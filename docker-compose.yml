@@ -1,0 +1,3 @@
+include:
+  - web/docker-compose.yml
+  - bot/docker-compose.yml
