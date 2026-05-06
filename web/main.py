@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
 from web.api import main_router
-from web.api.middleware import ASGILoggingMiddleware
+from web.api.middleware import ASGILoggingMiddleware, AuthUXASGIMiddleware
 from web.config_dir.config import env, pool_settings
 
 
@@ -23,7 +23,6 @@ async def lifespan(web_app):
         yield
     finally:
         await web_app.state.pg_pool.close()
-        await web_app.state.ml_aiohttp.close()
         await web_app.state.any_aiohttp.close()
 
 app = FastAPI(
@@ -45,8 +44,8 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*']
 )
+app.add_middleware(AuthUXASGIMiddleware)
 app.add_middleware(ASGILoggingMiddleware)
-
 
 if __name__ == '__main__':
     uvicorn.run('web.main:app', host="0.0.0.0", port=8000, log_config=None, workers=env.uvi_workers)

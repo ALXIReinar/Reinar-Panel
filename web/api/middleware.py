@@ -63,8 +63,8 @@ class AuthUXASGIMiddleware:
         request = Request(scope, receive=receive)
         now = datetime.now(UTC)
 
-        request.state.user_id = 1
-        request.state.session_id = '1'
+        request.state.admin_id = 0
+        request.state.session_id = '0'
 
         url = request.url.path
         "Обращения Сервера(под-адрес /server) доступен для allowed_ips"
@@ -96,7 +96,7 @@ class AuthUXASGIMiddleware:
 
             if new_token == 401:
                 # рефреш_токен НЕ ВАЛИДЕН
-                log_event(f"Попытка подмены refresh_token | s_id: {access_token.get('s_id', '')}; user_id: {access_token.get('sub', '')}",
+                log_event(f"Попытка подмены refresh_token | s_id: {access_token.get('s_id', '')}; admin_id: {access_token.get('sub', '')}",
                           request=request, level='CRITICAL')
                 response = JSONResponse(status_code=401, content={'message': 'Нужна повторная аутентификация'})
                 await response(scope, receive, send)
@@ -104,6 +104,6 @@ class AuthUXASGIMiddleware:
 
             request.state.new_a_t = new_token
 
-        request.state.user_id = int(access_token['sub'])
+        request.state.admin_id = int(access_token['sub'])
         request.state.session_id = access_token['s_id']
         await self.app(scope, receive, send)

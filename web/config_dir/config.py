@@ -92,6 +92,7 @@ class Settings(BaseSettings):
     post_processing_responses: bool
     app_mode: AppMode
     trusted_proxies: set[str] = {'127.0.0.1', '172.18.0.1', '172.18.0.9'}
+    allowed_ips: set[str] = {'127.0.0.1', '172.18.0.1',}
     model_config = SettingsConfigDict(extra='allow')
     domain: str
 

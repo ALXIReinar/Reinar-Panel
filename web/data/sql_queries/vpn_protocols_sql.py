@@ -1,114 +1,6 @@
 from asyncpg import Connection
 
 
-class ProtocolsQueries:
-    """Запросы для работы с протоколами VPN"""
-    
-    def __init__(self, conn: Connection):
-        self.conn = conn
-    
-    async def create_protocol(self, name: str) -> int:
-        """Создать новый протокол"""
-        query = """
-            INSERT INTO protocols (name)
-            VALUES ($1)
-            RETURNING id
-        """
-        return await self.conn.fetchval(query, name)
-    
-    async def get_protocol(self, proto_id: int):
-        """Получить протокол по ID"""
-        query = """
-            SELECT id, name, created_at
-            FROM protocols
-            WHERE id = $1
-        """
-        return await self.conn.fetchrow(query, proto_id)
-    
-    async def get_all_protocols(self):
-        """Получить все протоколы"""
-        query = """
-            SELECT id, name, created_at
-            FROM protocols
-            ORDER BY name
-        """
-        return await self.conn.fetch(query)
-    
-    async def delete_protocol(self, proto_id: int) -> bool:
-        """Удалить протокол"""
-        query = "DELETE FROM protocols WHERE id = $1"
-        result = await self.conn.execute(query, proto_id)
-        return result != "DELETE 0"
-
-
-class ProtocolCommandsQueries:
-    """Запросы для работы с командами протоколов"""
-    
-    def __init__(self, conn: Connection):
-        self.conn = conn
-    
-    async def create_command(self, proto_id: int, cmd_title: str, command: str) -> int:
-        """Создать команду для протокола"""
-        query = """
-            INSERT INTO protocols_commands (proto_id, cmd_title, command)
-            VALUES ($1, $2, $3)
-            RETURNING id
-        """
-        return await self.conn.fetchval(query, proto_id, cmd_title, command)
-    
-    async def get_command(self, cmd_id: int):
-        """Получить команду по ID"""
-        query = """
-            SELECT id, proto_id, cmd_title, command, created_at
-            FROM protocols_commands
-            WHERE id = $1
-        """
-        return await self.conn.fetchrow(query, cmd_id)
-    
-    async def get_protocol_commands(self, proto_id: int):
-        """Получить все команды протокола"""
-        query = """
-            SELECT id, proto_id, cmd_title, command, created_at
-            FROM protocols_commands
-            WHERE proto_id = $1
-            ORDER BY cmd_title
-        """
-        return await self.conn.fetch(query, proto_id)
-    
-    async def update_command(self, cmd_id: int, cmd_title: str | None = None, command: str | None = None) -> bool:
-        """Обновить команду"""
-        updates = []
-        params = []
-        param_count = 1
-        
-        if cmd_title is not None:
-            updates.append(f"cmd_title = ${param_count}")
-            params.append(cmd_title)
-            param_count += 1
-        
-        if command is not None:
-            updates.append(f"command = ${param_count}")
-            params.append(command)
-            param_count += 1
-        
-        if not updates:
-            return False
-        
-        params.append(cmd_id)
-        query = f"""
-            UPDATE protocols_commands
-            SET {', '.join(updates)}
-            WHERE id = ${param_count}
-        """
-        result = await self.conn.execute(query, *params)
-        return result != "UPDATE 0"
-    
-    async def delete_command(self, cmd_id: int) -> bool:
-        """Удалить команду"""
-        query = "DELETE FROM protocols_commands WHERE id = $1"
-        result = await self.conn.execute(query, cmd_id)
-        return result != "DELETE 0"
-
 
 class NodesQueries:
     """Запросы для работы с нодами
@@ -184,9 +76,9 @@ class NodesQueries:
         """
         return await self.conn.fetch(query, ip)
     
-    async def update_node(self, node_id: int, proto_id: int | None = None, 
-                         ip: str | None = None, port: int | None = None,
-                         title: str | None = None, status: str | None = None) -> bool:
+    async def update_node(
+            self, node_id: int, proto_id: int | None = None, ip: str | None = None, port: int | None = None, title: str | None = None, status: str | None = None
+    ) -> bool:
         """Обновить ноду"""
         updates = []
         params = []
