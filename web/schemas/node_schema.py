@@ -1,34 +1,37 @@
 from datetime import datetime
-from pydantic import Field, BaseModel, IPvAnyAddress
+from pydantic import Field, BaseModel
 
-from web.utils.anything import NodeStatus
-
-
-class NodeIPSchema(BaseModel):
-    ip: IPvAnyAddress
 
 class NodeCreateSchema(BaseModel):
-    """Схема для создания ноды"""
-    proto_id: int = Field(..., gt=0, description="ID протокола")
-    ip: str = Field(..., description="IP адрес физического сервера")
+    """Схема для создания физической ноды"""
+    ip: str = Field(..., description="Публичный IP адрес")
+    private_ip: str = Field(..., description="Приватный IP адрес (WireGuard)")
+    api_port: int = Field(..., gt=0, le=65535, description="Порт Node Client API")
     title: str = Field(..., min_length=1, max_length=200, description="Название ноды")
-    status: NodeStatus = Field(default=NodeStatus.vpn_worker, description="Статус ноды")
+    status: int = Field(default=1, description="Статус ноды(main, vpn_worker, balancer)")
+    is_active: bool = Field(default=True, description="Активна ли нода")
+
 
 class NodeUpdateSchema(BaseModel):
-    """Схема для обновления ноды"""
-    proto_id: int | None = Field(None, gt=0, description="ID протокола")
-    ip: str | None = Field(None, description="IP адрес физического сервера")
-    port: int | None = Field(None, gt=0, le=65535, description="Порт протокола")
+    """Схема для обновления физической ноды"""
+    node_id: int = Field(description='ID физической ноды')
+    ip: str | None = Field(None, description="Публичный IP адрес")
+    private_ip: str | None = Field(None, description="Приватный IP адрес")
+    api_port: int | None = Field(None, gt=0, le=65535, description="Порт Node Client API")
     title: str | None = Field(None, min_length=1, max_length=200, description="Название ноды")
-    status: NodeStatus | None = Field(None, description="Статус ноды")
+    status: int | None = Field(None, description="Статус ноды(main, vpn_worker, balancer)")
+    is_active: bool | None = Field(None, description="Активна ли нода")
+
 
 class NodeSchema(BaseModel):
-    """Схема ноды"""
+    """Схема физической ноды"""
     id: int
-    proto_id: int
     ip: str
-    title: str
+    private_ip: str | None
+    api_port: int
+    title: str | None
     status: int
+    is_active: bool | None
     created_at: datetime
-    updated_at: datetime
-    proto_name: str | None = None  # Для JOIN запросов
+    updated_at: datetime | None
+    status_name: str | None = None  # Из JOIN с node_statuses

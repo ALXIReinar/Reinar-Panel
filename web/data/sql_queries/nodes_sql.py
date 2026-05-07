@@ -1,113 +1,117 @@
-from asyncpg import ForeignKeyViolationError, Connection
+from asyncpg import Connection
 
 
 class NodesQueries:
-    """Запросы для работы с нодами
-
-    ВАЖНО: Одна нода = один протокол на одном физическом сервере
-    Это позволяет гибко комбинировать протоколы в подписках
-    """
-
+    """Запросы для работы с физическими нодами"""
+    
     def __init__(self, conn: Connection):
         self.conn = conn
+    
+    async def create_node(self, ip: str, private_ip: str, api_port: int, title: str, status: int = 1, is_active: bool = True) -> int:
+        """Создать физическую ноду"""
+        query = """
+        INSERT INTO nodes (ip, private_ip, api_port, title, status, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING
+        RETURNING id
+        """
+        return await self.conn.fetchval(query, ip, private_ip, api_port, title, status, is_active)
 
-    async def create_node(self, proto_id: int, ip: str, title: str, status: int) -> tuple[int, int]:
-        """Создать новую ноду"""
-        query = "INSERT INTO nodes (proto_id, ip, title, status) VALUES ($1, $2, $3, $4) RETURNING id"
-        try:
-            return 200, await self.conn.fetchval(query, proto_id, ip, title, status)
-        except ForeignKeyViolationError:
-            "Если протокол не найден в родительской таблице"
-            return 404, -1
 
     async def get_node(self, node_id: int):
-        """Получить ноду по ID с информацией о протоколе"""
+        """Получить ноду по ID"""
         query = """
-        SELECT n.proto_id, n.ip, n.title, n.status, n.created_at, n.updated_at, p.name as proto_name
-        FROM nodes n
-        JOIN protocols p ON n.proto_id = p.id
-        WHERE n.id = $1
+            SELECT n.id, n.ip, n.private_ip, n.api_port, n.title, n.status, n.is_active,
+                   n.created_at, n.updated_at,
+                   ns.name as status_name
+            FROM nodes n
+            LEFT JOIN node_statuses ns ON n.status = ns.id
+            WHERE n.id = $1
         """
         return await self.conn.fetchrow(query, node_id)
 
-    async def get_all_nodes(self, status: int | None = None, proto_id: int | None = None):
-        """Получить все ноды, опционально фильтр по статусу и/или протоколу"""
+
+    async def get_all_nodes(self, status: int | None = None, is_active: bool | None = None):
+        """Получить все ноды с опциональными фильтрами"""
         conditions = []
         params = []
         param_count = 1
-
-        if status:
+        
+        if status is not None:
             conditions.append(f"n.status = ${param_count}")
             params.append(status)
             param_count += 1
-
-        if proto_id:
-            conditions.append(f"n.proto_id = ${param_count}")
-            params.append(proto_id)
+        
+        if is_active is not None:
+            conditions.append(f"n.is_active = ${param_count}")
+            params.append(is_active)
             param_count += 1
-
+        
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-
+        
         query = f"""
-        SELECT n.id, n.proto_id, n.ip, n.title, n.status, n.created_at, n.updated_at, p.name as proto_name
+        SELECT n.id, n.ip, n.private_ip, n.api_port, n.title, n.status, n.created_at, n.updated_at, n.is_active, ns.name as status_name
         FROM nodes n
-        JOIN protocols p ON n.proto_id = p.id
+        LEFT JOIN node_statuses ns ON n.status = ns.id
         {where_clause}
         """
         return await self.conn.fetch(query, *params)
 
-    async def get_nodes_by_ip(self, ip: str):
-        """Получить все ноды на одном физическом сервере (все протоколы на одном IP)"""
-        query = """
-        SELECT n.id, n.proto_id, n.ip, n.title, n.status, n.created_at, n.updated_at, p.name as proto_name
-        FROM nodes n
-        JOIN protocols p ON n.proto_id = p.id
-        WHERE n.ip = $1 
-        """
-        return await self.conn.fetch(query, ip)
 
     async def update_node(
-            self, node_id: int, proto_id: int | None = None, ip: str | None = None, title: str | None = None,
-            status: str | None = None
+            self, node_id: int, ip: str | None = None, private_ip: str | None = None, api_port: int | None = None,
+            title: str | None = None, status: int | None = None, is_active: bool | None = None
     ):
         """Обновить ноду"""
         updates = []
         params = []
         param_count = 1
-
-        if proto_id is not None:
-            updates.append(f"proto_id = ${param_count}")
-            params.append(proto_id)
-            param_count += 1
-
+        
         if ip is not None:
             updates.append(f"ip = ${param_count}")
             params.append(ip)
             param_count += 1
-
+        
+        if private_ip is not None:
+            updates.append(f"private_ip = ${param_count}")
+            params.append(private_ip)
+            param_count += 1
+        
+        if api_port is not None:
+            updates.append(f"api_port = ${param_count}")
+            params.append(api_port)
+            param_count += 1
+        
         if title is not None:
             updates.append(f"title = ${param_count}")
             params.append(title)
             param_count += 1
-
+        
         if status is not None:
             updates.append(f"status = ${param_count}")
             params.append(status)
             param_count += 1
-
+        
+        if is_active is not None:
+            updates.append(f"is_active = ${param_count}")
+            params.append(is_active)
+            param_count += 1
+        
         if not updates:
             return
-
+        
         updates.append(f"updated_at = NOW()")
         params.append(node_id)
-
+        
         query = f"""
-        UPDATE nodes SET {', '.join(updates)}
+        UPDATE nodes
+        SET {', '.join(updates)}
         WHERE id = ${param_count}
         """
         await self.conn.execute(query, *params)
+
 
     async def delete_node(self, node_id: int):
         """Удалить ноду"""
         query = "DELETE FROM nodes WHERE id = $1"
         await self.conn.execute(query, node_id)
+
