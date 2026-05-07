@@ -5,8 +5,10 @@ from fastapi.params import Depends
 from starlette.requests import Request
 
 from web.data.sql_queries.admins_sql import AdminsQueries, AuthQueries
+from web.data.sql_queries.nodes_sql import NodesQueries
+from web.data.sql_queries.proto_cmds_sql import ProtocolCommandsQueries
 from web.data.sql_queries.protocols_sql import ProtocolsQueries
-from web.data.sql_queries.vpn_protocols_sql import ProtocolCommandsQueries, NodesQueries, ProtoConfigsQueries
+from web.data.sql_queries.node_configs_sql import ProtoConfigsQueries
 
 
 class PgSql:

@@ -29,7 +29,7 @@ class ProtocolCommandsQueries:
             commands: [{"cmd_title": "add_user", "command": "xray add ..."}, ...]
 
         Returns:
-            Количество вставленных команд
+            list[id1, id2] вставленных команд
         """
         if not commands:
             return 200, []
@@ -70,11 +70,11 @@ class ProtocolCommandsQueries:
         return res
 
 
-    async def delete_commands_bulk(self, cmd_ids: list[int]) -> list[int]:
+    async def delete_commands_bulk(self, cmd_ids: list[int]) -> int:
         """Массовое удаление команд"""
         if not cmd_ids:
-            return []
+            return 0
 
-        query = "DELETE FROM protocols_commands WHERE id = ANY($1) RETURNING id"
-        res = await self.conn.fetch(query, cmd_ids)
-        return res
+        query = "DELETE FROM protocols_commands WHERE id = ANY($1)"
+        res = await self.conn.execute(query, cmd_ids)
+        return int(res.split()[-1])

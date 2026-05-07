@@ -4,12 +4,8 @@ from starlette.responses import JSONResponse
 
 from web.data.postgres import PgSqlDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
-from web.schemas.vpn_protocols_schema import (
-    ProtocolCommandCreateSchema,
-    CommandsBulkInsertSchema,
-    CommandsBulkUpdateSchema,
-    CommandsBulkDeleteSchema
-)
+from web.schemas.proto_commands_schema import CommandsBulkInsertSchema, CommandsBulkUpdateSchema, CommandsBulkDeleteSchema
+
 from web.utils.logger_config import log_event
 
 router = APIRouter(prefix='/protocol-commands', tags=['Proto Commands'])

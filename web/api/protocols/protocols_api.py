@@ -4,7 +4,7 @@ from starlette.responses import JSONResponse
 
 from web.data.postgres import PgSqlDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
-from web.schemas.vpn_protocols_schema import ProtocolCreateSchema, ProtoPagenSchema
+from web.schemas.proto_schema import ProtocolCreateSchema, ProtoPagenSchema
 from web.utils.logger_config import log_event
 
 router = APIRouter(prefix='/protocols',tags=['Popular Protocols'])

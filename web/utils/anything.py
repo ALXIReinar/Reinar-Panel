@@ -5,6 +5,13 @@ from starlette.requests import Request
 from web.config_dir.config import env
 
 @dataclass
+class NodeStatus:
+    """Статусы нод"""
+    main: int = 1
+    vpn_worker: int = 2
+    balancer: int = 3
+
+@dataclass
 class TokenTypes:
     access_token: str = 'aT'
     refresh_token: str = 'rT'
