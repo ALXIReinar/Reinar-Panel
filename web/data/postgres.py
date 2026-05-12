@@ -9,6 +9,7 @@ from web.data.sql_queries.nodes_protocols_sql import NodesProtocolsQueries
 from web.data.sql_queries.nodes_sql import NodesQueries
 from web.data.sql_queries.proto_cmds_sql import ProtocolCommandsQueries
 from web.data.sql_queries.protocols_sql import ProtocolsQueries
+from web.data.sql_queries.whitelist_sql import WhitelistQueries
 
 
 class PgSql:
@@ -21,6 +22,8 @@ class PgSql:
         self.nodes_protocols = NodesProtocolsQueries(conn)
         self.protocols = ProtocolsQueries(conn)
         self.protocol_commands = ProtocolCommandsQueries(conn)
+
+        self.whitelist_cmd = WhitelistQueries(conn)
 
 
 async def get_pg_pool(request: Request):

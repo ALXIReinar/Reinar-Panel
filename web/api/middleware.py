@@ -7,30 +7,33 @@ from starlette.types import Scope, Receive, Send, ASGIApp
 
 from web.config_dir.config import env
 from web.data.postgres import PgSql
-from web.utils.anything import get_client_ip
+from web.utils.anything import get_client_ip, get_client_ip_by_scope
 from web.utils.jwt_factory import get_jwt_decode_payload, reissue_aT
 from web.utils.logger_config import log_event
 
+import time
+
 
 class ASGILoggingMiddleware:
-    def __init__(self, app: ASGIApp):
+    def __init__(self, app):
         self.app = app
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send):
-        if scope['type'] not in {'http',}:
+    async def __call__(self, scope, receive, send):
+        if scope['type'] not in {'http', 'websocket'}:
             await self.app(scope, receive, send)
             return
 
-        # >>>>> Работает ли эта конструкция????. Не должна, так как receive можно использовать только один раз => при ответе через self.app будет исключение
-        request = Request(scope, receive=receive)
 
-        # client = scope.get("client") # Альтернатива для получения ip
-        # client_host = client[0] if client else ''
-        ip = get_client_ip(request)
-        request.state.client_ip = ip
+        scope.setdefault('state', {})
+
+        # Используем вашу логику получения IP из заголовков (через scope)
+
+        ip = get_client_ip_by_scope(scope)
+
+        scope['state']['client_ip'] = ip  # Теперь это будет доступно в request.state.client_ip
 
         start = time.perf_counter()
-        status_code = 500  # По умолчанию, если что-то пойдет не так
+        status_code = 500
 
         async def send_wrapper(message):
             nonlocal status_code
@@ -39,16 +42,21 @@ class ASGILoggingMiddleware:
             await send(message)
 
         try:
+            # Передаем оригинальный receive, мы его не трогали
             await self.app(scope, receive, send_wrapper)
         finally:
             duration = time.perf_counter() - start
+            path = scope.get('path', '')
+            method = scope.get('method', '')
 
-            "Логируем для мониторинга"
-            if env.app_mode != 'local' and request.url.path != '/api/v1/healthcheck':
-                log_event(f'HTTP \033[33m{request.method}\033[0m {request.url.path}', request=request,
-                          http_status=status_code, response_time=round(duration, 4))
+            # Логика логирования
+            if env.app_mode != 'local' and path != '/api/v1/public/healthcheck':
+                # Здесь можно создать временный request только для лога,
+                # так как выполнение уже завершено
+                log_event(f'HTTP {method} {path}', http_status=status_code, response_time=round(duration, 4))
+
             if duration > 7.0:
-                log_event(f'Долгий ответ | {duration: .4f}', request=request, level='WARNING')
+                log_event(f'Долгий ответ | {duration: .4f}', level='WARNING')
 
 
 class AuthUXASGIMiddleware:
@@ -60,15 +68,18 @@ class AuthUXASGIMiddleware:
             await self.app(scope, receive, send)
             return
 
-        request = Request(scope, receive=receive)
-        now = datetime.now(UTC)
+        # Инициализируем state, если его нет
+        scope.setdefault('state', {})
+        scope['state']['admin_id'] = 0
+        scope['state']['session_id'] = '0'
 
-        request.state.admin_id = 0
-        request.state.session_id = '0'
+        url = scope.get('path', '')
 
-        url = request.url.path
-        "Обращения Сервера(под-адрес /server) доступен для allowed_ips"
-        if request.state.client_ip in env.allowed_ips:
+        # ВАЖНО: LoggingMiddleware должна стоять РАНЬШЕ этой в списке middleware
+        client_ip = scope['state'].get('client_ip')
+        log_event(client_ip, level='DEBUG')
+
+        if client_ip in env.allowed_ips:
             await self.app(scope, receive, send)
             return
 
@@ -77,8 +88,10 @@ class AuthUXASGIMiddleware:
             await self.app(scope, receive, send)
             return
 
-
+        request = Request(scope)  # Используем только для cookie
         encoded_access_token = request.cookies.get('access_token')
+
+        "Проверка Access Token"
         if (access_token:= get_jwt_decode_payload(encoded_access_token)) == 401:
             # невалидный аксес_токен
             log_event("Попытка подмены access_token", request=request, level='CRITICAL')
@@ -86,10 +99,13 @@ class AuthUXASGIMiddleware:
             await response(scope, receive, send)
             return
 
+        "Перевыпуск Access Token"
+        now = datetime.now(UTC)
         if datetime.fromtimestamp(access_token['exp'], tz=UTC) < now:
             # аксес_токен ИСТЁК
             "процесс выпуска токена"
-            async with request.app.state.pg_pool.acquire() as conn:
+            app_instance = scope['app']
+            async with app_instance.state.pg_pool.acquire() as conn:
                 db = PgSql(conn)
                 refresh_token = request.cookies.get('refresh_token')
                 new_token = await reissue_aT(access_token, refresh_token, db)
@@ -102,8 +118,9 @@ class AuthUXASGIMiddleware:
                 await response(scope, receive, send)
                 return
 
-            request.state.new_a_t = new_token
+            scope['state']['new_a_t'] = new_token
 
-        request.state.admin_id = int(access_token['sub'])
-        request.state.session_id = access_token['s_id']
+        scope['state']['admin_id'] = int(access_token['sub'])
+        scope['state']['session_id'] = access_token['s_id']
+
         await self.app(scope, receive, send)

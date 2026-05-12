@@ -124,6 +124,22 @@ pool_settings = dict(
 )
 
 
+"Redis"
+def get_redis_settings(envs: Settings):
+    cfg = APP_MODE_CONFIG[envs.app_mode]
+
+    redis_conf = {
+        'host': getattr(envs, cfg['redis_host']),
+        'port': getattr(envs, cfg['redis_port']),
+        'decode_responses': True,
+    }
+    if envs.app_mode != 'local':
+        redis_conf['password'] = envs.redis_password
+    return redis_conf
+
+redis_settings = get_redis_settings(env)
+
+
 "AioHttp для Исполнения команд на Нодах"
 async def get_cmd_exec_aiohttp(request: Request) -> ClientSession:
     return request.app.state.cmd_center_aiohttp

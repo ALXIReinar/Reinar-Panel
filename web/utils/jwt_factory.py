@@ -11,7 +11,7 @@ from jwt import DecodeError, ExpiredSignatureError
 from web.config_dir.config import env, encryption
 from web.data.postgres import PgSqlDep
 from web.schemas.admins_schema import TokenPayloadSchema
-from web.utils.anything import token_types, TokenTypes
+from web.utils.anything import Constants, TokenTypes
 from web.utils.logger_config import log_event
 
 
@@ -46,9 +46,9 @@ def add_ttl_limit(data: dict, token_ttl: str):
     # created_at = datetime.utcnow()
     
     ttl = env.JWTs.ttl_aT
-    if token_types[token_ttl] == TokenTypes.refresh_token:
+    if Constants.token_types[token_ttl] == TokenTypes.refresh_token:
         ttl = env.JWTs.ttl_rT
-    elif token_types[token_ttl] == TokenTypes.ws_token:
+    elif Constants.token_types[token_ttl] == TokenTypes.ws_token:
         ttl = env.JWTs.ttl_wT
     expired_at = created_at + ttl
 
@@ -66,13 +66,13 @@ async def issue_token(
         session_id: str | None=None,
         client: TokenPayloadSchema=None
 ):
-    if token_types[token] == TokenTypes.refresh_token:
+    if Constants.token_types[token] == TokenTypes.refresh_token:
         rT = add_ttl_limit(payload, token)
         encoded_rT = set_jwt_encode(rT)
         hashed_rT = encryption.hash(encoded_rT)
         await db.auth.make_session(session_id, int(payload['sub']), rT['iat'], rT['exp'], client.user_agent, client.ip, hashed_rT)
         return hashed_rT
-    elif token_types[token] == TokenTypes.access_token:
+    elif Constants.token_types[token] == TokenTypes.access_token:
         payload['s_id'] = session_id if not payload.get('s_id') else payload['s_id']
         aT = add_ttl_limit(payload, token)
         return set_jwt_encode(aT)

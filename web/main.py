@@ -4,26 +4,32 @@ import uvicorn
 from aiohttp import ClientSession
 from asyncpg import create_pool
 from fastapi import FastAPI
+from redis.asyncio import Redis
 from starlette.middleware.cors import CORSMiddleware
 
 from web.api import main_router
 from web.api.middleware import ASGILoggingMiddleware, AuthUXASGIMiddleware
-from web.config_dir.config import env, pool_settings
+from web.config_dir.config import env, pool_settings, redis_settings
 
 
 @asynccontextmanager
 async def lifespan(web_app):
-    """"""
+    """Lifecycle manager для FastAPI"""
+
     "Соединение с БД"
     web_app.state.pg_pool = await create_pool(**pool_settings)
 
     "Отдельная сессия для скачивания файлов с Тг"
     web_app.state.cmd_center_aiohttp = ClientSession()
+
+    "Соедиение с Redis"
+    web_app.state.redis = Redis(**redis_settings)
     try:
         yield
     finally:
         await web_app.state.pg_pool.close()
         await web_app.state.cmd_center_aiohttp.close()
+        await web_app.state.redis.aclose()
 
 app = FastAPI(
     docs_url='/api/docs',

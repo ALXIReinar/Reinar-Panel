@@ -42,7 +42,7 @@ services:
       - ENV_FILE=/run/secrets/env.api.prod
     network_mode: host
     volumes:
-      - ./secrets:/app/web/secrets/keys:ro
+      - ./secrets:/app/web/secrets:ro
     secrets:
       - env.api.prod
       - private_key.pem
