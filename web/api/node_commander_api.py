@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
