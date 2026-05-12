@@ -18,12 +18,12 @@ async def lifespan(web_app):
     web_app.state.pg_pool = await create_pool(**pool_settings)
 
     "Отдельная сессия для скачивания файлов с Тг"
-    web_app.state.any_aiohttp = ClientSession()
+    web_app.state.cmd_center_aiohttp = ClientSession()
     try:
         yield
     finally:
         await web_app.state.pg_pool.close()
-        await web_app.state.any_aiohttp.close()
+        await web_app.state.cmd_center_aiohttp.close()
 
 app = FastAPI(
     docs_url='/api/docs',
@@ -48,4 +48,4 @@ app.add_middleware(AuthUXASGIMiddleware)
 app.add_middleware(ASGILoggingMiddleware)
 
 if __name__ == '__main__':
-    uvicorn.run('web.main:app', host="0.0.0.0", port=8000, log_config=None, workers=env.uvi_workers)
+    uvicorn.run('web.main:app', host="0.0.0.0", port=env.admin_port, log_config=None, workers=env.uvi_workers)

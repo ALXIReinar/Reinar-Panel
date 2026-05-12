@@ -2,6 +2,7 @@ import logging
 import os
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
@@ -16,19 +17,13 @@ logging.critical(f'\033[35m{env_files}\033[0m | node_port: \033[32m{os.getenv("N
 
 class Settings(BaseSettings):
     """Настройки Node Client"""
-    
-    # Основные настройки
-    node_port: int = 8001
-    command_timeout: int = 30  # секунды
-    
-    # Разрешённые директории для чтения/записи конфигов
-    allowed_config_dirs: set[str] = {
-        "/etc/xray",
-        "/etc/wireguard",
-        "/etc/openvpn",
-        "/etc/shadowsocks"
-    }
-    
+
+    node_name: str = Field(max_length=64)
+    node_port: int
+    command_timeout: int  # секунды
+    uvicorn_workers: int
+
+    admin_panel_private_ip: str
     model_config = SettingsConfigDict(extra='allow')
 
 

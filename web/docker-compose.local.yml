@@ -1,3 +1,5 @@
+name: reinar_panel
+
 services:
   pg_db:
     image: postgres:16
@@ -18,8 +20,8 @@ services:
       - ./secrets/dumps:/docker-entrypoint-initdb.d
     ports:
       - "127.0.0.1:5431:5432"
-    networks:
-      - api_net
+#    networks:
+#      - api_net
 
   web-service:
     build:
@@ -27,39 +29,27 @@ services:
       dockerfile: Dockerfile
     container_name: web-service
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/healthcheck')\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${ADMIN_PORT}/api/v1/healthcheck')\""]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 20s
-    depends_on:
-      pg_db:
-        condition: service_healthy
-    restart: always
+#    restart: always
     environment:
       - ENV_FILE=/run/secrets/env.api.prod
+    network_mode: host
     volumes:
-      - ../web_logs:/app/web_logs
-      - ./secrets:/app/secrets/certs:ro
-      - ./secrets:/app/secrets/keys:ro
+      - ./secrets:/app/web/secrets/keys:ro
     secrets:
       - env.api.prod
-    ports:
-      - "127.0.0.1:8100:8000"
-    networks:
-      - api_net
-      - ml_net
+      - private_key.pem
+      - public_key.pem
 
-networks:
-  api_net:
-    driver: bridge
-    name: ocr_web_network
-  ml_net:
-    driver: bridge
-    name: ocr_ml_network
-  bot_net:
-    driver: bridge
-    name: ocr_bot_network
+
+#networks:
+#  api_net:
+#    driver: bridge
+#    name: reinar_web_network
 
 volumes:
   pgdata:
@@ -68,3 +58,7 @@ volumes:
 secrets:
   env.api.prod:
     file: .env.api.prod
+  private_key.pem:
+    file: secrets/keys/private_key.pem
+  public_key.pem:
+    file: secrets/keys/public_key.pem

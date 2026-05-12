@@ -4,9 +4,11 @@ from fastapi import APIRouter, Request
 from fastapi.params import Query
 from starlette.responses import JSONResponse
 
+from web.config_dir.config import NodeExecAiohttpDep
 from web.data.postgres import PgSqlDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
 from web.schemas.node_schema import NodeCreateSchema, NodeUpdateSchema
+from web.utils.anything import NodeUris
 from web.utils.logger_config import log_event
 
 
@@ -15,15 +17,22 @@ router = APIRouter(tags=['Physical Nodes (Servers)'])
 
 
 @router.post('/create', summary="Создать физическую ноду")
-async def create_node_api(body: NodeCreateSchema, db: PgSqlDep, request: Request, _: JWTCookieDep):
-    node_id = await db.nodes.create_node(
-        body.ip, body.private_ip, body.api_port, body.title, body.status, body.is_active
-    )
-    if not node_id:
-        return JSONResponse(status_code=404, content={'success': False, 'message': 'Убедитесь, что публичный и приватный ip не заняты другими нодами'})
+async def bind_node_api(body: NodeCreateSchema, request: Request, db: PgSqlDep, _: JWTCookieDep, aio_http: NodeExecAiohttpDep):
+    log_event(f'Связываем админку с Нодой | private_ip: \033[33m{body.private_ip}\033[0m; api_port: \033[35m{body.api_port}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    url = f'http://{body.private_ip}:{body.api_port}{NodeUris.ping}'
+    async with aio_http.get(url) as resp:
+        resp = await resp.json()
 
-    log_event(f"Создана нода: {body.title} | ip: \033[36m{body.ip}\033[0m; private_ip: \033[35m{body.private_ip}\033[0m; node_id: \033[33m{node_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request)
-    return {'success': True, 'node_id': node_id, 'message': 'Нода создана'}
+    "Нода не отвечает"
+    if not resp.get('success'):
+        log_event(f'Не удалось создать ноду | private_ip: \033[33m{body.private_ip}\033[0m; api_port: \033[35m{body.api_port}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
+
+    "Фиксируем имя в БД"
+    node_id = await db.nodes.create_node(
+        body.ip, body.private_ip, body.api_port, resp['service'], body.title, body.status, body.is_active
+    )
+    log_event(f'Успешно связались с нодой | node_name: \033[32m{resp['service']}\033[0m; private_ip: \033[33m{body.private_ip}\033[0m; api_port: \033[35m{body.api_port}\033[0m; node_id: \033[33m{node_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    return {'success': resp['success'], 'node_id': node_id, 'node_name': resp['service'], 'message': 'Нода создана'}
 
 
 @router.get('/all', summary="Получить все физические ноды")

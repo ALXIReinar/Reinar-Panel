@@ -162,3 +162,7 @@ cython_debug/
 .venv/
 .env*
 secrets/
+install.sh
+uninstall.sh
+docker-compose.local.yml
+*.md

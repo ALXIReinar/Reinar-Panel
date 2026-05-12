@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from starlette.requests import Request
 from starlette.responses import Response
 
-from bot.env_modes import AppMode
+from web.config_dir.env_modes import AppMode
 from web.config_dir.config import env
 from web.utils.logger_config import log_event
 

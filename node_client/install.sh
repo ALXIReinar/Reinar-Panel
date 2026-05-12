@@ -10,7 +10,8 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Константы
-INSTALL_DIR="/opt/vpn-node-client"
+INSTALL_BASE="/opt/vpn-panel"
+INSTALL_DIR="$INSTALL_BASE/node"
 SERVICE_NAME="vpn-node-client"
 PYTHON_MIN_VERSION="3.10"
 
@@ -27,7 +28,33 @@ fi
 
 echo -e "${GREEN}✓${NC} Права root подтверждены"
 
-echo -e "Обновление системы"
+# Определение директории скрипта
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Проверка наличия необходимых файлов
+echo -e "\n${YELLOW}Проверка исходных файлов...${NC}"
+REQUIRED_FILES=("requirements.txt" "main.py" "config.py")
+REQUIRED_DIRS=("api" "schemas")
+
+for file in "${REQUIRED_FILES[@]}"; do
+    if [ ! -f "$SCRIPT_DIR/$file" ]; then
+        echo -e "${RED}✗${NC} Файл не найден: $file"
+        echo "Убедитесь, что скрипт запущен из директории node_client/"
+        exit 1
+    fi
+done
+
+for dir in "${REQUIRED_DIRS[@]}"; do
+    if [ ! -d "$SCRIPT_DIR/$dir" ]; then
+        echo -e "${RED}✗${NC} Директория не найдена: $dir"
+        echo "Убедитесь, что скрипт запущен из директории node_client/"
+        exit 1
+    fi
+done
+
+echo -e "${GREEN}✓${NC} Все необходимые файлы найдены"
+
+echo -e "\nОбновление системы"
 apt-get update -y && apt-get upgrade -y
 
 echo -e "\nНастройка имени Ноды"
@@ -73,6 +100,15 @@ done
 
 NODE_PORT=$USER_PORT
 
+# Запрос приватного IP админки
+echo -e "\n${YELLOW}Настройка приватной сети${NC}"
+DEFAULT_ADMIN_IP="10.0.0.1"
+
+read -p "Введите приватный IP админ-панели (по умолчанию $DEFAULT_ADMIN_IP): " ADMIN_PRIVATE_IP
+ADMIN_PRIVATE_IP=${ADMIN_PRIVATE_IP:-$DEFAULT_ADMIN_IP}
+
+echo -e "${GREEN}✓${NC} Приватный IP админки: $ADMIN_PRIVATE_IP"
+
 # Проверка наличия Python
 echo -e "\n${YELLOW}Проверка Python...${NC}"
 if ! command -v python3 &> /dev/null; then
@@ -114,8 +150,21 @@ echo -e "${GREEN}✓${NC} Директория создана"
 
 # Копирование файлов
 echo -e "\n${YELLOW}Копирование файлов приложения...${NC}"
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cp -r $SCRIPT_DIR/* $INSTALL_DIR/
+
+# Копируем папку node_client как пакет
+mkdir -p $INSTALL_DIR/node_client
+cp -r $SCRIPT_DIR/api $INSTALL_DIR/node_client/
+cp -r $SCRIPT_DIR/schemas $INSTALL_DIR/node_client/
+cp $SCRIPT_DIR/*.py $INSTALL_DIR/node_client/ 2>/dev/null || true
+
+# Копируем файлы конфигурации и зависимости в корень
+cp $SCRIPT_DIR/requirements.txt $INSTALL_DIR/
+cp $SCRIPT_DIR/.env.example $INSTALL_DIR/ 2>/dev/null || true
+cp $SCRIPT_DIR/README.md $INSTALL_DIR/ 2>/dev/null || true
+
+# Копируем uninstall.sh в директорию установки
+cp $SCRIPT_DIR/uninstall.sh $INSTALL_DIR/ 2>/dev/null || true
+
 echo -e "${GREEN}✓${NC} Файлы скопированы"
 
 # Создание виртуального окружения
@@ -135,19 +184,35 @@ echo -e "${GREEN}✓${NC} Зависимости установлены"
 # Создание .env файла если его нет
 if [ ! -f "$INSTALL_DIR/.env.node.prod" ]; then
     echo -e "\n${YELLOW}Создание конфигурационного файла...${NC}"
-    cat > $INSTALL_DIR/.env.node.prod << EOF
+    cat > "$INSTALL_DIR/.env.node.prod" <<ENVEOF
 # Node Client Configuration
-NODE_PORT=$NODE_PORT
-NODE_NAME=$NODE_NAME
+NODE_PORT=${NODE_PORT}
+NODE_NAME=${NODE_NAME}
 COMMAND_TIMEOUT=30
 UVICORN_WORKERS=1
-EOF
+
+# Приватный IP админ-панели
+ADMIN_PANEL_PRIVATE_IP=${ADMIN_PRIVATE_IP}
+ENVEOF
     echo -e "${GREEN}✓${NC} Конфигурация создана: $INSTALL_DIR/.env.node.prod"
 else
     echo -e "\n${YELLOW}Обновление конфигурационного файла...${NC}"
     # Обновляем порт в существующем файле
     sed -i "s/^NODE_PORT=.*/NODE_PORT=$NODE_PORT/" $INSTALL_DIR/.env.node.prod
-    echo -e "${GREEN}✓${NC} Порт обновлён в конфигурации"
+    
+    # Обновляем имя ноды
+    sed -i "s/^NODE_NAME=.*/NODE_NAME=$NODE_NAME/" $INSTALL_DIR/.env.node.prod
+    
+    # Добавляем ADMIN_PANEL_PRIVATE_IP если его нет
+    if ! grep -q "ADMIN_PANEL_PRIVATE_IP" $INSTALL_DIR/.env.node.prod; then
+        echo "" >> $INSTALL_DIR/.env.node.prod
+        echo "# Приватный IP админ-панели" >> $INSTALL_DIR/.env.node.prod
+        echo "ADMIN_PANEL_PRIVATE_IP=$ADMIN_PRIVATE_IP" >> $INSTALL_DIR/.env.node.prod
+    else
+        sed -i "s/^ADMIN_PANEL_PRIVATE_IP=.*/ADMIN_PANEL_PRIVATE_IP=$ADMIN_PRIVATE_IP/" $INSTALL_DIR/.env.node.prod
+    fi
+    
+    echo -e "${GREEN}✓${NC} Конфигурация обновлена"
 fi
 
 # Создание systemd unit
@@ -162,6 +227,7 @@ Type=simple
 User=root
 WorkingDirectory=$INSTALL_DIR
 Environment="PATH=$INSTALL_DIR/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PYTHONPATH=$INSTALL_DIR"
 ExecStart=$INSTALL_DIR/venv/bin/python -m node_client.main
 Restart=always
 RestartSec=10

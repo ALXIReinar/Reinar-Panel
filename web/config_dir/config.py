@@ -24,7 +24,7 @@ load_dotenv(env_files, override=True)
 logging.critical(f'\033[35m{env_files}\033[0m | app_mode: \033[32m{os.getenv('APP_MODE')}\033[0m')
 
 "Создаём директории"
-WORKDIR = Path(__file__).resolve().parent.parent.parent
+WORKDIR = Path(__file__).resolve().parent.parent
 
 LOG_DIR = WORKDIR / 'web_logs'
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -73,6 +73,7 @@ class AuthConfig(BaseModel):
 
 
 class Settings(BaseSettings):
+    JWTs: AuthConfig = AuthConfig()
     pg_user: str
     pg_password: str
     pg_max_connections: int
@@ -89,10 +90,11 @@ class Settings(BaseSettings):
     redis_host_docker: str
 
     uvi_workers: int
+    admin_port: int
     post_processing_responses: bool
     app_mode: AppMode
-    trusted_proxies: set[str] = {'127.0.0.1', '172.18.0.1', '172.18.0.9'}
-    allowed_ips: set[str] = {'127.0.0.1', '172.18.0.1',}
+    trusted_proxies: set[str] = {'127.0.0.1', '172.20.0.1'}
+    allowed_ips: set[str] = {'127.0.0.1', '172.20.0.1',}
     model_config = SettingsConfigDict(extra='allow')
     domain: str
 
@@ -122,8 +124,8 @@ pool_settings = dict(
 )
 
 
-"AioHttp для микроопераций"
-async def get_any_aiohttp(request: Request) -> ClientSession:
-    return request.app.state.any_aiohttp
+"AioHttp для Исполнения команд на Нодах"
+async def get_cmd_exec_aiohttp(request: Request) -> ClientSession:
+    return request.app.state.cmd_center_aiohttp
 
-AnyAiohttpDep = Annotated[ClientSession, Depends(get_any_aiohttp)]
+NodeExecAiohttpDep = Annotated[ClientSession, Depends(get_cmd_exec_aiohttp)]

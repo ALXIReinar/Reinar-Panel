@@ -9,6 +9,6 @@ main_router = APIRouter(prefix='/api/v1/server')
 main_router.include_router(execute_router)
 main_router.include_router(node_config_router)
 
-@main_router.get('/health')
+@main_router.get('/node/ping')
 async def health_check():
-    return {"status": True, "service": env.node_name, "version": "0.1"}
+    return {"status": True, "message": "pong", "service": env.node_name, "version": "0.1"}

@@ -10,7 +10,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 SERVICE_NAME="vpn-node-client"
-INSTALL_DIR="/opt/vpn-node-client"
+INSTALL_DIR="/opt/vpn-panel/node"
 
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  VPN Node Client - Деинсталляция${NC}"
@@ -58,6 +58,12 @@ if [ -d "$INSTALL_DIR" ]; then
     echo -e "\n${YELLOW}Удаление директории $INSTALL_DIR...${NC}"
     rm -rf $INSTALL_DIR
     echo -e "${GREEN}✓${NC} Директория удалена"
+    
+    # Проверить, пуста ли родительская директория
+    if [ -d "/opt/vpn-panel" ] && [ -z "$(ls -A /opt/vpn-panel)" ]; then
+        rmdir /opt/vpn-panel
+        echo -e "${GREEN}✓${NC} Родительская директория /opt/vpn-panel удалена"
+    fi
 fi
 
 echo -e "\n${BLUE}========================================${NC}"

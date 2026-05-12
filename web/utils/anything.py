@@ -4,6 +4,14 @@ from starlette.requests import Request
 
 from web.config_dir.config import env
 
+
+@dataclass
+class NodeUris:
+    exec_cmd: str = '/api/v1/server/node/execute'
+    get_config_file: str = '/api/v1/server/node/config/read'
+    write_config_file: str = '/api/v1/server/node/config/write'
+    ping: str = '/api/v1/server/node/ping'
+
 @dataclass
 class NodeStatus:
     """Статусы нод"""
@@ -22,8 +30,6 @@ token_types = {
     'refresh_token': 'rT',
     'ws_token': 'wT'
 }
-
-default_avatar = '/users/avatars/default_picture.png'
 
 
 def get_client_ip(request: Request):

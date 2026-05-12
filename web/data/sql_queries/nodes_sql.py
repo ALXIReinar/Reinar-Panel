@@ -7,14 +7,13 @@ class NodesQueries:
     def __init__(self, conn: Connection):
         self.conn = conn
     
-    async def create_node(self, ip: str, private_ip: str, api_port: int, title: str, status: int = 1, is_active: bool = True) -> int:
+    async def create_node(self, ip: str, private_ip: str, api_port: int, node_name: str, title: str, status: int = 1, is_active: bool = True) -> int:
         """Создать физическую ноду"""
         query = """
-        INSERT INTO nodes (ip, private_ip, api_port, title, status, is_active)
-        VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING
-        RETURNING id
+        INSERT INTO nodes (ip, private_ip, api_port, node_name, title, status, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id
         """
-        return await self.conn.fetchval(query, ip, private_ip, api_port, title, status, is_active)
+        return await self.conn.fetchval(query, ip, private_ip, api_port, node_name, title, status, is_active)
 
 
     async def get_node(self, node_id: int):
@@ -114,4 +113,3 @@ class NodesQueries:
         """Удалить ноду"""
         query = "DELETE FROM nodes WHERE id = $1"
         await self.conn.execute(query, node_id)
-

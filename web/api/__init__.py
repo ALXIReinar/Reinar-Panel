@@ -3,12 +3,14 @@ from fastapi import APIRouter
 from web.api.auth_panel_api import router as auth_panel_router
 from web.api.nodes import nodes_router
 from web.api.protocols import protocols_router
+from web.api.node_commander_api import router as node_commander_router
 
 main_router = APIRouter(prefix="/api/v1")
 
 main_router.include_router(auth_panel_router)
 main_router.include_router(protocols_router)
 main_router.include_router(nodes_router)
+main_router.include_router(node_commander_router)
 
 @main_router.get('/healthcheck')
 async def healthcheck():

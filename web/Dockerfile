@@ -1,7 +1,6 @@
-FROM python:3.12-slim as builder
+FROM python:3.12-slim AS builder
 
 COPY requirements.txt ./requirements.txt
-
 
 RUN pip3 install --no-cache-dir --user -r requirements.txt
 
@@ -22,6 +21,5 @@ ENV PYTHONPATH=/app
 
 USER appuser
 
-EXPOSE 8000
 
 CMD ["python", "-m", "web.main"]
