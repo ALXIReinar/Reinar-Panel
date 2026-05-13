@@ -8,7 +8,7 @@ from typing import Annotated
 from aiohttp import ClientSession
 from fastapi import Depends
 from passlib.context import CryptContext
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 from starlette.requests import Request
@@ -93,6 +93,7 @@ class Settings(BaseSettings):
     admin_port: int
     post_processing_responses: bool
     app_mode: AppMode
+    sub_link_bytes: int = Field(le=64, ge=16)
     trusted_proxies: set[str] = {'127.0.0.1', '172.20.0.1'}
     allowed_ips: set[str] = {'127.0.0.1', '172.20.0.1',}
     model_config = SettingsConfigDict(extra='allow')

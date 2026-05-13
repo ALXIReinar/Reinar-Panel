@@ -10,6 +10,8 @@ from web.data.sql_queries.nodes_sql import NodesQueries
 from web.data.sql_queries.proto_cmds_sql import ProtocolCommandsQueries
 from web.data.sql_queries.protocols_sql import ProtocolsQueries
 from web.data.sql_queries.whitelist_sql import WhitelistQueries
+from web.data.sql_queries.users_sql import UsersQueries
+from web.data.sql_queries.sub_plans_sql import SubPlansQueries
 
 
 class PgSql:
@@ -24,6 +26,8 @@ class PgSql:
         self.protocol_commands = ProtocolCommandsQueries(conn)
 
         self.whitelist_cmd = WhitelistQueries(conn)
+        self.users = UsersQueries(conn)
+        self.sub_plans = SubPlansQueries(conn)
 
 
 async def get_pg_pool(request: Request):
