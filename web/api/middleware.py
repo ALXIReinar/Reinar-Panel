@@ -79,9 +79,10 @@ class AuthUXASGIMiddleware:
         client_ip = scope['state'].get('client_ip')
         log_event(client_ip, level='DEBUG')
 
-        if client_ip in env.allowed_ips:
-            await self.app(scope, receive, send)
-            return
+        "Полный доступ от Выбранных ip"
+        # if client_ip in env.allowed_ips:
+        #     await self.app(scope, receive, send)
+        #     return
 
         "Не нуждаются в авторизации, Если юрл в белом списке"
         if any(url.startswith(prefix) for prefix in ('/api/v1/public', )):
@@ -95,7 +96,7 @@ class AuthUXASGIMiddleware:
         if (access_token:= get_jwt_decode_payload(encoded_access_token)) == 401:
             # невалидный аксес_токен
             log_event("Попытка подмены access_token", request=request, level='CRITICAL')
-            response =  JSONResponse(status_code=401, content={'message': 'Нужна повторная аутентификация'})
+            response =  JSONResponse(status_code=401, content={'success': False, 'message': 'Нужна повторная аутентификация'})
             await response(scope, receive, send)
             return
 
@@ -114,7 +115,7 @@ class AuthUXASGIMiddleware:
                 # рефреш_токен НЕ ВАЛИДЕН
                 log_event(f"Попытка подмены refresh_token | s_id: {access_token.get('s_id', '')}; admin_id: {access_token.get('sub', '')}",
                           request=request, level='CRITICAL')
-                response = JSONResponse(status_code=401, content={'message': 'Нужна повторная аутентификация'})
+                response = JSONResponse(status_code=401, content={'success': False, 'message': 'Нужна повторная аутентификация'})
                 await response(scope, receive, send)
                 return
 

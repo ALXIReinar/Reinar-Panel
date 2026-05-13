@@ -1,5 +1,4 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
 from starlette.requests import Request
 
 from web.data.postgres import PgSqlDep

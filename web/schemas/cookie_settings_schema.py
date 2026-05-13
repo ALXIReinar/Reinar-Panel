@@ -25,7 +25,7 @@ class RtToken(BaseModel):
 
 def check_at_factor(request: Request, response: Response):
     if hasattr(request.state, 'new_a_t'):
-        log_event(f'Проставили access_token юзеру \033[31m{request.state.user_id}\033[0m', level='WARNING')
+        log_event(f'Проставили access_token юзеру | admin_id: \033[31m{request.state.admin_id}\033[0m', level='WARNING')
         response.set_cookie('access_token', request.state.new_a_t, **AccToken().model_dump())
 
 JWTCookieDep = Annotated[None, Depends(check_at_factor)]
