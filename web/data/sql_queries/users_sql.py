@@ -1,4 +1,5 @@
 from typing import Literal
+from uuid import uuid4
 
 from asyncpg import Connection
 import secrets
@@ -32,9 +33,9 @@ class UsersQueries:
         С retry-логикой для конфликтов b64_id
         """
         insert_users_query = """
-        INSERT INTO users (tg_id, b64_id, tg_username)
-        SELECT t.tg_id, t.b64_id, t.tg_username
-        FROM UNNEST($1::bigint[], $2::varchar[], $3::varchar[]) AS t(tg_id, b64_id, tg_username)
+        INSERT INTO users (tg_id, b64_id, tg_username, uuid)
+        SELECT t.tg_id, t.b64_id, t.tg_username, t.uuid
+        FROM UNNEST($1::bigint[], $2::varchar[], $3::varchar[], $4::varchar[]) AS t(tg_id, b64_id, tg_username, uuid)
         ON CONFLICT (b64_id) DO NOTHING
         RETURNING id, b64_id, tg_username
         """
@@ -54,9 +55,10 @@ class UsersQueries:
             b64_ids = self.generate_b64_id(users_count)
             tg_ids = tuple(u['tg_id'] for u in remaining_users)
             tg_usernames = tuple(u['tg_username'] for u in remaining_users)
+            uuids = tuple(str(uuid4()) for _ in range(len(remaining_users)))
             
             "Вставка"
-            created_users = await self.conn.fetch(insert_users_query,tg_ids, b64_ids, tg_usernames)
+            created_users = await self.conn.fetch(insert_users_query,tg_ids, b64_ids, tg_usernames, uuids)
             all_created_users.extend(created_users)
             
             "Если все вставились - выходим"

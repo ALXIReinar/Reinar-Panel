@@ -28,7 +28,7 @@ async def get_users(request: Request, db: PgSqlDep, _: JWTCookieDep,
     return {'success': True, 'users': users}
 
 
-@router.post('/bulk_create')
+@router.post('/bulk_add')
 async def bulk_create_users(body: UserBulkCreateSchema, request: Request, db: PgSqlDep, _: JWTCookieDep):
     """
     Bulk создание пользователей с подписками
@@ -64,7 +64,7 @@ async def bulk_update_users(body: UserBulkUpdateSchema, request: Request, db: Pg
 @router.delete('/bulk_delete')
 async def bulk_delete_users(body: UserBulkDeleteSchema, request: Request, db: PgSqlDep, _: JWTCookieDep):
     """
-    Bulk удаление пользователей (CASCADE удалит связанные подписки)
+    Bulk удаление пользователей 
     """
     log_event(f'Bulk delete пользователей | count: {len(body.user_ids)}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
 

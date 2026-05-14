@@ -13,3 +13,8 @@ class ExecuteResponseSchema(BaseModel):
     stderr: str
     exit_code: int
     command: str
+
+
+class MetricsSchema(BaseModel):
+    metrics_port: int = Field(gt=0, le=65535, description='Порт для сбора статистики трафика ядра')
+    command: str

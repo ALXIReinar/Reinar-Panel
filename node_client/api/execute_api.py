@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from starlette.responses import JSONResponse
 
 from node_client.config import env
-from node_client.schemas.execute_schema import ExecuteResponseSchema, ExecuteCommandSchema
+from node_client.schemas.execute_schema import ExecuteResponseSchema, ExecuteCommandSchema, MetricsSchema
 
 router = APIRouter(prefix='/node', tags=['Execute'])
 
@@ -38,3 +38,22 @@ async def execute_command(body: ExecuteCommandSchema):
     
     except Exception as e:
         return JSONResponse(status_code=500, content={"success": False, "message": f"Ошибка выполнения команды: {str(e)}", "command": body.command})
+
+
+
+@router.get('/metrics')
+async def get_metrics(body: MetricsSchema):
+    # xray api statsquery --server=127.0.0.1:{} -pattern "user>>>" -reset
+    cmd_str = body.command.format(body.metrics_port)
+
+    # xray api statsquery --server=127.0.0.1:10085 -pattern "user>>>" -reset
+    result = subprocess.run(
+        cmd_str.split(), # ["xray", "api", "statsquery", "--server=127.0.0.1:10085", "-pattern", '"user>>>"', "-reset"]
+        capture_output=True,
+        text=True
+    )
+
+    if result.returncode != 0:
+        return {"error": "Failed to get stats"}
+
+    return {'success': True, 'stdout': result.stdout}
