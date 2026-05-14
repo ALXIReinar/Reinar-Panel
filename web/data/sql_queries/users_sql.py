@@ -146,3 +146,13 @@ class UsersQueries:
         LIMIT $1
         '''
         return await self.conn.fetch(query, limit, last_id)
+
+
+    async def update_traffic(self, tg_usernames: list[str], traffic_add_mbs: list[int]):
+        query = """
+        UPDATE users
+        SET traffic_used_day_mb = users.traffic_used_day_mb + t.traffic_add
+        FROM (SELECT UNNEST($1::varchar[]) AS username, UNNEST($2::bigint[]) AS traffic_add) AS t
+        WHERE users.tg_username = t.username
+        """
+        await self.conn.execute(query, tg_usernames, traffic_add_mbs)

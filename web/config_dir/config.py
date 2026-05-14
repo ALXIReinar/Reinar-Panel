@@ -91,6 +91,7 @@ class Settings(BaseSettings):
 
     uvi_workers: int
     admin_port: int
+    app_url: str = f'https://127.0.0.1:{os.getenv('ADMIN_PORT')}'
     post_processing_responses: bool
     app_mode: AppMode
     sub_link_bytes: int = Field(le=64, ge=16)

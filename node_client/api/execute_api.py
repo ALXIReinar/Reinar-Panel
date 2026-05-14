@@ -1,5 +1,9 @@
 import subprocess
+from typing import Annotated
+
 from fastapi import APIRouter
+from fastapi.params import Query
+from starlette.datastructures import QueryParams
 from starlette.responses import JSONResponse
 
 from node_client.config import env
@@ -42,7 +46,7 @@ async def execute_command(body: ExecuteCommandSchema):
 
 
 @router.get('/metrics')
-async def get_metrics(body: MetricsSchema):
+async def get_metrics(body: Annotated[MetricsSchema, Query()]):
     # xray api statsquery --server=127.0.0.1:{} -pattern "user>>>" -reset
     cmd_str = body.command.format(body.metrics_port)
 

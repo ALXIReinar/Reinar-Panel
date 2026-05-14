@@ -74,3 +74,13 @@ class NodesProtocolsQueries:
         """Удалить протокол с ноды"""
         query = "DELETE FROM nodes_protocols WHERE id = $1"
         await self.conn.execute(query, np_id)
+
+
+    async def get_all_nodes_for_metrics(self):
+        query = '''
+        SELECT n.id, n.ip, n.private_ip, n.api_port, np.metrics_port, p.metrics_command, p.metrics_parser_code FROM nodes n
+        JOIN nodes_protocols np ON np.node_id = n.id AND np.user_visible = true
+        JOIN protocols p ON np.proto_id = p.id
+        WHERE n.is_active = true
+        '''
+        return await self.conn.fetch(query)

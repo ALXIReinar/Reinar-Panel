@@ -20,8 +20,17 @@ services:
       - ./secrets/dumps:/docker-entrypoint-initdb.d:z
     ports:
       - "127.0.0.1:5432:5432"
-#    networks:
-#      - api_net
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    volumes:
+      - redis_data:/data
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:6379:6379"
 
   web-service:
     build:
