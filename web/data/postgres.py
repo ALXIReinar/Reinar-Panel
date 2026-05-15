@@ -12,6 +12,9 @@ from web.data.sql_queries.protocols_sql import ProtocolsQueries
 from web.data.sql_queries.whitelist_sql import WhitelistQueries
 from web.data.sql_queries.users_sql import UsersQueries
 from web.data.sql_queries.sub_plans_sql import SubPlansQueries
+from web.data.sql_queries.proto_templates_sql import ProtoTemplatesQueries
+from web.data.sql_queries.template_spec_params_sql import TemplateSpecParamsQueries
+from web.data.sql_queries.remote_execute_history_sql import RemoteCommandHistoryQueries
 
 
 class PgSql:
@@ -24,8 +27,12 @@ class PgSql:
         self.nodes_protocols = NodesProtocolsQueries(conn)
         self.protocols = ProtocolsQueries(conn)
         self.protocol_commands = ProtocolCommandsQueries(conn)
-
         self.whitelist_cmd = WhitelistQueries(conn)
+        self.remote_command_history = RemoteCommandHistoryQueries(conn)
+
+        self.proto_templates = ProtoTemplatesQueries(conn)
+        self.template_spec_params = TemplateSpecParamsQueries(conn)
+
         self.users = UsersQueries(conn)
         self.sub_plans = SubPlansQueries(conn)
 

@@ -18,3 +18,10 @@ class ExecuteResponseSchema(BaseModel):
 class MetricsSchema(BaseModel):
     metrics_port: int = Field(gt=0, le=65535, description='Порт для сбора статистики трафика ядра')
     command: str
+
+
+class ReadConfigFileSchema(BaseModel):
+    file_path: str = Field(max_length=512, description='Путь до файла конфигурации')
+
+class WriteConfigFileSchema(ReadConfigFileSchema):
+    file_content: str

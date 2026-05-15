@@ -10,8 +10,8 @@ from web.config_dir.config import env
 class NodeUris:
     exec_cmd: str = '/api/v1/server/node/execute'
     get_metrics: str = '/api/v1/server/node/metrics'
-    get_config_file: str = '/api/v1/server/node/config/read'
-    write_config_file: str = '/api/v1/server/node/config/write'
+    get_config_file: str = '/api/v1/server/node/config_file/read'
+    write_config_file: str = '/api/v1/server/node/config_file/write'
     ping: str = '/api/v1/server/node/ping'
 
 @dataclass
@@ -20,6 +20,19 @@ class NodeStatus:
     main: int = 1
     vpn_worker: int = 2
     balancer: int = 3
+
+@dataclass
+class UserStatuses:
+    not_connect: int = 1
+    offline: int = 2
+    online: int = 3
+
+@dataclass
+class ExecHistoryStatuses:
+    pending: int = 1
+    success: int = 2
+    failed_on_node: int = 3
+    failed_on_admin: int = 4
 
 @dataclass
 class TokenTypes:

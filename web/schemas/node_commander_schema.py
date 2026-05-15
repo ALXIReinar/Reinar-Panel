@@ -4,6 +4,7 @@ from pydantic import BaseModel, IPvAnyAddress, Field, field_validator
 
 
 class RemoteExecBaseSchema(BaseModel):
+    node_proto_id: int
     private_ip: IPvAnyAddress
     api_port: int = Field(gt=0, le=65535)
 
@@ -37,3 +38,12 @@ class ExecCMDNodeSchema(RemoteExecBaseSchema):
                 raise ValueError(f"Команда содержит опасный паттерн: {pattern}")
 
         return v
+
+
+class ReadConfigSchema(BaseModel):
+    node_proto_id: int
+
+
+class WriteConfigSchema(RemoteExecBaseSchema):
+    file_path: str
+    file_content: str

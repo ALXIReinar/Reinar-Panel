@@ -5,6 +5,7 @@ from asyncpg import Connection
 import secrets
 import base64
 
+from web.utils.anything import UserStatuses
 from web.utils.logger_config import log_event
 from web.config_dir.config import env
 
@@ -121,7 +122,7 @@ class UsersQueries:
         # Первая страница - без фильтра по ID
         if last_id is None:
             query = f'''
-            SELECT u.id, u.tg_username, u.traffic_used_day_mb, sp.traffic_limit_day, ps.expire_date, ps.created_at 
+            SELECT u.id, u.tg_username, u.traffic_used_day_mb, u.online_status, u.updated_at AS last_activity, sp.traffic_limit_day, ps.expire_date, ps.created_at
             FROM users u
             JOIN payed_subs ps ON ps.user_id = u.id
             JOIN sub_plans sp ON sp.id = ps.sub_plan_id
@@ -151,8 +152,8 @@ class UsersQueries:
     async def update_traffic(self, tg_usernames: list[str], traffic_add_mbs: list[int]):
         query = """
         UPDATE users
-        SET traffic_used_day_mb = users.traffic_used_day_mb + t.traffic_add
+        SET traffic_used_day_mb = users.traffic_used_day_mb + t.traffic_add, online_status = $3, updated_at = NOW()
         FROM (SELECT UNNEST($1::varchar[]) AS username, UNNEST($2::bigint[]) AS traffic_add) AS t
         WHERE users.tg_username = t.username
         """
-        await self.conn.execute(query, tg_usernames, traffic_add_mbs)
+        await self.conn.execute(query, tg_usernames, traffic_add_mbs, UserStatuses)

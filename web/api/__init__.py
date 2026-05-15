@@ -8,6 +8,7 @@ from web.api.protocols import protocols_router
 from web.api.node_commander_api import router as node_commander_router
 from web.api.users import users_router
 from web.api.subscriptions import subscriptions_router
+from web.api.execute_history import router as remote_execute_history_router
 
 main_router = APIRouter(prefix="/api/v1")
 
@@ -17,6 +18,7 @@ main_router.include_router(protocols_router)
 main_router.include_router(nodes_router)
 main_router.include_router(node_commander_router)
 main_router.include_router(whitelist_router)
+main_router.include_router(remote_execute_history_router)
 main_router.include_router(users_router)
 main_router.include_router(subscriptions_router)
 main_router.include_router(bg_router)
