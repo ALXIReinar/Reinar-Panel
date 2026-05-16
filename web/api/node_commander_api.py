@@ -109,8 +109,8 @@ async def config_file_write(body: WriteConfigSchema, request: Request, db: PgSql
             resp.raise_for_status()
 
         "1. Вытаскиваем ссылку-шаблон, зависимости и описание из БД"
-        config_link_tmp, sep, spec_params, node_title = await db.nodes_protocols.get_proto_tmp_w_spec_params(body.node_proto_id)
-        sub_ready_link = generate_link_from_json(config_link_tmp, body.file_content, sep, spec_params, node_title)
+        config_link_tmp, spec_params, node_ip_or_domain, node_title = await db.nodes_protocols.get_proto_tmp_w_spec_params(body.node_proto_id)
+        sub_ready_link = generate_link_from_json(config_link_tmp, body.file_content, spec_params, node_ip_or_domain, node_title)
 
         "2. Генерируем конфиг-ссылку для подписок"
         await db.nodes_protocols.update_config_link(body.node_proto_id, sub_ready_link)

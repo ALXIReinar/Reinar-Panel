@@ -13,7 +13,7 @@ router = APIRouter(tags=['Virtual Nodes-Protocols Variations'])
 
 @router.post('/protocols/create', summary="Добавить протокол на ноду")
 async def add_protocol_to_node_api(body: NodeProtocolCreateSchema, db: PgSqlDep, request: Request, _: JWTCookieDep):
-    np_id = await db.nodes_protocols.create_node_protocol(body.node_id, body.proto_id, body.title)
+    np_id = await db.nodes_protocols.create_node_protocol(body.node_id, body.proto_id, body.title, body.sub_node_address)
     if not np_id:
         log_event(f'Не удалось добавить протокол. Нода не найдена | node_id: \033[31m{body.node_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
         return JSONResponse(status_code=404, content={'success': False, 'message': 'Нода не найдена'})
@@ -56,6 +56,7 @@ async def update_node_protocol_api(body: UpdateNodeProtoSchema, db: PgSqlDep, re
         title=body.title,
         metrics_port=body.metrics_port,
         proto_port=body.proto_port,
+        sub_node_address=body.sub_node_address,
         user_visible=body.user_visible,
     )
 

@@ -13,7 +13,7 @@ background_tasks = set()
 @router.put("/crons/traffic_sync")
 async def collect_metrics_api(request: Request, db: PgSqlDep):
     """Обновляет трафик пользователей"""
-    "Получаем список АКТИВНЫХ и ВИДИМЫХ для пользователя нод"
+    "Получаем список АКТИВНЫХ и ВИДИМЫХ для пользователя нод, с которых можно собрать метрики(есть metrics_port)"
     nodes = await db.nodes_protocols.get_all_nodes_for_metrics()
     log_event(f'Ноды для обновления трафика | nodes_len: \033[32m{len(nodes)}\033[0m')
 

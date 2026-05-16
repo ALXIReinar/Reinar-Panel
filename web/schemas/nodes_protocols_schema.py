@@ -8,6 +8,7 @@ class NodeProtocolCreateSchema(BaseModel):
     """Схема для добавления протокола на ноду"""
     node_id: int = Field(..., gt=0, description="ID физической ноды")
     proto_id: int = Field(..., gt=0, description="ID протокола")
+    sub_node_address: str | None = Field(None, min_length=4, max_length=255, description="Домен протокола в конфиге клиентов")
     title: str = Field(min_length=1, max_length=128, description='Описание виртуальной ноды (инстанса протокола)')
 
 
@@ -18,6 +19,7 @@ class UpdateNodeProtoSchema(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=128, description="Название виртуальной ноды")
     metrics_port: int | None = Field(None, ge=1024, le=65535, description="Порт для сбора метрик трафика")
     proto_port: int | None = Field(None, ge=1024, le=65535, description="Порт протокола для клиентов")
+    sub_node_address: str | None = Field(None, min_length=4, max_length=255, description="Домен протокола в конфиге клиентов")
     user_visible: bool | None = Field(None, description="Видимость для пользователей")
 
     @field_validator('proto_port', mode='after')
@@ -28,19 +30,3 @@ class UpdateNodeProtoSchema(BaseModel):
                 raise ValueError('Порт протокола не может быть равен порту для сбора статистики трафика!')
         return v
 
-
-class NodeProtocolSchema(BaseModel):
-    """Схема виртуальной ноды (протокол на физической ноде)"""
-    id: int
-    node_id: int
-    proto_id: int
-    config_path: str | None
-    created_at: datetime
-    updated_at: datetime | None
-    # Данные из JOIN'ов
-    node_ip: str | None = None
-    node_private_ip: str | None = None
-    node_api_port: int | None = None
-    node_title: str | None = None
-    node_is_active: bool | None = None
-    proto_name: str | None = None

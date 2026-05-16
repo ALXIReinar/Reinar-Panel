@@ -4,6 +4,7 @@ import math
 import re
 from collections import defaultdict
 
+import flatten_json
 import jmespath
 from aiohttp import ClientSession, ClientResponseError
 from asyncpg import Pool, Record
@@ -28,6 +29,7 @@ def parse_node_output(script_text: str, stdout: str):
         "math": math,
         "defaultdict": defaultdict,
         "jmespath": jmespath,
+        "flatten_json": flatten_json,
         # Запрещаем опасные встроенные функции типа open, eval, import
         "__builtins__": {
             "int": int, "str": str, "float": float, "list": list, "dict": dict,

@@ -29,7 +29,7 @@ async def bind_node_api(body: NodeCreateSchema, request: Request, db: PgSqlDep, 
 
     "Фиксируем имя в БД"
     node_id = await db.nodes.create_node(
-        body.ip, body.private_ip, body.api_port, resp['service'], body.title, body.status, body.is_active
+        body.ip, body.private_ip, body.api_port, resp['service'], body.title, body.is_active
     )
     log_event(f'Успешно связались с нодой | node_name: \033[32m{resp['service']}\033[0m; private_ip: \033[33m{body.private_ip}\033[0m; api_port: \033[35m{body.api_port}\033[0m; node_id: \033[33m{node_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     return {'success': resp['success'], 'node_id': node_id, 'node_name': resp['service'], 'message': 'Нода создана'}
@@ -37,10 +37,10 @@ async def bind_node_api(body: NodeCreateSchema, request: Request, db: PgSqlDep, 
 
 @router.get('/all', summary="Получить все физические ноды")
 async def get_all_nodes_api(
-        status: Annotated[int | None, Query()], is_active: Annotated[bool | None, Query()], db: PgSqlDep, request: Request, _: JWTCookieDep = None
+        is_active: Annotated[bool | None, Query()], db: PgSqlDep, request: Request, _: JWTCookieDep
 ):
-    nodes = await db.nodes.get_all_nodes(status, is_active)
-    log_event(f'Отдали все ноды | status: \033[33m{status}\033[0m; is_active: \033[32m{is_active}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    nodes = await db.nodes.get_all_nodes(is_active)
+    log_event(f'Отдали все ноды | is_active: \033[32m{is_active}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     return {'nodes': nodes}
 
 
@@ -57,7 +57,7 @@ async def get_node_api(node_id: int, request: Request, db: PgSqlDep, _: JWTCooki
 
 @router.put('/update/{node_id}', summary="Обновить физическую ноду")
 async def update_node_api(body: NodeUpdateSchema, db: PgSqlDep, request: Request, _: JWTCookieDep):
-    await db.nodes.update_node(body.node_id, body.ip, body.private_ip, body.api_port, body.title, body.status, body.is_active)
+    await db.nodes.update_node(body.node_id, body.ip, body.private_ip, body.api_port, body.title, body.is_active)
     log_event(f"Обновлена нода | node_id: \033[33m{body.node_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request)
     return {'success': True, 'message': 'Нода обновлена'}
 

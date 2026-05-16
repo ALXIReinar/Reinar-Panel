@@ -16,7 +16,7 @@ class ProtoTemplatesQueries:
             cursor_condition = ''
 
         query = f"""
-        SELECT id, title, url_tmp, status, separator
+        SELECT id, title, url_tmp, status
         FROM proto_templates
         {cursor_condition}
         ORDER BY id {sort_by}
@@ -31,7 +31,7 @@ class ProtoTemplatesQueries:
 
     async def get_by_id(self, tmp_id: int, spec_only: bool):
         """Получить шаблон по ID с привязанными spec параметрами"""
-        template_query = "SELECT id, title, url_tmp, status, separator FROM proto_templates WHERE id = $1"
+        template_query = "SELECT id, title, url_tmp, status FROM proto_templates WHERE id = $1"
         spec_params_query = "SELECT id, key FROM template_spec_params WHERE tmp_id = $1"
 
         "Облегчённый вариант(если в LocalStorage есть template)"
@@ -66,7 +66,7 @@ class ProtoTemplatesQueries:
             return 409, 'Шаблон с таким названием уже существует', None
 
 
-    async def update(self, tmp_id: int, url_tmp: str | None = None, separator: str | None = None) -> tuple[int, str]:
+    async def update(self, tmp_id: int, url_tmp: str | None = None) -> tuple[int, str]:
         """
         Обновить шаблон
         
@@ -82,11 +82,6 @@ class ProtoTemplatesQueries:
         if url_tmp is not None:
             updates.append(f"url_tmp = ${param_idx}")
             params.append(url_tmp)
-            param_idx += 1
-
-        if separator is not None:
-            updates.append(f"separator = ${param_idx}")
-            params.append(separator)
             param_idx += 1
 
         if not updates:

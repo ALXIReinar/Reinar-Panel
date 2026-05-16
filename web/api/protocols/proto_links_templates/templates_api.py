@@ -59,7 +59,7 @@ async def update_template(body: UpdateTmpSchema, request: Request, db: PgSqlDep,
     """Обновить шаблон конфиг-ссылки (url_tmp и separator)"""
     log_event(f'Обновление шаблона | tmp_id: \033[35m{body.tmp_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     
-    status_code, message = await db.proto_templates.update(body.tmp_id, body.url_tmp, body.separator)
+    status_code, message = await db.proto_templates.update(body.tmp_id, body.url_tmp)
     
     "Шаблон не найден"
     if status_code == 404:
