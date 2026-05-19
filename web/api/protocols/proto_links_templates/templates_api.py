@@ -68,6 +68,7 @@ async def update_template(body: UpdateTmpSchema, request: Request, db: PgSqlDep,
         api_delete_user_script=body.api_delete_user_script,
         proto_python_lib=body.proto_python_lib,
         flatten_json_users_key=body.flatten_json_users_key,
+        flatten_json_delete_user_key=body.flatten_json_delete_user_key,
     )
     
     "Шаблон не найден"

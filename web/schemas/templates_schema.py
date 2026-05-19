@@ -23,6 +23,7 @@ class UpdateTmpSchema(BaseModel):
     api_delete_user_script: str | None = Field(None, description='Python скрипт для удаления пользователя через API')
     proto_python_lib: str | None = Field(None, max_length=32, description='Библиотека для hot-reload (grpcio, requests)')
     flatten_json_users_key: str | None = Field(None, max_length=1024, description='Путь до массива clients (flatten-json)')
+    flatten_json_delete_user_key: str | None = Field(None, max_length=128, description='Путь до параметра-идентификатора пользователя в clients (flatten-json)')
     is_accepted: bool | None = Field(None, description='Принят ли шаблон администратором')
 
     @field_validator('url_tmp')

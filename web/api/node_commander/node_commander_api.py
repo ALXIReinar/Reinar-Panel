@@ -178,9 +178,12 @@ async def add_user(
 
         url = f"http://{cpi['private_ip']}:{cpi['api_port']}{NodeUris.proto_core_add_user}"
         json_body = {
+            'node_proto_id': cpi['node_proto_id'],
             'core_lib': cpi['proto_python_lib'],
+            'user_uuid': body.uuid,
             'user_obj': final_user_obj,
             'add_script': cpi['api_add_user_script'],
+            'core_port': cpi['metrics_port'],
             'reload_core_command': cpi['reload_core_command'],
             'config_file_path': cpi['config_path'],
             'flatten_json_users_key': cpi['flatten_json_users_key'],
@@ -219,9 +222,12 @@ async def delete_user(
         log_event(f'Юзер на удаление из конфиг-файла ядра | uuid: \033[35m{body.uuid}\033[0m; node_proto_id: \033[33m{cpi['node_proto_id']}\033[0m; private_ip: \033[33m{cpi['private_ip']}\033[0m; api_port: \033[35m{cpi['api_port']}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
         url = f"http://{cpi['private_ip']}:{cpi['api_port']}{NodeUris.proto_core_delete_user}"
         json_body = {
+            'node_proto_id': cpi['node_proto_id'],
             'core_lib': cpi['proto_python_lib'],
             'user_uuid': body.uuid,
             'delete_script': cpi['api_add_user_script'],
+            'core_port': cpi['metrics_port'],
+            'flatten_json_delete_user_key': cpi['flatten_json_delete_user_key'],
             'reload_core_command': cpi['reload_core_command'],
             'config_file_path': cpi['config_path'],
             'flatten_json_users_key': cpi['flatten_json_users_key'],

@@ -32,7 +32,7 @@ class ProtoTemplatesQueries:
         """Получить шаблон по ID с привязанными spec параметрами"""
         template_query = """
         SELECT id, title, url_tmp, status, is_accepted, reload_core_command, required_user_data_obj, constant_user_data_obj,
-               api_add_user_script, api_delete_user_script, proto_python_lib, flatten_json_users_key
+               api_add_user_script, api_delete_user_script, proto_python_lib, flatten_json_users_key, flatten_json_delete_user_key
         FROM proto_templates 
         WHERE id = $1
         """
@@ -81,6 +81,7 @@ class ProtoTemplatesQueries:
         api_delete_user_script: str | None = None,
         proto_python_lib: str | None = None,
         flatten_json_users_key: str | None = None,
+        flatten_json_delete_user_key: str | None = None,
     ) -> tuple[int, str]:
         """
         Обновить шаблон (универсальный метод для всех полей)
@@ -131,6 +132,11 @@ class ProtoTemplatesQueries:
 
         if flatten_json_users_key is not None:
             updates.append(f"flatten_json_users_key = ${param_idx}")
+            params.append(flatten_json_users_key)
+            param_idx += 1
+
+        if flatten_json_delete_user_key is not None:
+            updates.append(f"flatten_json_delete_user_key = ${param_idx}")
             params.append(flatten_json_users_key)
             param_idx += 1
 
