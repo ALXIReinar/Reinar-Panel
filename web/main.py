@@ -4,6 +4,7 @@ import uvicorn
 from aiohttp import ClientSession
 from asyncpg import create_pool
 from fastapi import FastAPI
+from fastapi.responses import ORJSONResponse
 from redis.asyncio import Redis
 from starlette.middleware.cors import CORSMiddleware
 
@@ -35,6 +36,7 @@ app = FastAPI(
     docs_url='/api/docs',
     openapi_url='/api/openapi.json',
     lifespan=lifespan,
+    default_response_class=ORJSONResponse, # используем в X5 раз более быстрый кодек orjson вместо json
     response_model=env.post_processing_responses,
     response_model_exclude_unset=env.post_processing_responses
 )
@@ -45,7 +47,7 @@ app.include_router(main_router)
 "Миддлвари"
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost", "http://127.0.0.1", "http://127.0.0.1:8000", "http://localhost:8000", env.domain],
+    allow_origins=[f"http://127.0.0.1:{env.admin_port}", f"http://localhost:{env.admin_port}", env.domain],
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*']

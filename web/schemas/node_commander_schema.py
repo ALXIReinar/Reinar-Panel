@@ -50,11 +50,14 @@ class WriteConfigSchema(RemoteExecBaseSchema):
     file_content: str
 
 
-class AddUserCoreProtoSchema(RemoteExecBaseSchema):
+class AddUserCoreProtoSchema(BaseModel):
     tg_username: str = Field(max_length=32)
-    uuid: str
+    uuid: str = Field(min_length=36, max_length=36)
     additional_fields: dict = Field(
         description='Словарь для объектов, которые добавляются в user_obj для пользователей в конфиг-файле ядра'
                     'Значения подставляются пользователем. Например, если этот объект будет {"add_must_have_field": "super_field"}, то'
                     'Конечный user_obj будет выглядеть: {**required_user_data_obj, **constant_user_data_obj, "add_must_have_field": "super_field"}'
     )
+
+class DeleteUserCoreProtoSchema(BaseModel):
+    uuid: str = Field(min_length=36, max_length=36)

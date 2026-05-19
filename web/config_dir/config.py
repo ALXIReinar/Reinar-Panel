@@ -5,7 +5,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 
+import orjson
 from aiohttp import ClientSession
+from asyncpg import Connection
 from fastapi import Depends
 from passlib.context import CryptContext
 from pydantic import BaseModel, Field
@@ -109,6 +111,20 @@ env = get_env_vars()
 
 
 "PostgreSQL"
+async def init(conn: Connection):
+    await conn.set_type_codec(
+        'jsonb',
+        encoder=lambda v: orjson.dumps(v).decode('utf-8'),
+        decoder=orjson.loads,
+        schema='pg_catalog',
+    )
+    await conn.set_type_codec(
+        'json',
+        encoder=lambda v: orjson.dumps(v).decode('utf-8'),
+        decoder=orjson.loads,
+        schema='pg_catalog',
+    )
+
 def get_pg_settings(envs: Settings):
     cfg = APP_MODE_CONFIG[envs.app_mode]
     host = getattr(envs, cfg["pg_host"])
@@ -122,9 +138,10 @@ pool_settings = dict(
     password=env.pg_password,
     **get_pg_settings(env),
     command_timeout=60,
+    init=init,
     max_size=env.pg_max_connections # connections on pool
 )
-
+print(f'\033[36m{pool_settings}\033[0m')
 
 "Redis"
 def get_redis_settings(envs: Settings):

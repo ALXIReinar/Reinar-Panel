@@ -56,10 +56,19 @@ async def add_template(body: AddTmpSchema, request: Request, db: PgSqlDep, _: JW
 
 @router.put('/update')
 async def update_template(body: UpdateTmpSchema, request: Request, db: PgSqlDep, _: JWTCookieDep):
-    """Обновить шаблон конфиг-ссылки (url_tmp и separator)"""
     log_event(f'Обновление шаблона | tmp_id: \033[35m{body.tmp_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     
-    status_code, message = await db.proto_templates.update(body.tmp_id, body.url_tmp)
+    status_code, message = await db.proto_templates.update(
+        tmp_id=body.tmp_id,
+        url_tmp=body.url_tmp,
+        reload_core_command=body.reload_core_command,
+        required_user_data_obj=body.required_user_data_obj,
+        constant_user_data_obj=body.constant_user_data_obj,
+        api_add_user_script=body.api_add_user_script,
+        api_delete_user_script=body.api_delete_user_script,
+        proto_python_lib=body.proto_python_lib,
+        flatten_json_users_key=body.flatten_json_users_key,
+    )
     
     "Шаблон не найден"
     if status_code == 404:

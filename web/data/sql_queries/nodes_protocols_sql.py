@@ -191,7 +191,17 @@ class NodesProtocolsQueries:
         await self.conn.execute(query, node_proto_id, sub_ready_link)
 
 
-    async def get_core_proto_deps(self, node_proto_id: int):
+    async def get_core_proto_deps_by_user_sub(self, uuid: str):
         query = '''
-        SELECT 
+        SELECT np.id, n.private_ip, n.api_port, pt.proto_python_lib, pt.api_add_user_script, pt.api_delete_user_script, 
+               pt.reload_core_command, np.config_path, pt.flatten_json_users_key, pt.required_user_data_obj, pt.constant_user_data_obj                    
+        FROM payed_subs ps
+        JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = ps.id
+        JOIN nodes_protocols np ON np.id = vsp.id AND np.user_visible = true
+        JOIN protocols p ON np.proto_id = p.id
+        JOIN nodes n ON np.node_id = n.id AND n.is_active = true
+        JOIN proto_templates pt ON p.proto_tmp_id = pt.id
+        JOIN users u ON ps.user_id = u.id
+        WHERE ps.is_active = true AND u.uuid = $1
         '''
+        return await self.conn.fetch(query, uuid)

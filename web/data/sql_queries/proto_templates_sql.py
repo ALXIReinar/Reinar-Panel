@@ -16,8 +16,7 @@ class ProtoTemplatesQueries:
             cursor_condition = ''
 
         query = f"""
-        SELECT id, title, url_tmp, status
-        FROM proto_templates
+        SELECT id,  title,  url_tmp,  status,  is_accepted, proto_python_lib FROM proto_templates
         {cursor_condition}
         ORDER BY id {sort_by}
         LIMIT $1
@@ -31,12 +30,17 @@ class ProtoTemplatesQueries:
 
     async def get_by_id(self, tmp_id: int, spec_only: bool):
         """Получить шаблон по ID с привязанными spec параметрами"""
-        template_query = "SELECT id, title, url_tmp, status FROM proto_templates WHERE id = $1"
+        template_query = """
+        SELECT id, title, url_tmp, status, is_accepted, reload_core_command, required_user_data_obj, constant_user_data_obj,
+               api_add_user_script, api_delete_user_script, proto_python_lib, flatten_json_users_key
+        FROM proto_templates 
+        WHERE id = $1
+        """
         spec_params_query = "SELECT id, key FROM template_spec_params WHERE tmp_id = $1"
 
         "Облегчённый вариант(если в LocalStorage есть template)"
         if spec_only:
-            spec_params = await self.conn.fetchrow(template_query, tmp_id)
+            spec_params = await self.conn.fetch(spec_params_query, tmp_id)
             return {'spec_params': spec_params}
 
         template = await self.conn.fetchrow(template_query, tmp_id)
@@ -66,9 +70,20 @@ class ProtoTemplatesQueries:
             return 409, 'Шаблон с таким названием уже существует', None
 
 
-    async def update(self, tmp_id: int, url_tmp: str | None = None) -> tuple[int, str]:
+    async def update(
+        self, 
+        tmp_id: int, 
+        url_tmp: str | None = None,
+        reload_core_command: str | None = None,
+        required_user_data_obj: dict | None = None,
+        constant_user_data_obj: dict | None = None,
+        api_add_user_script: str | None = None,
+        api_delete_user_script: str | None = None,
+        proto_python_lib: str | None = None,
+        flatten_json_users_key: str | None = None,
+    ) -> tuple[int, str]:
         """
-        Обновить шаблон
+        Обновить шаблон (универсальный метод для всех полей)
         
         Returns:
             tuple[status_code, message]
@@ -82,6 +97,41 @@ class ProtoTemplatesQueries:
         if url_tmp is not None:
             updates.append(f"url_tmp = ${param_idx}")
             params.append(url_tmp)
+            param_idx += 1
+
+        if reload_core_command is not None:
+            updates.append(f"reload_core_command = ${param_idx}")
+            params.append(reload_core_command)
+            param_idx += 1
+
+        if required_user_data_obj is not None:
+            updates.append(f"required_user_data_obj = ${param_idx}")
+            params.append(required_user_data_obj)
+            param_idx += 1
+
+        if constant_user_data_obj is not None:
+            updates.append(f"constant_user_data_obj = ${param_idx}")
+            params.append(constant_user_data_obj)
+            param_idx += 1
+
+        if api_add_user_script is not None:
+            updates.append(f"api_add_user_script = ${param_idx}")
+            params.append(api_add_user_script)
+            param_idx += 1
+
+        if api_delete_user_script is not None:
+            updates.append(f"api_delete_user_script = ${param_idx}")
+            params.append(api_delete_user_script)
+            param_idx += 1
+
+        if proto_python_lib is not None:
+            updates.append(f"proto_python_lib = ${param_idx}")
+            params.append(proto_python_lib)
+            param_idx += 1
+
+        if flatten_json_users_key is not None:
+            updates.append(f"flatten_json_users_key = ${param_idx}")
+            params.append(flatten_json_users_key)
             param_idx += 1
 
         if not updates:

@@ -106,7 +106,6 @@ class SubPlansQueries:
         query = """
         SELECT id, title, cost, ttl_days, traffic_limit_day, is_active
         FROM sub_plans
-        ORDER BY id DESC
         LIMIT $1
         """
         return await self.conn.fetch(query, limit)
@@ -122,21 +121,12 @@ class SubPlansQueries:
 
         # Получаем привязанные виртуальные ноды
         vnodes_query = """
-        SELECT 
-            vsp.id as link_id,
-            np.id as node_proto_id,
-            np.node_id,
-            np.proto_id,
-            np.config_link,
-            n.title as node_title,
-            n.ip as node_ip,
-            p.title as proto_title
+        SELECT vsp.id as link_id, np.id as node_proto_id, np.node_id, np.proto_id, np.config_link, n.title as node_title,n.ip as node_ip,np.title as proto_title
         FROM vnodes_sub_plans vsp
         JOIN nodes_protocols np ON np.id = vsp.node_proto_id
         JOIN nodes n ON n.id = np.node_id
         JOIN protocols p ON p.id = np.proto_id
         WHERE vsp.sub_plan_id = $1
-        ORDER BY np.id
         """
         vnodes = await self.conn.fetch(vnodes_query, plan_id)
 
