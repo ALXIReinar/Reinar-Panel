@@ -1,4 +1,5 @@
 import re
+from typing import Literal
 
 from pydantic import BaseModel, IPvAnyAddress, Field, field_validator
 
@@ -47,3 +48,13 @@ class ReadConfigSchema(BaseModel):
 class WriteConfigSchema(RemoteExecBaseSchema):
     file_path: str
     file_content: str
+
+
+class AddUserCoreProtoSchema(RemoteExecBaseSchema):
+    tg_username: str = Field(max_length=32)
+    uuid: str
+    additional_fields: dict = Field(
+        description='Словарь для объектов, которые добавляются в user_obj для пользователей в конфиг-файле ядра'
+                    'Значения подставляются пользователем. Например, если этот объект будет {"add_must_have_field": "super_field"}, то'
+                    'Конечный user_obj будет выглядеть: {**required_user_data_obj, **constant_user_data_obj, "add_must_have_field": "super_field"}'
+    )

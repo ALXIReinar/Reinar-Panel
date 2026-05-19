@@ -5,10 +5,10 @@ from web.api.bg_tasks import bg_router
 from web.api.whitelist_api import router as whitelist_router
 from web.api.nodes import nodes_router
 from web.api.protocols import protocols_router
-from web.api.node_commander_api import router as node_commander_router
+from web.api.node_commander.node_commander_api import router as node_commander_router
 from web.api.users import users_router
 from web.api.subscriptions import subscriptions_router
-from web.api.execute_history import router as remote_execute_history_router
+from web.api.node_commander.execute_history import router as remote_execute_history_router
 
 main_router = APIRouter(prefix="/api/v1")
 

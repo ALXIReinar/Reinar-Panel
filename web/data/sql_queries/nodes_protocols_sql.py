@@ -189,3 +189,9 @@ class NodesProtocolsQueries:
     async def update_config_link(self, node_proto_id: int, sub_ready_link: str):
         query = 'UPDATE nodes_protocols SET updated_at = NOW(), config_link = $2 WHERE id = $1'
         await self.conn.execute(query, node_proto_id, sub_ready_link)
+
+
+    async def get_core_proto_deps(self, node_proto_id: int):
+        query = '''
+        SELECT 
+        '''

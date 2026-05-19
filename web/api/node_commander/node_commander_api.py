@@ -1,16 +1,19 @@
+import json
 from typing import Annotated
 
 from aiohttp import ClientResponseError
 from fastapi import APIRouter, HTTPException
 from fastapi.params import Query
 from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from web.api.protocols.proto_links_templates.handlers import generate_link_from_json
 from web.config_dir.config import NodeExecAiohttpDep
 from web.data.postgres import PgSqlDep
 from web.data.redis_storage import RedisDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
-from web.schemas.node_commander_schema import ExecCMDNodeSchema, ReadConfigSchema, WriteConfigSchema
+from web.schemas.node_commander_schema import ExecCMDNodeSchema, ReadConfigSchema, WriteConfigSchema, \
+    AddDeleteUserCoreProtoSchema, AddUserCoreProtoSchema
 from web.utils.anything import NodeUris, Constants, ExecHistoryStatuses
 from web.data.redis_storage import CommandWhitelistCache
 from web.utils.logger_config import log_event
@@ -73,11 +76,11 @@ async def config_file_read(
 ):
     log_event(f'Пробуем считать конфиг-файл с ноды | node_proto_id: \033[32m{q_params.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     node_info = await db.nodes_protocols.get_node_for_file_edit(request.state.node_proto_id)
-    
+
     "Не указан путь к файлу"
     if node_info['config_path'] is None:
         raise HTTPException(status_code=404, detail={'success': False, 'message': 'Путь к конфиг-файлу протокола не указан!'})
-    
+
     "Запрашиваем файл с ноды"
     try:
         url = f'http://{node_info['private_ip']}:{node_info['api_port']}{NodeUris.get_config_file}'
@@ -127,3 +130,49 @@ async def config_file_write(body: WriteConfigSchema, request: Request, db: PgSql
     except Exception as e:
         log_event(f'Ошибка исполнения на админке, не удалось записать файл | error: \033[31m{e}\033[0m; node_proto_id: \033[33m{body.node_proto_id}\033[0m',request=request, level='CRITICAL')
         raise HTTPException(status_code=500, detail="Ошибка исполнения на админке")
+
+
+
+@router.put('/core_protocol/user/add')
+async def add_delete_user(
+        body: AddUserCoreProtoSchema, request: Request, db: PgSqlDep, aio_http: NodeExecAiohttpDep, _: JWTCookieDep
+):
+    log_event(f'Юзер в конфиг-файл ядра | uuid: \033[35m{body.uuid}\033[0m; node_proto_id: \033[33m{body.node_proto_id}\033[0m; private_ip: \033[33m{body.private_ip}\033[0m; api_port: \033[35m{body.api_port}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request,)
+
+    "Сбор данных"
+    core_proto_info = await db.nodes_protocols.get_core_proto_deps(body.node_proto_id)
+
+    required_user_obj = json.loads(core_proto_info['required_user_data_obj']).keys()
+
+    # TODO: Сомнительный подход
+    required_user_obj = {
+        required_user_obj[0]: body.uuid,
+        required_user_obj[1]: body.tg_username,
+    }
+
+    final_user_obj = {
+        **required_user_obj,
+        **json.loads(core_proto_info['constant_user_data_obj']),
+        **body.additional_fields
+    }
+
+    "Отправляем запрос на ноду, в ядро протокола"
+    url = f"http://{body.private_ip}:{body.api_port}{NodeUris.proto_core_add_user}"
+    json_body = {
+        'core_lib': core_proto_info['proto_python_lib'],
+        'user_obj': final_user_obj,
+        'add_script': core_proto_info['api_add_user_script'],
+        'reload_core_command': core_proto_info['reload_core_command'],
+        'config_file_path': core_proto_info['config_path'],
+        'flatten_json_users_key': core_proto_info['flatten_json_users_key'],
+    }
+    async with aio_http.post(url, json=json_body) as resp:
+        resp_json = await resp.json()
+        resp_status = resp.status
+
+    "Транслируем ответ ноды"
+    return JSONResponse(status_code=resp_status, content=resp_json)
+
+
+
+

@@ -13,6 +13,10 @@ class NodeUris:
     get_config_file: str = '/api/v1/server/node/config_file/read'
     write_config_file: str = '/api/v1/server/node/config_file/write'
     ping: str = '/api/v1/server/node/ping'
+    proto_core_add_user: str = '/api/v1/server/node/proto_core/user/add'
+    proto_core_delete_user: str = '/api/v1/server/node/proto_core/user/delete'
+
+
 
 @dataclass
 class NodeStatus:
@@ -51,6 +55,10 @@ class Constants:
         'ws_token': 'wT'
     }
     excluded_commands_words = {'sudo', }
+    proto_core_methods = {
+        'add': NodeUris.proto_core_add_user,
+        'delete': NodeUris.proto_core_delete_user
+    }
 
 
 def get_client_ip(request: Request):
