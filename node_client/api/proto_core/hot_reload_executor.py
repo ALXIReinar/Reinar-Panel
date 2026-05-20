@@ -2,9 +2,7 @@ import importlib
 import json
 import math
 import re
-import sys
 from collections import defaultdict
-from typing import Any
 
 import flatten_json
 import jmespath
@@ -18,7 +16,7 @@ class HotReloadExecutor:
     
     @staticmethod
     async def execute_add_script(
-            script: str, lib_name: str, user_obj: dict, proto_config: dict, node_ip: str, proto_port: int
+            script: str, lib_name: str, user_obj: dict, node_ip: str, core_api_port: int
     ) -> tuple[bool, str]:
         """
         Выполняет скрипт добавления пользователя через API
@@ -27,12 +25,12 @@ class HotReloadExecutor:
             script: Python код с функцией add_user()
             lib_name: Имя библиотеки для импорта (grpcio, requests)
             user_obj: Объект пользователя
-            proto_config: Конфиг протокола
             node_ip: IP ноды
-            proto_port: Порт протокола
-            
+            core_api_port: Порт АПИ ядра протокола
+
         Returns:
             tuple[success, message]
+
         """
         try:
 
@@ -59,14 +57,14 @@ class HotReloadExecutor:
             exec(script, global_scope, local_scope)
             
             "Вызываем функцию add_user из скрипта"
-            add_user_func = local_scope['add_user'](user_obj, proto_config, node_ip, proto_port)
-            result = add_user_func(user_obj, proto_config, node_ip, proto_port)
+            add_user_func = local_scope['add_user'](user_obj, node_ip, core_api_port)
+            result = add_user_func(user_obj, node_ip, core_api_port)
             
             "Если async"
             if hasattr(result, '__await__'):
                 result = await result
-            
-            log_event(f"Hot-reload ADD успешно выполнен для пользователя | uuid: {user_obj.get('id', 'unknown')}", level='INFO')
+
+            log_event(f"Hot-reload ADD успешно выполнен для пользователя | user_obj: \033[37m{user_obj}\033[0m", level='INFO')
             return True, "Hot-reload добавление успешно"
             
         except ImportError as e:
@@ -85,9 +83,8 @@ class HotReloadExecutor:
         script: str,
         lib_name: str,
         user_identifier: str,
-        config: dict,
         node_ip: str,
-        proto_port: int
+        core_api_port: int
     ) -> tuple[bool, str]:
         """
         Выполняет скрипт удаления пользователя через API
@@ -96,9 +93,8 @@ class HotReloadExecutor:
             script: Python код с функцией **delete_user()**
             lib_name: Имя библиотеки для импорта
             user_identifier: Идентификатор пользователя (UUID или email)
-            config: Конфиг протокола
             node_ip: IP ноды
-            proto_port: Порт протокола
+            core_api_port: Порт протокола
             
         Returns:
             tuple[success, message]
@@ -128,7 +124,7 @@ class HotReloadExecutor:
             
             "Вызываем функцию delete_user из скрипта"
             delete_user_func = local_scope['delete_user']
-            result = delete_user_func(user_identifier, config, node_ip, proto_port)
+            result = delete_user_func(user_identifier, node_ip, core_api_port)
             
             "Если async"
             if hasattr(result, '__await__'):

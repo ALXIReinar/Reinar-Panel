@@ -11,34 +11,15 @@ from node_client.logger_config import log_event
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    """
-    Lifespan для инициализации и остановки ConfigWriteBuffer
-    
-    Startup:
-    - Создаём глобальный экземпляр ConfigWriteBuffer
-    - Ноды регистрируются динамически при первом обращении
-    
-    Shutdown:
-    - Останавливаем все воркеры
-    - Сбрасываем остатки на диск
-    """
-    # ========== STARTUP ==========
-    log_event("Запуск node-client...", level='INFO')
-    
-    # Инициализируем глобальный ConfigWriteBuffer
-    app.state.core_buffer = ConfigWriteBuffer(max_batch=5, timeout=10.0)
-    
-    log_event("ConfigWriteBuffer инициализирован", level='INFO')
-    log_event(f"Node-client запущен на порту {env.node_port}", level='INFO')
-    
-    yield
-    
-    # ========== SHUTDOWN ==========
-    log_event("Остановка node-client...", level='INFO')
-    
-    # Останавливаем ConfigWriteBuffer
-    await app.state.core_buffer.stop()
+async def lifespan(web_app: FastAPI):
+    """"""
+    "Инициализируем глобальный ConfigWriteBuffer"
+    web_app.state.core_buffer = ConfigWriteBuffer(max_batch=env.write_buffer_size, timeout=env.write_buffer_interval)
+
+    try:
+        yield
+    finally:
+       await web_app.state.core_buffer.stop()
     
     log_event("Node-client остановлен", level='INFO')
 
@@ -49,4 +30,4 @@ app.include_router(main_router)
 app.add_middleware(OnlyAdminAccessMiddleware)
 
 if __name__ == '__main__':
-    uvicorn.run('node_client.main:app', log_config=None, host="0.0.0.0", port=env.node_port, workers=env.uvicorn_workers)
+    uvicorn.run('node_client.main:app', log_config=None, host="0.0.0.0", port=env.node_port, workers=1)

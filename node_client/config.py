@@ -15,7 +15,7 @@ env_files = (
     '.env.node.prod'
 )
 load_dotenv(env_files, override=True)
-logging.critical(f'\033[35m{env_files}\033[0m | node_port: \033[32m{os.getenv("NODE_PORT", "8001")}\033[0m')
+logging.critical(f'\033[35m{env_files}\033[0m | node_port: \033[32m{os.getenv("NODE_PORT", "8100")}\033[0m')
 
 "Создаём директории"
 WORKDIR = Path(__file__).resolve().parent
@@ -23,13 +23,18 @@ WORKDIR = Path(__file__).resolve().parent
 LOG_DIR = WORKDIR / 'node_logs'
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
+TMP_DIR = Path('/tmp/vpn-panel')
+TMP_DIR.mkdir(parents=True, exist_ok=True)
+
 class Settings(BaseSettings):
     """Настройки Node Client"""
 
     node_name: str = Field(max_length=64)
     node_port: int
     command_timeout: int  # секунды
-    uvicorn_workers: int
+
+    write_buffer_size: int # Размер очереди пользователей в памяти на удаление/запись в файл
+    write_buffer_interval: int # Интервал записи очереди из памяти на диск (в файл)
 
     admin_panel_private_ip: str
     model_config = SettingsConfigDict(extra='allow')
@@ -39,8 +44,3 @@ class Settings(BaseSettings):
 def get_env_vars():
     return Settings()
 env = get_env_vars()
-
-
-def get_proto_cores_buffer(request: Request):
-    return request.app.state.core_buffers
-CoreBuffersDep = Annotated[dict, get_proto_cores_buffer]

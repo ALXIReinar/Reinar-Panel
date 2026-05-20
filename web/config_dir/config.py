@@ -30,7 +30,6 @@ WORKDIR = Path(__file__).resolve().parent.parent
 
 LOG_DIR = WORKDIR / 'web_logs'
 LOG_DIR.mkdir(parents=True, exist_ok=True)
-Path("/tmp").mkdir(exist_ok=True)
 
 "Хэш-метод"
 encryption = CryptContext(schemes=['argon2'], deprecated='auto')
