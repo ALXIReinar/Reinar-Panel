@@ -1,5 +1,6 @@
 import os
 import inspect
+import orjson
 from datetime import datetime, UTC
 
 import logging
@@ -7,26 +8,26 @@ from logging.config import dictConfig
 
 from typing import Literal, Any
 
-import orjson
 from starlette.requests import Request
 from starlette.websockets import WebSocket
 
-from node_client.config import env, LOG_DIR
+from sub.config import env, LOG_DIR
 
 
-class JSONFormatter(logging.Formatter):
+class JsonFormatter(logging.Formatter):
     def format(self, record):
         log_entry = {
             "@timestamp": datetime.now(UTC).isoformat() + "Z",
             "level": record.levelname,
             "message": record.getMessage(),
-            "service": env.node,
+            "service": "web-panel_app",
             "environment": env.app_mode,
             "method": record.__dict__.get('method', ''),
             "url": str(record.__dict__.get('url', '')),
             "func": record.__dict__.get('func', 'unknown_function'),
             "location": record.__dict__.get('location', 'unknown_location'),
             "line": record.__dict__.get('line', 0),
+            "ip": str(record.__dict__.get('ip', ''))
         }
 
         # Добавляем дополнительные поля из extra (для HTTP метрик и ресурсов)
@@ -39,16 +40,16 @@ class JSONFormatter(logging.Formatter):
             log_entry[key] = record.__dict__.get(key, '')
 
         try:
-            return orjson.dumps(log_entry)
+            return orjson.dumps(log_entry).decode('utf8')
         except (TypeError, ValueError) as e:
             fallback_entry = {
                 "@timestamp": datetime.now(UTC).isoformat() + "Z",
                 "level": record.levelname,
                 "message": str(record.getMessage()),
-                "service": env.node_name,
-                "error": f"JSON serialization failed: {str(e)}"
+                "service": "sub-service",
+                "error": f"orjson serialization failed: {str(e)}"
             }
-            return orjson.dumps(fallback_entry)
+            return orjson.dumps(fallback_entry).decode('utf8')
 
 
 lvls = {
@@ -68,7 +69,7 @@ logger_settings = {
             "format": "%(log_color)s%(levelname)-8s%(reset)s | "
                       "\033[32mD%(asctime)s\033[0m | "
                       "\033[34m%(method)s\033[0m \033[36m%(url)s\033[0m | "
-                      "%(cyan)s%(location)s:%(reset)s def %(cyan)s%(func)s%(reset)s(): line - %(cyan)s%(line)d%(reset)s "
+                      "%(cyan)s%(location)s:%(reset)s def %(cyan)s%(func)s%(reset)s(): line - %(cyan)s%(line)d%(reset)s - \033[34m%(ip)s\033[0m "
                       "%(message)s",
             "datefmt": "%d-%m-%Y T%H:%M:%S",
             "log_colors": {
@@ -80,7 +81,7 @@ logger_settings = {
             }
         },
         "json": {
-            "()": JSONFormatter
+            "()": JsonFormatter
         }
     },
     "filters": {},
@@ -114,6 +115,13 @@ dictConfig(logger_settings)
 logger = logging.getLogger('prod_log')
 
 
+def get_client_ip(request: Request):
+    xff = request.headers.get('X-Forwarded-For')
+    ip = xff.split(',')[0].strip() if (
+            xff and request.client.host in env.trusted_proxies
+    ) else request.client.host
+    return ip
+
 def log_event(event: Any, *args, request: Request | WebSocket = None,
               level: Literal['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] = 'INFO', **extra):
     event = str(event)
@@ -123,9 +131,10 @@ def log_event(event: Any, *args, request: Request | WebSocket = None,
     func = outer.function
     line = outer.lineno
 
-    meth, url = '', ''
+    meth, url, ip = '', '', ''
     if isinstance(request, Request):
         meth, url = request.method, str(request.url.path)
+        ip = request.state.client_ip if hasattr(request.state, 'client_ip') else get_client_ip(request)
 
     message = event % args if args else event
 
@@ -135,5 +144,6 @@ def log_event(event: Any, *args, request: Request | WebSocket = None,
         'func': func,
         'line': line,
         'url': url,
+        'ip': ip,
         **extra
     })

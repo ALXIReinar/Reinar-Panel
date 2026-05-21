@@ -141,7 +141,7 @@ pool_settings = dict(
     init=init,
     max_size=env.pg_max_connections # connections on pool
 )
-print(f'\033[36m{pool_settings}\033[0m')
+
 
 "Redis"
 def get_redis_settings(envs: Settings):
