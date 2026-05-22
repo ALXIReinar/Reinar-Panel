@@ -2,7 +2,9 @@ import base64
 import json
 import math
 import re
-from fastapi import APIRouter, Response, HTTPException
+import urllib.parse
+
+from fastapi import APIRouter, Response
 from pydantic import Field
 from starlette.requests import Request
 
@@ -24,8 +26,12 @@ async def sub(db: PgSqlDep, request: Request, response: Response, b64_id: str = 
 
     "Подписка пользователя деактивирована/не существует"
     if not sub_meta:
+        messages = error_messages_for_client(
+            'Вы израсходовали лимит трафика за день. Обновите ваш план',
+            f'Продлить подписку в нашем боте {env.tg_bot_link}',
+        )
         log_event(f'Подписка не найдена | b64_id: \033[31m{b64_id}\033[0m', request=request, level='WARNING')
-        raise HTTPException(status_code=404, detail="Подписка не найдена")
+        return Response(content=process2vpn_client_format(messages), media_type='text/plain')
 
     "Обрабатываем каждую ссылку через кастомный скрипт"
     ready_config_links, errors = [], []
@@ -40,14 +46,14 @@ async def sub(db: PgSqlDep, request: Request, response: Response, b64_id: str = 
 
         "Исключение при обработке. Или ссылки для пользователя"
         if not res[0]:
-            log_event(f'Не смогли выдать локацию из подписки | user_id: \033[34m{sub_meta['user_id']}\033[0m; sub_id: \033[33m{proto_user_conf['sub_plan_id']}\033[0m; node_proto_id: \033[35m{proto_user_conf['node_proto_id']}\033[0m', request=request, level='CRITICAL')
+            log_event(f'Не смогли выдать локацию из подписки | user_id: \033[34m{sub_meta['user_id']}\033[0m; sub_id: \033[33m{proto_user_conf['sub_plan_id']}\033[0m; node_proto_id: \033[35m{proto_user_conf['node_proto_id']}\033[0m; vnodes_sub_plans_id: {proto_user_conf['sub_node_id']}', request=request, level='CRITICAL')
             errors.append((res[1], res[2]))
         else:
             ready_config_links.append(res[1])
 
 
     "Готовим ответ для Впн клиента"
-    user_traffic, sub_plan_limit, exp_date = sub_meta['traffic_used_day_mb'] * 1024 * 1024, sub_meta['sub_plan_limit'] * 1024 * 1024, sub_meta['expired_at']
+    user_traffic, sub_plan_limit, exp_date = sub_meta['traffic_used_day_mb'] * 1024 * 1024, sub_meta['sub_plan_limit'] * 1024 * 1024, sub_meta['expired_at'].timestamp()
     response.headers["Subscription-Userinfo"] = f"upload=0; download={user_traffic}; total={sub_plan_limit}; expire={exp_date}"
 
     response.headers["profile-title"] = sub_meta['title']
@@ -55,18 +61,32 @@ async def sub(db: PgSqlDep, request: Request, response: Response, b64_id: str = 
     response.headers["profile-web-page-url"] = env.tg_bot_link
 
     if errors:
-        log_event(f'Не все конфиги удалось обработать | errors: \033[37m{errors}\033[0m', level='WARNING')
+        log_event(f'Не все конфиги удалось обработать | user_uuid: \033[35m{sub_meta['user_uuid']}\033[0m; errors: \033[37m{errors}\033[0m', level='WARNING')
+
+    "В случае, если ни одна локация не сгенерировалась"
+    if not ready_config_links:
+        ready_config_links = error_messages_for_client('Приносим свои извинения за технические неполадки, мы уже в курсе и решаем эту проблему')
 
     "Отдаём конфиги"
     return Response(
-        content=base64.b64encode('\n'.join(ready_config_links).encode()).decode(),
+        content=process2vpn_client_format(ready_config_links),
         media_type='text/plain',
     )
 
 
 
+def error_messages_for_client(*messages: str):
+    tmp = 'vless://00000000-0000-0000-0000-000000000000@127.0.0.1:443?encryption=none#{}'
+    return [tmp.format(urllib.parse.quote(msg)) for msg in messages]
+
+def process2vpn_client_format(any_obj: str | list[str]) -> str:
+    if isinstance(any_obj, list):
+        any_obj = '\n'.join(any_obj)
+    return base64.b64encode(any_obj.encode()).decode()
+
+
 def executing_link_processing(sub_prepare_script: str, required_libs: str, user_uuid: str, config_link: str, user_id: int):
-    depend_libs = {lib_name: lib_name for lib_name in required_libs.split(',')}
+    depend_libs = {lib_name.strip(): lib_name.strip() for lib_name in required_libs.split(',')}
     local_scope = {}
     global_scope = {
         "json": json,
