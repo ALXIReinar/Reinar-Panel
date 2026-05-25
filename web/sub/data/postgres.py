@@ -19,7 +19,7 @@ async def get_pg_pool(request: Request):
     async with request.app.state.pg_pool.acquire() as conn:
         yield conn
 
-async def get_custom_pgsql(conn: Annotated[Connection, Depends(get_pg_pool)]):
-    yield PgSql(conn)
+def get_custom_pgsql(conn: Annotated[Connection, Depends(get_pg_pool)]):
+    return PgSql(conn)
 
 PgSqlDep = Annotated[PgSql, Depends(get_custom_pgsql)]

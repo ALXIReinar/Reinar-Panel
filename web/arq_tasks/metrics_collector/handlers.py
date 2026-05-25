@@ -42,10 +42,10 @@ def parse_node_output(script_text: str, stdout: str):
     try:
         exec(script_text, global_scope, local_scope)
         # Вызываем функцию parse, которую юзер написал в шаблоне
-        return local_scope['parse'](stdout)
+        return local_scope['parse'](stdout), ''
     except Exception as e:
         log_event(f'Упал скрипт парсинга stdout метрик | parse_code: {script_text}; exception: {e}', level='ERROR')
-        return f"Ошибка парсера: {e}"
+        return None, e
 
 
 async def run_traffic_sync_background(nodes: list, aio_http: ClientSession, pool: Pool):

@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 
 import orjson
 from aiohttp import ClientSession
+from arq.connections import RedisSettings, ArqRedis
 from asyncpg import Connection
 from fastapi import Depends
 from pydantic import Field
@@ -27,11 +28,15 @@ logging.critical(f'\033[35m{env_files}\033[0m | node_port: \033[32m{os.getenv("U
 WORKDIR = Path(__file__).resolve().parent.parent
 
 LOG_DIR = WORKDIR / 'sub_logs'
+ARQ_LOG_DIR = WORKDIR / 'arq_logs'
+
 LOG_DIR.mkdir(parents=True, exist_ok=True)
+ARQ_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class Settings(BaseSettings):
     """Настройки Node Client"""
+    # Postgresql
     pg_user: str
     pg_password: str
     pg_db: str
@@ -41,18 +46,26 @@ class Settings(BaseSettings):
     pg_host_docker: str
     pg_max_connections: int
 
+    # Redis
     redis_password: str
     redis_host: str
     redis_port: int
     redis_port_docker: int
     redis_host_docker: str
 
+    # Robokassa
     robo_shop_login: str
     robo_crypt_algorithm: Literal['sha256', 'md5']
     robo_shop_password: str
     robo_shop_username: str
     robo_passw_1: str
     robo_passw_2: str
+
+    # ARQ Settings
+    arq_max_jobs: int = 10
+    arq_job_timeout: int = 300
+    node_metrics_queue_limit: int = 10
+
 
     uvicorn_port: int
     uvicorn_workers: int
@@ -120,8 +133,23 @@ def get_redis_settings(envs: Settings):
 redis_settings = get_redis_settings(env)
 
 
-"AioHttp для вызова эндпоинтов админки"
-async def get_cmd_center_aiohttp(request: Request) -> ClientSession:
-    return request.app.state.cmd_center_aiohttp
+"ARQ для фоновых задач"
+def get_arq_redis_settings():
+    return RedisSettings(
+        host=redis_settings['host'],
+        port=redis_settings['port'],
+        password=redis_settings.get('password'),
+        database=0,
+    )
 
-NodeCmdAiohttpDep = Annotated[ClientSession, Depends(get_cmd_center_aiohttp)]
+async def get_arq_pool(request: Request) -> ArqRedis:
+    return request.app.state.arq_pool
+
+ArqDep = Annotated[ArqRedis, Depends(get_arq_pool)]
+
+
+"AioHttp для вызова эндпоинтов админки"
+def get_robo_aiohttp(request: Request) -> ClientSession:
+    return request.app.state.robo_aiohttp
+
+RoboAiohttpDep = Annotated[ClientSession, Depends(get_robo_aiohttp)]

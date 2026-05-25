@@ -226,7 +226,7 @@ async def delete_user(
             'node_proto_id': cpi['node_proto_id'],
             'core_lib': cpi['proto_python_lib'],
             'user_uuid': body.uuid,
-            'delete_script': cpi['api_add_user_script'],
+            'delete_script': cpi['api_delete_user_script'],
             'core_port': cpi['metrics_port'],
             'flatten_json_delete_user_key': cpi['flatten_user_identifier_key'],
             'reload_core_command': cpi['reload_core_command'],

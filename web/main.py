@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from aiohttp import ClientSession
+from arq import create_pool as create_arq_pool
 from asyncpg import create_pool
 from fastapi import FastAPI
 from fastapi.responses import ORJSONResponse
@@ -10,7 +11,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from web.api import main_router
 from web.api.middleware import ASGILoggingMiddleware, AuthUXASGIMiddleware
-from web.config_dir.config import env, pool_settings, redis_settings
+from web.config_dir.config import env, pool_settings, redis_settings, get_arq_redis_settings
 
 
 @asynccontextmanager
@@ -20,17 +21,22 @@ async def lifespan(web_app):
     "Соединение с БД"
     web_app.state.pg_pool = await create_pool(**pool_settings)
 
-    "Отдельная сессия для скачивания файлов с Тг"
+    "AioHttp для взаимодействия с Нодами"
     web_app.state.cmd_center_aiohttp = ClientSession()
 
     "Соедиение с Redis"
     web_app.state.redis = Redis(**redis_settings)
+    
+    "ARQ пул для фоновых задач"
+    web_app.state.arq_pool = await create_arq_pool(get_arq_redis_settings())
+    
     try:
         yield
     finally:
         await web_app.state.pg_pool.close()
         await web_app.state.cmd_center_aiohttp.close()
         await web_app.state.redis.aclose()
+        await web_app.state.arq_pool.close()
 
 app = FastAPI(
     docs_url='/api/docs',

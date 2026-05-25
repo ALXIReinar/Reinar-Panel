@@ -7,6 +7,7 @@ from typing import Annotated
 
 import orjson
 from aiohttp import ClientSession
+from arq.connections import ArqRedis, RedisSettings
 from asyncpg import Connection
 from fastapi import Depends
 from passlib.context import CryptContext
@@ -29,7 +30,10 @@ logging.critical(f'\033[35m{env_files}\033[0m | app_mode: \033[32m{os.getenv('AP
 WORKDIR = Path(__file__).resolve().parent.parent
 
 LOG_DIR = WORKDIR / 'web_logs'
+ARQ_LOG_DIR = WORKDIR / 'arq_logs'
+
 LOG_DIR.mkdir(parents=True, exist_ok=True)
+ARQ_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 "Хэш-метод"
 encryption = CryptContext(schemes=['argon2'], deprecated='auto')
@@ -101,6 +105,11 @@ class Settings(BaseSettings):
     allowed_ips: set[str] = {'127.0.0.1', '172.20.0.1',}
     model_config = SettingsConfigDict(extra='allow')
     domain: str
+    
+    # ARQ Settings
+    arq_max_jobs: int = 10
+    arq_job_timeout: int = 300
+    node_metrics_queue_limit: int = 10
 
 
 @lru_cache
@@ -157,6 +166,21 @@ def get_redis_settings(envs: Settings):
     return redis_conf
 
 redis_settings = get_redis_settings(env)
+
+
+"ARQ для фоновых задач"
+def get_arq_redis_settings():
+    return RedisSettings(
+        host=redis_settings['host'],
+        port=redis_settings['port'],
+        password=redis_settings.get('password'),
+        database=0,
+    )
+
+async def get_arq_pool(request: Request) -> ArqRedis:
+    return request.app.state.arq_pool
+
+ArqDep = Annotated[ArqRedis, Depends(get_arq_pool)]
 
 
 "AioHttp для Исполнения команд на Нодах"

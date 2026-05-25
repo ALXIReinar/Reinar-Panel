@@ -6,9 +6,9 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, HTTPException
 from starlette.requests import Request
 
-from web.sub.anything import Constants, RobokassaUrls
-from web.sub.api.robo_payment.handlers import payment_meta4signature_string, crypt_strategy, create_signature
-from web.sub.config_dir.config import RoboAiohttpDep, env, NodeCmdAiohttpDep
+from web.sub.anything import Constants, RobokassaUrls, CoreProtoActions
+from web.sub.api.robo_payment.handlers import crypt_strategy, create_signature
+from web.sub.config_dir.config import env, ArqDep
 from web.sub.config_dir.env_modes import AppMode
 from web.sub.config_dir.logger_config import log_event
 from web.sub.data.postgres import PgSqlDep
@@ -20,7 +20,7 @@ router = APIRouter(prefix='/api/v1/')# payment/robokassa
 
 
 @router.post('/public/robokassa/get_pay_link')
-async def create_payment_give_link(body: CreateRoboPayLinkSchema, request: Request, db: PgSqlDep, redis: RedisDep, aio_http: RoboAiohttpDep):
+async def create_payment_give_link(body: CreateRoboPayLinkSchema, request: Request, db: PgSqlDep, redis: RedisDep):
     """Генерация ссылки для оплаты. Фиксация начала платежка в нашей БД"""
     "Создаём InvId(для нас payed_subs.id)"
     order_id = await db.users_subs.order_subscription(body.user_id, body.sub_plan_id, body.expire_date)
@@ -62,7 +62,7 @@ async def create_payment_give_link(body: CreateRoboPayLinkSchema, request: Reque
 
 
 @router.post('/payment/robokassa/successful_webhook')
-async def processing_pay_result(form: WebhookRoboPayload, request: Request, db: PgSqlDep, redis: RedisDep, aio_http: NodeCmdAiohttpDep):
+async def processing_pay_result(form: WebhookRoboPayload, request: Request, db: PgSqlDep, redis: RedisDep, arq: ArqDep):
     """Обработка вебхука после оплаты пользователем"""
     "1. Проверяем сигнатуру"
     amount = form.OutSum.replace('.', '') # 150.00 -> 15000
@@ -80,16 +80,19 @@ async def processing_pay_result(form: WebhookRoboPayload, request: Request, db: 
         log_event(f'\033[37m[Robokassa]\033[0m Повторная обработка вебхука | order_id: \033[33m{form.InvId}\033[0m', request=request, level='WARNING')
         return f"OK{form.InvId}"
 
-    "3. Обработка успешного платежа, запрос на добавление пользователя в ядра протоколов"
+    "3.1. Активация подписку пользователя"
     await db.users_subs.activate_subscription(form.InvId, form.Shp_ttl_days, form.Shp_user_id)
+
+    "3.2. Запускаем в фон таску на добавление пользователя в ядра нод, указанных в подписке"
+    # User Meta
     user_info = await db.users_subs.get_user_info(form.Shp_user_id)
+    # Находим ноды по подписке, фиксируем попытку вставки пользователя в ядра протоколов
+    sub_nodes = await db.sub.get_core_proto_deps_by_user_id(
+        form.Shp_user_id, user_info['uuid'], user_info['tg_username'], form.InvId
+    )
+    job = await arq.enqueue_job(
+        'action_on_core_proto_by_sub_plan', user_info['uuid'], user_info['tg_username'], sub_nodes, CoreProtoActions.word_add
+    )
 
-    "Антипаттерн, но операция  слишком тяжёлая для обработки на месте."
-    "Возможно, нужно будет выносить в отдельный сервис исполнение фоновых задач."
-    # # отправляем запрос н админку для регистрации пользователя в нодах
-    # url = f'{env.admin_panel_url}/api/v1/private/cmd_center/core_protocol/user/add'
-    # async with aio_http.post(url, json={'uuid': user_info['uuid'], 'tg_username': user_info['tg_username']}) as resp:
-    #     resp.release()
-
-    log_event(f'Попробовали добавить пользователя на впн-ноды | user_id: \033[31m{form.Shp_user_id}\033[0m; user_uuid: \033[35m{user_info['uuid']}\033[0m; order_id: \033[33m{form.InvId}\033[0m', request=request)
+    log_event(f'Кинули добавление пользователя на впн-ноды в Arq | job_id: \033[33m{job.job_id}\033[0m; user_id: \033[31m{form.Shp_user_id}\033[0m; user_uuid: \033[35m{user_info['uuid']}\033[0m; order_id: \033[33m{form.InvId}\033[0m', request=request)
     return f"OK{form.InvId}"
