@@ -6,9 +6,10 @@ from pydantic import BaseModel, Field
 
 class BaseUserCoreSchema(BaseModel):
     node_proto_id: int = Field(..., gt=0, description='ID виртуальной ноды')
-    user_uuid: str = Field(..., min_length=1, description='UUID пользователя')
+    user_uuid: str = Field(..., min_length=1, max_length=36, description='UUID пользователя')
     core_lib: str | None = Field(None, max_length=100, description='Библиотека для hot-reload (grpcio, requests)')
     reload_core_command: str | None = Field(None, max_length=255, description='Команда перезагрузки ядра')
+    core_port: int = Field(gt=0, le=65535, description='Порт к апи ядра для взаимодействия через скрипты')
 
 class AddUserCoreSchema(BaseModel):
     """Схема для добавления пользователя в ядро протокола"""
@@ -23,5 +24,20 @@ class AddUserCoreSchema(BaseModel):
 
 class DeleteUserCoreSchema(BaseUserCoreSchema):
     """Схема для удаления пользователя из ядра протокола"""
-    
     delete_script: str | None = Field(None, description='Python скрипт для удаления через API')
+
+
+class UserCoreSchema:
+    tg_username: str = Field(min_length=5, max_length=32)
+    uuid: str = Field(max_length=36)
+
+    sub_node_id: int = Field(description='ID ноды в группе подписок. Служебное, не для нод-кдиента')
+    order_id: int = Field(description='ID купленной пользователем подписки. Служебное, не для нод-кдиента')
+
+
+class BulkDeleteUserCoreSchema(BaseModel):
+    node_proto_id: int = Field(..., gt=0, description='ID виртуальной ноды')
+    core_port: int = Field(gt=0, le=65535, description='Порт к апи ядра для взаимодействия через скрипты')
+    core_lib: str | None = Field(None, max_length=100, description='Библиотека для hot-reload (grpcio, requests)')
+    bulk_delete_script: str
+    users: list[UserCoreSchema]

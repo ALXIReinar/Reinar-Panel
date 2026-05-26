@@ -1,5 +1,4 @@
 import asyncio
-from dataclasses import dataclass
 from typing import Literal
 
 from aiohttp import ClientSession, ClientResponseError
@@ -80,18 +79,14 @@ async def action_on_core_proto_by_sub_plan(
                 'user_uuid': user_uuid,
                 'delete_script': node['api_delete_user_script'],
                 'core_port': node['metrics_port'],
-                'flatten_json_delete_user_key': node['flatten_user_identifier_key'],
-                'reload_core_command': node['reload_core_command'],
-                'config_file_path': node['config_path'],
-                'flatten_json_users_key': node['flatten_json_users_key'],
             }
             action_pack = {
-                'add': (json_delete_body, NodeUris.proto_core_add_user),
-                'delete': (json_add_body, NodeUris.proto_core_delete_user)
+                'add': (json_add_body, NodeUris.proto_core_add_user),
+                'delete': (json_delete_body, NodeUris.proto_core_delete_user)
             }
             # action_pack[operation][0] - json body;
             # action_pack[operation][1] - endpoint_uri
-            url = f"http://{node['private_ip']}:{node['api_port']}{action_pack[operation][2]}"
+            url = f"http://{node['private_ip']}:{node['api_port']}{action_pack[operation][1]}"
             json_body = action_pack[operation][0]
 
             "3. Отправляем запрос на ноду"
@@ -139,7 +134,7 @@ async def action_on_core_proto_by_sub_plan(
     )
 
     "Фиксируем в БД успешные вставки (удаляем маркеры для кроны на повторную вставку)"
-    await db.sub.success_action_core_proto_user(success_nodes)
+    await db.sub.success_action_core_proto_user(success_nodes, operation, user_uuid)
 
     "1. Retry: если есть failed ноды, отправляем повторную попытку"
     if retry_nodes:

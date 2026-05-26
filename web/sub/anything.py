@@ -18,6 +18,7 @@ class Constants:
 class NodeUris:
     proto_core_add_user: str = '/api/v1/server/node/proto_core/user/add'
     proto_core_delete_user: str = '/api/v1/server/node/proto_core/user/delete'
+    proto_core_bulk_delete_users: str = '/api/v1/server/node/proto_core/user/bulk/delete'
 
 class CoreProtoActions:
     add: int = 1
@@ -30,3 +31,4 @@ class CoreProtoActions:
         'add': 1,
         'delete': 2,
     }
+    id2name: dict[str, str] = {id: name for name, id in name2id.items()}

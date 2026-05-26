@@ -3,6 +3,7 @@ Write-Behind Caching для батчинга операций с конфиг-ф
 """
 import asyncio
 import time
+from contextlib import contextmanager
 from typing import Annotated
 
 import aiofiles
@@ -45,6 +46,9 @@ class ConfigWriteBuffer:
         
         # Воркеры для каждой ноды {node_proto_id: Task}
         self.worker_tasks: dict[int, asyncio.Task] = {}
+
+        # Флаг для выключения лимитов
+        self.queue_limited = True
 
 
     async def register_node(
@@ -252,9 +256,10 @@ class ConfigWriteBuffer:
                     except asyncio.TimeoutError:
                         # Таймаут истёк, выходим
                         break
-                
+
+                # Если очередь ограничивается лимитами
                 # Если есть операции → пишем на диск (неблокирующе)
-                if operations:
+                if self.queue_limited and operations:
                     log_event(f"[Worker] Батч собран | node_proto_id: {node_id} | operations: {len(operations)}")
                     asyncio.create_task(self._write_node_to_disk(node_id))
                     
@@ -318,6 +323,15 @@ class ConfigWriteBuffer:
                 
         except Exception as e:
             log_event(f"Исключение при перезагрузке ядра: {e}", level='CRITICAL')
+
+    @contextmanager
+    def unlimit_queue(self):
+        self.queue_limited = False
+        try:
+            yield self
+        finally:
+            self.queue_limited = True
+
 
 
     # ========== Утилиты для работы с конфиг-файлами ==========

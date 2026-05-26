@@ -82,7 +82,7 @@ class HotReloadExecutor:
     async def execute_delete_script(
         script: str,
         lib_name: str,
-        user_identifier: str,
+        user: list[dict] | str,
         node_ip: str,
         core_api_port: int
     ) -> tuple[bool, str]:
@@ -92,7 +92,7 @@ class HotReloadExecutor:
         Args:
             script: Python код с функцией **delete_user()**
             lib_name: Имя библиотеки для импорта
-            user_identifier: Идентификатор пользователя (UUID или email)
+            user: Идентификатор пользователя (UUID или email)
             node_ip: IP ноды
             core_api_port: Порт протокола
             
@@ -124,14 +124,14 @@ class HotReloadExecutor:
             
             "Вызываем функцию delete_user из скрипта"
             delete_user_func = local_scope['delete_user']
-            result = delete_user_func(user_identifier, node_ip, core_api_port)
+            result = delete_user_func(user, node_ip, core_api_port)
             
             "Если async"
             if hasattr(result, '__await__'):
                 import asyncio
                 result = await result
             
-            log_event(f"Hot-reload DELETE успешно выполнен для пользователя {user_identifier}", level='INFO')
+            log_event(f"Hot-reload DELETE успешно выполнен для пользователя {user}", level='INFO')
             return True, "Hot-reload удаление успешно"
             
         except ImportError as e:

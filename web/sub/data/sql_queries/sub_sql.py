@@ -70,36 +70,87 @@ class SubscriptionQueries:
         return await self.conn.fetch(query, user_id, user_uuid, tg_username, order_id, CoreProtoActions.name2id[operation])
 
 
-    async def users_on_core_proto_action(
-            self, user_uuids: list[int], tg_usernames: list[str], order_ids: list[int], sub_node_ids: list[int], operation: Literal['add', 'delete']
-    ):
+    async def get_nodes_to_core_proto_action(self, order_id: int):
         query = '''
-        WITH vnodes_read AS (
-            SELECT np.id as node_proto_id, vsp.id AS sub_node_id,n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
-                   pt.api_add_user_script, pt.api_delete_user_script, pt.reload_core_command, np.config_path, pt.flatten_json_users_key, pt.required_user_data_obj,
-                   pt.constant_user_data_obj,pt.flatten_user_identifier_key
-            FROM payed_subs ps
-            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = ps.sub_plan_id
-            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
-            JOIN protocols p ON np.proto_id = p.id
-            JOIN nodes n ON np.node_id = n.id AND n.is_active = true
-            JOIN proto_templates pt ON p.proto_tmp_id = pt.id
-            WHERE ps.is_active = true AND ps.user_id = $1
-        ),
-        outbox_insert AS (
-            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, sub_node_id, operation)
-            SELECT u_uuid, tg_uname, ord_id, vnode_id, $5
-            FROM UNNEST($1::text[], $2::text[], $3::bigint[], $4::bigint[]) AS t(u_uuid, tg_uname, ord_id, vnode_id)
-        )
-        SELECT * FROM vnodes_read
+        SELECT np.id as node_proto_id, vsp.id AS sub_node_id,n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
+           pt.api_add_user_script, pt.api_delete_user_script, pt.reload_core_command, np.config_path, pt.flatten_json_users_key, pt.required_user_data_obj,
+           pt.constant_user_data_obj,pt.flatten_user_identifier_key
+        FROM payed_subs ps
+        JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = ps.sub_plan_id
+        JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
+        JOIN protocols p ON np.proto_id = p.id
+        JOIN nodes n ON np.node_id = n.id AND n.is_active = true
+        JOIN proto_templates pt ON p.proto_tmp_id = pt.id
+        WHERE ps.id = $1
         '''
-        return await self.conn.fetch(query, user_uuids, tg_usernames, order_ids, sub_node_ids, CoreProtoActions.name2id[operation])
+        return await self.conn.fetch(query, order_id)
 
 
-    async def success_action_core_proto_user(self, sub_node_ids: list[int]):
+    async def get_and_lock_expired_subs_grouped_by_node(self):
+        """
+        Атомарно выключает просроченные подписки, фиксирует их в outbox
+        и возвращает сгруппированные по нодам данные для bulk-удаления.
+        """
+        query = '''
+        -- 1. Выключаем просроченные подписки и возвращаем их ID и данные юзеров
+        WITH deactivated_subs AS (
+            UPDATE payed_subs
+            SET is_active = false
+            WHERE is_active = true AND expire_date < now()
+            RETURNING id AS order_id, user_id, sub_plan_id
+        ),
+        -- 2. Собираем информацию о нодах для этих подписок
+        expired_nodes_info AS (
+            SELECT u.uuid, u.tg_username, ds.order_id, vsp.id AS sub_node_id,
+                   vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
+                   pt.api_bulk_delete_user_script
+            FROM deactivated_subs ds
+            JOIN users u ON u.id = ds.user_id
+            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = ds.sub_plan_id 
+            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
+            JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
+            JOIN protocols p ON np.proto_id = p.id 
+            JOIN proto_templates pt ON p.proto_tmp_id = pt.id 
+        ),
+        -- 3. Фиксируем операцию удаления в outbox (двухэтапный ack)
+        insert_outbox AS (
+            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
+            SELECT uuid, tg_username, order_id, $1, sub_node_id
+            FROM expired_nodes_info
+        )
+        -- 4. Группируем пользователей по нодам для пакетной отправки
+        SELECT node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script, 
+               COALESCE(
+                   json_agg(
+                       json_build_object( 
+                           'uuid', uuid, 
+                           'tg_username', tg_username,
+                           'order_id', order_id,
+                           'sub_node_id', sub_node_id
+                       )
+                   ),
+                   '[]'::json
+               ) AS users
+        FROM expired_nodes_info
+        GROUP BY node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script
+        '''
+        return await self.conn.fetch(query, CoreProtoActions.delete)
+
+
+    async def success_action_core_proto_user(self, sub_node_ids: list[int], operation: Literal['add', 'delete'], user_uuid: str):
         if not sub_node_ids:
-            return []
+            return
 
-        query = 'DELETE FROM sub_nodes_outbox WHERE sub_node_id = ANY ($1)'
-        return await self.conn.execute(query, sub_node_ids)
+        query = 'DELETE FROM sub_nodes_outbox WHERE user_uuid = $3 AND operation = $2 AND sub_node_id = ANY ($1)'
+        await self.conn.execute(query, sub_node_ids, CoreProtoActions.name2id[operation], user_uuid)
 
+
+    async def success_bulk_delete_core_proto_users(self, sub_node_ids: list[int], order_ids: list[int]):
+        query = '''
+        DELETE FROM sub_nodes_outbox
+        WHERE (sub_node_id, order_id) IN (
+            SELECT * FROM UNNEST($1::bigint[], $2::bigint[])
+        )
+        AND operation = $3
+        '''
+        await self.conn.execute(query, sub_node_ids, order_ids, CoreProtoActions.delete)

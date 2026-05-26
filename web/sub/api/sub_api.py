@@ -9,8 +9,8 @@ from pydantic import Field
 from starlette.requests import Request
 
 from bot.logger_config import log_event
-from sub.config import env
-from sub.data import PgSqlDep
+from web.sub.config_dir.config import env
+from web.sub.data.postgres import PgSqlDep
 
 router = APIRouter(tags=['Subscriptions Service'])
 

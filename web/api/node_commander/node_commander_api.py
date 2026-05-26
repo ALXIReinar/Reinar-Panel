@@ -228,14 +228,10 @@ async def delete_user(
             'user_uuid': body.uuid,
             'delete_script': cpi['api_delete_user_script'],
             'core_port': cpi['metrics_port'],
-            'flatten_json_delete_user_key': cpi['flatten_user_identifier_key'],
-            'reload_core_command': cpi['reload_core_command'],
-            'config_file_path': cpi['config_path'],
-            'flatten_json_users_key': cpi['flatten_json_users_key'],
         }
 
         "Отправляем запрос на ноду, в ядро протокола"
-        async with aio_http.delete(url, json=json_body) as resp:
+        async with aio_http.post(url, json=json_body) as resp:
             resp_json = await resp.json()
             resp_status = resp.status
 

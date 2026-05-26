@@ -6,7 +6,8 @@ from starlette.requests import Request
 
 from node_client.api.proto_core.hot_reload_executor import HotReloadExecutor
 from node_client.api.proto_core.write_behind_caching_file import CoreBuffersDep
-from node_client.schemas.proto_core_users_schema import AddUserCoreSchema, DeleteUserCoreSchema
+from node_client.schemas.proto_core_users_schema import AddUserCoreSchema, DeleteUserCoreSchema, \
+    BulkDeleteUserCoreSchema
 from node_client.logger_config import log_event
 
 router = APIRouter(prefix='/proto_core', tags=['Protocol Core Users'])
@@ -77,7 +78,7 @@ async def add_user_to_core(body: AddUserCoreSchema, request: Request, buffer: Co
 
 
 
-@router.delete('/user/delete')
+@router.post('/user/delete', summary='POST выбран ввиду нюансов реализации сервиса подписок. Не рекомендуется менять')
 async def delete_user_from_core(body: DeleteUserCoreSchema, request: Request, buffer: CoreBuffersDep):
     """
     Удаление пользователя из ядра протокола
@@ -102,7 +103,7 @@ async def delete_user_from_core(body: DeleteUserCoreSchema, request: Request, bu
             hot_reload_success, hot_reload_message = await HotReloadExecutor.execute_delete_script(
                 script=body.delete_script,
                 lib_name=body.core_lib,
-                user_identifier=body.user_uuid,
+                user=body.user_uuid,
                 node_ip='127.0.0.1',
                 core_api_port=body.core_port
             )
@@ -118,6 +119,56 @@ async def delete_user_from_core(body: DeleteUserCoreSchema, request: Request, bu
     await buffer.delete_user(body.node_proto_id, body.user_uuid)
     log_event(f"Пользователь удалён из буфера | uuid: {body.user_uuid}", request=request)
         
+    return {
+        'success': True, 'message': 'Пользователь удалён', 'hot_reload': hot_reload_success, 'hot_reload_message': hot_reload_message
+    }
+
+
+
+@router.delete('/user/bulk/delete')
+async def delete_user_from_core(body: BulkDeleteUserCoreSchema, request: Request, buffer: CoreBuffersDep):
+    """
+    Удаление пользователя из ядра протокола
+
+    Workflow:
+    1. [Если есть core_lib] → Hot-reload через API (мгновенно)
+    2. Удаление из буфера (O(1))
+    3. Добавление в очередь на запись (батчинг)
+    4. [Если нет hot-reload] → Перезагрузка ядра после записи файла
+
+    * Но
+    """
+    log_event(f"Удаление пользователей | node_proto_id: {body.node_proto_id} | users_len: \033[0m{len(body.users)}\033[0m", request=request, level='WARNING')
+
+    hot_reload_success = False
+    hot_reload_message = ""
+    "1. Hot-reload через API (если есть библиотека)"
+    if body.core_lib and body.delete_script and body.core_port:
+        try:
+            log_event(f"[Bulk] Попытка hot-reload удаления через {body.core_lib}", request=request)
+
+            hot_reload_success, hot_reload_message = await HotReloadExecutor.execute_delete_script(
+                script=body.delete_script,
+                lib_name=body.core_lib,
+                user=body.model_dump()['users'],
+                node_ip='127.0.0.1',
+                core_api_port=body.core_port
+            )
+
+            if not hot_reload_success:
+                log_event(f"[Bulk] Hot-reload DELETE FAILED: {hot_reload_message}. Продолжаем с файловой записью.", request=request, level='CRITICAL')
+
+        except Exception as e:
+            log_event(f"[Bulk] Исключение при hot-reload удаления: {e}", request=request, level='CRITICAL')
+            hot_reload_message = str(e)
+
+    "2. Удаление из ConfigWriteBuffer без лимитов на операции"
+    with buffer.unlimit_queue():
+        for u in body.users:
+            await buffer.delete_user(body.node_proto_id, u.uuid)
+
+    log_event(f"[Bulk] Пользователей удалено из буфера | users_len: {len(body.users)}", request=request)
+
     return {
         'success': True, 'message': 'Пользователь удалён', 'hot_reload': hot_reload_success, 'hot_reload_message': hot_reload_message
     }
