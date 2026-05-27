@@ -2,6 +2,9 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+class SubUrlSchema(BaseModel):
+    b64_id: str = Field(min_length=16, max_length=90)
+
 
 class CreateRoboPayLinkSchema(BaseModel):
     user_id: int

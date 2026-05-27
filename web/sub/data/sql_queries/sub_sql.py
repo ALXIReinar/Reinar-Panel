@@ -12,12 +12,15 @@ class SubscriptionQueries:
     async def get_sub_links(self, b64_string: str):
         query_sub_meta = '''
         SELECT 
-            ps.sub_plan_id, sp.title, sp.traffic_limit_day AS sub_plan_limit, u.id AS user_id, u.uuid AS user_uuid,
+            ps.sub_plan_id, sp.title, sp.description, sp.traffic_limit_day AS sub_plan_limit, u.id AS user_id, u.uuid AS user_uuid,
             u.traffic_used_day_mb, ps.expire_date
         FROM users u
         JOIN payed_subs ps ON ps.user_id = u.id
         JOIN sub_plans sp ON sp.id = ps.sub_plan_id
-        WHERE u.b64_id = $1 AND ps.expire_date > now() AND ps.is_active = true 
+        WHERE ps.is_active = true 
+          AND u.traffic_used_day_mb < sp.traffic_limit_day
+          AND ps.expire_date > now() 
+          AND u.b64_id = $1
         '''
         sub_meta = await self.conn.fetchrow(query_sub_meta, b64_string)
         if not sub_meta:

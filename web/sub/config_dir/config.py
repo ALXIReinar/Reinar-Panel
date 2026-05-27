@@ -9,7 +9,6 @@ from aiohttp import ClientSession
 from arq.connections import RedisSettings, ArqRedis
 from asyncpg import Connection
 from fastapi import Depends
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 from starlette.requests import Request
@@ -56,8 +55,6 @@ class Settings(BaseSettings):
     # Robokassa
     robo_shop_login: str
     robo_crypt_algorithm: Literal['sha256', 'md5']
-    robo_shop_password: str
-    robo_shop_username: str
     robo_passw_1: str
     robo_passw_2: str
 
@@ -71,7 +68,6 @@ class Settings(BaseSettings):
     uvicorn_workers: int
     trusted_proxies: set[str] = {'127.0.0.1', '172.0.18.0'}
 
-    domain: str = Field(max_length=255)
     app_mode: AppMode
     subscription_update_interval: str
     tg_bot_link: str

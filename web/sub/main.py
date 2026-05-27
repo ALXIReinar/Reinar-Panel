@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.responses import ORJSONResponse
 from redis.asyncio import Redis
 
+from web.sub.api import main_router
 from web.sub.config_dir.config import redis_settings, pool_settings, env, get_arq_redis_settings
 
 
@@ -36,7 +37,9 @@ async def lifespan(web_app: FastAPI):
 
 app = FastAPI(default_response_class=ORJSONResponse, lifespan=lifespan)
 
+app.include_router(main_router)
 
 
 if __name__ == '__main__':
-    uvicorn.run('web.sub.main:app', log_config=None, host="0.0.0.0", port=env.uvicorn_port, workers=env.uvicorn_workers)
+    uvicorn.run('web.sub.main:app', host="0.0.0.0", port=env.uvicorn_port, workers=env.uvicorn_workers)
+    # uvicorn.run('web.sub.main:app', log_config=None, host="0.0.0.0", port=env.uvicorn_port, workers=env.uvicorn_workers)

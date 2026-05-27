@@ -15,11 +15,11 @@ from web.sub.data.postgres import PgSqlDep
 from web.sub.data.redis_storage import RedisDep
 from web.sub.schemas import CreateRoboPayLinkSchema, WebhookRoboPayload
 
-router = APIRouter(prefix='/api/v1/')# payment/robokassa
+router = APIRouter(prefix='/api/v1')
 
 
 
-@router.post('/public/robokassa/get_pay_link')
+@router.post('/robokassa/get_pay_link')
 async def create_payment_give_link(body: CreateRoboPayLinkSchema, request: Request, db: PgSqlDep, redis: RedisDep):
     """Генерация ссылки для оплаты. Фиксация начала платежка в нашей БД"""
     "Создаём InvId(для нас payed_subs.id)"
@@ -61,7 +61,7 @@ async def create_payment_give_link(body: CreateRoboPayLinkSchema, request: Reque
 
 
 
-@router.post('/payment/robokassa/successful_webhook')
+@router.post('/robokassa/successful_webhook')
 async def processing_pay_result(form: WebhookRoboPayload, request: Request, db: PgSqlDep, redis: RedisDep, arq: ArqDep):
     """Обработка вебхука после оплаты пользователем"""
     "1. Проверяем сигнатуру"
