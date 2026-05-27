@@ -1,6 +1,11 @@
+from datetime import datetime
+from decimal import Decimal
+from uuid import UUID
+
+import orjson
 from aiohttp import ClientSession
 from arq.cron import cron
-from asyncpg import create_pool
+from asyncpg import create_pool, Record
 
 from web.config_dir.config import env, pool_settings, get_arq_redis_settings
 from web.utils.arq_logger_config import log_event
@@ -34,11 +39,29 @@ async def shutdown(ctx: dict):
     log_event('[ARQ Worker] Остановка завершена!', level='WARNING')
 
 
+def custom_json_encoder(obj):
+    if isinstance(obj, Record):
+        return dict(obj)  # Превращаем asyncpg.Record в обычный dict
+    if isinstance(obj, (datetime, UUID)):
+        return obj.isoformat()  # Даты и UUID переводим в строки
+    if isinstance(obj, Decimal):
+        return float(obj)  # Десятичные дроби в float
+    raise TypeError(f"Type {type(obj)} not serializable")
+
+def arq_serializer(data):
+    return orjson.dumps(data, default=custom_json_encoder)
+
+def arq_deserializer(b):
+    return orjson.loads(b)
+
 
 class WorkerSettings:
     """Настройки ARQ воркера"""
     redis_settings = get_arq_redis_settings()
-    
+
+    serializer = arq_serializer
+    deserializer = arq_deserializer
+
     # Импорты задач
     functions = [
         run_rT_cleaner,

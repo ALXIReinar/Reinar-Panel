@@ -1,6 +1,7 @@
-from typing import Optional
+from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
+
 
 class SubUrlSchema(BaseModel):
     b64_id: str = Field(min_length=16, max_length=90)
@@ -10,7 +11,7 @@ class CreateRoboPayLinkSchema(BaseModel):
     user_id: int
     sub_plan_id: int
     ttl_days: int
-    amount: int = Field(description='Стоимость подписки в копейках')
+    amount: str = Field(description='Стоимость подписки в рублях')
     description: str = Field(description='Описание для окна платежа. Например, тарифный план подписки')
 
 
@@ -22,8 +23,9 @@ class WebhookRoboPayload(BaseModel):
     Shp_user_id: int = Field(description="Кастомный параметр пользователя")
     Shp_csrf_token: str = Field(description='Токен для идемпотентной обработки платежа')
     Shp_sub_plan_id: int = Field(description='Приобретённый тарифный план')
-    Shp_ttl_days: int = Field(description='Срок действия подписки в днях')
+    Shp_expire_date: datetime = Field(description='Дата окончания действия подписки')
 
+    model_config = ConfigDict(extra='allow')
     # Эти поля Робокасса шлет опционально
     # Fee: Optional[str] = None
     # PaymentMethod: Optional[str] = None

@@ -1,6 +1,5 @@
 from aiohttp import ClientSession
 from arq import ArqRedis
-from asyncpg.protocol.record import Record
 
 from web.sub.anything import NodeUris
 from web.sub.arq_tasks.depends_fabric import pg_sql_dep, arq_dep, aiohttp_dep

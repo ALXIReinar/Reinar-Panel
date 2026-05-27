@@ -4,13 +4,11 @@ from typing import Literal
 from aiohttp import ClientSession, ClientResponseError
 from arq import ArqRedis
 
-from asyncpg.protocol.record import Record
-
 from web.sub.anything import NodeUris
 from web.sub.arq_tasks.depends_fabric import aiohttp_dep, arq_dep, pg_sql_dep
 from web.sub.config_dir.config import env
 from web.sub.data.postgres import PgSql
-from web.utils.arq_logger_config import log_event
+from web.sub.config_dir.arq_logger_config import log_event
 
 
 
@@ -19,7 +17,7 @@ from web.utils.arq_logger_config import log_event
 @pg_sql_dep
 async def action_on_core_proto_by_sub_plan(
         ctx: dict,
-        user_uuid: str, tg_username: str, sub_nodes: list[Record], operation: Literal['add', 'delete'], current_attempt: int = 1,
+        user_uuid: str, tg_username: str, sub_nodes: list[dict], operation: Literal['add', 'delete'], current_attempt: int = 1,
         db: PgSql = None,
         aio_http: ClientSession = None,
         arq: ArqRedis = None
@@ -32,7 +30,7 @@ async def action_on_core_proto_by_sub_plan(
     success_nodes = []  # Ноды, где вставка пользователя прошла успешно
     success_count = 0
     
-    async def worker(node: Record):
+    async def worker(node: dict):
         """Обработка одной ноды"""
         nonlocal success_count
         
@@ -104,7 +102,7 @@ async def action_on_core_proto_by_sub_plan(
                 log_event(f'\033[33m[ARQ]\033[0m HTTP ошибка | node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; status: \033[31m{e.status}\033[0m', level='ERROR')
                 retry_nodes.append({
                     'node_proto_id': node['node_proto_id'],
-                    'node_data': node,
+                    'node_data': node,  # Уже dict, не нужно преобразовывать
                     'status_code': e.status,
                     'response_json': {'error': str(e)}
                 })
@@ -114,7 +112,7 @@ async def action_on_core_proto_by_sub_plan(
                 log_event(f'\033[33m[ARQ]\033[0m Неожиданная ошибка | node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; error: \033[31m{e}\033[0m', level='CRITICAL')
                 retry_nodes.append({
                     'node_proto_id': node['node_proto_id'],
-                    'node_data': dict(node),
+                    'node_data': node,  # Уже dict, не нужно преобразовывать
                     'status_code': 500,
                     'response_json': {'error': str(e)}
                 })
@@ -148,12 +146,13 @@ async def action_on_core_proto_by_sub_plan(
             "Повторяем задачу с экспоненциальной задержкой: 60, 120, 240 секунд"
             defer_seconds = 60 * (2 ** current_attempt)
 
-            "2. Запуск новой задачи с ретрай-набором нод"
+            "2. Запуск новой задачи с ретрай-набором нод (уже dict, не Record)"
             await arq.enqueue_job(
-                'add_user_core_proto_by_sub_plan',
+                'action_on_core_proto_by_sub_plan',
                 user_uuid,
                 tg_username,
                 retry_sub_nodes,
+                operation,
                 current_attempt + 1,  # Инкрементируем попытку
                 _defer_by=defer_seconds  # Откладываем выполнение
             )

@@ -27,10 +27,10 @@ def arq_dep(func):
 
     @wraps(func)
     async def wrapper(ctx: dict, *args, **kwargs):
-        redis: ArqRedis = ctx['redis']
+        arq_redis: ArqRedis = ctx['arq_redis']
 
         "Передаём соединение"
-        return await func(ctx, *args, redis=redis, **kwargs)
+        return await func(ctx, *args, arq=arq_redis, **kwargs)
 
     return wrapper
 

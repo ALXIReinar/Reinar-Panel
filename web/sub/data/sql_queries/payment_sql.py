@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from asyncpg import Connection, ForeignKeyViolationError
 
 
@@ -7,22 +9,30 @@ class PaymentQueries:
 
 
     async def order_subscription(self, user_id: int, sub_plan_id: int):
-        query = 'INSERT INTO payed_subs (user_id, sub_plan_id) VALUES ($1, $2) RETURNING id'
+        query = '''
+        WITH order_ins AS (
+            INSERT INTO payed_subs (user_id, sub_plan_id) VALUES ($1, $2) RETURNING id, user_id
+        ),
+        old_sub AS (
+            SELECT ps.user_id, ps.expire_date AS old_expire_date FROM payed_subs ps WHERE user_id = $1 AND ps.is_active = true
+        )
+        SELECT oi.id AS order_id, COALESCE(os.old_expire_date, NOW()) AS old_expire_date
+        FROM order_ins oi
+        LEFT JOIN old_sub os ON os.user_id = oi.user_id
+        '''
         try:
-            return await self.conn.fetchval(query, user_id, sub_plan_id)
+            return await self.conn.fetchrow(query, user_id, sub_plan_id)
         except ForeignKeyViolationError:
             return None
 
 
-    async def activate_subscription(self, order_id: int, ttl_days: int, user_id: int):
-        query = '''
-        WITH deactivate_old AS (
-            UPDATE payed_subs SET is_active = false WHERE user_id = $3
-        )
-        UPDATE payed_subs SET is_active = true, expire_date = created_at + ($2 || ' days')::interval 
-        WHERE id = $1
-        '''
-        await self.conn.execute(query, order_id, ttl_days, user_id)
+    async def activate_subscription(self, order_id: int, expire_date: datetime, user_id: int):
+        """READ COMMITTED - оставляем только потому, что у платёжки есть механика идемпотентности. По-хорошему блокировки и REPEATABLE READ"""
+        query_deactivate = 'UPDATE payed_subs SET is_active = false WHERE user_id = $1'
+        query_activate = 'UPDATE payed_subs SET is_active = true, expire_date = $2 WHERE id = $1'
+        async with self.conn.transaction():
+            await self.conn.execute(query_deactivate, user_id)
+            await self.conn.execute(query_activate, order_id, expire_date)
 
 
     async def get_user_info(self, user_id: int):

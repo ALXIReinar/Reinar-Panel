@@ -20,17 +20,24 @@ async def startup(ctx: dict):
     "AioHttp сессия для запросов к нодам"
     ctx['aio_http'] = ClientSession()
 
+    "ArqRedis"
+    ctx['arq_redis'] = get_arq_redis_settings()
+
     log_event('[ARQ Worker] Инициализация завершена!', level='WARNING')
 
 
 async def shutdown(ctx: dict):
     log_event('[ARQ Worker] Остановка воркера, закрытие ресурсов...', level='WARNING')
-    
+
     if 'pg_pool' in ctx:
         await ctx['pg_pool'].close()
 
+
     if 'aio_http' in ctx:
         await ctx['aio_http'].close()
+
+    if 'arq_redis' in ctx:
+        await ctx['arq_redis'].close()
 
     log_event('[ARQ Worker] Остановка завершена!', level='WARNING')
 
@@ -39,7 +46,7 @@ async def shutdown(ctx: dict):
 class WorkerSettings:
     """Настройки ARQ воркера"""
     redis_settings = get_arq_redis_settings()
-    
+
     # Импорты задач
     functions = [
         action_on_core_proto_by_sub_plan,
