@@ -86,18 +86,13 @@ class Settings(BaseSettings):
     pg_db: str
     pg_port: int
     pg_host: str
-    pg_port_docker: int
-    pg_host_docker: str
 
     redis_password: str
     redis_host: str
     redis_port: int
-    redis_port_docker: int
-    redis_host_docker: str
 
-    uvi_workers: int
-    admin_port: int
-    app_url: str = f'https://127.0.0.1:{os.getenv('ADMIN_PORT')}'
+    uvicorn_workers: int
+    uvicorn_port: int
     post_processing_responses: bool
     app_mode: AppMode
     sub_link_bytes: int = Field(le=64, ge=16)
@@ -107,8 +102,8 @@ class Settings(BaseSettings):
     domain: str
     
     # ARQ Settings
-    arq_max_jobs: int = 10
-    arq_job_timeout: int = 300
+    arq_max_jobs: int
+    arq_job_timeout: int
     node_metrics_queue_limit: int = 10
 
 

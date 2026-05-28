@@ -1,7 +1,6 @@
 from fastapi import APIRouter
 
 from web.api.auth_panel_api import router as auth_panel_router
-from web.api.bg_tasks import bg_router
 from web.api.whitelist_api import router as whitelist_router
 from web.api.nodes import nodes_router
 from web.api.protocols import protocols_router
@@ -21,7 +20,6 @@ main_router.include_router(whitelist_router)
 main_router.include_router(remote_execute_history_router)
 main_router.include_router(users_router)
 main_router.include_router(subscriptions_router)
-main_router.include_router(bg_router)
 
 
 @main_router.get('/healthcheck')

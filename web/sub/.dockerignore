@@ -161,12 +161,9 @@ cython_debug/
 .idea/
 .venv/
 *.env*
-sub/
-secrets/
 install.sh
 uninstall.sh
 *.md
 .git/
 .gitignore
 docs/
-docker-*.yml

@@ -26,8 +26,8 @@ async def add_user_to_core(body: AddUserCoreSchema, request: Request, buffer: Co
     3. Добавление в очередь на запись (батчинг)
     4. [Если нет hot-reload] → Перезагрузка ядра после записи файла
     """
-    log_event(f"Добавление пользователя | node_proto_id: {body.node_proto_id} | uuid: {body.user_uuid}")
-    
+    log_event(f"Добавление пользователя | node_proto_id: \033[35m{body.node_proto_id}\033[0m | user_obj: \033[34m{body.user_obj}\033[0m")
+
     hot_reload_success = False
     hot_reload_message = ""
 
@@ -35,7 +35,7 @@ async def add_user_to_core(body: AddUserCoreSchema, request: Request, buffer: Co
     if body.core_lib and body.add_script and body.core_port:
         try:
             log_event(f"Попытка hot-reload добавления через \033[33m{body.core_lib}\033[0m", request=request)
-            
+
             hot_reload_success, hot_reload_message = await HotReloadExecutor.execute_add_script(
                 script=body.add_script,
                 lib_name=body.core_lib,
@@ -43,38 +43,36 @@ async def add_user_to_core(body: AddUserCoreSchema, request: Request, buffer: Co
                 node_ip='127.0.0.1',
                 core_api_port=body.core_port,
             )
-            
+
             if not hot_reload_success:
-                log_event(f"Hot-reload FAILED: {hot_reload_message}. Продолжаем с файловой записью.", level='CRITICAL')
+                log_event(f"Hot-reload FAILED: \033[31m{hot_reload_message}\033[0m. Продолжаем с файловой записью.", level='CRITICAL')
 
         except Exception as e:
-            log_event(f"Исключение при hot-reload: {e}", request=request, level='CRITICAL')
+            log_event(f"Исключение при hot-reload: \033[34m{e}\033[0m", request=request, level='CRITICAL')
             hot_reload_message = str(e)
-    
+
     "2. Добавление в ConfigWriteBuffer"
-    try:
-        # Добавляем пользователя (метод сам разберётся с регистрацией ноды)
-        await buffer.add_user(
-            node_proto_id=body.node_proto_id,
-            uuid=body.user_uuid,
-            user_obj=body.user_obj,
-            filepath=body.config_file_path,
-            users_path=body.flatten_json_users_key,
-            flatten_user_identifier_key=body.flatten_user_identifier_key,
+    # Добавляем пользователя (метод сам разберётся с регистрацией ноды)
+    add_res, msg = await buffer.add_user(
+        node_proto_id=body.node_proto_id,
+        user_obj=body.user_obj,
+        filepath=body.config_file_path,
+        users_path=body.flatten_json_users_key,
+        flatten_user_identifier_key=body.flatten_user_identifier_key,
 
-            # обеспечивает авто sync при неудачных вставках пользователя через апи, т.к. каждый раз обновляет reload_command
-            reload_command=body.reload_core_command if not hot_reload_success else None
-        )
-        
-        log_event(f"Пользователь добавлен в буфер | uuid: {body.user_uuid}", request=request)
+        # Обеспечивает авто sync при неудачных вставках пользователя через апи, т.к. каждый раз обновляет reload_command
+        reload_command=body.reload_core_command if not hot_reload_success else None
+    )
 
-        return {
-            'success': True, 'message': 'Пользователь добавлен', 'hot_reload': hot_reload_success, 'hot_reload_message': hot_reload_message
-        }
-        
-    except Exception as e:
-        log_event(f"Ошибка добавления пользователя: {e}", request=request, level='CRITICAL')
-        raise HTTPException(status_code=500, detail=str(e))
+    # buffer.add_user при успехе отдаёт сообщение, мол, всё хорошо
+    if add_res:
+        log_event(f"Пользователь добавлен в буфер | user_obj: \033[37m{body.user_obj}\033[0m", request=request)
+        return {'success': True, 'message': msg, 'hot_reload': hot_reload_success, 'hot_reload_message': hot_reload_message}
+
+    # При ошибке, отдаёт в сообщении ошибку из core_buffer - Поэтому стоят неочевидно
+    log_event(f'Не удалось добавить пользователя в буфер | user_obj: \033[31m{body.user_obj}\033[0m', request=request, level='WARNING')
+    raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка добавления пользователя в ядро', 'error_message': msg})
+
 
 
 
@@ -89,7 +87,7 @@ async def delete_user_from_core(body: DeleteUserCoreSchema, request: Request, bu
     3. Добавление в очередь на запись (батчинг)
     4. [Если нет hot-reload] → Перезагрузка ядра после записи файла
     """
-    log_event(f"Удаление пользователя | node_proto_id: {body.node_proto_id} | uuid: {body.user_uuid}", request=request)
+    log_event(f"Удаление пользователя | node_proto_id: {body.node_proto_id} | uuid: \033[33m{body.user_uuid}\033[0m", request=request)
     
     hot_reload_success = False
     hot_reload_message = ""
@@ -116,9 +114,26 @@ async def delete_user_from_core(body: DeleteUserCoreSchema, request: Request, bu
             hot_reload_message = str(e)
     
     "2. Удаление из ConfigWriteBuffer"
-    await buffer.delete_user(body.node_proto_id, body.user_uuid)
-    log_event(f"Пользователь удалён из буфера | uuid: {body.user_uuid}", request=request)
-        
+    del_res, msg = await buffer.delete_user(
+        node_proto_id=body.node_proto_id,
+        uuid=body.user_uuid,
+        filepath=body.config_file_path,
+        users_path=body.flatten_json_users_key,
+        flatten_user_identifier_key=body.flatten_user_identifier_key,
+        reload_command=body.reload_core_command
+    )
+
+
+    # buffer.delete_user при успехе отдаёт сообщение, мол, всё хорошо
+    if del_res:
+        log_event(f"Пользователь удалён из буфера | user_uuid: \033[37m{body.user_uuid}\033[0m", request=request)
+        return {'success': True, 'message': msg, 'hot_reload': hot_reload_success, 'hot_reload_message': hot_reload_message}
+
+    # При ошибке, отдаёт в сообщении ошибку из core_buffer - Поэтому стоят неочевидно
+    log_event(f'Не удалось удалить пользователя из буфера | user_uuid: \033[31m{body.user_uuid}\033[0m', request=request, level='WARNING')
+    raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка удаления пользователя из ядра', 'error_message': msg})
+
+
     return {
         'success': True, 'message': 'Пользователь удалён', 'hot_reload': hot_reload_success, 'hot_reload_message': hot_reload_message
     }
@@ -163,9 +178,17 @@ async def delete_user_from_core(body: BulkDeleteUserCoreSchema, request: Request
             hot_reload_message = str(e)
 
     "2. Удаление из ConfigWriteBuffer без лимитов на операции"
-    with buffer.unlimit_queue():
+    async with buffer.unlimit_queue(body.node_proto_id):
         for u in body.users:
-            await buffer.delete_user(body.node_proto_id, u.uuid)
+            # Можно реализовать логику подсчёта успешных удалений по первому аргументу от delete_user
+            await buffer.delete_user(
+                node_proto_id=body.node_proto_id,
+                uuid=u.uuid,
+                filepath=body.config_file_path,
+                users_path=body.flatten_json_users_key,
+                flatten_user_identifier_key=body.flatten_user_identifier_key,
+                reload_command=body.reload_core_command
+            )
 
     log_event(f"[Bulk] Пользователей удалено из буфера | users_len: {len(body.users)}", request=request)
 

@@ -106,7 +106,8 @@ class SubscriptionQueries:
         expired_nodes_info AS (
             SELECT u.uuid, u.tg_username, ds.order_id, vsp.id AS sub_node_id,
                    vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
-                   pt.api_bulk_delete_user_script
+                   pt.api_bulk_delete_user_script, pt.flatten_json_users_key, pt.flatten_user_identifier_key,
+                   pt.reload_core_command, np.config_path
             FROM deactivated_subs ds
             JOIN users u ON u.id = ds.user_id
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = ds.sub_plan_id 
@@ -123,6 +124,7 @@ class SubscriptionQueries:
         )
         -- 4. Группируем пользователей по нодам для пакетной отправки
         SELECT node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script, 
+               flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path,
                COALESCE(
                    json_agg(
                        json_build_object( 
@@ -135,7 +137,8 @@ class SubscriptionQueries:
                    '[]'::json
                ) AS users
         FROM expired_nodes_info
-        GROUP BY node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script
+        GROUP BY node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script, 
+                 flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path
         '''
         return await self.conn.fetch(query, CoreProtoActions.delete)
 

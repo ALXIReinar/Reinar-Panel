@@ -4,7 +4,7 @@ from uuid import UUID
 
 import orjson
 from aiohttp import ClientSession
-from arq.cron import cron
+from arq import cron, create_pool as create_arq_pool
 from asyncpg import create_pool, Record
 
 from web.config_dir.config import env, pool_settings, get_arq_redis_settings
@@ -20,7 +20,10 @@ async def startup(ctx: dict):
     
     "PostgreSQL пул"
     ctx['pg_pool'] = await create_pool(**pool_settings)
-    
+
+    "ArqRedis"
+    ctx['arq_redis'] = await create_arq_pool(get_arq_redis_settings())
+
     "AioHttp сессия для запросов к нодам"
     ctx['aio_http'] = ClientSession()
 
@@ -32,6 +35,9 @@ async def shutdown(ctx: dict):
     
     if 'pg_pool' in ctx:
         await ctx['pg_pool'].close()
+
+    if 'arq_redis' in ctx:
+        await ctx['arq_redis'].close()
 
     if 'aio_http' in ctx:
         await ctx['aio_http'].close()
@@ -74,7 +80,7 @@ class WorkerSettings:
         # Очистка просроченных refresh токенов (13 и 28 числа в 01:02)
         cron(run_rT_cleaner, day={13, 28}, hour=1, minute=2, unique=True),
         # Синхронизация трафика (каждые 5 минут)
-        cron(traffic_sync_scheduler, minute={0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55}, unique=True),
+        # cron(traffic_sync_scheduler, minute={0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55}, unique=True),
     ]
     
     # Lifecycle hooks
@@ -89,4 +95,4 @@ class WorkerSettings:
     log_results = True
     
     # Имя очереди
-    queue_name = 'arq:queue'
+    queue_name = 'arq:web_queue'

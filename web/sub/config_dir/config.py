@@ -44,16 +44,12 @@ class Settings(BaseSettings):
     pg_db: str
     pg_port: int
     pg_host: str
-    pg_port_docker: int
-    pg_host_docker: str
     pg_max_connections: int
 
     # Redis
     redis_password: str
     redis_host: str
     redis_port: int
-    redis_port_docker: int
-    redis_host_docker: str
 
     # Robokassa
     robo_shop_login: str
@@ -62,9 +58,8 @@ class Settings(BaseSettings):
     robo_passw_2: str
 
     # ARQ Settings
-    arq_max_jobs: int = 10
-    arq_job_timeout: int = 300
-    node_metrics_queue_limit: int = 10
+    arq_max_jobs: int
+    arq_job_timeout: int
 
 
     uvicorn_port: int
@@ -73,6 +68,7 @@ class Settings(BaseSettings):
 
     app_mode: AppMode
     subscription_update_interval: str
+    post_processing_responses: bool
     tg_bot_link: str
     model_config = SettingsConfigDict(extra='allow')
 

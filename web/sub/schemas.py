@@ -16,6 +16,19 @@ class CreateRoboPayLinkSchema(BaseModel):
 
 
 class WebhookRoboPayload(BaseModel):
+    """
+    Пример тела(формы) запроса от Робокассы
+
+    OutSum='345.00',
+    InvId=37,
+    SignatureValue='178a931e0ebd63530c7377999e45c4f1826a361e7180db9c4d0d206f34445108',
+    Shp_user_id=1,
+    Shp_csrf_token='NCHwWjvxh97Ml6vyh0HW-w',
+    Shp_sub_plan_id=1,
+    Shp_expire_date=datetime.datetime(2026, 8, 15, 6, 51, 4, 820826, tzinfo=TzInfo(0)),
+    IsTest='1',
+    Culture='ru'
+    """
     OutSum: str = Field(description="Сумма (Робокасса присылает строкой, например '150.00')")
     InvId: int = Field(description="ID заказа")
     SignatureValue: str = Field(description="Хеш от Робокассы для проверки")

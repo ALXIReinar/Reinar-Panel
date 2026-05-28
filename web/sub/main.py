@@ -35,7 +35,12 @@ async def lifespan(web_app: FastAPI):
         await web_app.state.arq_pool.close()
 
 
-app = FastAPI(default_response_class=ORJSONResponse, lifespan=lifespan)
+app = FastAPI(
+    default_response_class=ORJSONResponse,
+    lifespan=lifespan,
+    response_model=env.post_processing_responses,
+    response_model_exclude_unset=env.post_processing_responses
+)
 
 app.include_router(main_router)
 

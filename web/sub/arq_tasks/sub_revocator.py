@@ -32,6 +32,10 @@ async def revoke_sub_plan_by_expire(ctx: dict, db: PgSql = None, arq: ArqRedis =
                 vnode['proto_python_lib'],
                 vnode['api_bulk_delete_user_script'],
                 vnode['users'],
+                vnode['reload_core_command'],
+                vnode['config_path'],
+                vnode['flatten_json_users_key'],
+                vnode['flatten_user_identifier_key'],
             )
             log_event(f'\033[33m[ARQ]\033[0m Фоновая задача запущена | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
 
@@ -50,6 +54,10 @@ async def bulk_delete_users_from_single_node(
         proto_python_lib: str,
         api_bulk_delete_user_script: str,
         users: list[dict],
+        reload_core_command: str,
+        config_file_path: str,
+        flatten_json_users_key: str,
+        flatten_user_identifier_key: str,
         current_attempt = 1,
         db: PgSql = None,
         arq: ArqRedis = None,
@@ -63,6 +71,10 @@ async def bulk_delete_users_from_single_node(
         'users': users,
         'bulk_delete_script': api_bulk_delete_user_script,
         'core_port': metrics_port,
+        'reload_core_command': reload_core_command,
+        'config_file_path': config_file_path,
+        'flatten_json_users_key': flatten_json_users_key,
+        'flatten_user_identifier_key': flatten_user_identifier_key,
     }
     try:
         "Отправляем запрос на ноду, в ядро протокола"

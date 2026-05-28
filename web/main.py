@@ -53,7 +53,7 @@ app.include_router(main_router)
 "Миддлвари"
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[f"http://127.0.0.1:{env.admin_port}", f"http://localhost:{env.admin_port}", env.domain],
+    allow_origins=[f"http://127.0.0.1:{env.uvicorn_port}", f"http://localhost:{env.uvicorn_port}", env.domain],
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*']
@@ -62,4 +62,4 @@ app.add_middleware(AuthUXASGIMiddleware)
 app.add_middleware(ASGILoggingMiddleware)
 
 if __name__ == '__main__':
-    uvicorn.run('web.main:app', host="0.0.0.0", port=env.admin_port, log_config=None, workers=env.uvi_workers)
+    uvicorn.run('web.main:app', host="0.0.0.0", port=env.uvicorn_port, log_config=None, workers=env.uvicorn_workers)

@@ -21,7 +21,7 @@ async def run_rT_cleaner(ctx: dict, db: PgSql = None):
 
 @pg_sql_dep
 @arq_dep
-async def traffic_sync_scheduler(ctx: dict, db: PgSql = None, redis: ArqRedis = None):
+async def traffic_sync_scheduler(ctx: dict, db: PgSql = None, arq: ArqRedis = None):
     """
     Крона синхронизации трафика
     Запускается: каждые 5 минут
@@ -37,7 +37,7 @@ async def traffic_sync_scheduler(ctx: dict, db: PgSql = None, redis: ArqRedis = 
         return {'success': True, 'nodes_count': 0}
 
     "Ставим задачу сбора метрик в очередь. Task Chaining"
-    job = await redis.enqueue_job('collect_traffic_metrics', nodes)
+    job = await arq.enqueue_job('collect_traffic_metrics', nodes)
     log_event(f'\033[36m[ARQ]\033[0m Найдены ноды для сбора метрик. Задача поставлена в очередь | job_id: \033[33m{job.job_id}\033[0m; nodes_count: \033[32m{len(nodes)}\033[0m')
     return {'success': True, 'job_id': job.job_id, 'nodes_count': len(nodes)}
 

@@ -1,5 +1,5 @@
 from aiohttp import ClientSession
-from arq import cron
+from arq import cron, create_pool as create_arq_pool
 from asyncpg import create_pool
 
 from web.sub.arq_tasks.outbox_cleaner import retry_stuck_core_proto_actions
@@ -21,7 +21,7 @@ async def startup(ctx: dict):
     ctx['aio_http'] = ClientSession()
 
     "ArqRedis"
-    ctx['arq_redis'] = get_arq_redis_settings()
+    ctx['arq_redis'] = await create_arq_pool(get_arq_redis_settings())
 
     log_event('[ARQ Worker] Инициализация завершена!', level='WARNING')
 
@@ -71,4 +71,4 @@ class WorkerSettings:
     log_results = True
     
     # Имя очереди
-    queue_name = 'arq:queue'
+    queue_name = 'arq:sub_queue'

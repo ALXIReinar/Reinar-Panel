@@ -58,7 +58,7 @@ async def action_on_core_proto_by_sub_plan(
                 return
             
             "2. Подбираем тело запроса и эндпоинт в соответствии с operation"
-            log_event(f'\033[33m[ARQ]\033[0m Добавление юзера в ядро | uuid: \033[35m{user_uuid}\033[0m; node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; private_ip: \033[33m{node["private_ip"]}\033[0m', level='DEBUG')
+            log_event(f'\033[33m[ARQ]\033[0m Добавление юзера в ядро | uuid: \033[35m{user_uuid}\033[0m; node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; private_ip: \033[33m{node["private_ip"]}\033[0m; api_port: \033[35m{node['api_port']}\033[0m', level='DEBUG')
             json_add_body = {
                 'node_proto_id': node['node_proto_id'],
                 'core_lib': node['proto_python_lib'],
@@ -76,7 +76,11 @@ async def action_on_core_proto_by_sub_plan(
                 'core_lib': node['proto_python_lib'],
                 'user_uuid': user_uuid,
                 'delete_script': node['api_delete_user_script'],
+                'flatten_user_identifier_key': node['flatten_user_identifier_key'],
                 'core_port': node['metrics_port'],
+                'reload_core_command': node['reload_core_command'],
+                'config_file_path': node['config_path'],
+                'flatten_json_users_key': node['flatten_json_users_key'],
             }
             action_pack = {
                 'add': (json_add_body, NodeUris.proto_core_add_user),
@@ -85,6 +89,7 @@ async def action_on_core_proto_by_sub_plan(
             # action_pack[operation][0] - json body;
             # action_pack[operation][1] - endpoint_uri
             url = f"http://{node['private_ip']}:{node['api_port']}{action_pack[operation][1]}"
+            # url = f"http://localhost:8000/api/check_body"
             json_body = action_pack[operation][0]
 
             "3. Отправляем запрос на ноду"

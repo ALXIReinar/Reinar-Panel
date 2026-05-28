@@ -20,8 +20,7 @@ class JSONFormatter(logging.Formatter):
             "@timestamp": datetime.now(UTC).isoformat() + "Z",
             "level": record.levelname,
             "message": record.getMessage(),
-            "service": env.node,
-            "environment": env.app_mode,
+            "service": env.node_name,
             "method": record.__dict__.get('method', ''),
             "url": str(record.__dict__.get('url', '')),
             "func": record.__dict__.get('func', 'unknown_function'),
@@ -39,7 +38,7 @@ class JSONFormatter(logging.Formatter):
             log_entry[key] = record.__dict__.get(key, '')
 
         try:
-            return orjson.dumps(log_entry)
+            return orjson.dumps(log_entry).decode('utf-8')
         except (TypeError, ValueError) as e:
             fallback_entry = {
                 "@timestamp": datetime.now(UTC).isoformat() + "Z",
@@ -48,7 +47,7 @@ class JSONFormatter(logging.Formatter):
                 "service": env.node_name,
                 "error": f"JSON serialization failed: {str(e)}"
             }
-            return orjson.dumps(fallback_entry)
+            return orjson.dumps(fallback_entry).decode('utf-8')
 
 
 lvls = {

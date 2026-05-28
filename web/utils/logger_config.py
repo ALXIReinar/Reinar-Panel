@@ -1,6 +1,5 @@
 import os
 import inspect
-import json
 from datetime import datetime, UTC
 
 import logging
@@ -8,6 +7,7 @@ from logging.config import dictConfig
 
 from typing import Literal, Any
 
+import orjson
 from starlette.requests import Request
 from starlette.websockets import WebSocket
 
@@ -41,7 +41,7 @@ class JSONFormatter(logging.Formatter):
             log_entry[key] = record.__dict__.get(key, '')
 
         try:
-            return json.dumps(log_entry, ensure_ascii=False)
+            return orjson.dumps(log_entry).decode('utf-8')
         except (TypeError, ValueError) as e:
             fallback_entry = {
                 "@timestamp": datetime.now(UTC).isoformat() + "Z",
@@ -50,7 +50,7 @@ class JSONFormatter(logging.Formatter):
                 "service": "fastapi-app",
                 "error": f"JSON serialization failed: {str(e)}"
             }
-            return json.dumps(fallback_entry, ensure_ascii=False)
+            return orjson.dumps(fallback_entry).decode('utf-8')
 
 
 lvls = {
