@@ -173,12 +173,20 @@ cd $INSTALL_DIR
 python3 -m venv venv
 echo -e "${GREEN}✓${NC} Виртуальное окружение создано"
 
+# Права для использования
+sudo chown -R 1000:1000 /opt/vpn-panel/node
+
+# Для всех папок ставим стандартные 755 (читать и заходить могут все, писать - только владелец)
+find /opt/vpn-panel/ -type d -exec sudo chmod 755 {} +
+
+# Для всех файлов ставим стандартные 644 (читать могут все, писать - только владелец)
+find /opt/vpn-panel/ -type f -exec sudo chmod 644 {} +
+
+
 # Активация venv и установка зависимостей
 echo -e "\n${YELLOW}Установка зависимостей...${NC}"
-source venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
-deactivate
+$INSTALL_DIR/venv/bin/pip install --upgrade pip
+$INSTALL_DIR/venv/bin/pip install -r requirements.txt
 echo -e "${GREEN}✓${NC} Зависимости установлены"
 
 # Создание .env файла если его нет
@@ -189,7 +197,10 @@ if [ ! -f "$INSTALL_DIR/.env.node.prod" ]; then
 NODE_PORT=${NODE_PORT}
 NODE_NAME=${NODE_NAME}
 COMMAND_TIMEOUT=30
-UVICORN_WORKERS=1
+
+# Write Buffer Settings (батчинг записи конфигов)
+WRITE_BUFFER_INTERVAL=10
+WRITE_BUFFER_SIZE=5
 
 # Приватный IP админ-панели
 ADMIN_PANEL_PRIVATE_IP=${ADMIN_PRIVATE_IP}
@@ -210,6 +221,14 @@ else
         echo "ADMIN_PANEL_PRIVATE_IP=$ADMIN_PRIVATE_IP" >> $INSTALL_DIR/.env.node.prod
     else
         sed -i "s/^ADMIN_PANEL_PRIVATE_IP=.*/ADMIN_PANEL_PRIVATE_IP=$ADMIN_PRIVATE_IP/" $INSTALL_DIR/.env.node.prod
+    fi
+    
+    # Добавляем Write Buffer настройки если их нет
+    if ! grep -q "WRITE_BUFFER_INTERVAL" $INSTALL_DIR/.env.node.prod; then
+        echo "" >> $INSTALL_DIR/.env.node.prod
+        echo "# Write Buffer Settings (батчинг записи конфигов)" >> $INSTALL_DIR/.env.node.prod
+        echo "WRITE_BUFFER_INTERVAL=10" >> $INSTALL_DIR/.env.node.prod
+        echo "WRITE_BUFFER_SIZE=5" >> $INSTALL_DIR/.env.node.prod
     fi
     
     echo -e "${GREEN}✓${NC} Конфигурация обновлена"

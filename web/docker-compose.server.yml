@@ -1,4 +1,4 @@
-name: reinar_panel
+name: reinar_panel_admin
 
 services:
   pg_db:
@@ -24,7 +24,12 @@ services:
   redis:
     image: redis:7.2-alpine
     container_name: redis
-    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --appendonly
+      - "yes"
     volumes:
       - redis_data:/data
     environment:
@@ -59,62 +64,15 @@ services:
       - private_key.pem
       - public_key.pem
 
-  sub-service:
-    build:
-      context: ./sub
-      dockerfile: Dockerfile
-    container_name: sub-service
-    command: python -m web.sub.main
-    depends_on:
-      pg_db:
-        condition: service_healthy
-      web-service:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${SUB_PORT}/api/v1/healthcheck')\""]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-#    restart: always
-    environment:
-      - ENV_FILE=/run/secrets/env.sub.prod
-    network_mode: host
-    volumes:
-      - .sub/sub_logs:/app/sub/sub_logs
-    secrets:
-      - env.sub.prod
-
-  arq-sub-worker:
-    build:
-      context: ./sub
-      dockerfile: Dockerfile
-    container_name: arq-sub-worker
-    command: python -m arq web.sub.config_dir.arq_config.WorkerSettings
-    depends_on:
-      pg_db:
-        condition: service_healthy
-      sub-service:
-        condition: service_healthy
-#    restart: always
-    environment:
-      - ENV_FILE=/run/secrets/env.sub.prod
-    network_mode: host
-    volumes:
-      - .sub/arq_logs:/app/sub/arq_logs
-    secrets:
-      - env.sub.prod
-
-
 volumes:
   pgdata:
+    driver: local
+  redis_data:
     driver: local
 
 secrets:
   env.api.prod:
     file: .env.api.prod
-  env.sub.prod:
-    file: sub/.env.sub.prod
   private_key.pem:
     file: secrets/keys/private_key.pem
   public_key.pem:

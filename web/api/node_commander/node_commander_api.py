@@ -74,7 +74,7 @@ async def config_file_read(
         q_params: Annotated[ReadConfigSchema, Query()], request: Request, db: PgSqlDep, aio_http: NodeExecAiohttpDep, _: JWTCookieDep
 ):
     log_event(f'Пробуем считать конфиг-файл с ноды | node_proto_id: \033[32m{q_params.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
-    node_info = await db.nodes_protocols.get_node_for_file_edit(request.state.node_proto_id)
+    node_info = await db.nodes_protocols.get_node_for_file_edit(q_params.node_proto_id)
 
     "Не указан путь к файлу"
     if node_info['config_path'] is None:
@@ -83,7 +83,7 @@ async def config_file_read(
     "Запрашиваем файл с ноды"
     try:
         url = f'http://{node_info['private_ip']}:{node_info['api_port']}{NodeUris.get_config_file}'
-        async with aio_http.get(url, params={'file_path': node_info['config_path'], 'flatten_json_users_key': q_params.flatten_json_users_key}) as resp:
+        async with aio_http.post(url, json={'path': node_info['config_path'], 'flatten_json_users_key': q_params.flatten_json_users_key}) as resp:
             resp.raise_for_status()
             resp_data = await resp.json()
 
@@ -107,7 +107,7 @@ async def config_file_write(body: WriteConfigSchema, request: Request, db: PgSql
     "Запрашиваем файл с ноды"
     try:
         url = f'http://{body.private_ip}:{body.api_port}{NodeUris.write_config_file}'
-        async with aio_http.put(url, json={'file_path': body.file_path, 'file_content': body.file_content, 'flatten_json_users_key': body.flatten_json_users_key}) as resp:
+        async with aio_http.post(url, json={'file': body.file_path, 'content': body.file_content, 'flatten_json_users_key': body.flatten_json_users_key}) as resp:
             resp.raise_for_status()
 
         "1. Вытаскиваем ссылку-шаблон, зависимости и описание из БД"

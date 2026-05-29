@@ -118,15 +118,6 @@ done
 
 ADMIN_PORT=$USER_PORT
 
-# Запрос приватного IP для WireGuard
-echo -e "\n${YELLOW}Настройка WireGuard приватной сети${NC}"
-DEFAULT_WG_IP="10.0.0.1"
-
-read -p "Введите приватный IP админ-панели для WireGuard (по умолчанию $DEFAULT_WG_IP): " WG_PRIVATE_IP
-WG_PRIVATE_IP=${WG_PRIVATE_IP:-$DEFAULT_WG_IP}
-
-echo -e "${GREEN}✓${NC} WireGuard приватный IP: $WG_PRIVATE_IP"
-
 # Создание директории установки
 echo -e "\n${YELLOW}Создание директории ${INSTALL_DIR}...${NC}"
 mkdir -p "$INSTALL_DIR"
@@ -194,6 +185,9 @@ cat > "$ENV_FILE" <<ENVEOF
 # Для работы docker compose healthcheck. Убедитесь, что в .env.api.prod эти переменные идентичны
 ADMIN_PORT=${ADMIN_PORT}
 
+# Redis
+REDIS_PASSWORD=R'F&scBdorS8@0A-1!
+
 # PostgreSQL
 PG_DB=reinar_db
 PG_ADMIN=postgres
@@ -207,50 +201,62 @@ echo -e "\n${YELLOW}Настройка конфигурации приложен
 
 if [ ! -f "$ENV_API_FILE" ]; then
     cat > "$ENV_API_FILE" <<APIENVEOF
-# Application Configuration
-ADMIN_PORT=${ADMIN_PORT}
-UVI_WORKERS=1
-APP_MODE=docker
-DOMAIN=http://localhost:${ADMIN_PORT}
-POST_PROCESSING_RESPONSES=1
-
-REDIS_PASSWORD=R'F&scBdorS8@0A-1!
-REDIS_MAX_CONNECTIONS=50
-REDIS_HOST=127.0.0.1
-REDIS_PORT=6379
-REDIS_HOST_DOCKER=redis
-REDIS_PORT_DOCKER=6379
-
-
 # PostgreSQL (НЕ МЕНЯТЬ - вшито в скрипты инициализации БД!)
 PG_USER=reinar_crud_user
 PG_PASSWORD=VjZ0ChrfMfp9!
 PG_DB=reinar_db
 PG_HOST=127.0.0.1
 PG_PORT=5432
-PG_HOST_DOCKER=localhost
-PG_PORT_DOCKER=5432
 PG_MAX_CONNECTIONS=50
 
-# WireGuard
-ADMIN_PRIVATE_IP=${WG_PRIVATE_IP}
+# Redis
+REDIS_PASSWORD=R'F&scBdorS8@0A-1!
+REDIS_MAX_CONNECTIONS=50
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+
+# Subscription settings
+SUB_LINK_BYTES=32
+NODE_METRICS_QUEUE_LIMIT=8
+
+# ARQ Settings
+ARQ_QUEUE_NAME=arq:web_queue
+ARQ_MAX_JOBS=10
+ARQ_JOB_TIMEOUT=300
+
+# Application Configuration
+APP_MODE=docker
+POST_PROCESSING_RESPONSES=1
+UVICORN_WORKERS=1
+UVICORN_PORT=${ADMIN_PORT}
+DOMAIN=http://localhost:${ADMIN_PORT}
 APIENVEOF
     echo -e "${GREEN}✓${NC} Конфигурация приложения создана: $ENV_API_FILE"
 else
     echo -e "${YELLOW}Обновление существующего .env.api.prod...${NC}"
     
-    # Обновляем UVI_PORT
-    if grep -q "^UVI_PORT=" "$ENV_API_FILE"; then
-        sed -i "s/^UVI_PORT=.*/UVI_PORT=${ADMIN_PORT}/" "$ENV_API_FILE"
+    # Обновляем UVICORN_PORT
+    if grep -q "^UVICORN_PORT=" "$ENV_API_FILE"; then
+        sed -i "s/^UVICORN_PORT=.*/UVICORN_PORT=${ADMIN_PORT}/" "$ENV_API_FILE"
     else
-        echo "UVI_PORT=${ADMIN_PORT}" >> "$ENV_API_FILE"
+        echo "UVICORN_PORT=${ADMIN_PORT}" >> "$ENV_API_FILE"
     fi
     
-    # Обновляем ADMIN_PRIVATE_IP
-    if grep -q "^ADMIN_PRIVATE_IP=" "$ENV_API_FILE"; then
-        sed -i "s/^ADMIN_PRIVATE_IP=.*/ADMIN_PRIVATE_IP=${WG_PRIVATE_IP}/" "$ENV_API_FILE"
-    else
-        echo "ADMIN_PRIVATE_IP=${WG_PRIVATE_IP}" >> "$ENV_API_FILE"
+    # Добавляем ARQ настройки, если их нет
+    if ! grep -q "^ARQ_QUEUE_NAME=" "$ENV_API_FILE"; then
+        echo "" >> "$ENV_API_FILE"
+        echo "# ARQ Settings" >> "$ENV_API_FILE"
+        echo "ARQ_QUEUE_NAME=arq:web_queue" >> "$ENV_API_FILE"
+        echo "ARQ_MAX_JOBS=10" >> "$ENV_API_FILE"
+        echo "ARQ_JOB_TIMEOUT=300" >> "$ENV_API_FILE"
+    fi
+    
+    # Добавляем Subscription настройки, если их нет
+    if ! grep -q "^SUB_LINK_BYTES=" "$ENV_API_FILE"; then
+        echo "" >> "$ENV_API_FILE"
+        echo "# Subscription settings" >> "$ENV_API_FILE"
+        echo "SUB_LINK_BYTES=32" >> "$ENV_API_FILE"
+        echo "NODE_METRICS_QUEUE_LIMIT=8" >> "$ENV_API_FILE"
     fi
     
     echo -e "${GREEN}✓${NC} Конфигурация приложения обновлена"
@@ -282,14 +288,26 @@ else
     exit 1
 fi
 
+# 1. Принудительно отдаем папку проекта текущему юзеру (UID 1000)
+sudo chown -R 1000:1000 /opt/vpn-panel/
+
+# Для всех папок ставим стандартные 755 (читать и заходить могут все, писать - только владелец)
+find /opt/vpn-panel/ -type d -exec sudo chmod 755 {} +
+
+# Для всех файлов ставим стандартные 644 (читать могут все, писать - только владелец)
+find /opt/vpn-panel/ -type f -exec sudo chmod 644 {} +
+
+# 2. Выставляем права 777 (разрешить чтение/запись ВСЕМ, включая любого юзера внутри докера)
+sudo chmod -R 777 /opt/vpn-panel/web/arq_logs
+sudo chmod -R 777 /opt/vpn-panel/web/web_logs
+
 # Финальное сообщение
 echo -e "\n${BLUE}========================================${NC}"
 echo -e "${GREEN}  Установка завершена успешно!${NC}"
 echo -e "${BLUE}========================================${NC}\n"
 
 echo -e "Директория установки: ${GREEN}${INSTALL_DIR}${NC}"
-echo -e "Admin Panel доступна по адресу: ${GREEN}http://localhost:${ADMIN_PORT}${NC}"
-echo -e "WireGuard приватный IP: ${GREEN}${WG_PRIVATE_IP}${NC}\n"
+echo -e "Admin Panel доступна по адресу: ${GREEN}http://localhost:${ADMIN_PORT}${NC}\n"
 
 echo -e "${YELLOW}Управление сервисами:${NC}"
 echo -e "  Перейти в директорию: ${BLUE}cd $INSTALL_DIR${NC}"
@@ -305,6 +323,6 @@ echo -e "  Приложение:     ${BLUE}$ENV_API_FILE${NC}"
 echo -e "  RSA ключи:      ${BLUE}$INSTALL_DIR/secrets/keys/${NC}\n"
 
 echo -e "${YELLOW}Следующие шаги:${NC}"
-echo -e "  1. Настройте WireGuard для приватной сети между серверами"
-echo -e "  2. Установите Node Client: ${BLUE}cd /path/to/node_client && sudo bash install.sh${NC}"
-echo -e "  3. Добавьте ноды через Admin Panel\n"
+echo -e "  1. Добавьте ноды через Admin Panel"
+echo -e "  2. Установите Node Client на серверах: ${BLUE}cd /path/to/node_client && sudo bash install.sh${NC}"
+echo -e "  3. Настройте подключение между Admin Panel и нодами\n"

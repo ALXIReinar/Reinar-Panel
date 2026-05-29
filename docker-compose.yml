@@ -1,0 +1,3 @@
+include:
+  - web/docker-compose.server.yml
+  - web/sub/docker-compose.yml

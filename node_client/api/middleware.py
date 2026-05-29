@@ -18,9 +18,10 @@ class OnlyAdminAccessMiddleware:
         client = scope.get("client")
         client_ip = client[0] if client else ''
 
-        if not secrets.compare_digest(client_ip, env.admin_panel_private_ip):
+        if client_ip not in {"127.0.0.1", "10.0.0.1", env.admin_panel_private_ip}:
             response = JSONResponse(status_code=403, content='Forbidden')
             await response(scope, receive, send)
             return
+
 
         await self.app(scope, receive, send)
