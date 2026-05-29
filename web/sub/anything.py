@@ -7,6 +7,12 @@ class RobokassaUrls:
 
 
 @dataclass
+class PayStatuses:
+    pending: int = 1
+    success: int = 2
+    expired: int = 3
+
+@dataclass
 class Constants:
 
     @staticmethod
@@ -16,9 +22,9 @@ class Constants:
 
 @dataclass
 class NodeUris:
-    proto_core_add_user: str = '/api/v1/server/node/proto_core/user/add'
-    proto_core_delete_user: str = '/api/v1/server/node/proto_core/user/delete'
-    proto_core_bulk_delete_users: str = '/api/v1/server/node/proto_core/user/bulk/delete'
+    proto_core_add_user: str = '/api/v1/server/proto_core/user/add'
+    proto_core_delete_user: str = '/api/v1/server/proto_core/user/delete'
+    proto_core_bulk_delete_users: str = '/api/v1/server/proto_core/user/bulk/delete'
 
 class CoreProtoActions:
     add: int = 1

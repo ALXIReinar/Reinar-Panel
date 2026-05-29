@@ -2,6 +2,8 @@ from datetime import datetime
 
 from asyncpg import Connection, ForeignKeyViolationError
 
+from web.sub.anything import PayStatuses
+
 
 class PaymentQueries:
     def __init__(self, conn: Connection):
@@ -29,10 +31,10 @@ class PaymentQueries:
     async def activate_subscription(self, order_id: int, expire_date: datetime, user_id: int):
         """READ COMMITTED - оставляем только потому, что у платёжки есть механика идемпотентности. По-хорошему блокировки и REPEATABLE READ"""
         query_deactivate = 'UPDATE payed_subs SET is_active = false WHERE user_id = $1'
-        query_activate = 'UPDATE payed_subs SET is_active = true, expire_date = $2 WHERE id = $1'
+        query_activate = 'UPDATE payed_subs SET is_active = true, expire_date = $2, status = $3 WHERE id = $1'
         async with self.conn.transaction():
             await self.conn.execute(query_deactivate, user_id)
-            await self.conn.execute(query_activate, order_id, expire_date)
+            await self.conn.execute(query_activate, order_id, expire_date, PayStatuses.success)
 
 
     async def get_user_info(self, user_id: int):
@@ -43,10 +45,10 @@ class PaymentQueries:
     async def get_stuck_actions(self):
         query = '''
         WITH retrieve_upd AS (
-            UPDATE sub_nodes_outbox SET is_retried = true WHERE is_retried = false AND created_at > now() - interval '1 hour'
+            UPDATE sub_nodes_outbox SET is_retried = true WHERE is_retried = false AND created_at < now() - interval '1 hour'
             RETURNING id, user_uuid, tg_username, order_id, operation
         )
         SELECT * FROM retrieve_upd
-        ORDER BY operation DESC -- Сначала удаляем, затем добавляем
+        ORDER BY id
         '''
         return await self.conn.fetch(query)

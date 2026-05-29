@@ -22,9 +22,9 @@ async def action_on_core_proto_by_sub_plan(
         aio_http: ClientSession = None,
         arq: ArqRedis = None
 ):
-    log_event(f'\033[33m[ARQ]\033[0m Добавление пользователя на ноды | uuid: \033[35m{user_uuid}\033[0m; nodes_count: \033[32m{len(sub_nodes)}\033[0m', job_id=ctx.get('job_id'), task_name='add_user_core_proto_by_sub_plan')
+    log_event(f'\033[33m[ARQ]\033[0m Операция на Core Proto | uuid: \033[35m{user_uuid}\033[0m; nodes_count: \033[32m{len(sub_nodes)}\033[0m', job_id=ctx.get('job_id'), task_name='add_user_core_proto_by_sub_plan')
     
-    sem = asyncio.Semaphore(env.node_metrics_queue_limit)  # Батчинг нод
+    sem = asyncio.Semaphore(env.action_on_core_proto_limit)  # Батчинг нод
     trouble_nodes = []  # Критические ошибки (не ретраим)
     retry_nodes = []    # Временные ошибки (ретраим)
     success_nodes = []  # Ноды, где вставка пользователя прошла успешно
@@ -88,8 +88,8 @@ async def action_on_core_proto_by_sub_plan(
             }
             # action_pack[operation][0] - json body;
             # action_pack[operation][1] - endpoint_uri
-            url = f"http://{node['private_ip']}:{node['api_port']}{action_pack[operation][1]}"
-            # url = f"http://localhost:8000/api/check_body"
+            # url = f"http://{node['private_ip']}:{node['api_port']}{action_pack[operation][1]}"
+            url = f"http://localhost:8200{action_pack[operation][1]}"
             json_body = action_pack[operation][0]
 
             "3. Отправляем запрос на ноду"
@@ -103,14 +103,23 @@ async def action_on_core_proto_by_sub_plan(
                 success_nodes.append(node['sub_node_id'])
 
             except ClientResponseError as e:
-                "3.2. HTTP ошибка - ретраим"
-                log_event(f'\033[33m[ARQ]\033[0m HTTP ошибка | node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; status: \033[31m{e.status}\033[0m', level='ERROR')
-                retry_nodes.append({
-                    'node_proto_id': node['node_proto_id'],
-                    'node_data': node,  # Уже dict, не нужно преобразовывать
-                    'status_code': e.status,
-                    'response_json': {'error': str(e)}
-                })
+                "3.2.1. Шаблон некорректно настроен. Ошибки в параметрах для управления конфиг-файлом ядра"
+                if e.status == 422:
+                    log_event(f'Ошибка валидации в Инстансе ядре. Неправильные настройки для конфиг-файла, ключа к пользователям или ключа к идентификатору в объекте пользователя | node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m', level='WARNING')
+                    trouble_nodes.append({
+                        'node_proto_id': node['node_proto_id'],
+                        'status_code': 422,
+                        'response_json': str(e)
+                    })
+                # "3.2.2. HTTP ошибка - ретраим"
+                else:
+                    log_event(f'\033[33m[ARQ]\033[0m HTTP ошибка | node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; status: \033[31m{e.status}\033[0m', level='ERROR')
+                    retry_nodes.append({
+                        'node_proto_id': node['node_proto_id'],
+                        'node_data': node,  # Уже dict, не нужно преобразовывать
+                        'status_code': e.status,
+                        'response_json': {'error': str(e)}
+                    })
             
             except Exception as e:
                 "3.3. Неожиданная ошибка - ретраим"
@@ -146,7 +155,7 @@ async def action_on_core_proto_by_sub_plan(
         if current_attempt < max_tries:
             "Данные нод для retry"
             retry_sub_nodes = [node['node_data'] for node in retry_nodes]
-            log_event(f'\033[33m[ARQ]\033[0m Планируем retry | попытка: \033[33m{current_attempt + 1}/{max_tries}\033[0m; nodes_count: \033[33m{len(retry_sub_nodes)}\033[0m; operation: \033[36m{operation}\033[0m', level='WARNING')
+            log_event(f'\033[33m[ARQ]\033[0m \033[31mПланируем retry\033[0m | попытка: \033[33m{current_attempt + 1}/{max_tries}\033[0m; nodes_count: \033[33m{len(retry_sub_nodes)}\033[0m; operation: \033[36m{operation}\033[0m', level='WARNING')
 
             "Повторяем задачу с экспоненциальной задержкой: 60, 120, 240 секунд"
             defer_seconds = 60 * (2 ** current_attempt)

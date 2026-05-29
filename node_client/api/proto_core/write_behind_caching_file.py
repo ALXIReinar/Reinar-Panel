@@ -207,7 +207,7 @@ class ConfigWriteBuffer:
         "Проверяем наличие пользователя"
         if not uuid in self.buffer_storage[node_proto_id]:
             log_event(f'Пользователя с uuid не существует в этом конфиге | uuid: \033[33m{uuid}\033[0m; config_file: \033[32m{filepath}\033[0m', level='WARNING')
-            return False, 'Пользователя не существует'
+            return True, 'Пользователя уже не было'
 
         "Удаляем из кэша и Добавляем в очередь"
         del self.buffer_storage[node_proto_id][uuid]
@@ -409,7 +409,7 @@ class ConfigWriteBuffer:
     @staticmethod
     async def _write_config_atomic(filepath: str, config_dict: dict):
         """Атомарная запись конфига через временный файл"""
-        now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        now = time.monotonic()
 
         # Используем только имя файла
         filename = os.path.basename(filepath)

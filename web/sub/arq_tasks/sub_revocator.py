@@ -10,19 +10,19 @@ from web.sub.data.postgres import PgSql
 @pg_sql_dep
 @arq_dep
 async def revoke_sub_plan_by_expire(ctx: dict, db: PgSql = None, arq: ArqRedis = None):
-    log_event('\033[33m[ARQ]\033[0m "Срок действия подписки истёк. Крона по удалению пользователей из ядер протоколов')
+    log_event('\033[35m[ARQ Cron]\033[0m Срок действия подписки истёк. Крона по удалению пользователей из ядер протоколов')
     expired_users_by_node = await db.sub.get_and_lock_expired_subs_grouped_by_node()
     if not expired_users_by_node:
-        log_event('\033[32m[ARQ]\033[0m Нет истёкших подписок. Idle')
+        log_event('\033[32m[ARQ Cron]\033[0m Нет истёкших подписок. Idle')
         return {'success': True, 'message': 'Нет просроченных подписок'}
 
     users_to_delete = sum(len(vnode['users']) for vnode in  expired_users_by_node)
-    log_event(f'\033[33m[ARQ]\033[0m Крона по удалению пользователей из ядер протоколов | total_deletes: \033[31m{users_to_delete}\033[0m')
+    log_event(f'\033[35m[ARQ Cron]\033[0m Крона по удалению пользователей из ядер протоколов | total_deletes: \033[31m{users_to_delete}\033[0m')
 
     "Отправляем chain task на каждую ноду для бульк удаления"
     for vnode in expired_users_by_node:
         if len(vnode['users']) > 0:
-            log_event(f'\033[33m[ARQ]\033[0m Отправляем Бульк запрос на фоновое удаление пользователей из ядра | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
+            log_event(f'\033[35m[ARQ Cron]\033[0m Отправляем Бульк запрос на фоновое удаление пользователей из ядра | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
             job = await arq.enqueue_job(
                 'bulk_delete_users_from_single_node',
                 vnode['node_proto_id'],
@@ -37,7 +37,7 @@ async def revoke_sub_plan_by_expire(ctx: dict, db: PgSql = None, arq: ArqRedis =
                 vnode['flatten_json_users_key'],
                 vnode['flatten_user_identifier_key'],
             )
-            log_event(f'\033[33m[ARQ]\033[0m Фоновая задача запущена | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
+            log_event(f'\033[35m[ARQ Cron]\033[0m Фоновая задача запущена | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
 
     return {'success': True, 'message': 'Запущено Бульк удаление с нод', 'total_nodes': len(expired_users_by_node)}
 
@@ -63,8 +63,9 @@ async def bulk_delete_users_from_single_node(
         arq: ArqRedis = None,
         aio_http: ClientSession = None,
 ):
-    log_event(f'\033[33m[ARQ]\033[0m Юзер на удаление из конфиг-файла ядра | users_len: \033[35m{len(users)}\033[0m; node_proto_id: \033[33m{node_proto_id}\033[0m; private_ip: \033[33m{private_ip}\033[0m; api_port: \033[35m{api_port}\033[0m')
-    url = f"http://{private_ip}:{api_port}{NodeUris.proto_core_bulk_delete_users}"
+    log_event(f'\033[35m[ARQ Cron]\033[0m Юзер на удаление из конфиг-файла ядра | users_len: \033[35m{len(users)}\033[0m; node_proto_id: \033[33m{node_proto_id}\033[0m; private_ip: \033[33m{private_ip}\033[0m; api_port: \033[35m{api_port}\033[0m')
+    # url = f"http://{private_ip}:{api_port}{NodeUris.proto_core_bulk_delete_users}"
+    url = f"http://localhost:8200{NodeUris.proto_core_bulk_delete_users}"
     json_body = {
         'node_proto_id': node_proto_id,
         'core_lib': proto_python_lib,
@@ -87,15 +88,15 @@ async def bulk_delete_users_from_single_node(
             order_ids = [u['order_id'] for u in users]
 
             await db.sub.success_bulk_delete_core_proto_users(sub_node_ids, order_ids)
-            log_event(f'\033[33m[ARQ]\033[0m Юзеры удалены из конфиг-файла ядра | users_len: \033[35m{len(users)}\033[0m; node_proto_id: \033[33m{node_proto_id}\033[0m; private_ip: \033[33m{private_ip}\033[0m; api_port: \033[35m{api_port}\033[0m')
+            log_event(f'\033[35m[ARQ Cron]\033[0m Юзеры удалены из конфиг-файла ядра | users_len: \033[35m{len(users)}\033[0m; node_proto_id: \033[33m{node_proto_id}\033[0m; private_ip: \033[33m{private_ip}\033[0m; api_port: \033[35m{api_port}\033[0m')
             return {'success': True, 'message': 'Пользователи удалены из инстанса ядра'}
     except Exception as e:
-        log_event(f'\033[33m[ARQ]\033[0m Ошибка запроса на бульк удаление. Ретрай | node_proto_id: \033[33m{node_proto_id}\033[0m; users_len: {len(users)}; error: \033[36m{e}\033[0m', level='ERROR')
+        log_event(f'\033[35m[ARQ Cron]\033[0m Ошибка запроса на бульк удаление. Ретрай | node_proto_id: \033[33m{node_proto_id}\033[0m; users_len: {len(users)}; error: \033[36m{e}\033[0m', level='ERROR')
 
     "1. Retry: если есть failed ноды, отправляем повторную попытку"
     max_tries = 3
     if current_attempt < max_tries:
-        log_event(f'\033[33m[ARQ]\033[0m Планируем retry | попытка: \033[33m{current_attempt + 1}/{max_tries}\033[0m; users_len: \033[33m{len(users)}\033[0m; node_proto_id: \033[36m{node_proto_id}\033[0m',level='WARNING')
+        log_event(f'\033[35m[ARQ Cron]\033[0m Планируем retry | попытка: \033[33m{current_attempt + 1}/{max_tries}\033[0m; users_len: \033[33m{len(users)}\033[0m; node_proto_id: \033[36m{node_proto_id}\033[0m',level='WARNING')
 
         "Повторяем задачу с экспоненциальной задержкой: 60, 120, 240 секунд"
         defer_seconds = 60 * (2 ** current_attempt)
@@ -116,6 +117,6 @@ async def bulk_delete_users_from_single_node(
 
     else:
         "3. Попытки кончились. Крона попробует снова"
-        log_event(f'\033[33m[ARQ]\033[0m Удаление по истёкшим подпискам. Превышено количество попыток | max_tries: {max_tries}; node_proto_id: \033[31m{node_proto_id}\033[0m', level='ERROR')
+        log_event(f'\033[35m[ARQ Cron]\033[0m Удаление по истёкшим подпискам. Превышено количество попыток | max_tries: {max_tries}; node_proto_id: \033[31m{node_proto_id}\033[0m', level='ERROR')
 
     return {'success': True, 'message': 'Попытка бульк удаления пользователей с нод', 'current_attempt': current_attempt}

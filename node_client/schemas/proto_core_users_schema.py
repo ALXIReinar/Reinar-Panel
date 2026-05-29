@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 class BaseUserCoreSchema(BaseModel):
     node_proto_id: int = Field(..., gt=0, description='ID инстанса ядра (виртуальной ноды)')
     core_lib: str | None = Field(None, max_length=100, description='Библиотека для hot-reload (grpcio, requests)')
-    reload_core_command: str | None = Field(None, max_length=255, description='Команда перезагрузки ядра')
+    reload_core_command: str = Field(None, max_length=255, description='Команда перезагрузки ядра')
     core_port: int | None = Field(gt=0, le=65535, description='Порт к апи ядра для взаимодействия через скрипты')
     config_file_path: str = Field(..., min_length=1, description='Путь к конфиг-файлу')
     flatten_json_users_key: str = Field(..., min_length=1, description='Flatten-json путь до массива clients')

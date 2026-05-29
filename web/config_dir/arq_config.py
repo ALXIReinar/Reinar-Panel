@@ -7,7 +7,7 @@ from aiohttp import ClientSession
 from arq import cron, create_pool as create_arq_pool
 from asyncpg import create_pool, Record
 
-from web.config_dir.config import env, pool_settings, get_arq_redis_settings
+from web.config_dir.config import env, pool_settings, get_arq_redis_settings, get_arq_worker_settings
 from web.utils.arq_logger_config import log_event
 
 from web.arq_tasks.cron_tasks import run_rT_cleaner, traffic_sync_scheduler
@@ -22,7 +22,7 @@ async def startup(ctx: dict):
     ctx['pg_pool'] = await create_pool(**pool_settings)
 
     "ArqRedis"
-    ctx['arq_redis'] = await create_arq_pool(get_arq_redis_settings())
+    ctx['arq_redis'] = await create_arq_pool(get_arq_redis_settings(), **get_arq_worker_settings())
 
     "AioHttp сессия для запросов к нодам"
     ctx['aio_http'] = ClientSession()
@@ -95,4 +95,4 @@ class WorkerSettings:
     log_results = True
     
     # Имя очереди
-    queue_name = 'arq:web_queue'
+    queue_name = env.arq_queue_name

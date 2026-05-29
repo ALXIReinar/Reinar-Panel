@@ -2,7 +2,7 @@ from typing import Literal
 
 from asyncpg import Connection
 
-from web.sub.anything import CoreProtoActions
+from web.sub.anything import CoreProtoActions, PayStatuses
 
 
 class SubscriptionQueries:
@@ -98,7 +98,7 @@ class SubscriptionQueries:
         -- 1. Выключаем просроченные подписки и возвращаем их ID и данные юзеров
         WITH deactivated_subs AS (
             UPDATE payed_subs
-            SET is_active = false
+            SET is_active = false, status = $2
             WHERE is_active = true AND expire_date < now()
             RETURNING id AS order_id, user_id, sub_plan_id
         ),
@@ -140,7 +140,7 @@ class SubscriptionQueries:
         GROUP BY node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script, 
                  flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path
         '''
-        return await self.conn.fetch(query, CoreProtoActions.delete)
+        return await self.conn.fetch(query, CoreProtoActions.delete, PayStatuses.expired)
 
 
     async def success_action_core_proto_user(self, sub_node_ids: list[int], operation: Literal['add', 'delete'], user_uuid: str):

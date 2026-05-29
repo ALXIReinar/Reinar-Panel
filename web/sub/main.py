@@ -9,7 +9,8 @@ from fastapi.responses import ORJSONResponse
 from redis.asyncio import Redis
 
 from web.sub.api import main_router
-from web.sub.config_dir.config import redis_settings, pool_settings, env, get_arq_redis_settings
+from web.sub.config_dir.config import redis_settings, pool_settings, env, get_arq_redis_settings, \
+    get_arq_worker_settings
 
 
 @asynccontextmanager
@@ -25,7 +26,7 @@ async def lifespan(web_app: FastAPI):
     web_app.state.redis = Redis(**redis_settings)
 
     "ARQ пул для фоновых задач"
-    web_app.state.arq_pool = await create_arq_pool(get_arq_redis_settings())
+    web_app.state.arq_pool = await create_arq_pool(get_arq_redis_settings(), **get_arq_worker_settings())
     try:
         yield
     finally:
@@ -46,5 +47,5 @@ app.include_router(main_router)
 
 
 if __name__ == '__main__':
-    uvicorn.run('web.sub.main:app', host="0.0.0.0", port=env.uvicorn_port, workers=env.uvicorn_workers)
     # uvicorn.run('web.sub.main:app', log_config=None, host="0.0.0.0", port=env.uvicorn_port, workers=env.uvicorn_workers)
+    uvicorn.run('web.sub.main:app', host="0.0.0.0", port=env.uvicorn_port, workers=env.uvicorn_workers)

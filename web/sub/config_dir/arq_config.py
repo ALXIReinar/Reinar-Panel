@@ -4,7 +4,7 @@ from asyncpg import create_pool
 
 from web.sub.arq_tasks.outbox_cleaner import retry_stuck_core_proto_actions
 from web.sub.arq_tasks.sub_revocator import bulk_delete_users_from_single_node, revoke_sub_plan_by_expire
-from web.sub.config_dir.config import env, pool_settings, get_arq_redis_settings
+from web.sub.config_dir.config import env, pool_settings, get_arq_redis_settings, get_arq_worker_settings
 from web.sub.arq_tasks.action_on_user_core_proto import action_on_core_proto_by_sub_plan
 from web.sub.config_dir.arq_logger_config import log_event
 
@@ -21,7 +21,7 @@ async def startup(ctx: dict):
     ctx['aio_http'] = ClientSession()
 
     "ArqRedis"
-    ctx['arq_redis'] = await create_arq_pool(get_arq_redis_settings())
+    ctx['arq_redis'] = await create_arq_pool(get_arq_redis_settings(), **get_arq_worker_settings())
 
     log_event('[ARQ Worker] Инициализация завершена!', level='WARNING')
 
@@ -55,8 +55,10 @@ class WorkerSettings:
     
     # Cron задачи
     cron_jobs = [
-        cron(revoke_sub_plan_by_expire, hour={0}, minute={0}, unique=True),
-        cron(retry_stuck_core_proto_actions, hour={3}, minute={0}, unique=True),
+        # cron(revoke_sub_plan_by_expire, hour={0}, minute={0}, unique=True),
+        # cron(retry_stuck_core_proto_actions, hour={3}, minute={0}, unique=True),
+        cron(revoke_sub_plan_by_expire, minute=set(i for i in range(61) if i % 2 == 0), unique=True),
+        cron(retry_stuck_core_proto_actions, minute=set(i for i in range(61) if i % 2 != 0), unique=True),
     ]
     
     # Lifecycle hooks
@@ -71,4 +73,4 @@ class WorkerSettings:
     log_results = True
     
     # Имя очереди
-    queue_name = 'arq:sub_queue'
+    queue_name = env.arq_queue_name

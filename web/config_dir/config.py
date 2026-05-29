@@ -102,6 +102,7 @@ class Settings(BaseSettings):
     domain: str
     
     # ARQ Settings
+    arq_queue_name: str
     arq_max_jobs: int
     arq_job_timeout: int
     node_metrics_queue_limit: int = 10
@@ -171,6 +172,11 @@ def get_arq_redis_settings():
         password=redis_settings.get('password'),
         database=0,
     )
+
+def get_arq_worker_settings():
+    return {
+        'default_queue_name': env.arq_queue_name,
+    }
 
 async def get_arq_pool(request: Request) -> ArqRedis:
     return request.app.state.arq_pool

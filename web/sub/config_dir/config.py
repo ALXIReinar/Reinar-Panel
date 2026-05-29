@@ -58,13 +58,14 @@ class Settings(BaseSettings):
     robo_passw_2: str
 
     # ARQ Settings
+    arq_queue_name: str
     arq_max_jobs: int
     arq_job_timeout: int
-
 
     uvicorn_port: int
     uvicorn_workers: int
     trusted_proxies: set[str] = {'127.0.0.1', '172.0.18.0'}
+    action_on_core_proto_limit: int
 
     app_mode: AppMode
     subscription_update_interval: str
@@ -136,6 +137,11 @@ def get_arq_redis_settings():
         password=redis_settings.get('password'),
         database=0,
     )
+
+def get_arq_worker_settings():
+    return {
+        'default_queue_name': env.arq_queue_name,
+    }
 
 async def get_arq_pool(request: Request) -> ArqRedis:
     return request.app.state.arq_pool

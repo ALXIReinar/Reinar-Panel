@@ -15,7 +15,7 @@ from web.sub.data.postgres import PgSqlDep
 from web.sub.data.redis_storage import RedisDep
 from web.sub.schemas import CreateRoboPayLinkSchema, WebhookRoboPayload
 
-router = APIRouter(prefix='/api/v1')
+router = APIRouter(prefix='/api/v1', tags=['🤖 RoboKassa Payment'])
 
 
 
@@ -61,12 +61,14 @@ async def create_payment_give_link(body: CreateRoboPayLinkSchema, request: Reque
 
 
 
-@router.post('/robokassa/successful_webhook')
+@router.post('/robokassa/webhook')
 async def processing_pay_result(form: Annotated[WebhookRoboPayload, Form()], request: Request, db: PgSqlDep, redis: RedisDep, arq: ArqDep):
     """Обработка вебхука после оплаты пользователем"""
+    log_event(f'{repr(form)}', request=request, level='DEBUG')
+
     "1. Проверяем сигнатуру"
     payment_meta = {k: v for k,v in form.model_dump().items() if k.startswith('Shp_')}
-    expected_signature = create_signature(env.robo_passw_1, form.OutSum, form.InvId, payment_meta4signature_string(payment_meta))
+    expected_signature = create_signature(env.robo_passw_2, form.OutSum, form.InvId, payment_meta4signature_string(payment_meta))
     expected_hash = crypt_strategy[env.robo_crypt_algorithm](expected_signature.encode('utf-8')).hexdigest()
     if not secrets.compare_digest(
             expected_hash.lower(),

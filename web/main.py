@@ -11,7 +11,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from web.api import main_router
 from web.api.middleware import ASGILoggingMiddleware, AuthUXASGIMiddleware
-from web.config_dir.config import env, pool_settings, redis_settings, get_arq_redis_settings
+from web.config_dir.config import env, pool_settings, redis_settings, get_arq_redis_settings, get_arq_worker_settings
 
 
 @asynccontextmanager
@@ -28,7 +28,7 @@ async def lifespan(web_app):
     web_app.state.redis = Redis(**redis_settings)
     
     "ARQ пул для фоновых задач"
-    web_app.state.arq_pool = await create_arq_pool(get_arq_redis_settings())
+    web_app.state.arq_pool = await create_arq_pool(get_arq_redis_settings(), **get_arq_worker_settings())
     
     try:
         yield
@@ -39,8 +39,8 @@ async def lifespan(web_app):
         await web_app.state.arq_pool.close()
 
 app = FastAPI(
-    docs_url='/api/docs',
-    openapi_url='/api/openapi.json',
+    # docs_url='/api/docs',
+    # openapi_url='/api/openapi.json',
     lifespan=lifespan,
     default_response_class=ORJSONResponse, # используем в X5 раз более быстрый кодек orjson вместо json
     response_model=env.post_processing_responses,

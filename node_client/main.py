@@ -27,4 +27,5 @@ app.include_router(main_router)
 app.add_middleware(OnlyAdminAccessMiddleware)
 
 if __name__ == '__main__':
-    uvicorn.run('node_client.main:app', log_config=None, host="0.0.0.0", port=env.node_port, workers=1)
+    # uvicorn.run('node_client.main:app', log_config=None, host="0.0.0.0", port=env.node_port, workers=1)
+    uvicorn.run('node_client.main:app', host="0.0.0.0", port=env.node_port, workers=1)

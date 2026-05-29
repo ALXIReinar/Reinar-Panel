@@ -70,8 +70,8 @@ async def add_user_to_core(body: AddUserCoreSchema, request: Request, buffer: Co
         return {'success': True, 'message': msg, 'hot_reload': hot_reload_success, 'hot_reload_message': hot_reload_message}
 
     # При ошибке, отдаёт в сообщении ошибку из core_buffer - Поэтому стоят неочевидно
-    log_event(f'Не удалось добавить пользователя в буфер | user_obj: \033[31m{body.user_obj}\033[0m', request=request, level='WARNING')
-    raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка добавления пользователя в ядро', 'error_message': msg})
+    log_event(f'Не удалось добавить пользователя в буфер, некорректные настройки | user_obj: \033[31m{body.user_obj}\033[0m', request=request, level='WARNING')
+    raise HTTPException(status_code=422, detail={'success': False, 'message': 'Ошибка добавления пользователя в ядро', 'error_message': msg})
 
 
 
@@ -134,11 +134,6 @@ async def delete_user_from_core(body: DeleteUserCoreSchema, request: Request, bu
     raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка удаления пользователя из ядра', 'error_message': msg})
 
 
-    return {
-        'success': True, 'message': 'Пользователь удалён', 'hot_reload': hot_reload_success, 'hot_reload_message': hot_reload_message
-    }
-
-
 
 @router.delete('/user/bulk/delete')
 async def delete_user_from_core(body: BulkDeleteUserCoreSchema, request: Request, buffer: CoreBuffersDep):
@@ -153,14 +148,14 @@ async def delete_user_from_core(body: BulkDeleteUserCoreSchema, request: Request
 
     * Но
     """
-    log_event(f"Удаление пользователей | node_proto_id: {body.node_proto_id} | users_len: \033[0m{len(body.users)}\033[0m", request=request, level='WARNING')
+    log_event(f"Удаление пользователей | node_proto_id: {body.node_proto_id} | users_len: \033[0m{len(body.users)}\033[0m", request=request)
 
     hot_reload_success = False
     hot_reload_message = ""
     "1. Hot-reload через API (если есть библиотека)"
     if body.core_lib and body.delete_script and body.core_port:
         try:
-            log_event(f"[Bulk] Попытка hot-reload удаления через {body.core_lib}", request=request)
+            log_event(f"\033[33m[Bulk]\033[0m Попытка hot-reload удаления через {body.core_lib}", request=request)
 
             hot_reload_success, hot_reload_message = await HotReloadExecutor.execute_delete_script(
                 script=body.delete_script,
@@ -171,10 +166,10 @@ async def delete_user_from_core(body: BulkDeleteUserCoreSchema, request: Request
             )
 
             if not hot_reload_success:
-                log_event(f"[Bulk] Hot-reload DELETE FAILED: {hot_reload_message}. Продолжаем с файловой записью.", request=request, level='CRITICAL')
+                log_event(f"\033[33m[Bulk]\033[0m Hot-reload DELETE FAILED: {hot_reload_message}. Продолжаем с файловой записью.", request=request, level='ERROR')
 
         except Exception as e:
-            log_event(f"[Bulk] Исключение при hot-reload удаления: {e}", request=request, level='CRITICAL')
+            log_event(f"\033[33m[Bulk]\033[0m Исключение при hot-reload удаления: {e}", request=request, level='CRITICAL')
             hot_reload_message = str(e)
 
     "2. Удаление из ConfigWriteBuffer без лимитов на операции"
@@ -190,7 +185,7 @@ async def delete_user_from_core(body: BulkDeleteUserCoreSchema, request: Request
                 reload_command=body.reload_core_command
             )
 
-    log_event(f"[Bulk] Пользователей удалено из буфера | users_len: {len(body.users)}", request=request)
+    log_event(f"\033[33m[Bulk]\033[0m Пользователей удалено из буфера | users_len: \033[31m{len(body.users)}\033[0m", request=request)
 
     return {
         'success': True, 'message': 'Пользователь удалён', 'hot_reload': hot_reload_success, 'hot_reload_message': hot_reload_message

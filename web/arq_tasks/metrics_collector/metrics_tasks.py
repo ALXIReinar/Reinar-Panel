@@ -1,6 +1,6 @@
 import asyncio
 from aiohttp import ClientResponseError, ClientSession
-from asyncpg import Record
+from asyncpg import Record, Pool
 
 from web.arq_tasks.depends_fabric import pg_sql_dep, aiohttp_dep
 from web.arq_tasks.metrics_collector.handlers import parse_node_output
@@ -27,7 +27,7 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[Record], db: PgSql = No
     error_count = 0
     
 
-    async def worker(node: Record):
+    async def worker(node: Record, pool: Pool):
         nonlocal success_count, error_count
         
         async with sem:
@@ -51,7 +51,8 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[Record], db: PgSql = No
                     usernames, traffic_adds = zip(*tuple(
                         tuple(user_dict.items()) for user_dict in parsed_data
                     ))
-                    await db.users.update_traffic(usernames, traffic_adds)
+                    async with pool.acquire() as conn:
+                        await PgSql(conn).users.update_traffic(usernames, traffic_adds)
                     
                     success_count += 1
                     log_event(f'\033[35m[ARQ]\033[0m Метрики обновлены | node_id: \033[36m{node["id"]}\033[0m; users_count: \033[32m{len(parsed_data)}\033[0m')
@@ -67,6 +68,6 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[Record], db: PgSql = No
                 log_event(f'\033[35m[ARQ]\033[0m Ошибка исполнения на админке, не удалось собрать метрики | error: \033[31m{e}\033[0m; node: \033[33m{repr(node)}\033[0m', level='CRITICAL')
     
     "Запускаем все воркеры"
-    await asyncio.gather(*(worker(node) for node in nodes))
+    await asyncio.gather(*(worker(node, ctx['pg_pool']) for node in nodes))
     log_event(f'\033[35m[ARQ]\033[0m Сбор метрик завершён | success: \033[32m{success_count}\033[0m; errors: \033[31m{error_count}\033[0m')
     return {'success': True, 'nodes_total': len(nodes), 'success_count': success_count, 'error_count': error_count}
