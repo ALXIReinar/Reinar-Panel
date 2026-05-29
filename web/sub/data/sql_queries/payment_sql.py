@@ -52,3 +52,8 @@ class PaymentQueries:
         ORDER BY id
         '''
         return await self.conn.fetch(query)
+
+
+    async def reset_user_traffic_per_day(self):
+        query = 'UPDATE users SET traffic_used_day_mb = 0'
+        await self.conn.execute(query)

@@ -4,9 +4,7 @@ Write-Behind Caching для батчинга операций с конфиг-ф
 import asyncio
 import os
 import time
-from asyncio import Queue
 from contextlib import asynccontextmanager
-from datetime import datetime
 from typing import Annotated
 
 import aiofiles
@@ -451,18 +449,54 @@ class ConfigWriteBuffer:
         return current
 
 
-def flatten_key2value(json_obj: dict, flatten_key: str):
+def flatten_key2value(
+        json_obj: dict, flatten_key: str, new_last_obj: dict = None, replace_last_obj: bool = False, delete_obj: bool = False
+):
+    """
+    Ультимативная функция для парсинга flatten-json ключей
+    1. Может просто возращать конечное значение
+    2. Удалять последний объект по ключу
+    3. Подменять последний объект
+
+    Exception используется в качестве Fallback для гарантированного понимания "Мы точно не нашли объект по ключу"
+
+    :param json_obj: Исходный json
+    :param flatten_key: flatten-json ключ-строка
+    :param new_last_obj: Если нужна подмена, новый объект взамен старого
+    :param replace_last_obj: Флаг для подмены
+    :param delete_obj: Флаг для удаления последнего объекта
+    :return:
+    """
     keys = flatten_key.split('___')
     current = json_obj
 
-    for key in keys:
+    for idx, key in enumerate(keys):
         # Пытаемся преобразовать в int (для индексов массивов)
+        if key.isdigit():
+            key = int(key)
+
+        # Исполняем операцию над последним объектом по flatten ключу. Изменения отобразятся в исходном json_obj
+        if idx == len(keys) - 1:
+            # Удаляем объект
+            if delete_obj:
+                # Если ключ - индекс в массиве
+                del current[key]
+                return None
+            # Подменяем содержимое
+            if replace_last_obj and new_last_obj is not None:
+                current[key] = new_last_obj
+                return None
+
+
+        # Простой select. Продвигаемся дальше
         try:
-            key_int = int(key)
-            current = current[key_int]
+            current = current[key]
         except (ValueError, TypeError):
-            # Обычный ключ словаря
             current = current.get(key, Exception)
+
+        # Ранний выход, если ключ не найден
+        if current is Exception:
+            return Exception
 
     return current
 

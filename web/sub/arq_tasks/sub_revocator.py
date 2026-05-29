@@ -64,8 +64,8 @@ async def bulk_delete_users_from_single_node(
         aio_http: ClientSession = None,
 ):
     log_event(f'\033[35m[ARQ Cron]\033[0m Юзер на удаление из конфиг-файла ядра | users_len: \033[35m{len(users)}\033[0m; node_proto_id: \033[33m{node_proto_id}\033[0m; private_ip: \033[33m{private_ip}\033[0m; api_port: \033[35m{api_port}\033[0m')
-    # url = f"http://{private_ip}:{api_port}{NodeUris.proto_core_bulk_delete_users}"
-    url = f"http://localhost:8200{NodeUris.proto_core_bulk_delete_users}"
+    url = f"http://{private_ip}:{api_port}{NodeUris.proto_core_bulk_delete_users}"
+    # url = f"http://localhost:8200{NodeUris.proto_core_bulk_delete_users}"
     json_body = {
         'node_proto_id': node_proto_id,
         'core_lib': proto_python_lib,

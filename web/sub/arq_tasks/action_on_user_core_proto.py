@@ -88,8 +88,8 @@ async def action_on_core_proto_by_sub_plan(
             }
             # action_pack[operation][0] - json body;
             # action_pack[operation][1] - endpoint_uri
-            # url = f"http://{node['private_ip']}:{node['api_port']}{action_pack[operation][1]}"
-            url = f"http://localhost:8200{action_pack[operation][1]}"
+            # url = f"http://localhost:8200{action_pack[operation][1]}"
+            url = f"http://{node['private_ip']}:{node['api_port']}{action_pack[operation][1]}"
             json_body = action_pack[operation][0]
 
             "3. Отправляем запрос на ноду"

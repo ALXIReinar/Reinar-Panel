@@ -55,10 +55,10 @@ class WorkerSettings:
     
     # Cron задачи
     cron_jobs = [
-        # cron(revoke_sub_plan_by_expire, hour={0}, minute={0}, unique=True),
-        # cron(retry_stuck_core_proto_actions, hour={3}, minute={0}, unique=True),
-        cron(revoke_sub_plan_by_expire, minute=set(i for i in range(61) if i % 2 == 0), unique=True),
-        cron(retry_stuck_core_proto_actions, minute=set(i for i in range(61) if i % 2 != 0), unique=True),
+        cron(revoke_sub_plan_by_expire, hour={0}, minute={0}, unique=True),
+        cron(retry_stuck_core_proto_actions, hour={3}, minute={0}, unique=True),
+        # cron(revoke_sub_plan_by_expire, minute=set(i for i in range(61) if i % 2 == 0), unique=True),
+        # cron(retry_stuck_core_proto_actions, minute=set(i for i in range(61) if i % 2 != 0), unique=True),
     ]
     
     # Lifecycle hooks

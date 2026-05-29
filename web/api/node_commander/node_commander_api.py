@@ -1,11 +1,9 @@
-import json
 from typing import Annotated
 
 from aiohttp import ClientResponseError
 from fastapi import APIRouter, HTTPException
 from fastapi.params import Query
 from starlette.requests import Request
-from starlette.responses import JSONResponse
 
 from web.api.protocols.proto_links_templates.handlers import generate_link_from_json
 from web.config_dir.config import NodeExecAiohttpDep
@@ -85,7 +83,7 @@ async def config_file_read(
     "Запрашиваем файл с ноды"
     try:
         url = f'http://{node_info['private_ip']}:{node_info['api_port']}{NodeUris.get_config_file}'
-        async with aio_http.get(url, params={'file_path': node_info['config_path']}) as resp:
+        async with aio_http.get(url, params={'file_path': node_info['config_path'], 'flatten_json_users_key': q_params.flatten_json_users_key}) as resp:
             resp.raise_for_status()
             resp_data = await resp.json()
 
@@ -109,7 +107,7 @@ async def config_file_write(body: WriteConfigSchema, request: Request, db: PgSql
     "Запрашиваем файл с ноды"
     try:
         url = f'http://{body.private_ip}:{body.api_port}{NodeUris.write_config_file}'
-        async with aio_http.put(url, json={'file_path': body.file_path, 'file_content': body.file_content}) as resp:
+        async with aio_http.put(url, json={'file_path': body.file_path, 'file_content': body.file_content, 'flatten_json_users_key': body.flatten_json_users_key}) as resp:
             resp.raise_for_status()
 
         "1. Вытаскиваем ссылку-шаблон, зависимости и описание из БД"

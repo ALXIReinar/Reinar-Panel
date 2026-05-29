@@ -1,7 +1,9 @@
 from pathlib import Path
+import orjson
 from fastapi import APIRouter
 from starlette.responses import JSONResponse
 
+from node_client.api.proto_core.write_behind_caching_file import flatten_key2value
 from node_client.schemas.node_config_schema import ConfigReadSchema, ConfigReadResponseSchema, ConfigWriteSchema, \
     ConfigWriteResponseSchema
 
@@ -14,6 +16,7 @@ router = APIRouter(prefix='/node/config', tags=['Config'])
 async def read_config(body: ConfigReadSchema):
     """
     Читает содержимое конфигурационного файла на ноде.
+    Удаляет список пользователей из ответа (если указан flatten_json_users_key).
     """
     try:
         file_path = Path(body.path)
@@ -27,6 +30,13 @@ async def read_config(body: ConfigReadSchema):
             return JSONResponse(status_code=400, content={"success": False, "message": "Указанный путь не является файлом", "path": body.path})
 
         content = file_path.read_text(encoding='utf-8')
+
+        "Если указатель на массив пользователей передан, отдаём конфиг без этого объекта пользователей"
+        if body.flatten_json_users_key:
+            json_content = orjson.loads(content)
+            flatten_key2value(json_content, body.flatten_json_users_key, delete_obj=True)
+            content = orjson.dumps(json_content, option=orjson.OPT_INDENT_2).decode('utf-8')
+
         return ConfigReadResponseSchema(success=True, content=content, path=body.path)
     
     except PermissionError:
@@ -47,12 +57,20 @@ async def write_config(body: ConfigWriteSchema):
     """
     try:
         file_path = Path(body.path)
-        
-        # Создаём директории если их нет
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        
+        new_content = body.content
+
+        "Если передан указатель, переносим пользователей из старого конфига в новый"
+        if body.flatten_json_users_key:
+            old_file_json = orjson.loads(body.content)
+            new_file_json = orjson.loads(body.content)
+
+            users_list = flatten_key2value(old_file_json, body.flatten_json_users_key)
+            flatten_key2value(new_file_json, body.flatten_json_users_key, new_last_obj=users_list, replace_last_obj=True)
+
+            new_content = orjson.dumps(new_file_json, option=orjson.OPT_INDENT_2).decode('utf-8')
+
         # Запись файла
-        file_path.write_text(body.content, encoding='utf-8')
+        file_path.write_text(new_content, encoding='utf-8')
         
         return ConfigWriteResponseSchema(success=True, message="Файл успешно записан", path=body.path)
     

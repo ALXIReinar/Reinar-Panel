@@ -10,9 +10,8 @@ from web.utils.anything import NodeUris
 from web.utils.arq_logger_config import log_event
 
 
-@pg_sql_dep
 @aiohttp_dep
-async def collect_traffic_metrics(ctx: dict, nodes: list[Record], db: PgSql = None, aio_http: ClientSession = None):
+async def collect_traffic_metrics(ctx: dict, nodes: list[Record], aio_http: ClientSession = None):
     """
     Сбор метрик трафика с нод и обновление в БД
     
@@ -33,7 +32,8 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[Record], db: PgSql = No
         async with sem:
             try:
                 "Запрашиваем метрики потребления с нод"
-                url = f"http://{node['private_ip']}:{node['api_port']}{NodeUris.get_metrics}"
+                # url = f"http://{node['private_ip']}:{node['api_port']}{NodeUris.get_metrics}"
+                url = f"http://localhost:8200{NodeUris.get_metrics}"
                 async with aio_http.get(
                     url, params={'metrics_port': node['metrics_port'], 'command': node['metrics_command']}, timeout=10.0
                 ) as resp:
