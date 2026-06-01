@@ -6,6 +6,7 @@ from starlette.responses import JSONResponse
 from node_client.api.proto_core.write_behind_caching_file import flatten_key2value
 from node_client.schemas.node_config_schema import ConfigReadSchema, ConfigReadResponseSchema, ConfigWriteSchema, \
     ConfigWriteResponseSchema
+from node_client.logger_config import log_event
 
 router = APIRouter(prefix='/node/config', tags=['Config'])
 
@@ -34,7 +35,9 @@ async def read_config(body: ConfigReadSchema):
         "Если указатель на массив пользователей передан, отдаём конфиг без этого объекта пользователей"
         if body.flatten_json_users_key:
             json_content = orjson.loads(content)
-            flatten_key2value(json_content, body.flatten_json_users_key, delete_obj=True)
+            log_event(f'После питонизации джсона: {json_content}', level="DEBUG")
+            res = flatten_key2value(json_content, body.flatten_json_users_key, delete_obj=True)
+            log_event(f'После удаления клиентов {res}', level="DEBUG")
             content = orjson.dumps(json_content, option=orjson.OPT_INDENT_2).decode('utf-8')
 
         return ConfigReadResponseSchema(success=True, content=content, path=body.path)
@@ -57,21 +60,20 @@ async def write_config(body: ConfigWriteSchema):
     """
     try:
         file_path = Path(body.path)
-        new_content = body.content
+        new_file_json = orjson.loads(body.content)
 
         "Если передан указатель, переносим пользователей из старого конфига в новый"
         if body.flatten_json_users_key:
-            old_file_json = orjson.loads(body.content)
-            new_file_json = orjson.loads(body.content)
+            old_file_json = orjson.loads(file_path.read_text(encoding='utf-8'))
 
             users_list = flatten_key2value(old_file_json, body.flatten_json_users_key)
             flatten_key2value(new_file_json, body.flatten_json_users_key, new_last_obj=users_list, replace_last_obj=True)
 
-            new_content = orjson.dumps(new_file_json, option=orjson.OPT_INDENT_2).decode('utf-8')
 
         # Запись файла
+        new_content = orjson.dumps(new_file_json, option=orjson.OPT_INDENT_2).decode('utf-8')
         file_path.write_text(new_content, encoding='utf-8')
-        
+
         return ConfigWriteResponseSchema(success=True, message="Файл успешно записан", path=body.path)
     
     except PermissionError:

@@ -182,6 +182,8 @@ find /opt/vpn-panel/ -type d -exec sudo chmod 755 {} +
 # Для всех файлов ставим стандартные 644 (читать могут все, писать - только владелец)
 find /opt/vpn-panel/ -type f -exec sudo chmod 644 {} +
 
+# Разрешаем запускать весь bin
+chmod 755 -R $INSTALL_DIR/venv/bin
 
 # Активация venv и установка зависимостей
 echo -e "\n${YELLOW}Установка зависимостей...${NC}"

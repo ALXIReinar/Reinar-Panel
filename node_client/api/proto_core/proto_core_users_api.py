@@ -36,12 +36,13 @@ async def add_user_to_core(body: AddUserCoreSchema, request: Request, buffer: Co
         try:
             log_event(f"Попытка hot-reload добавления через \033[33m{body.core_lib}\033[0m", request=request)
 
-            hot_reload_success, hot_reload_message = await HotReloadExecutor.execute_add_script(
+            hot_reload_success, hot_reload_message = await HotReloadExecutor.execute_action_script(
                 script=body.add_script,
                 lib_name=body.core_lib,
                 user_obj=body.user_obj,
                 node_ip='127.0.0.1',
                 core_api_port=body.core_port,
+                custom_params=body.custom_params,
             )
 
             if not hot_reload_success:
@@ -98,12 +99,13 @@ async def delete_user_from_core(body: DeleteUserCoreSchema, request: Request, bu
             log_event(f"Попытка hot-reload удаления через {body.core_lib}", request=request)
             
 
-            hot_reload_success, hot_reload_message = await HotReloadExecutor.execute_delete_script(
+            hot_reload_success, hot_reload_message = await HotReloadExecutor.execute_action_script(
                 script=body.delete_script,
                 lib_name=body.core_lib,
-                user=body.user_uuid,
+                user_obj=body.user_uuid,
                 node_ip='127.0.0.1',
-                core_api_port=body.core_port
+                core_api_port=body.core_port,
+                custom_params=body.custom_params,
             )
             
             if not hot_reload_success:
@@ -157,12 +159,13 @@ async def delete_user_from_core(body: BulkDeleteUserCoreSchema, request: Request
         try:
             log_event(f"\033[33m[Bulk]\033[0m Попытка hot-reload удаления через {body.core_lib}", request=request)
 
-            hot_reload_success, hot_reload_message = await HotReloadExecutor.execute_delete_script(
+            hot_reload_success, hot_reload_message = await HotReloadExecutor.execute_action_script(
                 script=body.delete_script,
                 lib_name=body.core_lib,
-                user=body.model_dump()['users'],
+                user_obj=body.model_dump()['users'],
                 node_ip='127.0.0.1',
-                core_api_port=body.core_port
+                core_api_port=body.core_port,
+                custom_params=body.custom_params,
             )
 
             if not hot_reload_success:
@@ -182,7 +185,7 @@ async def delete_user_from_core(body: BulkDeleteUserCoreSchema, request: Request
                 filepath=body.config_file_path,
                 users_path=body.flatten_json_users_key,
                 flatten_user_identifier_key=body.flatten_user_identifier_key,
-                reload_command=body.reload_core_command
+                reload_command=body.reload_core_command,
             )
 
     log_event(f"\033[33m[Bulk]\033[0m Пользователей удалено из буфера | users_len: \033[31m{len(body.users)}\033[0m", request=request)

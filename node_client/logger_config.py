@@ -1,6 +1,6 @@
 import os
 import inspect
-from datetime import datetime, UTC
+from datetime import datetime
 
 import logging
 from logging.config import dictConfig
@@ -17,7 +17,7 @@ from node_client.config import env, LOG_DIR
 class JSONFormatter(logging.Formatter):
     def format(self, record):
         log_entry = {
-            "@timestamp": datetime.now(UTC).isoformat() + "Z",
+            "@timestamp": datetime.now().isoformat() + "Z",
             "level": record.levelname,
             "message": record.getMessage(),
             "service": env.node_name,
@@ -41,7 +41,7 @@ class JSONFormatter(logging.Formatter):
             return orjson.dumps(log_entry).decode('utf-8')
         except (TypeError, ValueError) as e:
             fallback_entry = {
-                "@timestamp": datetime.now(UTC).isoformat() + "Z",
+                "@timestamp": datetime.now().isoformat() + "Z",
                 "level": record.levelname,
                 "message": str(record.getMessage()),
                 "service": env.node_name,

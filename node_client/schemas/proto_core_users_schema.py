@@ -13,6 +13,7 @@ class BaseUserCoreSchema(BaseModel):
     flatten_json_users_key: str = Field(..., min_length=1, description='Flatten-json путь до массива clients')
     flatten_user_identifier_key: str = Field(..., min_length=1, description='Flatten-json путь до идентификатора пользователя'
                                                                             ' относительно массива clients')
+    custom_params: dict | None = Field(description='Зависимости для скрипта, которые идут отдельно от объекта пользователя')
 
 class UserCoreSchema(BaseModel):
     tg_username: str = Field(min_length=5, max_length=32)
