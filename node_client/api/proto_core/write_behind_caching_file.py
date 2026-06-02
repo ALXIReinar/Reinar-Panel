@@ -180,13 +180,13 @@ class ConfigWriteBuffer:
         return True, 'Пользователь добавлен'
 
 
-    async def delete_user(self, node_proto_id: int, uuid: str, filepath: str, users_path: str,  flatten_user_identifier_key: str, reload_command: str | None):
+    async def delete_user(self, node_proto_id: int, user_obj_or_identifier: dict | str, filepath: str, users_path: str, flatten_user_identifier_key: str, reload_command: str | None):
         """
         Удаляет пользователя из буфера (O(1))
         
         Args:
             node_proto_id: ID виртуальной ноды
-            uuid: UUID пользователя
+            user_obj_or_identifier: объект пользователя в конфиг-файле ядра
             filepath: Путь к конфиг-файлу
             users_path: Flatten-json путь до массива clients
             flatten_user_identifier_key: Flatten-json путь до идентификатора пользователя
@@ -201,7 +201,12 @@ class ConfigWriteBuffer:
             if not reg_res:
                 log_event(f'Не удалось зарегистрировать ноду | node_proto_id: \033[31m{node_proto_id}\033[0m', level='WARNING')
                 return False, str(msg)
-        
+
+        uuid = user_obj_or_identifier
+        if isinstance(user_obj_or_identifier, dict):
+            # Достаём идентификатор, если передан целый объект
+            uuid = flatten_key2value(user_obj_or_identifier, flatten_user_identifier_key)
+
         "Проверяем наличие пользователя"
         if not uuid in self.buffer_storage[node_proto_id]:
             log_event(f'Пользователя с uuid не существует в этом конфиге | uuid: \033[33m{uuid}\033[0m; config_file: \033[32m{filepath}\033[0m', level='WARNING')

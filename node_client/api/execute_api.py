@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException
 from fastapi.params import Query
 
+from node_client.api.proto_core.hot_reload_executor import HotReloadExecutor
 from node_client.config import env
 from node_client.schemas.execute_schema import ExecuteResponseSchema, ExecuteCommandSchema, MetricsSchema
 
@@ -12,7 +13,7 @@ router = APIRouter(prefix='/node', tags=['Execute'])
 
 
 @router.post('/execute', summary="Выполнить команду на ноде")
-async def execute_command(body: ExecuteCommandSchema):
+def execute_command(body: ExecuteCommandSchema):
     """
     Выполняет команду на ноде через subprocess.
     
@@ -43,14 +44,27 @@ async def execute_command(body: ExecuteCommandSchema):
 
 
 
-@router.get('/metrics')
-async def get_metrics(query_p: Annotated[MetricsSchema, Query()]):
-    # xray api statsquery --server=127.0.0.1:{} -pattern "user>>>" -reset
-
-    cmd_str = query_p.command.format(query_p.metrics_port)
-    # xray api statsquery --server=127.0.0.1:10085 -pattern "user>>>" -reset
+@router.post('/metrics')
+async def get_metrics(body: MetricsSchema):
 
     try:
+        "1. Пробуем получить метрики по Апи ядра"
+        if body.metrics_script and body.core_lib:
+            action_res, raw_metrics = await HotReloadExecutor.execute_action_script(
+                script=body.metrics_script,
+                lib_names=body.core_lib,
+                node_ip='127.0.0.1',
+                core_api_port=body.metrics_port,
+                action='get_metrics',
+                custom_params=body.custom_params
+            )
+            if action_res:
+                return {'success': True, 'stdout': raw_metrics}
+
+        "2. Получение метрик по команде в cli, если не удалось по скрипту/нет скрипта"
+        # xray api statsquery --server=127.0.0.1:{} -pattern "user>>>" -reset
+        cmd_str = body.command.format(body.metrics_port)
+        # xray api statsquery --server=127.0.0.1:10085 -pattern "user>>>" -reset
         result = subprocess.run(
             cmd_str.split(), # ["xray", "api", "statsquery", "--server=127.0.0.1:10085", "-pattern", '"user>>>"', "-reset"]
             capture_output=True,
