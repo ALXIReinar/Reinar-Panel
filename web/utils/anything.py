@@ -25,11 +25,6 @@ class NodeStatus:
     vpn_worker: int = 2
     balancer: int = 3
 
-@dataclass
-class UserStatuses:
-    not_connect: int = 1
-    offline: int = 2
-    online: int = 3
 
 @dataclass
 class ExecHistoryStatuses:

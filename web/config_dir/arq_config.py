@@ -10,8 +10,8 @@ from asyncpg import create_pool, Record
 from web.config_dir.config import env, pool_settings, get_arq_redis_settings, get_arq_worker_settings
 from web.utils.arq_logger_config import log_event
 
-from web.arq_tasks.cron_tasks import run_rT_cleaner, traffic_sync_scheduler
-from web.arq_tasks.metrics_collector.metrics_tasks import collect_traffic_metrics
+from web.arq_tasks.cron_tasks import run_rT_cleaner
+
 
 
 
@@ -69,18 +69,12 @@ class WorkerSettings:
     deserializer = arq_deserializer
 
     # Импорты задач
-    functions = [
-        run_rT_cleaner,
-        traffic_sync_scheduler,
-        collect_traffic_metrics,
-    ]
+    functions = []
     
     # Cron задачи
     cron_jobs = [
         # Очистка просроченных refresh токенов (13 и 28 числа в 01:02)
         cron(run_rT_cleaner, day={13, 28}, hour=1, minute=2, unique=True),
-        # Синхронизация трафика (каждые 5 минут)
-        # cron(traffic_sync_scheduler, minute={0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55}, unique=True),
     ]
     
     # Lifecycle hooks

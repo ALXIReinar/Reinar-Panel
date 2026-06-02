@@ -25,6 +25,7 @@ class NodeUris:
     proto_core_add_user: str = '/api/v1/server/proto_core/user/add'
     proto_core_delete_user: str = '/api/v1/server/proto_core/user/delete'
     proto_core_bulk_delete_users: str = '/api/v1/server/proto_core/user/bulk/delete'
+    get_metrics: str = '/api/v1/server/node/metrics'
 
 class CoreProtoActions:
     add: int = 1
@@ -38,3 +39,10 @@ class CoreProtoActions:
         'delete': 2,
     }
     id2name: dict[str, str] = {id: name for name, id in name2id.items()}
+
+
+@dataclass
+class UserStatuses:
+    not_connect: int = 1
+    offline: int = 2
+    online: int = 3

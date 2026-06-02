@@ -57,3 +57,16 @@ class PaymentQueries:
     async def reset_user_traffic_per_day(self):
         query = 'UPDATE users SET traffic_used_day_mb = 0'
         await self.conn.execute(query)
+
+
+    async def get_all_nodes_for_metrics(self):
+        query = '''
+        SELECT np.id, n.ip, n.private_ip, n.api_port, np.metrics_port, pt.metrics_command, pt.api_metrics_script, pt.proto_python_lib,
+               pt.metrics_script_custom_params, pt.metrics_parser_code, pt.sub_required_libs
+        FROM nodes n
+        JOIN nodes_protocols np ON np.node_id = n.id AND np.user_visible = true
+        JOIN protocols p ON np.proto_id = p.id
+        JOIN proto_templates pt ON p.proto_tmp_id = pt.id
+        WHERE n.is_active = true AND np.metrics_port IS NOT NULL
+        '''
+        return await self.conn.fetch(query)

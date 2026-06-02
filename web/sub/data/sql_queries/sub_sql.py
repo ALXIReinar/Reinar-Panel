@@ -2,7 +2,7 @@ from typing import Literal
 
 from asyncpg import Connection
 
-from web.sub.anything import CoreProtoActions, PayStatuses
+from web.sub.anything import CoreProtoActions, PayStatuses, UserStatuses
 
 
 class SubscriptionQueries:
@@ -160,3 +160,13 @@ class SubscriptionQueries:
         AND operation = $3
         '''
         await self.conn.execute(query, sub_node_ids, order_ids, CoreProtoActions.delete)
+
+
+    async def update_traffic(self, tg_usernames: list[str], traffic_add_mbs: list[int]):
+        query = """
+        UPDATE users
+        SET traffic_used_day_mb = users.traffic_used_day_mb + t.traffic_add, online_status = $3, updated_at = NOW()
+        FROM (SELECT UNNEST($1::varchar[]) AS username, UNNEST($2::bigint[]) AS traffic_add) AS t
+        WHERE users.tg_username = t.username
+        """
+        await self.conn.execute(query, tg_usernames, traffic_add_mbs, UserStatuses.online)
