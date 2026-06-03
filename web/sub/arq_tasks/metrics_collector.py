@@ -11,11 +11,11 @@ from aiohttp import ClientResponseError, ClientSession
 from arq import ArqRedis
 from asyncpg import Pool
 
-from web.arq_tasks.depends_fabric import aiohttp_dep, pg_sql_dep, arq_dep
-from web.config_dir.config import env
+from web.sub.arq_tasks.depends_fabric import aiohttp_dep, pg_sql_dep, arq_dep
+from web.sub.config_dir.config import env
 from web.sub.data.postgres import PgSql
 from web.sub.anything import NodeUris
-from web.utils.arq_logger_config import log_event
+from web.sub.config_dir.arq_logger_config import log_event
 
 
 @pg_sql_dep
@@ -46,7 +46,8 @@ async def traffic_sync_scheduler(ctx: dict, db: PgSql = None, arq: ArqRedis = No
 
 
 @aiohttp_dep
-async def collect_traffic_metrics(ctx: dict, nodes: list[dict], aio_http: ClientSession = None):
+@arq_dep
+async def collect_traffic_metrics(ctx: dict, nodes: list[dict], aio_http: ClientSession = None, arq: ArqRedis = None):
     """
     Сбор метрик трафика с нод и обновление в БД
     
@@ -88,11 +89,19 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[dict], aio_http: Client
                 "Обновляем трафик, если был"
                 if parsed_data:
                     usernames, traffic_adds = zip(*tuple(
-                        tuple(user_dict.items()) for user_dict in parsed_data
+                        tuple(user_dict.values()) for user_dict in parsed_data
                     ))
                     async with pool.acquire() as conn:
-                        await PgSql(conn).sub.update_traffic(usernames, traffic_adds)
-                    
+                        outbox_event_ids = await PgSql(conn).sub.update_traffic(usernames, traffic_adds)
+
+                    if outbox_event_ids:
+                        outbox_event_ids = [dict(event) for event in outbox_event_ids]
+                        job = await arq.enqueue_job(
+                            'bulk_delete_by_traffic_limit',
+                            outbox_event_ids,
+                        )
+                        log_event(f'\033[35m[ARQ]\033[0m Task Chaining, depth: \033[31m1\033[0m Запустили бульк-удаление для пользователей, превысивших лимит трафика | users_len: {len(outbox_event_ids)}', job_id=job.job_id)
+
                     success_count += 1
                     log_event(f'\033[35m[ARQ]\033[0m Метрики обновлены | node_proto_id: \033[36m{node["id"]}\033[0m; users_count: \033[32m{len(parsed_data)}\033[0m')
                 else:
@@ -111,6 +120,37 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[dict], aio_http: Client
     log_event(f'\033[35m[ARQ]\033[0m Сбор метрик завершён | success: \033[32m{success_count}\033[0m; errors: \033[31m{error_count}\033[0m')
     return {'success': True, 'nodes_total': len(nodes), 'success_count': success_count, 'error_count': error_count}
 
+
+@arq_dep
+@pg_sql_dep
+async def bulk_delete_by_traffic_limit(ctx: dict, outbox_event_ids: list, arq: ArqRedis = None, db: PgSql = None):
+
+    log_event('\033[31m[ARQ]\033[0m Task Chaining, depth: \033[33m2\033[0m Собираем данные и группируем пользователей по нодаи для отправки delete бульк-запроса')
+    nodes_by_limited_users = await db.sub.get_vnodes_by_outbox_events(outbox_event_ids)
+    users_to_delete = sum(len(vnode['users']) for vnode in  nodes_by_limited_users)
+    log_event(f'\033[31m[ARQ Cron]\033[0m Крона по удалению пользователей из ядер протоколов | total_deletes: \033[31m{users_to_delete}\033[0m')
+
+    "Отправляем chain task на каждую ноду для бульк удаления"
+    for vnode in nodes_by_limited_users:
+        if len(vnode['users']) > 0:
+            log_event(f'\033[31m[ARQ Cron]\033[0m Отправляем Бульк запрос на фоновое удаление пользователей из ядра | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
+            job = await arq.enqueue_job(
+                'bulk_delete_users_from_single_node',
+                vnode['node_proto_id'],
+                vnode['private_ip'],
+                vnode['api_port'],
+                vnode['metrics_port'],
+                vnode['proto_python_lib'],
+                vnode['api_bulk_delete_user_script'],
+                vnode['users'],
+                vnode['reload_core_command'],
+                vnode['config_path'],
+                vnode['flatten_json_users_key'],
+                vnode['flatten_user_identifier_key'],
+            )
+            log_event(f'\033[31m[ARQ Cron]\033[0m Фоновая задача запущена | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
+
+    return {'success': True, 'message': 'Запущено Бульк удаление с нод', 'total_nodes': len(nodes_by_limited_users)}
 
 
 async def parse_node_output(script_text: str, stdout: str, lib_names: str):
@@ -148,7 +188,7 @@ async def parse_node_output(script_text: str, stdout: str, lib_names: str):
         if not parse_func:
             return False, "функция parse не найдена в скрипте!"
 
-        result = parse_func(script_text, stdout, lib_names)
+        result = parse_func(stdout)
 
         "Если async"
         if asyncio.iscoroutine(result):

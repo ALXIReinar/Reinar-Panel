@@ -49,7 +49,7 @@ async def get_metrics(body: MetricsSchema):
 
     try:
         "1. Пробуем получить метрики по Апи ядра"
-        if body.metrics_script and body.core_lib:
+        if body.metrics_script and body.metrics_port:
             action_res, raw_metrics = await HotReloadExecutor.execute_action_script(
                 script=body.metrics_script,
                 lib_names=body.core_lib,

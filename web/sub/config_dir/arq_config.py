@@ -2,7 +2,8 @@ from aiohttp import ClientSession
 from arq import cron, create_pool as create_arq_pool
 from asyncpg import create_pool
 
-from web.sub.arq_tasks.metrics_collector import traffic_sync_scheduler, collect_traffic_metrics
+from web.sub.arq_tasks.metrics_collector import traffic_sync_scheduler, collect_traffic_metrics, \
+    bulk_delete_by_traffic_limit
 from web.sub.arq_tasks.outbox_cleaner import retry_stuck_core_proto_actions
 from web.sub.arq_tasks.sub_revocator import bulk_delete_users_from_single_node, revoke_sub_plan_by_expire
 from web.sub.config_dir.config import env, pool_settings, get_arq_redis_settings, get_arq_worker_settings
@@ -52,7 +53,8 @@ class WorkerSettings:
     functions = [
         action_on_core_proto_by_sub_plan,
         bulk_delete_users_from_single_node,
-        collect_traffic_metrics
+        collect_traffic_metrics,
+        bulk_delete_by_traffic_limit
     ]
     
     # Cron задачи

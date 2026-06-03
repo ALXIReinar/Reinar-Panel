@@ -18,6 +18,7 @@ RUN chown -R appuser:appuser /home/appuser /app
 
 ENV PATH=/home/appuser/.local/bin:$PATH
 ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
 USER appuser
 

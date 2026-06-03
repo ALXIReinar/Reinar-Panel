@@ -153,8 +153,8 @@ fi
 
 echo -e "${GREEN}✓${NC} Права установлены"
 
-# Генерация RSA ключей для JWT
-echo -e "\n${YELLOW}Генерация RSA ключей для JWT...${NC}"
+# Генерация JWT ключей для JWT
+echo -e "\n${YELLOW}Генерация JWT ключей для JWT...${NC}"
 KEYS_DIR="$INSTALL_DIR/secrets/keys"
 mkdir -p "$KEYS_DIR"
 
@@ -168,9 +168,9 @@ if [ ! -f "$KEYS_DIR/private_key.pem" ] || [ ! -f "$KEYS_DIR/public_key.pem" ]; 
     chmod 600 "$KEYS_DIR/private_key.pem"
     chmod 644 "$KEYS_DIR/public_key.pem"
     
-    echo -e "${GREEN}✓${NC} RSA ключи сгенерированы"
+    echo -e "${GREEN}✓${NC} JWT ключи сгенерированы"
 else
-    echo -e "${GREEN}✓${NC} RSA ключи уже существуют, пропускаем генерацию"
+    echo -e "${GREEN}✓${NC} JWT ключи уже существуют, пропускаем генерацию"
 fi
 
 # Путь к .env файлам
@@ -320,7 +320,7 @@ echo -e "  Логи:        ${BLUE}docker compose -f docker-compose.server.yml l
 echo -e "${YELLOW}Конфигурация:${NC}"
 echo -e "  Docker Compose: ${BLUE}$ENV_FILE${NC}"
 echo -e "  Приложение:     ${BLUE}$ENV_API_FILE${NC}"
-echo -e "  RSA ключи:      ${BLUE}$INSTALL_DIR/secrets/keys/${NC}\n"
+echo -e "  JWT ключи:      ${BLUE}$INSTALL_DIR/secrets/keys/${NC}\n"
 
 echo -e "${YELLOW}Следующие шаги:${NC}"
 echo -e "  1. Добавьте ноды через Admin Panel"

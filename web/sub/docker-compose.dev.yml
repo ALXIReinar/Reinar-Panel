@@ -23,9 +23,11 @@ services:
     #    restart: always
     environment:
       - ENV_FILE=/run/secrets/env.sub.prod
+      - RELOAD=1
     network_mode: host
     volumes:
-      - ../sub_logs:/app/sub/sub_logs
+      - ./sub_logs:/app/sub/sub_logs
+      - .:/app/web/sub
     secrets:
       - env.sub.prod
 
@@ -44,6 +46,7 @@ services:
     network_mode: host
     volumes:
       - ./arq_logs:/app/sub/arq_logs
+      - .:/app/web/sub
     secrets:
       - env.sub.prod
 

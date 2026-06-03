@@ -1,3 +1,5 @@
+import os
+
 import uvicorn
 from contextlib import asynccontextmanager
 
@@ -48,4 +50,4 @@ app.include_router(main_router)
 
 if __name__ == '__main__':
     # uvicorn.run('web.sub.main:app', log_config=None, host="0.0.0.0", port=env.uvicorn_port, workers=env.uvicorn_workers)
-    uvicorn.run('web.sub.main:app', host="0.0.0.0", port=env.uvicorn_port, workers=env.uvicorn_workers)
+    uvicorn.run('web.sub.main:app', host="0.0.0.0", port=env.uvicorn_port, workers=env.uvicorn_workers, reload=os.getenv('RELOAD', False))

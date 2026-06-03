@@ -50,7 +50,7 @@ class ASGILoggingMiddleware:
             method = scope.get('method', '')
 
             # Логика логирования
-            if env.app_mode != 'local' and path != '/api/v1/public/healthcheck':
+            if env.app_mode != 'local' and path != '/api/v1/healthcheck':
                 # Здесь можно создать временный request только для лога,
                 # так как выполнение уже завершено
                 log_event(f'HTTP {method} {path}', http_status=status_code, response_time=round(duration, 4))

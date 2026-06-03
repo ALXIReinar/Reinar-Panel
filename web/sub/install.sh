@@ -178,7 +178,7 @@ echo -e "\n${YELLOW}Перезапуск Docker Compose...${NC}"
 cd "$INSTALL_DIR"
 
 # Останавливаем текущие контейнеры
-docker compose down 2>/dev/null || true
+docker compose -f /opt/vpn-panel/web/docker-compose.yml down
 
 # Запускаем с новой конфигурацией
 docker compose up -d --build

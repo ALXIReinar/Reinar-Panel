@@ -164,9 +164,68 @@ class SubscriptionQueries:
 
     async def update_traffic(self, tg_usernames: list[str], traffic_add_mbs: list[int]):
         query = """
-        UPDATE users
-        SET traffic_used_day_mb = users.traffic_used_day_mb + t.traffic_add, online_status = $3, updated_at = NOW()
-        FROM (SELECT UNNEST($1::varchar[]) AS username, UNNEST($2::bigint[]) AS traffic_add) AS t
-        WHERE users.tg_username = t.username
+        WITH increase_traffic AS (
+            UPDATE users
+            SET traffic_used_day_mb = users.traffic_used_day_mb + t.traffic_add, online_status = $3, updated_at = NOW()
+            FROM (SELECT UNNEST($1::varchar[]) AS username, UNNEST($2::bigint[]) AS traffic_add) AS t
+            WHERE users.tg_username = t.username
+            RETURNING users.id AS user_id, users.traffic_used_day_mb
+        ),
+        users_limited AS (
+            UPDATE payed_subs SET is_limited = true 
+            FROM (
+                SELECT it.user_id FROM increase_traffic it
+                JOIN payed_subs ps ON ps.user_id = it.user_id AND ps.is_active = true 
+                JOIN sub_plans sp ON sp.id = ps.sub_plan_id
+                WHERE it.traffic_used_day_mb > sp.traffic_limit_day AND ps.is_limited = false
+            ) AS limited_users
+            WHERE payed_subs.user_id = limited_users.user_id
+            RETURNING payed_subs.user_id, payed_subs.id, payed_subs.sub_plan_id
+        )
+        INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
+        SELECT u.uuid, u.tg_username, ul.id, $4, vsp.id
+        FROM users_limited ul
+        JOIN vnodes_sub_plans vsp ON ul.sub_plan_id = vsp.sub_plan_id
+        JOIN users u ON ul.user_id = u.id
+        RETURNING sub_nodes_outbox.id
         """
-        await self.conn.execute(query, tg_usernames, traffic_add_mbs, UserStatuses.online)
+        await self.conn.fetch(query, tg_usernames, traffic_add_mbs, UserStatuses.online, CoreProtoActions.delete)
+
+
+    async def get_vnodes_by_outbox_events(self, outbox_ids: list[int]):
+        query = '''
+        -- 1. Собираем информацию о нодах по событиям
+        WITH limited_nodes_info AS (
+            SELECT u.uuid, u.tg_username, ps.id AS order_id, sno.sub_node_id,
+                   vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
+                   pt.api_bulk_delete_user_script, pt.flatten_json_users_key, pt.flatten_user_identifier_key,
+                   pt.reload_core_command, np.config_path
+            FROM (SELECT UNNEST($1::bigint[]) AS outbox_id) AS limited_outbox_events
+            JOIN sub_nodes_outbox sno ON sno.id = limited_outbox_events.outbox_id
+            JOIN payed_subs ps ON ps.id = sno.order_id
+            JOIN users u ON u.id = ps.user_id
+            JOIN vnodes_sub_plans vsp ON vsp.id = sno.sub_node_id 
+            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
+            JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
+            JOIN protocols p ON np.proto_id = p.id 
+            JOIN proto_templates pt ON p.proto_tmp_id = pt.id 
+        )
+        -- 2. Группируем пользователей по нодам для пакетной отправки
+        SELECT node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script, 
+               flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path,
+               COALESCE(
+                   json_agg(
+                       json_build_object( 
+                           'uuid', uuid, 
+                           'tg_username', tg_username,
+                           'order_id', order_id,
+                           'sub_node_id', sub_node_id
+                       )
+                   ),
+                   '[]'::json
+               ) AS users
+        FROM limited_nodes_info
+        GROUP BY node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script, 
+                 flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path
+        '''
+        return await self.conn.fetch(query, outbox_ids)

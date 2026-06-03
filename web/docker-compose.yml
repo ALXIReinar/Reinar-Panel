@@ -4,4 +4,4 @@
 include:
   - docker-compose.server.yml
   # Раскомментируйте после установки sub сервиса (web/sub/install.sh)
-  # - sub/docker-compose.yml
+  - sub/docker-compose.yml
