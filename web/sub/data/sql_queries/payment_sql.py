@@ -2,7 +2,7 @@ from datetime import datetime
 
 from asyncpg import Connection, ForeignKeyViolationError
 
-from web.sub.anything import PayStatuses
+from web.sub.anything import PayStatuses, CoreProtoActions
 
 
 class PaymentQueries:
@@ -55,14 +55,62 @@ class PaymentQueries:
 
 
     async def reset_user_traffic_per_day(self):
-        query = 'UPDATE users SET traffic_used_day_mb = 0'
-        await self.conn.execute(query)
+        query = '''
+        WITH zero_traffic AS (
+            UPDATE users SET traffic_used_day_mb = 0
+        ),
+        users_to_proto_cores AS (
+            UPDATE payed_subs SET is_limited = false
+            WHERE is_active = true AND is_limited = true
+            RETURNING id AS order_id, sub_plan_id, user_id
+        ),
+        -- 3. Собираем информацию о нодах для этих подписок
+        expired_nodes_info AS (
+            SELECT u.uuid, u.tg_username, upc.order_id, vsp.id AS sub_node_id,
+                   vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib, pt.api_bulk_add_user_script,
+                   pt.bulk_add_script_custom_params, pt.flatten_json_users_key, pt.flatten_user_identifier_key, pt.reload_core_command,
+                   np.config_path, pt.constant_user_data_obj, pt.required_user_data_obj
+            FROM users_to_proto_cores upc
+            JOIN users u ON u.id = upc.user_id
+            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = upc.sub_plan_id 
+            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
+            JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
+            JOIN protocols p ON np.proto_id = p.id 
+            JOIN proto_templates pt ON p.proto_tmp_id = pt.id 
+        ),
+        -- 4. Фиксируем операцию удаления в outbox (двухэтапный ack)
+        insert_outbox AS (
+            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
+            SELECT uuid, tg_username, order_id, $1, sub_node_id
+            FROM expired_nodes_info
+        )
+        -- 5. Группируем пользователей по нодам для пакетной отправки
+        SELECT node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_add_user_script, 
+               flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, constant_user_data_obj,
+               required_user_data_obj, bulk_add_script_custom_params,
+               COALESCE(
+                   json_agg(
+                       json_build_object( 
+                           'uuid', uuid, 
+                           'tg_username', tg_username,
+                           'order_id', order_id,
+                           'sub_node_id', sub_node_id
+                       )
+                   ),
+                   '[]'::json
+               ) AS users
+        FROM expired_nodes_info
+        GROUP BY node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_add_user_script, 
+                 flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, constant_user_data_obj,
+                 required_user_data_obj, bulk_add_script_custom_params
+        '''
+        return await self.conn.fetch(query, CoreProtoActions.add)
 
 
     async def get_all_nodes_for_metrics(self):
         query = '''
         SELECT np.id, n.ip, n.private_ip, n.api_port, np.metrics_port, pt.metrics_command, pt.api_metrics_script, pt.proto_python_lib,
-               pt.metrics_script_custom_params, pt.metrics_parser_code, pt.sub_required_libs
+               pt.metrics_parser_code, pt.sub_required_libs
         FROM nodes n
         JOIN nodes_protocols np ON np.node_id = n.id AND np.user_visible = true
         JOIN protocols p ON np.proto_id = p.id

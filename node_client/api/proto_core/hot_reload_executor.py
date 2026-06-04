@@ -24,7 +24,7 @@ class HotReloadExecutor:
             lib_names: str,
             node_ip: str,
             core_api_port: int,
-            action: Literal["add_user", "delete_user", "bulk_delete_users", "get_metrics"],
+            action: Literal["add_user", "delete_user", "bulk_delete_users", "bulk_add_users", "get_metrics"],
             custom_params: dict | None = None,
             user_obj: dict | str | list[dict] = None,
 
@@ -77,6 +77,7 @@ class HotReloadExecutor:
                     local_scope.get('add_user') or
                     local_scope.get('delete_user') or
                     local_scope.get('bulk_delete_users') or
+                    local_scope.get('bulk_add_users') or
                     local_scope.get('get_metrics')
             )
             if not action_user_func:
@@ -87,6 +88,7 @@ class HotReloadExecutor:
                 "add_user": (user_obj, node_ip, core_api_port, custom_params),
                 "delete_users": (user_obj, node_ip, core_api_port, custom_params),
                 "bulk_delete_users": (user_obj, node_ip, core_api_port, custom_params),
+                "bulk_add_users": (user_obj, node_ip, core_api_port, custom_params),
                 "get_metrics": (node_ip, core_api_port, custom_params),
             }
             result = action_user_func(*args_func_map[action])

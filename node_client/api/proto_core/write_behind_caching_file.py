@@ -120,7 +120,7 @@ class ConfigWriteBuffer:
     async def add_user(
         self, 
         node_proto_id: int,
-        user_obj: dict,
+        user_obj_or_identifier: dict | str,
         filepath: str | None = None,
         users_path: str | None = None,
         reload_command: str | None = None,
@@ -137,14 +137,18 @@ class ConfigWriteBuffer:
         Args:
             node_proto_id: ID виртуальной ноды
             uuid: UUID пользователя
-            user_obj: Объект пользователя
+            user_obj_or_identifier: Объект пользователя
             filepath: Путь к конфиг-файлу (нужен только при первом обращении)
             users_path: Flatten-json путь (нужен только при первом обращении)
             reload_command: Команда перезагрузки (нужна только при первом обращении)
             flatten_user_identifier_key: Flatten-json путь для формирования O(1) структуры пользователей в памяти
         """
+        uuid = user_obj_or_identifier
+        if isinstance(user_obj_or_identifier, dict):
+            # Достаём идентификатор, если передан целый объект
+            uuid = flatten_key2value(user_obj_or_identifier, flatten_user_identifier_key)
+
         # Сценарий 1: Пользователь УЖЕ в буфере
-        uuid = flatten_key2value(user_obj, flatten_user_identifier_key)
         if node_proto_id in self.buffer_storage and uuid in self.buffer_storage[node_proto_id]:
             log_event(f"Пользователь УЖЕ в буфере | node_proto_id: \033[35m{node_proto_id}\033[0m | uuid: \033[32m{uuid}\033[0m")
 
@@ -156,26 +160,26 @@ class ConfigWriteBuffer:
         # Сценарий 2: Очередь существует, пользователя нет
         if node_proto_id in self.node_queues:
             log_event(f"Добавление пользователя | node_proto_id: \033[32m{node_proto_id}\033[0m | uuid: \033[33m{uuid}\033[0m")
-            self.buffer_storage[node_proto_id][uuid] = user_obj
+            self.buffer_storage[node_proto_id][uuid] = user_obj_or_identifier
             await self.node_queues[node_proto_id].put({'op': 'add', 'uuid': uuid})
             return True, 'Пользователь добавлен'
-        
+
         # Сценарий 3: Первое обращение к ноде
         if not all([filepath, users_path]):
             raise ValueError(
                 f"При первом обращении к node_proto_id={node_proto_id} "
                 f"нужны filepath и users_path"
             )
-        
+
         # Регистрируем ноду (загружаем существующих пользователей)
         log_event(f"Первое обращение к ноде | node_proto_id: \033[35m{node_proto_id}\033[0m | регистрируем")
-        reg_res, msg = await self.register_node(node_proto_id, filepath, users_path, flatten_user_identifier_key, reload_command, user_obj)
+        reg_res, msg = await self.register_node(node_proto_id, filepath, users_path, flatten_user_identifier_key, reload_command, user_obj_or_identifier)
         if not reg_res:
             log_event(f'Не удалось зарегистрировать ноду | node_proto_id: \033[31m{node_proto_id}\033[0m', level='WARNING')
             return False, str(msg)
-        
+
         # Добавляем нового пользователя
-        self.buffer_storage[node_proto_id][uuid] = user_obj
+        self.buffer_storage[node_proto_id][uuid] = user_obj_or_identifier
         await self.node_queues[node_proto_id].put({'op': 'add', 'uuid': uuid})
         return True, 'Пользователь добавлен'
 

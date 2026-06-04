@@ -20,7 +20,6 @@ class MetricsSchema(BaseModel):
     command: str
     metrics_script: str | None = None
     core_lib: list[str] | str | None = None
-    custom_params: dict | None = None
 
     @field_validator('core_lib', mode='after')
     @classmethod

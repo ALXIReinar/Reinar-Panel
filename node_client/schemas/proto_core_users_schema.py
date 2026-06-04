@@ -22,7 +22,7 @@ class BaseUserCoreSchema(BaseModel):
             return [lib.strip() for lib in v.split(',')]
         return v
 
-class UserCoreSchema(BaseModel):
+class UserCoreDeleteSchema(BaseModel):
     tg_username: str = Field(min_length=5, max_length=32)
     uuid: str = Field(max_length=36)
 
@@ -42,4 +42,8 @@ class DeleteUserCoreSchema(BaseUserCoreSchema):
 
 class BulkDeleteUserCoreSchema(BaseUserCoreSchema):
     bulk_delete_script: str | None
-    users: list[UserCoreSchema]
+    users: list[UserCoreDeleteSchema]
+
+class BulkAddUserCoreSchema(BaseUserCoreSchema):
+    bulk_add_script: str | None
+    users: list[dict]

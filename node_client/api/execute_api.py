@@ -46,7 +46,6 @@ def execute_command(body: ExecuteCommandSchema):
 
 @router.post('/metrics')
 async def get_metrics(body: MetricsSchema):
-
     try:
         "1. Пробуем получить метрики по Апи ядра"
         if body.metrics_script and body.metrics_port:
@@ -56,7 +55,6 @@ async def get_metrics(body: MetricsSchema):
                 node_ip='127.0.0.1',
                 core_api_port=body.metrics_port,
                 action='get_metrics',
-                custom_params=body.custom_params
             )
             if action_res:
                 return {'success': True, 'stdout': raw_metrics}

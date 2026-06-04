@@ -70,6 +70,7 @@ async def action_on_core_proto_by_sub_plan(
                 'reload_core_command': node['reload_core_command'],
                 'config_file_path': node['config_path'],
                 'flatten_json_users_key': node['flatten_json_users_key'],
+                'custom_params': node['add_script_custom_params'],
             }
             json_delete_body = {
                 'node_proto_id': node['node_proto_id'],
@@ -81,6 +82,7 @@ async def action_on_core_proto_by_sub_plan(
                 'reload_core_command': node['reload_core_command'],
                 'config_file_path': node['config_path'],
                 'flatten_json_users_key': node['flatten_json_users_key'],
+                'custom_params': node['delete_script_custom_params'],
             }
             action_pack = {
                 'add': (json_add_body, NodeUris.proto_core_add_user),

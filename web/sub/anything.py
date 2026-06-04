@@ -25,6 +25,7 @@ class NodeUris:
     proto_core_add_user: str = '/api/v1/server/proto_core/user/add'
     proto_core_delete_user: str = '/api/v1/server/proto_core/user/delete'
     proto_core_bulk_delete_users: str = '/api/v1/server/proto_core/user/bulk/delete'
+    proto_core_bulk_add_users: str = '/api/v1/server/proto_core/user/bulk/add'
     get_metrics: str = '/api/v1/server/node/metrics'
 
 class CoreProtoActions:

@@ -54,7 +54,7 @@ class SubscriptionQueries:
         WITH vnodes_read AS (
             SELECT np.id as node_proto_id, vsp.id AS sub_node_id,n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
                    pt.api_add_user_script, pt.api_delete_user_script, pt.reload_core_command, np.config_path, pt.flatten_json_users_key, pt.required_user_data_obj,
-                   pt.constant_user_data_obj,pt.flatten_user_identifier_key
+                   pt.constant_user_data_obj, pt.flatten_user_identifier_key, pt.add_script_custom_params, pt.delete_script_custom_params
             FROM payed_subs ps
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = ps.sub_plan_id
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
@@ -77,7 +77,7 @@ class SubscriptionQueries:
         query = '''
         SELECT np.id as node_proto_id, vsp.id AS sub_node_id,n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
            pt.api_add_user_script, pt.api_delete_user_script, pt.reload_core_command, np.config_path, pt.flatten_json_users_key, pt.required_user_data_obj,
-           pt.constant_user_data_obj,pt.flatten_user_identifier_key
+           pt.constant_user_data_obj,pt.flatten_user_identifier_key, pt.add_script_custom_params, pt.delete_script_custom_params
         FROM payed_subs ps
         JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = ps.sub_plan_id
         JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
@@ -106,7 +106,7 @@ class SubscriptionQueries:
         expired_nodes_info AS (
             SELECT u.uuid, u.tg_username, ds.order_id, vsp.id AS sub_node_id,
                    vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
-                   pt.api_bulk_delete_user_script, pt.flatten_json_users_key, pt.flatten_user_identifier_key,
+                   pt.api_bulk_delete_user_script, pt.bulk_delete_script_custom_params, pt.flatten_json_users_key, pt.flatten_user_identifier_key,
                    pt.reload_core_command, np.config_path
             FROM deactivated_subs ds
             JOIN users u ON u.id = ds.user_id
@@ -151,7 +151,7 @@ class SubscriptionQueries:
         await self.conn.execute(query, sub_node_ids, CoreProtoActions.name2id[operation], user_uuid)
 
 
-    async def success_bulk_delete_core_proto_users(self, sub_node_ids: list[int], order_ids: list[int]):
+    async def success_bulk_core_proto_users(self, sub_node_ids: list[int], order_ids: list[int], action: CoreProtoActions | int):
         query = '''
         DELETE FROM sub_nodes_outbox
         WHERE (sub_node_id, order_id) IN (
@@ -159,7 +159,7 @@ class SubscriptionQueries:
         )
         AND operation = $3
         '''
-        await self.conn.execute(query, sub_node_ids, order_ids, CoreProtoActions.delete)
+        await self.conn.execute(query, sub_node_ids, order_ids, action)
 
 
     async def update_traffic(self, tg_usernames: list[str], traffic_add_mbs: list[int]):
@@ -169,7 +169,7 @@ class SubscriptionQueries:
             SET traffic_used_day_mb = users.traffic_used_day_mb + t.traffic_add, online_status = $3, updated_at = NOW()
             FROM (SELECT UNNEST($1::varchar[]) AS username, UNNEST($2::bigint[]) AS traffic_add) AS t
             WHERE users.tg_username = t.username
-            RETURNING users.id AS user_id, users.traffic_used_day_mb
+			RETURNING users.id AS user_id, users.traffic_used_day_mb
         ),
         users_limited AS (
             UPDATE payed_subs SET is_limited = true 
@@ -179,17 +179,18 @@ class SubscriptionQueries:
                 JOIN sub_plans sp ON sp.id = ps.sub_plan_id
                 WHERE it.traffic_used_day_mb > sp.traffic_limit_day AND ps.is_limited = false
             ) AS limited_users
-            WHERE payed_subs.user_id = limited_users.user_id
+            WHERE payed_subs.user_id = limited_users.user_id AND payed_subs.is_active = true
             RETURNING payed_subs.user_id, payed_subs.id, payed_subs.sub_plan_id
         )
         INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
         SELECT u.uuid, u.tg_username, ul.id, $4, vsp.id
         FROM users_limited ul
         JOIN vnodes_sub_plans vsp ON ul.sub_plan_id = vsp.sub_plan_id
+		JOIN nodes_protocols np ON vsp.node_proto_id = np.id AND np.user_visible = true
         JOIN users u ON ul.user_id = u.id
         RETURNING sub_nodes_outbox.id
         """
-        await self.conn.fetch(query, tg_usernames, traffic_add_mbs, UserStatuses.online, CoreProtoActions.delete)
+        return await self.conn.fetch(query, tg_usernames, traffic_add_mbs, UserStatuses.online, CoreProtoActions.delete)
 
 
     async def get_vnodes_by_outbox_events(self, outbox_ids: list[int]):
@@ -199,7 +200,7 @@ class SubscriptionQueries:
             SELECT u.uuid, u.tg_username, ps.id AS order_id, sno.sub_node_id,
                    vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
                    pt.api_bulk_delete_user_script, pt.flatten_json_users_key, pt.flatten_user_identifier_key,
-                   pt.reload_core_command, np.config_path
+                   pt.reload_core_command, np.config_path, pt.bulk_delete_script_custom_params
             FROM (SELECT UNNEST($1::bigint[]) AS outbox_id) AS limited_outbox_events
             JOIN sub_nodes_outbox sno ON sno.id = limited_outbox_events.outbox_id
             JOIN payed_subs ps ON ps.id = sno.order_id
@@ -212,7 +213,7 @@ class SubscriptionQueries:
         )
         -- 2. Группируем пользователей по нодам для пакетной отправки
         SELECT node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script, 
-               flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path,
+               flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, bulk_delete_script_custom_params,
                COALESCE(
                    json_agg(
                        json_build_object( 
@@ -226,6 +227,6 @@ class SubscriptionQueries:
                ) AS users
         FROM limited_nodes_info
         GROUP BY node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script, 
-                 flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path
+                 flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, bulk_delete_script_custom_params
         '''
         return await self.conn.fetch(query, outbox_ids)
