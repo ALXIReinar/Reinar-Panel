@@ -7,6 +7,7 @@ from typing import Annotated
 
 import orjson
 from aiohttp import ClientSession
+from arq.connections import ArqRedis, RedisSettings
 from asyncpg import Connection
 from fastapi import Depends
 from passlib.context import CryptContext
@@ -29,7 +30,10 @@ logging.critical(f'\033[35m{env_files}\033[0m | app_mode: \033[32m{os.getenv('AP
 WORKDIR = Path(__file__).resolve().parent.parent
 
 LOG_DIR = WORKDIR / 'web_logs'
+ARQ_LOG_DIR = WORKDIR / 'arq_logs'
+
 LOG_DIR.mkdir(parents=True, exist_ok=True)
+ARQ_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 "Хэш-метод"
 encryption = CryptContext(schemes=['argon2'], deprecated='auto')
@@ -82,18 +86,13 @@ class Settings(BaseSettings):
     pg_db: str
     pg_port: int
     pg_host: str
-    pg_port_docker: int
-    pg_host_docker: str
 
     redis_password: str
     redis_host: str
     redis_port: int
-    redis_port_docker: int
-    redis_host_docker: str
 
-    uvi_workers: int
-    admin_port: int
-    app_url: str = f'https://127.0.0.1:{os.getenv('ADMIN_PORT')}'
+    uvicorn_workers: int
+    uvicorn_port: int
     post_processing_responses: bool
     app_mode: AppMode
     sub_link_bytes: int = Field(le=64, ge=16)
@@ -101,6 +100,12 @@ class Settings(BaseSettings):
     allowed_ips: set[str] = {'127.0.0.1', '172.20.0.1',}
     model_config = SettingsConfigDict(extra='allow')
     domain: str
+    
+    # ARQ Settings
+    arq_queue_name: str
+    arq_max_jobs: int
+    arq_job_timeout: int
+    node_metrics_queue_limit: int = 10
 
 
 @lru_cache
@@ -141,7 +146,7 @@ pool_settings = dict(
     init=init,
     max_size=env.pg_max_connections # connections on pool
 )
-print(f'\033[36m{pool_settings}\033[0m')
+
 
 "Redis"
 def get_redis_settings(envs: Settings):
@@ -157,6 +162,26 @@ def get_redis_settings(envs: Settings):
     return redis_conf
 
 redis_settings = get_redis_settings(env)
+
+
+"ARQ для фоновых задач"
+def get_arq_redis_settings():
+    return RedisSettings(
+        host=redis_settings['host'],
+        port=redis_settings['port'],
+        password=redis_settings.get('password'),
+        database=0,
+    )
+
+def get_arq_worker_settings():
+    return {
+        'default_queue_name': env.arq_queue_name,
+    }
+
+async def get_arq_pool(request: Request) -> ArqRedis:
+    return request.app.state.arq_pool
+
+ArqDep = Annotated[ArqRedis, Depends(get_arq_pool)]
 
 
 "AioHttp для Исполнения команд на Нодах"

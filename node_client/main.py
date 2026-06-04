@@ -7,7 +7,6 @@ from node_client.api import main_router
 from node_client.api.middleware import OnlyAdminAccessMiddleware
 from node_client.api.proto_core.write_behind_caching_file import ConfigWriteBuffer
 from node_client.config import env
-from node_client.logger_config import log_event
 
 
 @asynccontextmanager
@@ -20,8 +19,6 @@ async def lifespan(web_app: FastAPI):
         yield
     finally:
        await web_app.state.core_buffer.stop()
-    
-    log_event("Node-client остановлен", level='INFO')
 
 
 app = FastAPI(default_response_class=ORJSONResponse, lifespan=lifespan)
@@ -30,4 +27,5 @@ app.include_router(main_router)
 app.add_middleware(OnlyAdminAccessMiddleware)
 
 if __name__ == '__main__':
-    uvicorn.run('node_client.main:app', log_config=None, host="0.0.0.0", port=env.node_port, workers=1)
+    # uvicorn.run('node_client.main:app', log_config=None, host="0.0.0.0", port=env.node_port, workers=1)
+    uvicorn.run('node_client.main:app', host="0.0.0.0", port=env.node_port, workers=1)

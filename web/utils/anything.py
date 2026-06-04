@@ -10,11 +10,11 @@ from web.config_dir.config import env
 class NodeUris:
     exec_cmd: str = '/api/v1/server/node/execute'
     get_metrics: str = '/api/v1/server/node/metrics'
-    get_config_file: str = '/api/v1/server/node/config_file/read'
-    write_config_file: str = '/api/v1/server/node/config_file/write'
+    get_config_file: str = '/api/v1/server/node/config/read'
+    write_config_file: str = '/api/v1/server/node/config/write'
     ping: str = '/api/v1/server/node/ping'
-    proto_core_add_user: str = '/api/v1/server/node/proto_core/user/add'
-    proto_core_delete_user: str = '/api/v1/server/node/proto_core/user/delete'
+    proto_core_add_user: str = '/api/v1/server/proto_core/user/add'
+    proto_core_delete_user: str = '/api/v1/server/proto_core/user/delete'
 
 
 
@@ -25,11 +25,6 @@ class NodeStatus:
     vpn_worker: int = 2
     balancer: int = 3
 
-@dataclass
-class UserStatuses:
-    not_connect: int = 1
-    offline: int = 2
-    online: int = 3
 
 @dataclass
 class ExecHistoryStatuses:

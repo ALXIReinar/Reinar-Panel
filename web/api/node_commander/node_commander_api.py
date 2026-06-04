@@ -1,11 +1,9 @@
-import json
 from typing import Annotated
 
 from aiohttp import ClientResponseError
 from fastapi import APIRouter, HTTPException
 from fastapi.params import Query
 from starlette.requests import Request
-from starlette.responses import JSONResponse
 
 from web.api.protocols.proto_links_templates.handlers import generate_link_from_json
 from web.config_dir.config import NodeExecAiohttpDep
@@ -76,7 +74,7 @@ async def config_file_read(
         q_params: Annotated[ReadConfigSchema, Query()], request: Request, db: PgSqlDep, aio_http: NodeExecAiohttpDep, _: JWTCookieDep
 ):
     log_event(f'Пробуем считать конфиг-файл с ноды | node_proto_id: \033[32m{q_params.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
-    node_info = await db.nodes_protocols.get_node_for_file_edit(request.state.node_proto_id)
+    node_info = await db.nodes_protocols.get_node_for_file_edit(q_params.node_proto_id)
 
     "Не указан путь к файлу"
     if node_info['config_path'] is None:
@@ -85,7 +83,7 @@ async def config_file_read(
     "Запрашиваем файл с ноды"
     try:
         url = f'http://{node_info['private_ip']}:{node_info['api_port']}{NodeUris.get_config_file}'
-        async with aio_http.get(url, params={'file_path': node_info['config_path']}) as resp:
+        async with aio_http.post(url, json={'path': node_info['config_path'], 'flatten_json_users_key': q_params.flatten_json_users_key}) as resp:
             resp.raise_for_status()
             resp_data = await resp.json()
 
@@ -109,7 +107,7 @@ async def config_file_write(body: WriteConfigSchema, request: Request, db: PgSql
     "Запрашиваем файл с ноды"
     try:
         url = f'http://{body.private_ip}:{body.api_port}{NodeUris.write_config_file}'
-        async with aio_http.put(url, json={'file_path': body.file_path, 'file_content': body.file_content}) as resp:
+        async with aio_http.post(url, json={'file': body.file_path, 'content': body.file_content, 'flatten_json_users_key': body.flatten_json_users_key}) as resp:
             resp.raise_for_status()
 
         "1. Вытаскиваем ссылку-шаблон, зависимости и описание из БД"
@@ -226,16 +224,12 @@ async def delete_user(
             'node_proto_id': cpi['node_proto_id'],
             'core_lib': cpi['proto_python_lib'],
             'user_uuid': body.uuid,
-            'delete_script': cpi['api_add_user_script'],
+            'delete_script': cpi['api_delete_user_script'],
             'core_port': cpi['metrics_port'],
-            'flatten_json_delete_user_key': cpi['flatten_user_identifier_key'],
-            'reload_core_command': cpi['reload_core_command'],
-            'config_file_path': cpi['config_path'],
-            'flatten_json_users_key': cpi['flatten_json_users_key'],
         }
 
         "Отправляем запрос на ноду, в ядро протокола"
-        async with aio_http.delete(url, json=json_body) as resp:
+        async with aio_http.post(url, json=json_body) as resp:
             resp_json = await resp.json()
             resp_status = resp.status
 

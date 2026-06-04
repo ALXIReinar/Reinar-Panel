@@ -50,7 +50,7 @@ class ASGILoggingMiddleware:
             method = scope.get('method', '')
 
             # Логика логирования
-            if env.app_mode != 'local' and path != '/api/v1/public/healthcheck':
+            if env.app_mode != 'local' and path != '/api/v1/healthcheck':
                 # Здесь можно создать временный request только для лога,
                 # так как выполнение уже завершено
                 log_event(f'HTTP {method} {path}', http_status=status_code, response_time=round(duration, 4))
@@ -77,12 +77,11 @@ class AuthUXASGIMiddleware:
 
         # ВАЖНО: LoggingMiddleware должна стоять РАНЬШЕ этой в списке middleware
         client_ip = scope['state'].get('client_ip')
-        log_event(client_ip, level='DEBUG')
 
         "Полный доступ от Выбранных ip"
-        # if client_ip in env.allowed_ips:
-        #     await self.app(scope, receive, send)
-        #     return
+        if client_ip in env.allowed_ips:
+            await self.app(scope, receive, send)
+            return
 
         "Не нуждаются в авторизации, Если юрл в белом списке"
         if any(url.startswith(prefix) for prefix in ('/api/v1/public', )):

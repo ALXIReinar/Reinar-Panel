@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ExecuteCommandSchema(BaseModel):
@@ -18,10 +18,12 @@ class ExecuteResponseSchema(BaseModel):
 class MetricsSchema(BaseModel):
     metrics_port: int = Field(gt=0, le=65535, description='Порт для сбора статистики трафика ядра')
     command: str
+    metrics_script: str | None = None
+    core_lib: list[str] | str | None = None
 
-
-class ReadConfigFileSchema(BaseModel):
-    file_path: str = Field(max_length=512, description='Путь до файла конфигурации')
-
-class WriteConfigFileSchema(ReadConfigFileSchema):
-    file_content: str
+    @field_validator('core_lib', mode='after')
+    @classmethod
+    def core_lib_validator(cls, v):
+        if isinstance(v, str):
+            return [lib.strip() for lib in v.split(',')]
+        return v
