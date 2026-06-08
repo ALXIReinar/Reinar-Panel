@@ -106,7 +106,7 @@ async def bulk_add_users_into_single_node(
         async with aio_http.post(url, json=json_body, timeout=60.0) as resp:
             resp.raise_for_status()
 
-        "Очищаем outbox при успешном удалении"
+        "Очищаем outbox при успешном добавлении"
         sub_node_ids = [u['sub_node_id'] for u in users]
         order_ids = [u['order_id'] for u in users]
 

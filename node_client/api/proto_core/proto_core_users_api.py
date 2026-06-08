@@ -29,7 +29,7 @@ async def add_user_to_core(body: AddUserCoreSchema, request: Request, buffer: Co
     hot_reload_message = ""
 
     "1. Hot-reload через API (если есть скрипт)"
-    if body.core_lib and body.add_script and body.core_port:
+    if body.add_script and body.core_port:
         try:
             log_event(f"Попытка hot-reload добавления через \033[33m{body.core_lib}\033[0m", request=request)
 
@@ -70,7 +70,7 @@ async def add_user_to_core(body: AddUserCoreSchema, request: Request, buffer: Co
 
     # При ошибке, отдаёт в сообщении ошибку из core_buffer - Поэтому стоят неочевидно
     log_event(f'Не удалось добавить пользователя в буфер, некорректные настройки | user_obj: \033[31m{body.user_obj}\033[0m', request=request, level='WARNING')
-    raise HTTPException(status_code=422, detail={'success': False, 'message': 'Ошибка добавления пользователя в ядро', 'error_message': msg})
+    raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка добавления пользователя в ядро', 'error_message': msg})
 
 
 
