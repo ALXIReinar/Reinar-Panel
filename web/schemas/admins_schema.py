@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class ValidatePasswSchema(BaseModel):
     passw: str
-    @field_validator('passw', check_fields=False, mode='before')
+    @field_validator('passw', check_fields=False, mode='after')
     @classmethod
     def validate_password(cls, value):
         passw = value.strip()

@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from starlette.requests import Request
 from starlette.responses import Response
 
-from bot.env_modes import AppMode
+from web.config_dir.env_modes import AppMode
 from web.config_dir.config import env
 from web.utils.logger_config import log_event
 
@@ -25,7 +25,7 @@ class RtToken(BaseModel):
 
 def check_at_factor(request: Request, response: Response):
     if hasattr(request.state, 'new_a_t'):
-        log_event(f'Проставили access_token юзеру \033[31m{request.state.user_id}\033[0m', level='WARNING')
+        log_event(f'Проставили access_token юзеру | admin_id: \033[31m{request.state.admin_id}\033[0m', level='WARNING')
         response.set_cookie('access_token', request.state.new_a_t, **AccToken().model_dump())
 
 JWTCookieDep = Annotated[None, Depends(check_at_factor)]

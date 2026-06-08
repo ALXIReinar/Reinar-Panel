@@ -1,0 +1,64 @@
+name: reinar_panel
+
+services:
+  pg_db:
+    image: postgres:16
+    container_name: pg_db
+    environment:
+      - POSTGRES_USER=${PG_ADMIN}
+      - POSTGRES_PASSWORD=${PG_ADMIN_PASSWORD}
+      - POSTGRES_DB=${PG_DB}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_ADMIN}"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: on-failure
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./secrets/dumps:/docker-entrypoint-initdb.d
+    ports:
+      - "127.0.0.1:5431:5432"
+#    networks:
+#      - api_net
+
+  web-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: web-service
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${ADMIN_PORT}/api/v1/healthcheck')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+#    restart: always
+    environment:
+      - ENV_FILE=/run/secrets/env.api.prod
+    network_mode: host
+    volumes:
+      - ./secrets:/app/web/secrets/keys:ro
+    secrets:
+      - env.api.prod
+      - private_key.pem
+      - public_key.pem
+
+
+#networks:
+#  api_net:
+#    driver: bridge
+#    name: reinar_web_network
+
+volumes:
+  pgdata:
+    driver: local
+
+secrets:
+  env.api.prod:
+    file: .env.api.prod
+  private_key.pem:
+    file: secrets/keys/private_key.pem
+  public_key.pem:
+    file: secrets/keys/public_key.pem
