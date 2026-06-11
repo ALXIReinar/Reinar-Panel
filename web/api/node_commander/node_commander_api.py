@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from aiohttp import ClientResponseError
+from aiohttp import ClientResponseError, ClientError, ClientTimeout
 from fastapi import APIRouter, HTTPException
 from fastapi.params import Query
 from starlette.requests import Request
@@ -76,9 +76,15 @@ async def config_file_read(
     log_event(f'Пробуем считать конфиг-файл с ноды | node_proto_id: \033[32m{q_params.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     node_info = await db.nodes_protocols.get_node_for_file_edit(q_params.node_proto_id)
 
+    "Виртуальной ноды не существует"
+    if node_info is None:
+        log_event(f'Виртуальной ноды не существует | node_proto_id: \033[32m{q_params.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+        raise HTTPException(status_code=404, detail={'success': False, 'message': 'Виртуальная нода не найдена'})
+
     "Не указан путь к файлу"
     if node_info['config_path'] is None:
-        raise HTTPException(status_code=404, detail={'success': False, 'message': 'Путь к конфиг-файлу протокола не указан!'})
+        log_event(f'Путь к файлу не указан, не можем прочесть конфиг | node_proto_id: \033[32m{q_params.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='ERROR')
+        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Путь к конфиг-файлу протокола не указан!'})
 
     "Запрашиваем файл с ноды"
     try:
@@ -93,6 +99,10 @@ async def config_file_read(
     except ClientResponseError as e:
         log_event(f'Нода ответила, что-то пошло не так | status_code: \033[33m{e.status}\033[0m; response: \033[37m{e}\033[0m; node_proto_id: \033[31m{q_params.node_proto_id}\033[0m', request=request, level='ERROR')
         raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка исполнения на ноде'})
+
+    except ClientTimeout:
+        log_event(f'Таймаут при чтении конфига | node_proto_id: \033[31m{q_params.node_proto_id}\033[0m', request=request, level='ERROR')
+        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Превышен таймаут запроса'})
 
     except Exception as e:
         log_event(f'Ошибка исполнения на админке, не удалось прочесть файл | error: \033[31m{e}\033[0m; node_proto_id: \033[33m{q_params.node_proto_id}\033[0m', request=request, level='CRITICAL')
@@ -125,6 +135,10 @@ async def config_file_write(body: WriteConfigSchema, request: Request, db: PgSql
     except ClientResponseError as e:
         log_event(f'Нода ответила, что-то пошло не так | status_code: \033[33m{e.status}\033[0m; response: \033[37m{e}\033[0m; node_proto_id: \033[31m{body.node_proto_id}\033[0m', request=request, level='ERROR')
         raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка исполнения на ноде'})
+
+    except ClientTimeout:
+        log_event(f'Таймаут при чтении конфига | node_proto_id: \033[31m{body.node_proto_id}\033[0m', request=request, level='ERROR')
+        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Превышен таймаут запроса'})
 
     except Exception as e:
         log_event(f'Ошибка исполнения на админке, не удалось записать файл | error: \033[31m{e}\033[0m; node_proto_id: \033[33m{body.node_proto_id}\033[0m',request=request, level='CRITICAL')

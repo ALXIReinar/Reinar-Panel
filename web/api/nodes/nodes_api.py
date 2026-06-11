@@ -1,6 +1,7 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Request
+from aiohttp import ClientError, ClientTimeout
+from fastapi import APIRouter, Request, HTTPException
 from fastapi.params import Query
 from starlette.responses import JSONResponse
 
@@ -20,19 +21,26 @@ router = APIRouter(tags=['Physical Nodes (Servers)'])
 async def bind_node_api(body: NodeCreateSchema, request: Request, db: PgSqlDep, _: JWTCookieDep, aio_http: NodeExecAiohttpDep):
     log_event(f'Связываем админку с Нодой | private_ip: \033[33m{body.private_ip}\033[0m; api_port: \033[35m{body.api_port}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     url = f'http://{body.private_ip}:{body.api_port}{NodeUris.ping}'
-    async with aio_http.get(url) as resp:
-        resp = await resp.json()
+    try:
+        async with aio_http.get(url) as resp:
+            resp = await resp.json()
 
-    "Нода не отвечает"
-    if not resp.get('success'):
-        log_event(f'Не удалось создать ноду | private_ip: \033[33m{body.private_ip}\033[0m; api_port: \033[35m{body.api_port}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
+    except (ClientError, ClientTimeout) as resp_err:
+        "Нода не отвечает"
+        log_event(f'Не удалось создать ноду. Ошибка при запросе | private_ip: \033[33m{body.private_ip}\033[0m; api_port: \033[35m{body.api_port}\033[0m', request=request, level='WARNING')
+        raise HTTPException(status_code=502, detail={'success': False, 'message': 'Не удалось связаться с нодой','err_message': str(resp_err)})
+
+    "Обрабатываем ответ ноды"
+    if not (resp.get('success') and resp.get('service')):
+        log_event(f'Нода ответила, но не так, как ожидалось | private_ip: \033[33m{body.private_ip}\033[0m; api_port: \033[35m{body.api_port}\033[0m', request=request, level='WARNING')
+        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Неизвестный ответ от ноды', 'node_resp': resp})
 
     "Фиксируем имя в БД"
     node_id = await db.nodes.create_node(
         body.ip, body.private_ip, body.api_port, resp['service'], body.title, body.is_active
     )
     log_event(f'Успешно связались с нодой | node_name: \033[32m{resp['service']}\033[0m; private_ip: \033[33m{body.private_ip}\033[0m; api_port: \033[35m{body.api_port}\033[0m; node_id: \033[33m{node_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
-    return {'success': resp['success'], 'node_id': node_id, 'node_name': resp['service'], 'message': 'Нода создана'}
+    return {'success': True, 'node_id': node_id, 'node_name': resp['service'], 'message': 'Нода создана'}
 
 
 @router.get('/all', summary="Получить все физические ноды")

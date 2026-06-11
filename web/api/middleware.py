@@ -1,5 +1,4 @@
 from datetime import datetime, UTC
-import time
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -7,7 +6,7 @@ from starlette.types import Scope, Receive, Send, ASGIApp
 
 from web.config_dir.config import env
 from web.data.postgres import PgSql
-from web.utils.anything import get_client_ip, get_client_ip_by_scope
+from web.utils.anything import get_client_ip_by_scope
 from web.utils.jwt_factory import get_jwt_decode_payload, reissue_aT
 from web.utils.logger_config import log_event
 

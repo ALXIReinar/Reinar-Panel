@@ -39,7 +39,7 @@ async def update_sub_plan(body: SubPlanUpdateSchema, request: Request, db: PgSql
 
     if not plan:
         log_event(f'Группа подписок не найдена | plan_id: \033[33m{body.id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
-        raise HTTPException(status_code=404, detail='Группа подписок не найдена')
+        raise HTTPException(status_code=404, detail={'success': False, 'message': 'Группа подписок не найдена'})
 
     # Редачим связки локаций(виртуальные ноды-протоколы) с группой подписок
     attached_count, detached_count = 0, 0

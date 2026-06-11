@@ -22,7 +22,7 @@ async def lifespan(web_app):
     web_app.state.pg_pool = await create_pool(**pool_settings)
 
     "AioHttp для взаимодействия с Нодами"
-    web_app.state.cmd_center_aiohttp = ClientSession()
+    web_app.state.cmd_center_aiohttp = ClientSession(timeout=30.0)
 
     "Соедиение с Redis"
     web_app.state.redis = Redis(**redis_settings)
@@ -62,4 +62,5 @@ app.add_middleware(AuthUXASGIMiddleware)
 app.add_middleware(ASGILoggingMiddleware)
 
 if __name__ == '__main__':
-    uvicorn.run('web.main:app', host="0.0.0.0", port=env.uvicorn_port, log_config=None, workers=env.uvicorn_workers)
+    # uvicorn.run('web.main:app', host="0.0.0.0", port=env.uvicorn_port, log_config=None, workers=env.uvicorn_workers)
+    uvicorn.run('web.main:app', host="0.0.0.0", port=env.uvicorn_port, workers=env.uvicorn_workers)
