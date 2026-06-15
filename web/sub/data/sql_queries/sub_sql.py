@@ -32,7 +32,7 @@ class SubscriptionQueries:
         JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = sp.id
         JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
         JOIN protocols p ON p.id = np.proto_id
-        JOIN proto_templates pt ON p.proto_tmp_id = pt.id
+        JOIN proto_templates pt ON p.tmp_id = pt.id
         WHERE sp.id = $1
         '''
         locations = await self.conn.fetch(query_locations, sub_meta['sub_plan_id'])
@@ -60,7 +60,7 @@ class SubscriptionQueries:
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
             JOIN protocols p ON np.proto_id = p.id
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true
-            JOIN proto_templates pt ON p.proto_tmp_id = pt.id
+            JOIN proto_templates pt ON p.tmp_id = pt.id
             WHERE ps.is_active = true AND ps.user_id = $1
         ),
         outbox_insert AS (
@@ -83,7 +83,7 @@ class SubscriptionQueries:
         JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
         JOIN protocols p ON np.proto_id = p.id
         JOIN nodes n ON np.node_id = n.id AND n.is_active = true
-        JOIN proto_templates pt ON p.proto_tmp_id = pt.id
+        JOIN proto_templates pt ON p.tmp_id = pt.id
         WHERE ps.id = $1
         '''
         return await self.conn.fetch(query, order_id)
@@ -114,7 +114,7 @@ class SubscriptionQueries:
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
             JOIN protocols p ON np.proto_id = p.id 
-            JOIN proto_templates pt ON p.proto_tmp_id = pt.id 
+            JOIN proto_templates pt ON p.tmp_id = pt.id 
         ),
         -- 3. Фиксируем операцию удаления в outbox (двухэтапный ack)
         insert_outbox AS (
@@ -209,7 +209,7 @@ class SubscriptionQueries:
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
             JOIN protocols p ON np.proto_id = p.id 
-            JOIN proto_templates pt ON p.proto_tmp_id = pt.id 
+            JOIN proto_templates pt ON p.tmp_id = pt.id 
         )
         -- 2. Группируем пользователей по нодам для пакетной отправки
         SELECT node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script, 

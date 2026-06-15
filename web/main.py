@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 
 import uvicorn
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ClientTimeout
 from arq import create_pool as create_arq_pool
 from asyncpg import create_pool
 from fastapi import FastAPI
@@ -22,7 +22,7 @@ async def lifespan(web_app):
     web_app.state.pg_pool = await create_pool(**pool_settings)
 
     "AioHttp для взаимодействия с Нодами"
-    web_app.state.cmd_center_aiohttp = ClientSession(timeout=30.0)
+    web_app.state.cmd_center_aiohttp = ClientSession(timeout=ClientTimeout(total=30.0))
 
     "Соедиение с Redis"
     web_app.state.redis = Redis(**redis_settings)

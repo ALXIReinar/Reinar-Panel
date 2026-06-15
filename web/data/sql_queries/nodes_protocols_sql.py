@@ -144,9 +144,10 @@ class NodesProtocolsQueries:
 
     async def get_all_nodes_for_metrics(self):
         query = '''
-        SELECT n.id, n.ip, n.private_ip, n.api_port, np.metrics_port, p.metrics_command, p.metrics_parser_code FROM nodes n
+        SELECT n.id, n.ip, n.private_ip, n.api_port, np.metrics_port, pt.metrics_command, pt.metrics_parser_code FROM nodes n
         JOIN nodes_protocols np ON np.node_id = n.id AND np.user_visible = true
         JOIN protocols p ON np.proto_id = p.id
+        JOIN proto_templates pt ON p.tmp_id = pt.id
         WHERE n.is_active = true AND np.metrics_port IS NOT NULL
         '''
         return await self.conn.fetch(query)
@@ -165,7 +166,7 @@ class NodesProtocolsQueries:
     async def get_proto_tmp_w_spec_params(self, node_proto_id: int) -> tuple:
         tmp_link_query = '''
         SELECT pt.url_tmp, np.title, np.sub_node_address, n.ip FROM proto_templates pt
-        JOIN public.protocols p on pt.id = p.proto_tmp_id
+        JOIN public.protocols p on pt.id = p.tmp_id
         JOIN nodes_protocols np ON np.node_id = np.id
         JOIN nodes n ON n.id = np.node_id
         WHERE np.id = $1
@@ -201,7 +202,7 @@ class NodesProtocolsQueries:
         JOIN nodes_protocols np ON np.id = vsp.id AND np.user_visible = true
         JOIN protocols p ON np.proto_id = p.id
         JOIN nodes n ON np.node_id = n.id AND n.is_active = true
-        JOIN proto_templates pt ON p.proto_tmp_id = pt.id
+        JOIN proto_templates pt ON p.tmp_id = pt.id
         JOIN users u ON ps.user_id = u.id
         WHERE ps.is_active = true AND u.uuid = $1
         '''

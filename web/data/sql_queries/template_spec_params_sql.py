@@ -1,12 +1,14 @@
-from asyncpg import Connection, ForeignKeyViolationError
+from asyncpg import Connection, ForeignKeyViolationError, UniqueViolationError
 
 
 class TemplateSpecParamsQueries:
     def __init__(self, conn: Connection):
         self.conn = conn
 
-    async def bulk_add(self, tmp_id: int, keys: list[str]) -> tuple[int, str, int]:
+    async def bulk_add(self, tmp_id: int, keys: list[str]):
         """
+        Как будто хочется CTE для 404?
+
         Bulk добавление spec параметров к шаблону
         
         Returns:
@@ -32,9 +34,7 @@ class TemplateSpecParamsQueries:
         """
         
         result = await self.conn.fetch(query, tmp_id, keys)
-        added_count = len(result)
-        
-        return 200, f'Добавлено параметров: {added_count}', added_count
+        return 200, f'Добавлено параметров: {len(result)}', [rec['id'] for rec in result]
 
     async def bulk_delete(self, param_ids: list[int]) -> tuple[int, str, int]:
         """
@@ -53,3 +53,25 @@ class TemplateSpecParamsQueries:
         except ForeignKeyViolationError:
             "RESTRICT Constraint"
             return 409, 'Эти параметры используются какими-то из виртуальных нод', 0
+
+
+    async def values_bulk_add(self, node_proto_id: int, spec_param_values: dict):
+        query = """
+        INSERT INTO nodes_protocoles_spec_params_values (node_proto_id, spec_key_id, value) 
+        SELECT $1, t.spec_key_id, t.value FROM UNNEST ($2::integer[], $3::text[]) AS t(spec_key_id, value)
+        RETURNING id
+        """
+        try:
+            # Пользуемся фишкой структуры в Pydantic схеме: spec_param_values: {"spec_key_id": "static_value"}
+            spec_key_ids, spec_values = list(spec_param_values.keys()), list(spec_param_values.values())
+
+            spec_value_ids = await self.conn.fetch(query, node_proto_id, spec_key_ids, spec_values)
+            return 200, 'Значения указаны под выбранные ключи и эту виртуальную ноду', [rec['id'] for rec in spec_value_ids]
+
+        except UniqueViolationError:
+            return 409, 'Все ключи должны быть выбраны только один раз', None
+
+
+    async def values_bulk_delete(self, value_ids: list[int]):
+        query = 'DELETE FROM nodes_protocoles_spec_params_values WHERE id = ANY($1) RETURNING id'
+        return await self.conn.fetch(query, value_ids)

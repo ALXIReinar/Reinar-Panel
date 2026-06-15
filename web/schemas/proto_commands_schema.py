@@ -3,13 +3,6 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-class ProtocolCommandCreateSchema(BaseModel):
-    """Схема для создания команды протокола"""
-    proto_id: int = Field(..., gt=0, description="ID протокола")
-    cmd_title: str = Field(..., min_length=1, max_length=200, description="Название команды")
-    command: str = Field(..., min_length=1, description="CLI команда для выполнения")
-
-
 class CommandInsertItemSchema(BaseModel):
     """Схема элемента для bulk insert"""
     cmd_title: str = Field(..., min_length=1, max_length=200, description="Название команды")
@@ -31,18 +24,11 @@ class CommandUpdateItemSchema(BaseModel):
 
 class CommandsBulkUpdateSchema(BaseModel):
     """Схема для массового обновления команд"""
+    proto_id: int
     commands: list[CommandUpdateItemSchema] = Field(..., min_length=1, description="Список команд для обновления")
 
 
 class CommandsBulkDeleteSchema(BaseModel):
     """Схема для массового удаления команд"""
-    cmd_ids: list[int] = Field(..., min_length=1, description="Список ID команд для удаления")
-
-
-class ProtocolCommandSchema(BaseModel):
-    """Схема команды протокола"""
-    id: int
     proto_id: int
-    cmd_title: str
-    command: str
-    created_at: datetime
+    cmd_ids: list[int] = Field(..., min_length=1, description="Список ID команд для удаления")

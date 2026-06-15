@@ -76,7 +76,7 @@ class PaymentQueries:
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
             JOIN protocols p ON np.proto_id = p.id 
-            JOIN proto_templates pt ON p.proto_tmp_id = pt.id 
+            JOIN proto_templates pt ON p.tmp_id = pt.id 
         ),
         -- 4. Фиксируем операцию удаления в outbox (двухэтапный ack)
         insert_outbox AS (
@@ -114,7 +114,7 @@ class PaymentQueries:
         FROM nodes n
         JOIN nodes_protocols np ON np.node_id = n.id AND np.user_visible = true
         JOIN protocols p ON np.proto_id = p.id
-        JOIN proto_templates pt ON p.proto_tmp_id = pt.id
+        JOIN proto_templates pt ON p.tmp_id = pt.id
         WHERE n.is_active = true AND np.metrics_port IS NOT NULL
         '''
         return await self.conn.fetch(query)
