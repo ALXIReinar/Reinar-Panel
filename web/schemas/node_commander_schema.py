@@ -26,14 +26,19 @@ class ExecCMDNodeSchema(RemoteExecBaseSchema):
             (is_valid, error_message)
         """
         dangerous_patterns = [
-            r'[;&|`$]',  # Command injection символы
-            r'\$\(',  # Command substitution
-            r'>\s*/dev/',  # Запись в /dev/
-            r'rm\s+-rf\s+/',  # Рекурсивное удаление от корня
-            r':\(\)\{',  # Fork bomb
-            r'>\s*/etc/',  # Запись в /etc/
-            r'curl.*\|.*sh',  # Curl pipe to shell
-            r'wget.*\|.*sh',  # Wget pipe to shell
+            r'[;&|`$]',           # Command injection символы
+            r'\$\(',              # Command substitution
+            r'[\(\)]',            # Subshell execution
+            r'[\{\}]',            # Brace expansion
+            r'>+\s*/dev/',        # Запись/append в /dev/
+            r'>+\s*/etc/',        # Запись/append в /etc/
+            r'rm\s+-rf\s+/\*?',   # Рекурсивное удаление от корня
+            r':\(\)\{',           # Fork bomb
+            r'curl.*\|.*sh',      # Curl pipe to shell
+            r'wget.*\|.*sh',      # Wget pipe to shell
+            r'\\x[0-9a-fA-F]{2}', # Hex encoding обход
+            r'[\n\r]',            # Newline injection
+            r'\$IFS',             # IFS injection
         ]
 
         "Откидываем sudo и т.п. команды перед валидацией"
