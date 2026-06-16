@@ -1,5 +1,6 @@
 import os
 import inspect
+from copy import deepcopy
 from datetime import datetime, UTC
 
 import logging
@@ -69,7 +70,7 @@ logger_settings = {
             "()": "colorlog.ColoredFormatter",
             "format": "%(log_color)s%(levelname)-8s%(reset)s | "
                       "\033[32mD%(asctime)s\033[0m | "
-                      "\033[34m%(method)s\033[0m \033[36m%(url)s\033[0m | "
+                      "\033[34m%(method)s\033[0m \033[33m%(url)s\033[0m | "
                       "%(cyan)s%(location)s:%(reset)s def %(cyan)s%(func)s%(reset)s(): line - %(cyan)s%(line)d%(reset)s - \033[34m%(ip)s\033[0m "
                       "%(message)s",
             "datefmt": "%d-%m-%Y T%H:%M:%S",
@@ -112,7 +113,7 @@ logger_settings = {
     }
 }
 
-logger_settings_arq = logger_settings.copy()
+logger_settings_arq = deepcopy(logger_settings)
 logger_settings_arq['formatters']['default']['format'] = "%(log_color)s%(levelname)-8s%(reset)s | \033[32mD%(asctime)s\033[0m | %(cyan)s%(location)s:%(reset)s def %(cyan)s%(func)s%(reset)s(): line - %(cyan)s%(line)d%(reset)s %(message)s"
 logger_settings_arq["handlers"]["json_file"]["filename"] = ARQ_LOG_DIR / "app.log"
 
@@ -135,7 +136,7 @@ def log_event(event: Any, *args, request: Request | WebSocket = None,
         ip = request.state.client_ip if hasattr(request.state, 'client_ip') else get_client_ip(request)
 
     message = event % args if args else event
-
+    # print(f'{meth}, {url}, {message}')
     logger.log(lvls[level], message, extra={
         'method': meth,
         'location': filename,

@@ -14,7 +14,7 @@ main_router = APIRouter(prefix="/api/v1")
 
 # main_router.include_router(auth_panel_router)
 # main_router.include_router(protocols_router)
-main_router.include_router(nodes_router)
+# main_router.include_router(nodes_router)
 main_router.include_router(node_commander_router)
 main_router.include_router(whitelist_router)
 main_router.include_router(remote_execute_history_router)

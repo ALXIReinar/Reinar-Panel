@@ -28,12 +28,8 @@ async def execute_cmd_on_node(
     """Выполнение команды на удалённой ноде с валидацией"""
     log_event(f'Исполняем команду на ноде | node_proto_id: \033[32m{body.node_proto_id}\033[0m; private_ip: \033[33m{body.private_ip}\033[0m; api_port: \033[35m{body.api_port}\033[0m; cmd: \033[36m{body.cmd}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
 
-    "Обработка"
-    splitted_cmd = body.cmd.split()
-    base_cmd = splitted_cmd[0] if splitted_cmd[0] not in Constants.excluded_commands_words else splitted_cmd[1]
-
     "Проверка по белому списку"
-    if not await CommandWhitelistCache.is_whitelisted(base_cmd, redis, db):
+    if not await CommandWhitelistCache.is_whitelisted(body.cmd, redis, db):
         log_event(f'Команда не прошла по Whitelist | node_proto_id: \033[32m{body.node_proto_id}\033[0m; cmd: \033[36m{body.cmd}\033[0m; base_cmd: \033[37m{base_cmd}\033[0m; private_ip: \033[33m{body.private_ip}\033[0m; api_port: \033[35m{body.api_port}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
         raise HTTPException(status_code=400, detail={'success': False, 'message': f'Команда {body.cmd} не находится в белом списке'})
 
@@ -41,7 +37,8 @@ async def execute_cmd_on_node(
     action_id = await db.remote_command_history.save_action(body.node_proto_id, body.private_ip, body.api_port, body.cmd)
 
     "Отправка команды на ноду"
-    url = f'http://{body.private_ip}:{body.api_port}{NodeUris.exec_cmd}'
+    # url = f'http://{body.private_ip}:{body.api_port}{NodeUris.exec_cmd}'
+    url = f'http://localhost:18100{NodeUris.exec_cmd}'
     try:
         async with aio_http.post(url, json={'command': body.cmd}) as resp:
             status_code = resp.status

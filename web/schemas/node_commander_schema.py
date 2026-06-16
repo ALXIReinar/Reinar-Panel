@@ -3,6 +3,9 @@ from typing import Literal
 
 from pydantic import BaseModel, IPvAnyAddress, Field, field_validator
 
+from web.utils.anything import Constants
+from web.utils.logger_config import log_event
+
 
 class RemoteExecBaseSchema(BaseModel):
     node_proto_id: int
@@ -33,13 +36,22 @@ class ExecCMDNodeSchema(RemoteExecBaseSchema):
             r'wget.*\|.*sh',  # Wget pipe to shell
         ]
 
+        "Откидываем sudo и т.п. команды перед валидацией"
+        splitted_cmd = v.split() + [' '] # для splitted_cmd[1:], чтобы избежать IndexError
+        cmd = v if splitted_cmd[0] not in Constants.excluded_commands_words else ' '.join(splitted_cmd[1:])
+
         "Проверка на опасные паттерны"
         for pattern in dangerous_patterns:
-            if re.search(pattern, v):
+            if re.search(pattern, cmd):
                 raise ValueError(f"Команда содержит опасный паттерн: {pattern}")
 
         return v
 
+
+    @field_validator('private_ip', mode='after')
+    @classmethod
+    def validate_private_ip(cls, v: str):
+        return str(v)
 
 class ReadConfigSchema(BaseModel):
     node_proto_id: int

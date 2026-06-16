@@ -1,5 +1,7 @@
 import os
 import inspect
+from copy import deepcopy
+
 import orjson
 from datetime import datetime, UTC
 
@@ -114,7 +116,7 @@ logger_settings = {
 dictConfig(logger_settings)
 logger = logging.getLogger('prod_log')
 
-logger_settings_arq = logger_settings.copy()
+logger_settings_arq = deepcopy(logger_settings)
 logger_settings_arq['formatters']['default']['format'] = "%(log_color)s%(levelname)-8s%(reset)s | \033[32mD%(asctime)s\033[0m | %(cyan)s%(location)s:%(reset)s def %(cyan)s%(func)s%(reset)s(): line - %(cyan)s%(line)d%(reset)s %(message)s"
 logger_settings_arq["handlers"]["json_file"]["filename"] = ARQ_LOG_DIR / "app.log"
 
