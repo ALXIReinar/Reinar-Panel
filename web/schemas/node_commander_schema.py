@@ -70,14 +70,10 @@ class WriteConfigSchema(RemoteExecBaseSchema):
     flatten_json_users_key: str | None = Field(description='Ключ к списку пользователей в конфиге. При записи этот объект переносится из старого файла')
 
 
-class AddUserCoreProtoSchema(BaseModel):
-    tg_username: str = Field(max_length=32)
-    uuid: str = Field(min_length=36, max_length=36)
-    additional_fields: dict = Field(
-        description='Словарь для объектов, которые добавляются в user_obj для пользователей в конфиг-файле ядра'
-                    'Значения подставляются пользователем. Например, если этот объект будет {"add_must_have_field": "super_field"}, то'
-                    'Конечный user_obj будет выглядеть: {**required_user_data_obj, **constant_user_data_obj, "add_must_have_field": "super_field"}'
-    )
+class UserCoreProtoActionSchema(BaseModel):
+    user_id: int
+    uuid: str = Field(min_length=36, max_length=36, description='Буквенный ID пользователя, обычно используется в списках пользователей в ядрах протоколов')
+    tg_username: str = Field(min_length=5, max_length=32)
+    order_id: int = Field(description='ID подписки')
+    action: Literal['add', 'delete']
 
-class DeleteUserCoreProtoSchema(BaseModel):
-    uuid: str = Field(min_length=36, max_length=36)

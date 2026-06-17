@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from web.data.postgres import PgSqlDep
 from web.data.redis_storage import RedisDep
@@ -47,16 +48,19 @@ async def add_base_whitelist(body: WhitelistAddSchema, request: Request, db: PgS
     """
     Bulk add базовых команд в whitelist, автоматически инвалидирует кэш Redis
     """
-    log_event(f'Bulk add Whitelist команд | count: {len(body.commands)}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    log_event(f'Bulk add Whitelist команд | commands: {body.commands}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     
     records = await db.whitelist_cmd.bulk_add(body.commands)
 
     "Очистка кэша команд"
     await CommandWhitelistCache.flush_whitelist(redis)
 
-    added_count = len(records)
-    log_event(f'Добавлено базовых команд: {added_count}; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request)
-    return {'success': True, 'message': f'Команды добавлены!', 'added_count': added_count}
+    if len(body.commands) != len(records):
+        log_event(f'Добавление команд в белый список выполнено частично, uniq constraint | inp_cmds: {body.commands}; db_cmds: {records}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
+        return JSONResponse(status_code=202, content={'success': True, 'message': 'Вставка выполнена частично. Дубликаты команд проигнорированы', "success_insert_cmds": records})
+
+    log_event(f'Добавлены команды белого списка | wh_cmd_ids: {records}; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request)
+    return {'success': True, 'message': f'Команды добавлены!', 'white_cmd_ids': records}
 
 
 @router.delete('/bulk_delete')
@@ -66,9 +70,8 @@ async def delete_base_whitelist(body: WhitelistDeleteSchema, request: Request, d
     """
     log_event(f'Bulk delete базовых команд | count: {len(body.ids)}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     
-    del_rows = await db.whitelist_cmd.bulk_delete(body.ids)
-    deleted_count = len(del_rows)
+    await db.whitelist_cmd.bulk_delete(body.ids)
 
     await CommandWhitelistCache.flush_whitelist(redis)
-    log_event(f'Удалено базовых команд: {deleted_count}', request=request)
-    return {'success': True, 'message': f'Удалено команд: {deleted_count}', 'deleted_count': deleted_count}
+    log_event(f'Whlist команды удалены | wh_cmd_ids {body.ids}', request=request)
+    return {'success': True, 'message': f'Команды удалены'}

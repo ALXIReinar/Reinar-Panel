@@ -131,7 +131,7 @@ ROBO_PASSW_1=${ROBO_PASSW_1}
 ROBO_PASSW_2=${ROBO_PASSW_2}
 
 # ARQ Settings
-ARQ_QUEUE_NAME=arq:sub_queue
+ARQ_QUEUE_NAME=arq:cron_background_queue
 ARQ_MAX_JOBS=10
 ARQ_JOB_TIMEOUT=300
 
