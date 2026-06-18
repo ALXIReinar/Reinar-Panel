@@ -5,7 +5,7 @@ from flatten_json import flatten
 from jinja2 import Template
 
 
-def generate_link_from_json(tmp_link: str, node_config_json: str | dict, spec_keys_values: dict[str, str], node_ip_or_domain: str, node_title: str):
+def generate_link_from_json(tmp_link: str, node_config_json: str | dict, spec_keys_values: dict, node_ip_or_domain: str, node_title: str):
     """
     Собирает готовую конфиг-ссылку для клиента до этапа подстановки user_uuid перед самой выдачей подписки
 
@@ -16,6 +16,15 @@ def generate_link_from_json(tmp_link: str, node_config_json: str | dict, spec_ke
     :param node_title:
     :return: vless://{user_uuid}@192.168.1.100:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=ads.x5.ru&fp=chrome&pbk=ABC123...&sid=709c400f8da05efa&type=tcp#MyNode
     """
+    "Проверяем зависимости перед генерацией ссылки"
+    if tmp_link is None:
+        return False, 'Url конфиг-ссылка не указана в шаблоне. Обновите шаблон протокола, который используется этой нодой'
+
+    "Все ли кастомные spec попадут в ссылку"
+    for spec_key in spec_keys_values.keys():
+        if "{{" + spec_key + "}}" not in tmp_link:
+            return False, f"Spec key: {spec_key} указан в кастомных параметрах, но отсутствует в ссылке-шаблоне"
+
     if isinstance(node_config_json, str):
         node_config_json = json.loads(node_config_json)
 
@@ -31,4 +40,4 @@ def generate_link_from_json(tmp_link: str, node_config_json: str | dict, spec_ke
 
     # 3. Рендерим шаблон
     template = Template(tmp_link)
-    return template.render(context)
+    return True, template.render(context)

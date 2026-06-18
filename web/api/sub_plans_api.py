@@ -17,7 +17,11 @@ router = APIRouter(prefix='/private/subscriptions/plans', tags=['Subscription Pl
 async def create_sub_plan(body: SubPlanCreateSchema, request: Request, db: PgSqlDep, _: JWTCookieDep):
     """Создание группы подписок"""
     plan_id = await db.sub_plans.create(body.title)
-    log_event(f'Группа подписок создана | plan_id: \033[32m{plan_id}\033[0m; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request)
+    if not plan_id:
+        log_event(f'Подписка с таким названием уже существует | plan_name: \033[32m{body.title}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
+        raise HTTPException(status_code=409, detail={'success': False, 'message': 'Подписка с таким именем уже существует'})
+
+    log_event(f'Группа подписок создана | plan_id: \033[32m{plan_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     return {'success': True, 'message': 'Группа подписок создана', 'plan': plan_id}
 
 
@@ -42,19 +46,21 @@ async def update_sub_plan(body: SubPlanUpdateSchema, request: Request, db: PgSql
         raise HTTPException(status_code=404, detail={'success': False, 'message': 'Группа подписок не найдена'})
 
     # Редачим связки локаций(виртуальные ноды-протоколы) с группой подписок
-    attached_count, detached_count = 0, 0
+    attache_status_code, attache_msg = 202, "Без изменений"
     if body.add_node_proto_ids:
-        attached_count = await db.sub_plans.attach_vnodes(body.id, body.add_node_proto_ids)
+        attache_status_code, attache_msg = await db.sub_plans.attach_vnodes(body.id, body.add_node_proto_ids)
+        log_event(f"Попробовали прикрепить ноды к подписке | attache_res: \033[32m{attache_status_code}: {attache_msg}\033[0m; attache_list: {body.add_node_proto_ids}; plan_id: \033[33m{body.id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request)
 
+    detach_status_code, detach_msg = 202, "Без изменений"
     if body.remove_node_proto_ids:
-        detached_count = await db.sub_plans.detach_vnodes(body.id, body.remove_node_proto_ids)
+        detach_status_code, detach_msg = await db.sub_plans.detach_vnodes(body.id, body.remove_node_proto_ids)
+        log_event(f'Попробовали открепить ноды от подписки | detach_res: \033[31m{detach_status_code}: {detach_msg}\033[0m; detache_list: {body.remove_node_proto_ids}; plan_id: \033[33m{body.id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
 
-    log_event(f'Группа подписок обновлена | plan_id: \033[32m{body.id}\033[0m; attached: {attached_count}; detached: {detached_count}; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request)
+    log_event(f'Группа подписок обновлена | plan_id: \033[32m{body.id}\033[0m; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request)
     return {
         'success': True, 'message': 'Группа подписок обновлена',
-        'plan': plan,
-        'attached_count': attached_count,
-        'detached_count': detached_count
+        "attache_res": {"status_code": attache_status_code, "attached_msg": attache_msg},
+        "detach_res": {"status_code": detach_status_code, 'detach_message': detach_msg},
     }
 
 

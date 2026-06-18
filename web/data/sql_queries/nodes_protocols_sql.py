@@ -3,6 +3,7 @@ from typing import Literal
 from asyncpg import Connection, UniqueViolationError
 
 from web.utils.anything import CoreProtoActions
+from web.utils.logger_config import log_event
 
 
 class NodesProtocolsQueries:
@@ -170,8 +171,8 @@ class NodesProtocolsQueries:
     async def get_proto_tmp_w_spec_params(self, node_proto_id: int) -> tuple:
         tmp_link_query = '''
         SELECT pt.url_tmp, np.title, np.sub_node_address, n.ip FROM proto_templates pt
-        JOIN public.protocols p on pt.id = p.tmp_id
-        JOIN nodes_protocols np ON np.node_id = np.id
+        JOIN protocols p on pt.id = p.tmp_id
+        JOIN nodes_protocols np ON np.proto_id = p.id
         JOIN nodes n ON n.id = np.node_id
         WHERE np.id = $1
         '''

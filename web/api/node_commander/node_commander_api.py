@@ -1,9 +1,10 @@
 from typing import Annotated
 
-from aiohttp import ClientResponseError, ClientTimeout
+from aiohttp import ClientResponseError, ClientTimeout, ClientError
 from fastapi import APIRouter, HTTPException
 from fastapi.params import Query
 from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from web.api.protocols.proto_links_templates.handlers import generate_link_from_json
 from web.config_dir.config import NodeExecAiohttpDep, env, ArqDep
@@ -93,15 +94,11 @@ async def config_file_read(
             resp_data = await resp.json()
 
         log_event(f'Нода прислала конфиг-файл | node_proto_id: \033[32m{q_params.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
-        return {'success': True, 'file_content': resp_data['stdout'], 'message': 'Получен конфиг-файл от ноды'}
+        return {'success': True, 'file_content': resp_data['content'], 'message': 'Получен конфиг-файл от ноды'}
 
-    except ClientResponseError as e:
-        log_event(f'Нода ответила, что-то пошло не так | status_code: \033[33m{e.status}\033[0m; response: \033[37m{e}\033[0m; node_proto_id: \033[31m{q_params.node_proto_id}\033[0m', request=request, level='ERROR')
-        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка исполнения на ноде'})
-
-    except ClientTimeout:
-        log_event(f'Таймаут при чтении конфига | node_proto_id: \033[31m{q_params.node_proto_id}\033[0m', request=request, level='ERROR')
-        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Превышен таймаут запроса'})
+    except ClientError as e:
+        log_event(f'Нода ответила, что-то пошло не так | response: \033[37m{repr(e)}\033[0m; node_proto_id: \033[31m{q_params.node_proto_id}\033[0m', request=request, level='ERROR')
+        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка исполнения на ноде', "err_message": str(repr(e))})
 
     except Exception as e:
         log_event(f'Ошибка исполнения на админке, не удалось прочесть файл | error: \033[31m{e}\033[0m; node_proto_id: \033[33m{q_params.node_proto_id}\033[0m', request=request, level='CRITICAL')
@@ -111,33 +108,50 @@ async def config_file_read(
 
 @router.put('/config_file/write')
 async def config_file_write(body: WriteConfigSchema, request: Request, db: PgSqlDep, aio_http: NodeExecAiohttpDep, _: JWTCookieDep):
-    log_event(f'Пробуем записать конфиг-файл с ноды | node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    """
+    Рендеринг через Jinja2. При подстановке конфиг-файла в шаблон-ссылку бракованные ключи(опечатка/не существует) БУДУТ ПРОИГНОРИРОВАНЫ
+
+    Касаемо шаблонов. Всё больше поводов сделать систему шаблонов такой, что
+    пока шаблон не пройдёт системные проверки, он не будет допущен в прод(его не будет в выпадашке при настройке протоколов)
+    """
+    log_event(f'Пробуем записать конфиг-файл на ноду | node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    node_info = await db.nodes_protocols.get_node_for_file_edit(body.node_proto_id)
+
+    "Виртуальной ноды не существует"
+    if node_info is None:
+        log_event(f'Виртуальной ноды не существует | node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+        raise HTTPException(status_code=404, detail={'success': False, 'message': 'Виртуальная нода не найдена'})
+
+    "Не указан путь к файлу"
+    if node_info['config_path'] is None:
+        log_event(f'Путь к файлу не указан, не можем записать конфиг | node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='ERROR')
+        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Путь к конфиг-файлу протокола не указан!'})
 
     "Запрашиваем файл с ноды"
     try:
-        url = f'http://{body.private_ip}:{body.api_port}{NodeUris.write_config_file}'
-        async with aio_http.post(url, json={'file': body.file_path, 'content': body.file_content, 'flatten_json_users_key': body.flatten_json_users_key}) as resp:
+        # url = f'{node_info['private_ip']}:{node_info['api_port']}{NodeUris.write_config_file}'
+        url = f'http://localhost:18100{NodeUris.write_config_file}'
+        async with aio_http.post(url, json={'path': node_info['config_path'], 'content': body.file_content, 'flatten_json_users_key': body.flatten_json_users_key}) as resp:
             resp.raise_for_status()
 
         "1. Вытаскиваем ссылку-шаблон, зависимости и описание из БД"
         config_link_tmp, spec_params, node_ip_or_domain, node_title = await db.nodes_protocols.get_proto_tmp_w_spec_params(body.node_proto_id)
-        sub_ready_link = generate_link_from_json(config_link_tmp, body.file_content, spec_params, node_ip_or_domain, node_title)
+        success_status, sub_ready_link = generate_link_from_json(config_link_tmp, body.file_content, spec_params, node_ip_or_domain, node_title)
+        if not success_status:
+            log_event(f'Генерация ссылок упала | error_reason: \033[34m{sub_ready_link}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
+            return JSONResponse(status_code=409, content={'success': False, 'message': 'Исключение при генерации ссылки по шаблону', 'err_message': sub_ready_link})
 
         "2. Генерируем конфиг-ссылку для подписок"
         await db.nodes_protocols.update_config_link(body.node_proto_id, sub_ready_link)
-        log_event(f'Конфиг-ссылка для подписок сгенерирована из конфиг-файла | node_proto_id: \033[32m{body.node_proto_id}\033[0m', request=request)
+        log_event(f"Итого ссылка после Jinja2 | node_proto_id: \033[32m{body.node_proto_id}\033[0m; sub_ready_link: \033[35m{sub_ready_link}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request)
 
 
         log_event(f'Нода записала конфиг-файл | node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
-        return {'success': True, 'message': 'Конфиг-файл ноды обновился!'}
+        return {'success': True, 'message': 'Конфиг-файл ноды обновился, ссылка переопределена', "tip": "Перезагрузите ядро, чтобы изменения вступили в силу","sub_ready_link": sub_ready_link}
 
-    except ClientResponseError as e:
-        log_event(f'Нода ответила, что-то пошло не так | status_code: \033[33m{e.status}\033[0m; response: \033[37m{e}\033[0m; node_proto_id: \033[31m{body.node_proto_id}\033[0m', request=request, level='ERROR')
-        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка исполнения на ноде'})
-
-    except ClientTimeout:
-        log_event(f'Таймаут при чтении конфига | node_proto_id: \033[31m{body.node_proto_id}\033[0m', request=request, level='ERROR')
-        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Превышен таймаут запроса'})
+    except ClientError as e:
+        log_event(f'Нода ответила, что-то пошло не так | response: \033[37m{repr(e)}\033[0m; node_proto_id: \033[31m{body.node_proto_id}\033[0m', request=request, level='ERROR')
+        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка исполнения на ноде', "err_message": str(repr(e))})
 
     except Exception as e:
         log_event(f'Ошибка исполнения на админке, не удалось записать файл | error: \033[31m{e}\033[0m; node_proto_id: \033[33m{body.node_proto_id}\033[0m',request=request, level='CRITICAL')

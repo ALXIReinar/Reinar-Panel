@@ -1,4 +1,4 @@
-from asyncpg import Connection
+from asyncpg import Connection, ForeignKeyViolationError
 
 
 class SubPlansQueries:
@@ -7,7 +7,7 @@ class SubPlansQueries:
 
     async def create(self, title: str):
         """Создание группы подписок"""
-        query = "INSERT INTO sub_plans (title) VALUES ($1) RETURNING id"
+        query = "INSERT INTO sub_plans (title) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id"
         return await self.conn.fetchval(query, title)
 
 
@@ -70,7 +70,7 @@ class SubPlansQueries:
         return await self.conn.fetchrow(query, *params)
 
 
-    async def attach_vnodes(self, sub_plan_id: int, node_proto_ids: list[int]) -> int:
+    async def attach_vnodes(self, sub_plan_id: int, node_proto_ids: list[int]):
         """Привязать виртуальные ноды к группе"""
         if not node_proto_ids:
             return 0
@@ -81,18 +81,25 @@ class SubPlansQueries:
         ON CONFLICT (sub_plan_id, node_proto_id) DO NOTHING
         RETURNING id
         """
-        result = await self.conn.fetch(query, sub_plan_id, node_proto_ids)
-        return len(result)
+        try:
+            result = await self.conn.fetch(query, sub_plan_id, node_proto_ids)
+            return 200, f"Успешно прикрепили {len(result)} нод к тарифному плану"
+        except ForeignKeyViolationError as e:
+            return 404, f"Некоторые ноды не существуют: {e}"
 
 
-    async def detach_vnodes(self, sub_plan_id: int, node_proto_ids: list[int]) -> int:
+    async def detach_vnodes(self, sub_plan_id: int, node_proto_ids: list[int]):
         """Отвязать виртуальные ноды от группы"""
         if not node_proto_ids:
             return 0
 
-        query = "DELETE FROM vnodes_sub_plans WHERE sub_plan_id = $1 AND node_proto_id = ANY($2) RETURNING id"
+        query = "DELETE FROM vnodes_sub_plans WHERE sub_plan_id = $1 AND node_proto_id = ANY($2) RETURNING node_proto_id"
         result = await self.conn.fetch(query, sub_plan_id, node_proto_ids)
-        return len(result)
+
+        inp_nodes_len = len(node_proto_ids)
+        if len(result) != inp_nodes_len:
+            return 409, f"Некоторые ноды не были откреплены. successful_detache: {[rec['node_proto_id'] for rec in result]}"
+        return 200, f'Успешно открепили ноды ({inp_nodes_len})'
 
 
     async def delete(self, plan_id: int):

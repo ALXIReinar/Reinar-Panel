@@ -62,7 +62,6 @@ async def action_on_core_proto_by_sub_plan(
             json_add_body = {
                 'node_proto_id': node['node_proto_id'],
                 'core_lib': node['proto_python_lib'],
-                'user_uuid': user_uuid,
                 'user_obj': final_user_obj,
                 'add_script': node['api_add_user_script'],
                 'flatten_user_identifier_key': node['flatten_user_identifier_key'],
@@ -75,7 +74,7 @@ async def action_on_core_proto_by_sub_plan(
             json_delete_body = {
                 'node_proto_id': node['node_proto_id'],
                 'core_lib': node['proto_python_lib'],
-                'user_uuid': user_uuid,
+                'user_obj': final_user_obj,
                 'delete_script': node['api_delete_user_script'],
                 'flatten_user_identifier_key': node['flatten_user_identifier_key'],
                 'core_port': node['metrics_port'],

@@ -64,8 +64,8 @@ class ReadConfigSchema(BaseModel):
 
 
 
-class WriteConfigSchema(RemoteExecBaseSchema):
-    file_path: str
+class WriteConfigSchema(BaseModel):
+    node_proto_id: int
     file_content: str
     flatten_json_users_key: str | None = Field(description='Ключ к списку пользователей в конфиге. При записи этот объект переносится из старого файла')
 
