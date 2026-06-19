@@ -77,7 +77,11 @@ async def delete_sub_plan(body: SubPlanDeleteSchema, request: Request, db: PgSql
 
 @router.get('/all')
 async def get_all_sub_plans(request: Request, db: PgSqlDep, _: JWTCookieDep, limit: int = 20):
-    """Получить список всех групп подписок"""
+    """
+    Получить список всех групп подписок
+
+    !Добавить флаг-возможность скрывать настройки конфига от пользователя!
+    """
     plans = await db.sub_plans.all(limit)
     log_event(f'Отдали список групп подписок | plans_len: \033[32m{len(plans)}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     return {'success': True, 'plans': plans}

@@ -12,11 +12,11 @@ from web.api.node_commander.execute_history import router as remote_execute_hist
 main_router = APIRouter(prefix="/api/v1")
 
 
-# main_router.include_router(auth_panel_router)
-# main_router.include_router(protocols_router)
+main_router.include_router(auth_panel_router)
+main_router.include_router(protocols_router)
 main_router.include_router(nodes_router)
-# main_router.include_router(node_commander_router)
-# main_router.include_router(whitelist_router)
+main_router.include_router(node_commander_router)
+main_router.include_router(whitelist_router)
 main_router.include_router(remote_execute_history_router)
 main_router.include_router(users_router)
 main_router.include_router(subscriptions_router)
@@ -24,4 +24,4 @@ main_router.include_router(subscriptions_router)
 
 @main_router.get('/healthcheck')
 async def healthcheck():
-    return {"status": True, "server": "web-panel", "version": '0.1'}
+    return {"status": True, "service": "web-panel", "version": '0.1'}

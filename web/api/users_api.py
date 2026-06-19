@@ -1,6 +1,7 @@
-from typing import Literal
+from typing import Literal, Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from fastapi.params import Query
 from starlette.requests import Request
 
 from web.data.postgres import PgSqlDep
@@ -28,6 +29,18 @@ async def get_users(request: Request, db: PgSqlDep, _: JWTCookieDep,
     return {'success': True, 'users': users}
 
 
+@router.get('/get_by_id')
+async def get_user(order_id: Annotated[int, Query(alias='oid')], request: Request, db: PgSqlDep, _: JWTCookieDep):
+    user = await db.users.get_by_id(order_id)
+    if not user:
+        log_event(f'Не удалось найти пользователя | payed_subs.id: \033[32m{order_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
+        raise HTTPException(status_code=404, detail={'success': False, 'message': 'Пользователь не найден'})
+
+    log_event(f'Выдали Extent Юзера | payed_subs.id: \033[32m{order_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    return {'success': True, 'user': user}
+
+
+
 @router.post('/bulk_add')
 async def bulk_create_users(body: UserBulkCreateSchema, request: Request, db: PgSqlDep, _: JWTCookieDep):
     """
@@ -38,8 +51,7 @@ async def bulk_create_users(body: UserBulkCreateSchema, request: Request, db: Pg
     users_data = [user.model_dump() for user in body.users]
     created_users, failed_users = await db.users.bulk_create_with_subs(users_data)
 
-    log_event(
-        f'Создано пользователей | created_users_len: {len(created_users)}; failed_users_len: \033[33m{len(failed_users)}\033[0m; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request,
+    log_event(f'Создано пользователей | created_users_len: {len(created_users)}; failed_users_len: \033[33m{len(failed_users)}\033[0m; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request,
         level='CRITICAL' if failed_users else 'INFO'
     )
     return {'success': True, 'message': f'Пользователи созданы!', 'users': created_users, 'failed_users': failed_users}

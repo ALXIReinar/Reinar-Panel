@@ -1,4 +1,4 @@
-from asyncpg import Connection
+from asyncpg import Connection, UniqueViolationError
 
 
 class NodesQueries:
@@ -11,7 +11,9 @@ class NodesQueries:
         """Создать физическую ноду"""
         query = """
         INSERT INTO nodes (ip, private_ip, api_port, node_name, title, is_active)
-        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id
+        VALUES ($1, $2, $3, $4, $5, $6) 
+        ON CONFLICT DO NOTHING
+        RETURNING id
         """
         return await self.conn.fetchval(query, ip, private_ip, api_port, node_name, title, is_active)
 
@@ -19,32 +21,32 @@ class NodesQueries:
     async def get_node(self, node_id: int):
         """Получить ноду по ID"""
         query = """
-        SELECT n.id, n.ip, n.private_ip, n.api_port, n.title, n.is_active, n.created_at, n.updated_at
-        FROM nodes n
-        WHERE n.id = $1
+        SELECT id AS node_id, ip, private_ip, api_port, title, is_active, created_at, updated_at FROM nodes WHERE id = $1
         """
         return await self.conn.fetchrow(query, node_id)
 
 
-    async def get_all_nodes(self, status: int | None = None, is_active: bool | None = None):
+    async def get_all_nodes(self, is_active: bool | None, limit: int, offset: int):
         """Получить все ноды с опциональными фильтрами"""
-        conditions = []
-        params = []
-        param_count = 1
+        conditions, params = [], []
+        param_count = 3
 
         if is_active is not None:
             conditions.append(f"n.is_active = ${param_count}")
             params.append(is_active)
             param_count += 1
-        
+
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        
         query = f"""
-        SELECT n.id, n.ip, n.private_ip, n.api_port, n.title, n.status, n.created_at, n.updated_at, n.is_active
+        SELECT n.id, n.ip, n.private_ip, n.api_port, n.title, n.created_at, n.updated_at, n.is_active, COUNT(np.id) AS binded_vnodes_count
         FROM nodes n
+        JOIN nodes_protocols np ON n.id = np.node_id
         {where_clause}
+        GROUP BY n.id, n.ip, n.private_ip, n.api_port, n.title, n.created_at, n.updated_at, n.is_active
+        LIMIT $1 OFFSET $2
         """
-        return await self.conn.fetch(query, *params)
+
+        return await self.conn.fetch(query, limit, offset, *params)
 
 
     async def update_node(
@@ -92,7 +94,11 @@ class NodesQueries:
         SET {', '.join(updates)}
         WHERE id = ${param_count}
         """
-        await self.conn.execute(query, *params)
+        try:
+            await self.conn.execute(query, *params)
+            return 200, 'Нода обновлена'
+        except UniqueViolationError as e:
+            return 409, {'message': 'Конфликт хост-порт пар', 'err_message': str(repr(e))}
 
 
     async def delete_node(self, node_id: int):

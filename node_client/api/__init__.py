@@ -13,4 +13,4 @@ main_router.include_router(proto_core_users_router)
 
 @main_router.get('/node/ping')
 async def health_check():
-    return {"status": True, "message": "pong", "service": env.node_name, "version": "0.1"}
+    return {"success": True, "message": "pong", "service": env.node_name, "version": "0.1"}

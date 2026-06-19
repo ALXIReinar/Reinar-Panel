@@ -37,8 +37,8 @@ async def execute_cmd_on_node(
     action_id = await db.remote_command_history.save_action(body.node_proto_id, body.private_ip, body.api_port, body.cmd)
 
     "Отправка команды на ноду"
-    # url = f'http://{body.private_ip}:{body.api_port}{NodeUris.exec_cmd}'
     url = f'http://localhost:18100{NodeUris.exec_cmd}' if env.app_mode == AppMode.LOCAL else f'http://{body.private_ip}:{body.api_port}{NodeUris.exec_cmd}'
+    # url = f'http://{body.private_ip}:{body.api_port}{NodeUris.exec_cmd}'
     try:
         async with aio_http.post(url, json={'command': body.cmd}) as resp:
             resp.raise_for_status()
@@ -87,8 +87,8 @@ async def config_file_read(
 
     "Запрашиваем файл с ноды"
     try:
-        # url = f'http://{node_info['private_ip']}:{node_info['api_port']}{NodeUris.get_config_file}'
         url = f'http://localhost:18100{NodeUris.get_config_file}' if env.app_mode == AppMode.LOCAL else f'http://{node_info['private_ip']}:{node_info['api_port']}{NodeUris.get_config_file}'
+        # url = f'http://{node_info['private_ip']}:{node_info['api_port']}{NodeUris.get_config_file}'
         async with aio_http.post(url, json={'path': node_info['config_path'], 'flatten_json_users_key': q_params.flatten_json_users_key}) as resp:
             resp.raise_for_status()
             resp_data = await resp.json()
@@ -129,8 +129,8 @@ async def config_file_write(body: WriteConfigSchema, request: Request, db: PgSql
 
     "Запрашиваем файл с ноды"
     try:
+        url = f'{node_info['private_ip']}:{node_info['api_port']}{NodeUris.write_config_file}' if env.app_mode != AppMode.LOCAL else f'http://localhost:18100{NodeUris.write_config_file}'
         # url = f'{node_info['private_ip']}:{node_info['api_port']}{NodeUris.write_config_file}'
-        url = f'http://localhost:18100{NodeUris.write_config_file}'
         async with aio_http.post(url, json={'path': node_info['config_path'], 'content': body.file_content, 'flatten_json_users_key': body.flatten_json_users_key}) as resp:
             resp.raise_for_status()
 

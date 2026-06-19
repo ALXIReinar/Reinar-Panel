@@ -157,7 +157,7 @@ def get_redis_settings(envs: Settings):
         'port': getattr(envs, cfg['redis_port']),
         'decode_responses': True,
     }
-    if envs.app_mode == 'local':
+    if envs.app_mode != AppMode.LOCAL:
         redis_conf['password'] = envs.redis_password
     return redis_conf
 

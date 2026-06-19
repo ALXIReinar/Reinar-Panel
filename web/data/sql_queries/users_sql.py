@@ -117,32 +117,49 @@ class UsersQueries:
 
 
     async def all(self, last_id: int | None, sort_by: Literal['asc', 'desc'], limit: int) -> list:
-        """Получить список пользователей с пагинацией"""
-        # Первая страница - без фильтра по ID
+        """Получить список пользователей с пагинацией - ровно одна запись на пользователя"""
+        
+        # Курсор для пагинации
         if last_id is None:
-            query = f'''
-            SELECT u.id, u.tg_username, u.traffic_used_day_mb, u.online_status, u.updated_at AS last_activity, sp.traffic_limit_day, ps.expire_date, ps.created_at
-            FROM users u
-            JOIN payed_subs ps ON ps.user_id = u.id
-            JOIN sub_plans sp ON sp.id = ps.sub_plan_id
-            ORDER BY u.id {sort_by}
-            LIMIT $1
-            '''
-            return await self.conn.fetch(query, limit)
-
-        # Следующие страницы - с курсором
-        if sort_by == 'asc':
-            cursor_condition = 'u.id > $2'
+            cursor_condition = 'TRUE'  # Первая страница
+            params = (limit,)
         else:
-            cursor_condition = 'u.id < $2'
-
+            cursor_condition = 'u.id > $2' if sort_by == 'asc' else 'u.id < $2'
+            params = (limit, last_id)
+        
         query = f'''
-        SELECT u.id, u.tg_username, u.traffic_used_day_mb, sp.traffic_limit_day, ps.expire_date, ps.created_at 
+        WITH latest_sub AS (
+            SELECT DISTINCT ON (user_id)
+                id AS sub_id,
+                user_id,
+                sub_plan_id,
+                expire_date,
+                created_at,
+                is_active,
+                is_limited
+            FROM payed_subs
+            ORDER BY user_id, is_active DESC, id DESC
+        )
+        SELECT u.id AS user_id, ls.sub_id AS order_id, u.tg_username, u.traffic_used_day_mb, u.online_status, u.updated_at AS last_activity,
+               sp.traffic_limit_day, ls.expire_date, ls.created_at, ls.is_active AS sub_active, ls.is_limited AS sub_limited
         FROM users u
-        JOIN payed_subs ps ON ps.user_id = u.id
-        JOIN sub_plans sp ON sp.id = ps.sub_plan_id
+        JOIN latest_sub ls ON ls.user_id = u.id
+        JOIN sub_plans sp ON sp.id = ls.sub_plan_id
         WHERE {cursor_condition}
         ORDER BY u.id {sort_by}
         LIMIT $1
         '''
-        return await self.conn.fetch(query, limit, last_id)
+        return await self.conn.fetch(query, *params)
+
+
+    async def get_by_id(self, order_id: int):
+        query = '''
+        SELECT u.id AS user_id, u.uuid, ps.id AS order_id, u.b64_id, u.tg_username, sp.id AS sub_plan_id, sp.title AS sub_plan_name,
+               u.traffic_used_day_mb, sp.traffic_limit_day AS total_traffic_day, u.online_status, u.updated_at AS last_activity,
+               u.registered_at, ps.expire_date, ps.created_at AS sub_created_at, ps.is_active AS sub_active, ps.is_limited AS sub_limited
+        FROM users u
+        JOIN payed_subs ps ON ps.user_id = u.id
+        JOIN sub_plans sp ON sp.id = ps.sub_plan_id
+        WHERE ps.id = $1
+        '''
+        return await self.conn.fetchrow(query, order_id)

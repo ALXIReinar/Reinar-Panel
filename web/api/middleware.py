@@ -5,6 +5,7 @@ from starlette.responses import JSONResponse
 from starlette.types import Scope, Receive, Send, ASGIApp
 
 from web.config_dir.config import env
+from web.config_dir.env_modes import AppMode
 from web.data.postgres import PgSql
 from web.utils.anything import get_client_ip_by_scope
 from web.utils.jwt_factory import get_jwt_decode_payload, reissue_aT
@@ -25,7 +26,7 @@ class ASGILoggingMiddleware:
 
         scope.setdefault('state', {})
 
-        # Используем вашу логику получения IP из заголовков (через scope)
+        # Используем логику получения IP из заголовков (через scope)
 
         ip = get_client_ip_by_scope(scope)
 
@@ -49,12 +50,12 @@ class ASGILoggingMiddleware:
             method = scope.get('method', '')
 
             # Логика логирования
-            if env.app_mode != 'local' and path != '/api/v1/healthcheck':
+            if env.app_mode != AppMode.LOCAL and path != '/api/v1/healthcheck':
                 # Здесь можно создать временный request только для лога,
                 # так как выполнение уже завершено
                 log_event(f'HTTP {method} {path}', http_status=status_code, response_time=round(duration, 4))
 
-            if duration > 7.0:
+            if duration > 10.0:
                 log_event(f'Долгий ответ | {duration: .4f}', level='WARNING')
 
 

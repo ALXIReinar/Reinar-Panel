@@ -4,6 +4,11 @@ from datetime import datetime
 from pydantic_core.core_schema import ValidationInfo
 
 
+class GetNodeProtoSchema(BaseModel):
+    node_id: int
+    limit: int = Field(le=30)
+    offset: int = Field(0, ge=0)
+
 class NodeProtocolCreateSchema(BaseModel):
     """Схема для добавления протокола на ноду"""
     node_id: int = Field(..., gt=0, description="ID физической ноды")

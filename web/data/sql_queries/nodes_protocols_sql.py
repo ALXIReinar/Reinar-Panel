@@ -1,6 +1,6 @@
 from typing import Literal
 
-from asyncpg import Connection, UniqueViolationError
+from asyncpg import Connection, UniqueViolationError, ForeignKeyViolationError
 
 from web.utils.anything import CoreProtoActions
 from web.utils.logger_config import log_event
@@ -12,13 +12,16 @@ class NodesProtocolsQueries:
     def __init__(self, conn: Connection):
         self.conn = conn
     
-    async def create_node_protocol(self, node_id: int, proto_id: int, title: str, sub_node_address: str) -> int:
+    async def create_node_protocol(self, node_id: int, proto_id: int, title: str, sub_node_address: str | None):
         """Добавить протокол на ноду"""
         query = """
         INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address) VALUES ($1, $2, $3, $4)
         ON CONFLICT DO NOTHING RETURNING id
         """
-        return await self.conn.fetchval(query, node_id, proto_id, title, sub_node_address)
+        try:
+            return await self.conn.fetchval(query, node_id, proto_id, title, sub_node_address), "Успешно добавили виртуальную ноду"
+        except ForeignKeyViolationError:
+            return None, "Ноды или протокола с таким id не существует"
     
     
     async def get_node_protocol(self, np_id: int):
@@ -36,7 +39,7 @@ class NodesProtocolsQueries:
         return await self.conn.fetchrow(query, np_id)
     
     
-    async def get_node_protocols(self, node_id: int):
+    async def get_node_protocols(self, node_id: int, limit: int, offset: int):
         """Получить все протоколы на физической ноде"""
         query = """
         SELECT 
@@ -46,8 +49,9 @@ class NodesProtocolsQueries:
         JOIN protocols p ON np.proto_id = p.id
         JOIN nodes n ON np.node_id = n.id
         WHERE np.node_id = $1
+        LIMIT $2 OFFSET $3
         """
-        return await self.conn.fetch(query, node_id)
+        return await self.conn.fetch(query, node_id, limit, offset)
     
     
     async def get_protocol_nodes(self, proto_id: int):
@@ -108,7 +112,7 @@ class NodesProtocolsQueries:
 
         if sub_node_address is not None:
             updates.append(f"sub_node_address = ${param_idx}")
-            params.append(proto_port)
+            params.append(sub_node_address)
             param_idx += 1
 
         if user_visible is not None:
