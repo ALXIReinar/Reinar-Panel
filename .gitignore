@@ -165,3 +165,4 @@ secrets/
 .env*
 1.py
 *.json
+calculate_logs_size.py

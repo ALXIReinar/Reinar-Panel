@@ -38,7 +38,7 @@ async def log_in(creds: AdminLogInSchema, db: PgSqlDep, request: Request):
         )
         access_token, refresh_token = await issue_aT_rT(db, token_schema)
 
-        log_event("Пользователь Вошёл в акк | user_id: %s", db_user['id'], request=request)
+        log_event("Пользователь Вошёл в акк | admin_id: %s", db_user['id'], request=request)
         json_response = JSONResponse(status_code=200, content={'success': True, 'message': 'Успешная авторизация!'})
 
         "Ставим куки"
@@ -52,25 +52,25 @@ async def log_in(creds: AdminLogInSchema, db: PgSqlDep, request: Request):
 
 @router.put('/private/admins/logout')
 async def log_out(request: Request, response: Response, db: PgSqlDep, _: JWTCookieDep):
-    await db.auth.session_termination(request.state.user_id, request.state.session_id)
+    await db.auth.session_termination(request.state.admin_id, request.state.session_id)
     response.delete_cookie('access_token')
     response.delete_cookie('refresh_token')
-    log_event("Пользователь разлогинился | user_id: %s; s_id: %s", request.state.user_id, request.state.session_id,
+    log_event("Пользователь разлогинился | admin_id: %s; s_id: %s", request.state.admin_id, request.state.session_id,
               request=request)
     return {'success': True, 'message': 'Пользователь вне аккаунта'}
 
 
 @router.post('/private/admins/seances', summary='Все Устройства аккаунта')
 async def show_seances(request: Request, db: PgSqlDep, _: JWTCookieDep):
-    log_event("Запрос всех Устройств с акка | user_id: %s; s_id: %s", request.state.user_id, request.state.session_id,
+    log_event("Запрос всех Устройств с акка | admin_id: %s; s_id: %s", request.state.admin_id, request.state.session_id,
               request=request, level='INFO')
-    seances = await db.auth.all_seances_user(request.state.user_id, request.state.session_id)
+    seances = await db.auth.all_seances_user(request.state.admin_id, request.state.session_id)
     return {'seances': seances}
 
 
 @router.put('/server/admins/passw/set_new_passw')
 async def reset_password(update_secrets: UpdatePasswSchema, db: PgSqlDep, request: Request):
     hashed_passw = encryption.hash(update_secrets.passw)
-    await db.admins.set_new_passw(update_secrets.user_id, hashed_passw)
-    log_event(f"Юзер сменил Пароль | user_id: {update_secrets.user_id}", request=request, level='CRITICAL')
+    await db.admins.set_new_passw(update_secrets.admin_id, hashed_passw)
+    log_event(f"Юзер сменил Пароль | admin_id: {update_secrets.admin_id}", request=request, level='CRITICAL')
     return {'success': True, 'message': 'Пароль обновлён!'}
