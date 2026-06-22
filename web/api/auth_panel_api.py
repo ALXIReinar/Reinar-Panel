@@ -18,8 +18,7 @@ async def registration_user(creds: AdminRegSchema, db: PgSqlDep, request: Reques
     insert_attempt = await db.admins.reg_admin(creds.login, creds.passw)
 
     if not insert_attempt:
-        log_event(f"Пользователь с email: {hide_log_param(creds.login)} Уже существует", request=request,
-                  level='WARNING')
+        log_event(f"Пользователь с email: {hide_log_param(creds.login)} Уже существует", request=request, level='WARNING')
         return JSONResponse(status_code=204, content={"success": False, "message": 'Такой пользователь уже существует'})
 
     log_event(f"Новый пользователь! email: {hide_log_param(creds.login)}", request=request)

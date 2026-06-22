@@ -46,9 +46,10 @@ class ProtocolsQueries:
 
     async def delete_protocol(self, proto_id: int):
         """Удалить протокол"""
-        query = "DELETE FROM protocols WHERE id = $1 RETURNING id"
+        query = "DELETE FROM protocols WHERE id = $1"
 
         try:
-            return 200, "Протокол удалён", await self.conn.fetchrow(query, proto_id)
+            await self.conn.execute(query, proto_id)
+            return 200, "Протокол удалён"
         except ForeignKeyViolationError:
             return 409, "Протокол не может быть удалён. Некоторые ноды используют его"
