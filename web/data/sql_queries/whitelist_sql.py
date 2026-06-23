@@ -22,7 +22,7 @@ class WhitelistQueries:
         "Деактивация"
         if set_as_inactive:
             query = 'UPDATE whitelist_commands SET is_active = false WHERE id = ANY($1) RETURNING id'
-            result = await self.conn.execute(query,set_as_inactive)
+            result = await self.conn.fetch(query, set_as_inactive)
             inactive_count = len(result)
 
         return active_count, inactive_count
@@ -33,8 +33,8 @@ class WhitelistQueries:
         INSERT INTO whitelist_commands (command) SELECT cmd FROM UNNEST($1::text[]) AS t(cmd)
         ON CONFLICT (command) DO NOTHING RETURNING id
         """
-        await self.conn.fetch(query, commands)
-        return await self.conn.fetch(query, commands)
+        result = await self.conn.fetch(query, commands)
+        return [rec['id'] for rec in result]
 
 
     async def bulk_delete(self, ids: list[int]):

@@ -8,7 +8,6 @@ class GetTmpSchema(BaseModel):
     last_id: int | None = None
     sort_by: Literal['asc', 'desc'] = 'desc'
     limit: int = Field(default=20, gt=0, le=100)
-    proto_id: int | None = Field(default=None, description='ID протокола для фильтрации')
 GetTmpSchema = Annotated[GetTmpSchema, Depends()]
 
 class AddTmpSchema(BaseModel):

@@ -127,8 +127,11 @@ class TemplateSpecParamsQueries:
                 INSERT INTO nodes_protocoles_spec_params_values (spec_key_id, node_proto_id, value)
                 SELECT UNNEST($1::bigint[]), $2, UNNEST($3::varchar[])
                 ON CONFLICT (spec_key_id, node_proto_id) DO UPDATE SET value = EXCLUDED.value
+                RETURNING id AS value_id, spec_key_id
                 """
                 key_ids, values = zip(*[spec_obj.values() for spec_obj in new_specs])
 
-                await self.conn.execute(query, key_ids, node_proto_id, values)
+                db_spec_values = await self.conn.fetch(query, key_ids, node_proto_id, values)
                 log_event(f'UPSERT, Установили переданные specs | node_proto_id: \033[33m{node_proto_id}\033[0m; new_specs: \033[34m{new_specs}\033[0m')
+                return db_spec_values
+            return []

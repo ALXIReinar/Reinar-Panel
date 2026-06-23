@@ -6,51 +6,6 @@ import pytest
 from httpx import AsyncClient
 
 
-@pytest.fixture
-async def proto_template_seed(pg_pool, db_seed):
-    """
-    Создаёт тестовый шаблон протокола в БД.
-    Возвращает tmp_id для использования в тестах.
-    Зависит от db_seed для очистки БД перед каждым тестом.
-    """
-    async with pg_pool.acquire() as conn:
-        # Создаём первый тестовый шаблон протокола
-        tmp_id = await conn.fetchval(
-            """
-            INSERT INTO proto_templates (
-                title, url_tmp, status, is_accepted, 
-                reload_core_command, sub_prepare_script
-            ) VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id
-            """,
-            "TestProtocol Template",
-            "https://example.com/proto_template",
-            1,
-            True,
-            "systemctl reload test-proto",
-            "#!/bin/bash\necho 'test'"
-        )
-        
-        # Создаём второй шаблон для разнообразия
-        tmp_id_2 = await conn.fetchval(
-            """
-            INSERT INTO proto_templates (
-                title, url_tmp, status, is_accepted,
-                reload_core_command, sub_prepare_script
-            ) VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id
-            """,
-            "AnotherTemplate",
-            "https://example.com/another_template",
-            1,
-            True,
-            "systemctl reload another",
-            "#!/bin/bash\necho 'another'"
-        )
-        
-        return {"tmp_id": tmp_id, "tmp_id_2": tmp_id_2}
-
-
 # ==================== POST /private/protocols/create ====================
 
 @pytest.mark.asyncio
@@ -196,6 +151,55 @@ async def test_get_all_protocols_limit_exceeded(client: AsyncClient, db_seed, pr
     assert response.status_code == 422
     data = response.json()
     assert "detail" in data
+
+
+@pytest.mark.asyncio
+async def test_get_all_protocols_filter_by_tmp_id(client: AsyncClient, db_seed, proto_template_seed):
+    """Фильтрация протоколов по tmp_id (шаблону) - несколько протоколов с одним шаблоном"""
+    tmp_id_1 = proto_template_seed["tmp_id"]
+    tmp_id_2 = proto_template_seed["tmp_id_2"]
+    
+    # Создаём 3 протокола: 2 с шаблоном1, 1 с шаблоном2
+    proto1_resp = await client.post(
+        "/api/v1/private/protocols/create",
+        json={"name": "Protocol_A", "tmp_id": tmp_id_1}
+    )
+    proto1_id = proto1_resp.json()["proto_id"]
+    
+    proto2_resp = await client.post(
+        "/api/v1/private/protocols/create",
+        json={"name": "Protocol_B", "tmp_id": tmp_id_1}
+    )
+    proto2_id = proto2_resp.json()["proto_id"]
+    
+    proto3_resp = await client.post(
+        "/api/v1/private/protocols/create",
+        json={"name": "Protocol_C", "tmp_id": tmp_id_2}
+    )
+    proto3_id = proto3_resp.json()["proto_id"]
+    
+    # Фильтруем по tmp_id_1 (должны вернуться 2 протокола)
+    response = await client.get(f"/api/v1/private/protocols/all?tmp_id={tmp_id_1}")
+    assert response.status_code == 200
+    data = response.json()
+    assert "protocols" in data
+    assert len(data["protocols"]) == 2
+    
+    # Проверяем, что вернулись правильные протоколы
+    returned_proto_ids = {proto["proto_id"] for proto in data["protocols"]}
+    assert returned_proto_ids == {proto1_id, proto2_id}
+    
+    # Проверяем, что все протоколы используют tmp_id_1
+    for proto in data["protocols"]:
+        assert proto["tmp_id"] == tmp_id_1
+    
+    # Фильтруем по tmp_id_2 (должен вернуться 1 протокол)
+    response = await client.get(f"/api/v1/private/protocols/all?tmp_id={tmp_id_2}")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["protocols"]) == 1
+    assert data["protocols"][0]["proto_id"] == proto3_id
+    assert data["protocols"][0]["tmp_id"] == tmp_id_2
 
 
 # ==================== GET /private/protocols/{proto_id} ====================

@@ -42,10 +42,13 @@ async def _truncate_and_seed(conn: asyncpg.Connection):
         TRUNCATE TABLE 
             sessions_admins, 
             admins, 
+            nodes_protocoles_spec_params_values,
+            template_spec_params,
             nodes_protocols, 
             nodes, 
             protocols, 
-            proto_templates 
+            proto_templates,
+            whitelist_commands
         RESTART IDENTITY CASCADE
     """)
 
@@ -96,6 +99,12 @@ async def client(db_seed):
     app.include_router(main_router)
     app.state.pg_pool = pg_pool
     app.state.seed_info = seed_info
+    
+    # Инициализация Redis для тестов
+    from redis.asyncio import Redis
+    from web.config_dir.config import redis_settings
+    redis = Redis(**redis_settings)
+    app.state.redis = redis
 
     @app.middleware("http")
     async def add_state(request, call_next):
@@ -117,6 +126,9 @@ async def client(db_seed):
         # Сохраняем ссылку на app в клиенте
         ac.app = app
         yield ac
+    
+    # Закрываем Redis после тестов
+    await redis.aclose()
 
 
 @pytest.fixture(scope="function")
@@ -128,6 +140,51 @@ def seed_info(db_seed):
 def pg_pool(db_seed):
     return db_seed[0]
 
+
+
+@pytest.fixture
+async def proto_template_seed(pg_pool, db_seed):
+    """
+    Создаёт тестовый шаблон протокола в БД.
+    Возвращает tmp_id для использования в тестах.
+    Зависит от db_seed для очистки БД перед каждым тестом.
+    """
+    async with pg_pool.acquire() as conn:
+        # Создаём первый тестовый шаблон протокола
+        tmp_id = await conn.fetchval(
+            """
+            INSERT INTO proto_templates (
+                title, url_tmp, status, is_accepted, 
+                reload_core_command, sub_prepare_script
+            ) VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
+            """,
+            "TestProtocol Template",
+            "https://example.com/proto_template",
+            1,
+            True,
+            "systemctl reload test-proto",
+            "#!/bin/bash\necho 'test'"
+        )
+        
+        # Создаём второй шаблон для разнообразия
+        tmp_id_2 = await conn.fetchval(
+            """
+            INSERT INTO proto_templates (
+                title, url_tmp, status, is_accepted,
+                reload_core_command, sub_prepare_script
+            ) VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
+            """,
+            "AnotherTemplate",
+            "https://example.com/another_template",
+            1,
+            True,
+            "systemctl reload another",
+            "#!/bin/bash\necho 'another'"
+        )
+        
+        return {"tmp_id": tmp_id, "tmp_id_2": tmp_id_2}
 
 
 @pytest.fixture(autouse=True)
