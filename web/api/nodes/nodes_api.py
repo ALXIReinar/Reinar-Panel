@@ -21,8 +21,8 @@ router = APIRouter(tags=['Physical Nodes (Servers)'])
 @router.post('/create', summary="Создать физическую ноду")
 async def bind_node_api(body: NodeCreateSchema, request: Request, db: PgSqlDep, _: JWTCookieDep, aio_http: NodeExecAiohttpDep):
     log_event(f'Связываем админку с Нодой | ip: \033[32m{body.ip}\033[0m; private_ip: \033[33m{body.private_ip}\033[0m; api_port: \033[35m{body.api_port}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
-    url = f'http://{body.private_ip}:{body.api_port}{NodeUris.ping}' if env.app_mode != AppMode.LOCAL else f'http://localhost:8100{NodeUris.ping}'
-    # url = f'http://{body.private_ip}:{body.api_port}{NodeUris.ping}'
+    # url = f'http://{body.private_ip}:{body.api_port}{NodeUris.ping}' if env.app_mode != AppMode.LOCAL else f'http://localhost:8100{NodeUris.ping}'
+    url = f'http://{body.private_ip}:{body.api_port}{NodeUris.ping}'
     try:
         async with aio_http.get(url) as resp:
             resp = await resp.json()

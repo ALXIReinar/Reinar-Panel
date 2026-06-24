@@ -41,7 +41,7 @@ async def update_sub_plan(body: SubPlanUpdateSchema, request: Request, db: PgSql
         is_active=body.is_active
     )
 
-    if not plan:
+    if not plan and (not body.add_node_proto_ids and not body.remove_node_proto_ids):
         log_event(f'Группа подписок не найдена | plan_id: \033[33m{body.id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
         raise HTTPException(status_code=404, detail={'success': False, 'message': 'Группа подписок не найдена'})
 

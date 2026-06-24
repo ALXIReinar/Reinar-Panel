@@ -15,8 +15,7 @@ class NodesProtocolsQueries:
     async def create_node_protocol(self, node_id: int, proto_id: int, title: str, sub_node_address: str | None):
         """Добавить протокол на ноду"""
         query = """
-        INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address) VALUES ($1, $2, $3, $4)
-        ON CONFLICT DO NOTHING RETURNING id
+        INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address) VALUES ($1, $2, $3, $4) RETURNING id
         """
         try:
             return await self.conn.fetchval(query, node_id, proto_id, title, sub_node_address), "Успешно добавили виртуальную ноду"

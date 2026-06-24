@@ -48,7 +48,12 @@ async def _truncate_and_seed(conn: asyncpg.Connection):
             nodes, 
             protocols, 
             proto_templates,
-            whitelist_commands
+            whitelist_commands,
+            vnodes_sub_plans,
+            sub_plans,
+            remote_execute_history,
+            payed_subs,
+            sub_nodes_outbox
         RESTART IDENTITY CASCADE
     """)
 
@@ -106,6 +111,9 @@ async def client(db_seed):
     redis = Redis(**redis_settings)
     app.state.redis = redis
 
+    # Инициализация фейковой aiohttp.ClientSession
+    app.state.cmd_center_aiohttp = FakeAiohttpSession()
+
     @app.middleware("http")
     async def add_state(request, call_next):
         request.state.client_ip = "127.0.0.1"
@@ -129,6 +137,150 @@ async def client(db_seed):
     
     # Закрываем Redis после тестов
     await redis.aclose()
+
+# Фейк классы для моков aiohttp ответов
+class FakeAiohttpResponse:
+    def __init__(self, json_data: dict, status: int = 200):
+        self._json_data = json_data
+        self.status = status
+
+    async def json(self):
+        return self._json_data
+    
+    def raise_for_status(self):
+        """Имитация raise_for_status из aiohttp"""
+        if self.status >= 400:
+            from aiohttp import ClientResponseError
+            raise ClientResponseError(
+                request_info=None,
+                history=None,
+                status=self.status,
+                message=f"HTTP {self.status}"
+            )
+        return self._json_data
+
+class FakeAiohttpGetContext:
+    def __init__(self, json_data: dict, status: int = 200):
+        self.json_data = json_data
+        self.status = status
+
+    async def __aenter__(self):
+        return FakeAiohttpResponse(self.json_data, self.status)
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+class FakeAiohttpSession:
+    def __init__(self, json_data: dict | None = None, status: int = 200, raise_error: bool = False):
+        self.json_data = {} if json_data is None else json_data
+        self.status = status
+        self.raise_error = raise_error
+
+    def get(self, url: str, *args, **kwargs):
+        if self.raise_error:
+            from aiohttp import ClientError
+            raise ClientError("Simulated connection error")
+        return FakeAiohttpGetContext(self.json_data, self.status)
+
+    # Добавляем POST по аналогии
+    def post(self, url: str, *args, **kwargs):
+        if self.raise_error:
+            from aiohttp import ClientError
+            raise ClientError("Simulated connection error")
+        return FakeAiohttpGetContext(self.json_data, self.status)
+
+
+
+@pytest.fixture
+async def virtual_node_seed(pg_pool, physical_node_seed, proto_template_seed):
+    """
+    Создаёт тестовые виртуальные ноды (nodes_protocols) в БД.
+    Возвращает словарь с vnode_id для использования в тестах.
+    Зависит от physical_node_seed и proto_template_seed.
+    """
+    async with pg_pool.acquire() as conn:
+        # Создаём протокол для тестирования виртуальных нод
+        proto_id = await conn.fetchval(
+            """
+            INSERT INTO protocols (tmp_id, name)
+            VALUES ($1, $2)
+            RETURNING id
+            """,
+            proto_template_seed["tmp_id"],
+            "Test Protocol for VNodes"
+        )
+        
+        # Создаём виртуальную ноду 1: с портами (для тестов конфликтов)
+        vnode_id_1 = await conn.fetchval(
+            """
+            INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, proto_port, config_path)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id
+            """,
+            physical_node_seed["node_id_1"],
+            proto_id,
+            "VNode1 With Ports",  # Укорочено до 30 символов
+            "vnode1.example.com",
+            9090,  # metrics_port
+            8443,  # proto_port
+            "/etc/test-proto/config1.json"
+        )
+        
+        # Создаём виртуальную ноду 2: без портов (для тестов установки портов)
+        vnode_id_2 = await conn.fetchval(
+            """
+            INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id
+            """,
+            physical_node_seed["node_id_1"],
+            proto_id,
+            "VNode2 No Ports",  # Укорочено
+            "vnode2.example.com"
+        )
+        
+        # Создаём виртуальную ноду 3: на другой физической ноде (для проверки изоляции портов)
+        vnode_id_3 = await conn.fetchval(
+            """
+            INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, proto_port)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
+            """,
+            physical_node_seed["node_id_2"],
+            proto_id,
+            "VNode3 Other Node",  # Укорочено
+            "vnode3.example.com",
+            9090,  # Тот же порт что и vnode1, но на другой физ. ноде - это ОК
+            8443   # Тот же порт что и vnode1, но на другой физ. ноде - это ОК
+        )
+        
+        return {
+            "proto_id": proto_id,
+            "vnode_id_1": vnode_id_1,
+            "vnode_id_2": vnode_id_2,
+            "vnode_id_3": vnode_id_3,
+            "node_id_1": physical_node_seed["node_id_1"],
+            "node_id_2": physical_node_seed["node_id_2"],
+        }
+
+
+@pytest.fixture(autouse=True)
+async def flush_redis():
+    """
+    Fixture to flush Redis before each test.
+
+    This ensures test isolation by clearing all Redis data before each test runs.
+    Used by rate limiter and other Redis-dependent features.
+    """
+    from redis.asyncio import Redis
+    from web.config_dir.config import redis_settings
+
+    redis = Redis(**redis_settings)
+    await redis.flushdb()
+    try:
+        yield redis
+    finally:
+        await redis.close()
 
 
 @pytest.fixture(scope="function")
@@ -187,20 +339,105 @@ async def proto_template_seed(pg_pool, db_seed):
         return {"tmp_id": tmp_id, "tmp_id_2": tmp_id_2}
 
 
-@pytest.fixture(autouse=True)
-async def flush_redis():
+@pytest.fixture
+async def sub_plan_seed(pg_pool, db_seed):
     """
-    Fixture to flush Redis before each test.
-
-    This ensures test isolation by clearing all Redis data before each test runs.
-    Used by rate limiter and other Redis-dependent features.
+    Создаёт тестовые планы подписок в БД.
+    Возвращает словарь с plan_id для использования в тестах.
+    Зависит от db_seed для очистки БД перед каждым тестом.
     """
-    from redis.asyncio import Redis
-    from web.config_dir.config import redis_settings
+    async with pg_pool.acquire() as conn:
+        # Создаём первый план подписки (активный)
+        plan_id_1 = await conn.fetchval(
+            """
+            INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, is_active)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
+            """,
+            "Basic Plan",
+            "Basic subscription plan for testing",
+            30,  # 30 дней
+            500,  # 5.00 руб (в копейках)
+            10240,  # 10 GB в МБ
+            True
+        )
+        
+        # Создаём второй план (неактивный, безлимитный трафик)
+        plan_id_2 = await conn.fetchval(
+            """
+            INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, is_active)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
+            """,
+            "Premium Plan",
+            "Premium unlimited plan",
+            90,  # 90 дней
+            2000,  # 20.00 руб
+            -1,  # Безлимит
+            False
+        )
+        
+        return {
+            "plan_id_1": plan_id_1,
+            "plan_id_2": plan_id_2
+        }
 
-    redis = Redis(**redis_settings)
-    await redis.flushdb()
-    try:
-        yield redis
-    finally:
-        await redis.close()
+
+@pytest.fixture
+async def physical_node_seed(pg_pool, db_seed):
+    """
+    Создаёт тестовые физические ноды в БД.
+    Возвращает словарь с node_id для использования в тестах.
+    Зависит от db_seed для очистки БД перед каждым тестом.
+    """
+    async with pg_pool.acquire() as conn:
+        # Создаём первую тестовую физическую ноду (активная)
+        node_id_1 = await conn.fetchval(
+            """
+            INSERT INTO nodes (ip, private_ip, api_port, node_name, title, is_active)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
+            """,
+            "192.168.1.100",
+            "10.0.0.100",
+            8100,
+            "test-node-1",
+            "Test Physical Node 1",
+            True
+        )
+        
+        # Создаём вторую ноду (неактивная)
+        node_id_2 = await conn.fetchval(
+            """
+            INSERT INTO nodes (ip, private_ip, api_port, node_name, title, is_active)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
+            """,
+            "192.168.1.101",
+            "10.0.0.101",
+            8101,
+            "test-node-2",
+            "Test Physical Node 2",
+            False
+        )
+        
+        # Создаём третью ноду (активная) - для усиления тестов фильтрации
+        node_id_3 = await conn.fetchval(
+            """
+            INSERT INTO nodes (ip, private_ip, api_port, node_name, title, is_active)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
+            """,
+            "192.168.1.102",
+            "10.0.0.102",
+            8102,
+            "test-node-3",
+            "Test Physical Node 3",
+            True
+        )
+        
+        return {
+            "node_id_1": node_id_1,
+            "node_id_2": node_id_2,
+            "node_id_3": node_id_3
+        }

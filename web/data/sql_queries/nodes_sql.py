@@ -40,7 +40,7 @@ class NodesQueries:
         query = f"""
         SELECT n.id, n.ip, n.private_ip, n.api_port, n.title, n.created_at, n.updated_at, n.is_active, COUNT(np.id) AS binded_vnodes_count
         FROM nodes n
-        JOIN nodes_protocols np ON n.id = np.node_id
+        LEFT JOIN nodes_protocols np ON n.id = np.node_id
         {where_clause}
         GROUP BY n.id, n.ip, n.private_ip, n.api_port, n.title, n.created_at, n.updated_at, n.is_active
         LIMIT $1 OFFSET $2

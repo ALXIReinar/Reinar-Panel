@@ -49,12 +49,10 @@ async def bulk_create_users(body: UserBulkCreateSchema, request: Request, db: Pg
     log_event(f'Bulk create пользователей | users_len: {len(body.users)}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
 
     users_data = [user.model_dump() for user in body.users]
-    created_users, failed_users = await db.users.bulk_create_with_subs(users_data)
+    created_users = await db.users.bulk_create_with_subs(users_data)
 
-    log_event(f'Создано пользователей | created_users_len: {len(created_users)}; failed_users_len: \033[33m{len(failed_users)}\033[0m; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request,
-        level='CRITICAL' if failed_users else 'INFO'
-    )
-    return {'success': True, 'message': f'Пользователи созданы!', 'users': created_users, 'failed_users': failed_users}
+    log_event(f'Создано пользователей | created_users_len: {len(created_users)}; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request,)
+    return {'success': True, 'message': f'Пользователи созданы!', 'users': created_users}
 
 
 @router.put('/bulk_update')

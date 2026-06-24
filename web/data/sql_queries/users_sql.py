@@ -27,7 +27,7 @@ class UsersQueries:
 
     async def bulk_create_with_subs(
         self, users_data: list[dict]  # [{tg_username, tg_id, sub_plan_id, ttl_days, is_active}, ...]
-    ) -> tuple:
+    ):
         """
         Bulk создание пользователей с подписками
         С retry-логикой для конфликтов b64_id
@@ -40,62 +40,38 @@ class UsersQueries:
         RETURNING id, b64_id, tg_username
         """
 
-        all_created_users, failed_users = [], []
-        remaining_users = users_data.copy()
-        max_retries = 3  # Максимум попыток
 
-        "1. Вставка с Retry"
-        for attempt in range(1, max_retries + 1):
-            # Если вставки прошли успешно, то брейк по равенству б64 и вставок. Если нет, то remaining_users точно будут
-            # if not remaining_users:
-            #     break
-            users_count = len(remaining_users)
-            
-            # Генерируем b64_ids
-            b64_ids = self.generate_b64_id(users_count)
-            tg_ids = tuple(u['tg_id'] for u in remaining_users)
-            tg_usernames = tuple(u['tg_username'] for u in remaining_users)
-            uuids = tuple(str(uuid4()) for _ in range(len(remaining_users)))
-            
-            "Вставка"
-            created_users = await self.conn.fetch(insert_users_query,tg_ids, b64_ids, tg_usernames, uuids)
-            all_created_users.extend(created_users)
-            
-            "Если все вставились - выходим"
-            if len(created_users) == users_count:
-                log_event(f'Успешно создали Пользователей и b64 подписки | users_len: {len(created_users)}')
-                break
-            
-            "Находим индексы неудачных вставок"
-            success_b64_set = {u['b64_id'] for u in created_users}
-            failed_indices = tuple(i for i, b64 in enumerate(b64_ids) if b64 not in success_b64_set)
+        "1. Вставка"
+        users_count = len(users_data)
 
-            "Оставляем пользователей из фейл-вставок для retry"
-            remaining_users = [remaining_users[i] for i in failed_indices]
-            log_event(f'Не удалось вставить пользователей | attempt_num: \033[33m{attempt}\033[0m; failed_users: \033[36m{remaining_users}\033[0m', level='WARNING')
+        # Генерируем b64_ids
+        b64_ids = self.generate_b64_id(users_count)
+        tg_ids = tuple(u['tg_id'] for u in users_data)
+        tg_usernames = tuple(u['tg_username'] for u in users_data)
+        uuids = tuple(str(uuid4()) for _ in range(users_count))
 
-            if attempt == max_retries and remaining_users:
-                log_event(f'Попытки вставки исчерпаны | total_attempts: \033[31m{max_retries}\033[0m; failed_users: \033[37m{remaining_users}\033[0m', level='CRITICAL')
-                failed_users = remaining_users
+        "Вставка"
+        created_users = await self.conn.fetch(insert_users_query,tg_ids, b64_ids, tg_usernames, uuids)
+        log_event(f'Успешно создали Пользователей и b64 подписки | users_len: {len(created_users)}')
 
-        "2. Создаём подписки для всех успешно созданных пользователей"
-        if all_created_users:
-            insert_subs_query = """
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, created_at, expire_date)
-            SELECT t.user_id, t.sub_plan_id, t.is_active, NOW(), NOW() + (t.ttl_days || ' days')::interval
-            FROM UNNEST($1::bigint[], $2::integer[], $3::boolean[], $4::integer[]) AS t(user_id, sub_plan_id, is_active, ttl_days)
-            """
-            
-            "Создаём маппинг для связи созданных пользователей с исходными данными"
-            data_map = {u['tg_username']: u for u in users_data}
-            
-            user_ids = tuple(u['id'] for u in all_created_users)
-            sub_plan_ids = tuple(data_map[u['tg_username']]['sub_plan_id'] for u in all_created_users)
-            is_actives = tuple(data_map[u['tg_username']]['is_active'] for u in all_created_users)
-            ttl_days_list = tuple(data_map[u['tg_username']]['ttl_days'] for u in all_created_users)
-            await self.conn.execute(insert_subs_query, user_ids, sub_plan_ids, is_actives, ttl_days_list)
 
-        return all_created_users, failed_users
+        "2. Создаём подписки для созданных пользователей"
+        insert_subs_query = """
+        INSERT INTO payed_subs (user_id, sub_plan_id, is_active, created_at, expire_date)
+        SELECT t.user_id, t.sub_plan_id, t.is_active, NOW(), NOW() + (t.ttl_days || ' days')::interval
+        FROM UNNEST($1::bigint[], $2::integer[], $3::boolean[], $4::integer[]) AS t(user_id, sub_plan_id, is_active, ttl_days)
+        """
+
+        "Создаём маппинг для связи созданных пользователей с исходными данными"
+        data_map = {u['tg_username']: u for u in users_data}
+
+        user_ids = tuple(u['id'] for u in created_users)
+        sub_plan_ids = tuple(data_map[u['tg_username']]['sub_plan_id'] for u in users_data)
+        is_actives = tuple(data_map[u['tg_username']]['is_active'] for u in users_data)
+        ttl_days_list = tuple(data_map[u['tg_username']]['ttl_days'] for u in users_data)
+        await self.conn.execute(insert_subs_query, user_ids, sub_plan_ids, is_actives, ttl_days_list)
+
+        return created_users
 
 
     async def bulk_update_action(self, user_ids: list[int], action: str) -> int:

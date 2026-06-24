@@ -16,15 +16,17 @@ router = APIRouter(tags=['Virtual Nodes-Protocols Variations'])
 @router.post('/protocols/create', summary="Добавить протокол на ноду")
 async def add_protocol_to_node_api(body: NodeProtocolCreateSchema, db: PgSqlDep, request: Request, _: JWTCookieDep):
     np_id, msg = await db.nodes_protocols.create_node_protocol(body.node_id, body.proto_id, body.title, body.sub_node_address)
+
+    "404, не найдена нода/протокол"
     if not np_id:
-        log_event(f'Не удалось добавить протокол. Нода не найдена | node_id: \033[31m{body.node_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
-        return JSONResponse(status_code=404, content={'success': False, 'message': msg})
+        log_event(f'Не удалось добавить протокол. \033[34m{msg}\033[0m | node_id: \033[31m{body.node_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
+        raise HTTPException(status_code=404, detail={'success': False, 'message': msg})
 
     log_event(f"Добавлен протокол на ноду | node_id: \033[33m{body.node_id}\033[0m; proto_id: \033[32m{body.proto_id}\033[0m; np_id: \033[34m{np_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request)
     return {'success': True, 'node_protocol_id': np_id, 'message': msg}
 
 
-@router.get('/{node_id}/protocols', summary="Получить все протоколы на ноде")
+@router.get('/protocols/by_node', summary="Получить все протоколы на ноде")
 async def get_node_protocols_api(q_params: Annotated[GetNodeProtoSchema, Query()], request: Request, db: PgSqlDep, _: JWTCookieDep):
     protocols = await db.nodes_protocols.get_node_protocols(q_params.node_id, q_params.limit, q_params.offset)
     log_event(f'Отдали протоколы ноды | node_id: \033[33m{q_params.node_id}\033[0m; count: \033[32m{len(protocols)}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
@@ -36,7 +38,7 @@ async def get_node_protocol_api(np_id: int, request: Request, db: PgSqlDep, _: J
     node_protocol = await db.nodes_protocols.get_node_protocol(np_id)
     if not node_protocol:
         log_event(f"Виртуальная нода не найдена | np_id: \033[34m{np_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request, level='WARNING')
-        return JSONResponse(status_code=404, content={'success': False, 'message': 'Виртуальная нода не найдена'})
+        raise HTTPException(status_code=404, detail={'success': False, 'message': 'Виртуальная нода не найдена'})
 
     log_event(f'Отдали Виртуальную ноду-протокол | node_proto_id: \033[32m{np_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     return {'node_protocol': node_protocol}

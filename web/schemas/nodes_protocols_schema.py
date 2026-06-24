@@ -14,14 +14,14 @@ class NodeProtocolCreateSchema(BaseModel):
     node_id: int = Field(..., gt=0, description="ID физической ноды")
     proto_id: int = Field(..., gt=0, description="ID протокола")
     sub_node_address: str | None = Field(None, min_length=4, max_length=255, description="Домен протокола в конфиге клиентов")
-    title: str = Field(min_length=1, max_length=128, description='Описание виртуальной ноды (инстанса протокола)')
+    title: str = Field(min_length=1, max_length=30, description='Описание виртуальной ноды (инстанса протокола)')
 
 
 class UpdateNodeProtoSchema(BaseModel):
     """Схема для обновления виртуальной ноды"""
     node_proto_id: int = Field(..., gt=0, description="ID виртуальной ноды")
     config_path: str | None = Field(None, min_length=1, description="Путь к конфигу протокола")
-    title: str | None = Field(None, min_length=1, max_length=128, description="Название виртуальной ноды")
+    title: str | None = Field(None, min_length=1, max_length=30, description="Название виртуальной ноды")
     metrics_port: int | None = Field(None, ge=1024, le=65535, description="Порт для сбора метрик трафика")
     proto_port: int | None = Field(None, ge=1024, le=65535, description="Порт протокола для клиентов")
     sub_node_address: str | None = Field(None, min_length=4, max_length=255, description="Домен протокола в конфиге клиентов")
