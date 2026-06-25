@@ -1,9 +1,12 @@
+import asyncio
+
 from aiohttp import ClientSession, ClientResponseError
 from arq import ArqRedis
 
 from web.sub.anything import NodeUris, CoreProtoActions
 from web.sub.arq_tasks.depends_fabric import pg_sql_dep, arq_dep, aiohttp_dep
 from web.sub.config_dir.arq_logger_config import log_event
+from web.sub.config_dir.config import env
 from web.sub.data.postgres import PgSql
 
 
@@ -19,9 +22,11 @@ async def revoke_sub_plan_by_expire(ctx: dict, db: PgSql = None, arq: ArqRedis =
     users_to_delete = sum(len(vnode['users']) for vnode in  expired_users_by_node)
     log_event(f'\033[31m[ARQ Sub Revoke]\033[0m Крона по удалению пользователей из ядер протоколов | total_deletes: \033[31m{users_to_delete}\033[0m')
 
-    "Отправляем chain task на каждую ноду для бульк удаления"
-    for vnode in expired_users_by_node:
-        if len(vnode['users']) > 0:
+    sem = asyncio.Semaphore(env.action_on_core_proto_limit)
+
+    async def enqueue_delete(vnode):
+        async with sem:
+            "Отправляем chain task на каждую ноду для бульк удаления"
             log_event(f'\033[31m[ARQ Sub Revoke]\033[0m Отправляем Бульк запрос на фоновое удаление пользователей из ядра | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
             job = await arq.enqueue_job(
                 'bulk_delete_users_from_single_node',
@@ -39,6 +44,9 @@ async def revoke_sub_plan_by_expire(ctx: dict, db: PgSql = None, arq: ArqRedis =
                 vnode['flatten_user_identifier_key'],
             )
             log_event(f'\033[31m[ARQ Sub Revoke]\033[0m Фоновая задача запущена | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
+
+    "Размеренная обработка"
+    await asyncio.gather(*[enqueue_delete(vnode) for vnode in expired_users_by_node if len(vnode['users']) > 0])
 
     return {'success': True, 'message': 'Запущено Бульк удаление с нод', 'total_nodes': len(expired_users_by_node)}
 

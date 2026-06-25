@@ -5,6 +5,7 @@ from asyncpg import Connection
 import secrets
 import base64
 
+from web.utils.anything import CoreProtoActions
 from web.utils.logger_config import log_event
 from web.config_dir.config import env
 
@@ -28,10 +29,7 @@ class UsersQueries:
     async def bulk_create_with_subs(
         self, users_data: list[dict]  # [{tg_username, tg_id, sub_plan_id, ttl_days, is_active}, ...]
     ):
-        """
-        Bulk создание пользователей с подписками
-        С retry-логикой для конфликтов b64_id
-        """
+        """Bulk создание пользователей с подписками"""
         insert_users_query = """
         INSERT INTO users (tg_id, b64_id, tg_username, uuid)
         SELECT t.tg_id, t.b64_id, t.tg_username, t.uuid
@@ -39,7 +37,6 @@ class UsersQueries:
         ON CONFLICT (b64_id) DO NOTHING
         RETURNING id, b64_id, tg_username
         """
-
 
         "1. Вставка"
         users_count = len(users_data)
@@ -54,12 +51,26 @@ class UsersQueries:
         created_users = await self.conn.fetch(insert_users_query,tg_ids, b64_ids, tg_usernames, uuids)
         log_event(f'Успешно создали Пользователей и b64 подписки | users_len: {len(created_users)}')
 
-
-        "2. Создаём подписки для созданных пользователей"
+        "2. Создаём подписки для созданных пользователей + фиксация в outbox"
         insert_subs_query = """
-        INSERT INTO payed_subs (user_id, sub_plan_id, is_active, created_at, expire_date)
-        SELECT t.user_id, t.sub_plan_id, t.is_active, NOW(), NOW() + (t.ttl_days || ' days')::interval
-        FROM UNNEST($1::bigint[], $2::integer[], $3::boolean[], $4::integer[]) AS t(user_id, sub_plan_id, is_active, ttl_days)
+        WITH ins_subs AS (
+            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, created_at, expire_date)
+            SELECT t.user_id, t.sub_plan_id, t.is_active, NOW(), NOW() + (t.ttl_days || ' days')::interval
+            FROM UNNEST($1::bigint[], $2::integer[], $3::boolean[], $4::integer[], $5::varchar[]) AS t(user_id, sub_plan_id, is_active, ttl_days, tg_username)
+            RETURNING id AS order_id, sub_plan_id, user_id, is_active, tg_username
+        ),
+        sub_nodes_info AS (
+            SELECT u.uuid, is.tg_username, is.order_id, is.user_id, is.sub_plan_id, np.id AS sub_node_id
+            FROM ins_subs is
+            JOIN users u ON u.id = is.user_id
+            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = is.sub_plan_id 
+            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
+            JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
+        )
+        INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
+        SELECT uuid, tg_username, order_id, $2, sub_node_id
+        FROM sub_nodes_info
+        RETURNING order_id, sub_plan_id, user_id
         """
 
         "Создаём маппинг для связи созданных пользователей с исходными данными"
@@ -69,27 +80,95 @@ class UsersQueries:
         sub_plan_ids = tuple(data_map[u['tg_username']]['sub_plan_id'] for u in users_data)
         is_actives = tuple(data_map[u['tg_username']]['is_active'] for u in users_data)
         ttl_days_list = tuple(data_map[u['tg_username']]['ttl_days'] for u in users_data)
-        await self.conn.execute(insert_subs_query, user_ids, sub_plan_ids, is_actives, ttl_days_list)
+        user_for_arq_bg = await self.conn.fetch(insert_subs_query, user_ids, sub_plan_ids, is_actives, ttl_days_list, tuple(data_map.keys()))
 
-        return created_users
-
-
-    async def bulk_update_action(self, user_ids: list[int], action: str) -> int:
-        """Активация подписок пользователей"""
-        query_activate = "UPDATE payed_subs SET is_active = true WHERE user_id = ANY($1) AND is_active = false RETURNING id"
-        query_deactivate = "UPDATE payed_subs SET is_active = false WHERE user_id = ANY($1) AND is_active = true RETURNING id"
-        query_reset_traffic = "UPDATE users SET traffic_used_day_mb = 0 WHERE id = ANY($1) RETURNING id"
-
-        action_map = {'activate': query_activate, 'deactivate': query_deactivate, 'reset_traffic': query_reset_traffic,}
-        res = await self.conn.fetch(action_map[action], user_ids)
-        return len(res)
+        return created_users, user_for_arq_bg
 
 
-    async def bulk_delete(self, user_ids: list[int]) -> int:
-        """Удаление пользователей (CASCADE удалит связанные подписки)"""
-        query = "DELETE FROM users WHERE id = ANY($1) RETURNING id"
-        result = await self.conn.fetch(query, user_ids)
-        return len(result)
+    async def bulk_update_action(self, user_ids: list[int], action: str):
+        """3 upd-варианта"""
+        "Активируем подписки"
+        query_activate = """
+        UPDATE payed_subs SET is_active = true FROM (
+            SELECT u2.user_id, u.uuid, u.tg_username
+            FROM (SELECT UNNEST($1::bigint[]) AS user_id) AS u2
+            JOIN users u ON u.id = u2.user_id
+        ) AS input_users
+        WHERE user_id = input_users.user_id AND is_active = false
+        RETURNING id AS order_id, sub_plan_id, user_id, input_users.uuid, input_users.tg_username
+        """
+
+        "Деактивируем подписки"
+        query_deactivate = """
+        UPDATE payed_subs SET is_active = false FROM (
+            SELECT u2.user_id, u.uuid, u.tg_username
+            FROM (SELECT UNNEST($1::bigint[]) AS user_id) AS u2
+            JOIN users u ON u.id = u2.user_id
+        ) AS input_users
+        WHERE user_id = input_users.user_id AND is_active = true
+        RETURNING id AS order_id, sub_plan_id, user_id, input_users.uuid, input_users.tg_username
+        """
+
+        "Сброс трафика"
+        query_reset_traffic = """
+        UPDATE users SET traffic_used_day_mb = 0 FROM (
+            SELECT ps.id AS order_id, u2.user_id, ps.sub_plan_id 
+            FROM (SELECT UNNEST($1::bigint[]) AS user_id) AS u2
+            JOIN payed_subs ps ON ps.user_id = u2.user_id
+        ) AS input_users
+        WHERE id = input_users.user_id
+        RETURNING input_users.order_id, input_users.sub_plan_id, input_users.user_id, users.uuid, users.tg_username
+        """
+
+        "Outbox-фиксация перед отправкой в фон"
+        action_map = {
+            'activate': (query_activate, CoreProtoActions.add),
+            'deactivate': (query_deactivate, CoreProtoActions.delete),
+            'reset_traffic': (query_reset_traffic, CoreProtoActions.add),
+        }
+        action_query, action_param = action_map[action]
+        base_query = f'''
+        WITH action AS (
+            {action_query}
+        ),
+        sub_nodes_info AS (
+            SELECT a.uuid, a.tg_username, a.order_id, a.user_id, a.sub_plan_id, np.id AS sub_node_id
+            FROM action a
+            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = a.sub_plan_id 
+            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
+            JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
+        )
+        INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
+        SELECT uuid, tg_username, order_id, $2, sub_node_id
+        FROM sub_nodes_info
+        RETURNING order_id, sub_plan_id, user_id
+        '''
+        return await self.conn.fetch(base_query, user_ids, action_param)
+
+
+    async def bulk_delete(self, user_ids: list[int]):
+        """Удаление пользователей"""
+        query = """
+        WITH del_users AS (
+            ...
+            -- DELETE FROM users 
+            -- SELECT DISTINCT u.id 
+            -- RETURNING order_id, sub_plan_id, user_id
+        ),
+        sub_nodes_info AS (
+            SELECT a.uuid, a.tg_username, a.order_id, a.user_id, a.sub_plan_id, np.id AS sub_node_id
+            FROM action a
+            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = a.sub_plan_id 
+            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
+            JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
+        )
+        INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
+        SELECT uuid, tg_username, order_id, $2, sub_node_id
+        FROM sub_nodes_info
+        RETURNING order_id, sub_plan_id, user_id
+        """
+
+        return await self.conn.fetch(query, user_ids)
 
 
     async def all(self, last_id: int | None, sort_by: Literal['asc', 'desc'], limit: int) -> list:

@@ -53,7 +53,8 @@ async def _truncate_and_seed(conn: asyncpg.Connection):
             sub_plans,
             remote_execute_history,
             payed_subs,
-            sub_nodes_outbox
+            sub_nodes_outbox,
+            users
         RESTART IDENTITY CASCADE
     """)
 
@@ -213,8 +214,8 @@ async def virtual_node_seed(pg_pool, physical_node_seed, proto_template_seed):
         # Создаём виртуальную ноду 1: с портами (для тестов конфликтов)
         vnode_id_1 = await conn.fetchval(
             """
-            INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, proto_port, config_path)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, proto_port, config_path, user_visible)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
             """,
             physical_node_seed["node_id_1"],
@@ -223,7 +224,8 @@ async def virtual_node_seed(pg_pool, physical_node_seed, proto_template_seed):
             "vnode1.example.com",
             9090,  # metrics_port
             8443,  # proto_port
-            "/etc/test-proto/config1.json"
+            "/etc/test-proto/config1.json",
+            True  # user_visible = True (ВАЖНО для тестов)
         )
         
         # Создаём виртуальную ноду 2: без портов (для тестов установки портов)
@@ -307,8 +309,11 @@ async def proto_template_seed(pg_pool, db_seed):
             """
             INSERT INTO proto_templates (
                 title, url_tmp, status, is_accepted, 
-                reload_core_command, sub_prepare_script
-            ) VALUES ($1, $2, $3, $4, $5, $6)
+                reload_core_command, sub_prepare_script,
+                proto_python_lib, api_add_user_script, api_delete_user_script,
+                flatten_json_users_key, flatten_user_identifier_key,
+                add_script_custom_params, delete_script_custom_params
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             RETURNING id
             """,
             "TestProtocol Template",
@@ -316,7 +321,14 @@ async def proto_template_seed(pg_pool, db_seed):
             1,
             True,
             "systemctl reload test-proto",
-            "#!/bin/bash\necho 'test'"
+            "#!/bin/bash\necho 'test'",
+            "vless",  # proto_python_lib
+            "python /opt/add_user.py",  # api_add_user_script
+            "python /opt/delete_user.py",  # api_delete_user_script
+            "inbounds.0.settings.clients",  # flatten_json_users_key
+            "email",  # flatten_user_identifier_key
+            '{}',  # add_script_custom_params (пустой JSON)
+            '{}'   # delete_script_custom_params (пустой JSON)
         )
         
         # Создаём второй шаблон для разнообразия

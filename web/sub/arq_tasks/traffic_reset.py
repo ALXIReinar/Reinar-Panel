@@ -10,10 +10,12 @@ from web.sub.data.postgres import PgSql
 
 @pg_sql_dep
 @arq_dep
-async def reset_day_user_traffic(ctx: dict, db: PgSql = None, arq: ArqRedis = None):
-    log_event('\033[35m[ARQ Traffic Reset]\033[0m Обнуление трафика пользователей за день', level='WARNING')
-    unlock_users_by_node = await db.users_subs.reset_user_traffic_per_day()
-
+async def reset_day_user_traffic(ctx: dict, users: list[dict] | None = None, db: PgSql = None, arq: ArqRedis = None):
+    log_event(f'\033[35m[ARQ Traffic Reset]\033[0m Обнуление трафика пользователей. \033[34m(Крона, если user_ids = None)\033[0m | user_ids: {user_ids}', level='WARNING')
+    if users:
+        unlock_users_by_node = await db.users_subs.reset_traffic_by_users(users)
+    else:
+        unlock_users_by_node = await db.users_subs.reset_user_traffic_per_day()
     users_to_add = sum(len(vnode['users']) for vnode in unlock_users_by_node)
     log_event(f'\033[32m[ARQ Traffic Reset]\033[0m Крона по возврату пользователей после обнуления трафика | total_adds: \033[31m{users_to_add}\033[0m')
 
@@ -24,7 +26,7 @@ async def reset_day_user_traffic(ctx: dict, db: PgSql = None, arq: ArqRedis = No
     "Отправляем chain task на каждую ноду для бульк добавления в ядра"
     for vnode in unlock_users_by_node:
         if len(vnode['users']) > 0:
-            log_event(f'\033[35m[Traffic Reset]\033[0m Отправляем Бульк запрос на фоновое удаление пользователей из ядра | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
+            log_event(f'\033[35m[Traffic Reset]\033[0m Отправляем Бульк запрос на фоновое добавление пользователей в ядра | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
             job = await arq.enqueue_job(
                 'bulk_add_users_into_single_node',
                 vnode['node_proto_id'],
@@ -44,7 +46,7 @@ async def reset_day_user_traffic(ctx: dict, db: PgSql = None, arq: ArqRedis = No
             )
             log_event(f'\033[35m[Traffic Reset]\033[0m Фоновая задача запущена, бульк-добавление | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
 
-    return {'success': True, 'message': 'Трафик пользователей обнулён'}
+    return {'success': True, 'message': 'Трафик пользователей обнулён', 'is_definite_users': bool(users)}
 
 
 

@@ -28,7 +28,19 @@ class NodeUris:
     proto_core_bulk_add_users: str = '/api/v1/server/proto_core/user/bulk/add'
     get_metrics: str = '/api/v1/server/node/metrics'
 
+@dataclass
+class DeleteReasons:
+    sub_revoke: str = 'sub_revoke'
+    admin_bulk_delete: str = 'admin_bulk_delete'
+
+@dataclass
+class AddReasons:
+    ...
+
 class CoreProtoActions:
+    reason_del: DeleteReasons = DeleteReasons
+    reason_add: AddReasons = AddReasons
+
     add: int = 1
     delete: int = 2
 

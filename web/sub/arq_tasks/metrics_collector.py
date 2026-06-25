@@ -132,9 +132,10 @@ async def bulk_delete_by_traffic_limit(ctx: dict, outbox_event_ids: list, arq: A
 
     log_event(f'\033[31m[ARQ Metrics Collector]\033[0m Фон по удалению пользователей из ядер протоколов | total_deletes: \033[31m{users_to_delete}\033[0m')
 
-    "Отправляем chain task на каждую ноду для бульк удаления"
-    for vnode in nodes_by_limited_users:
-        if len(vnode['users']) > 0:
+    sem = asyncio.Semaphore(env.action_on_core_proto_limit)
+
+    async def enqueue_delete(vnode):
+        async with sem:
             log_event(f'\033[31m[ARQ Metrics Collector]\033[0m Отправляем Бульк запрос на фоновое удаление пользователей из ядра | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
             job = await arq.enqueue_job(
                 'bulk_delete_users_from_single_node',
@@ -153,6 +154,9 @@ async def bulk_delete_by_traffic_limit(ctx: dict, outbox_event_ids: list, arq: A
             )
             log_event(f'\033[31m[ARQ Metrics Collector]\033[0m \033[34mTask Chaining, depth: \033[32m3\033[0m бульк delete летит на ноду | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
             log_event(f'\033[31m[ARQ Metrics Collector]\033[0m Фоновая задача запущена | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
+
+    "Размеренная параллельная обработка с ограничением через семафор"
+    await asyncio.gather(*[enqueue_delete(vnode) for vnode in nodes_by_limited_users if len(vnode['users']) > 0])
 
     return {'success': True, 'message': 'Запущено Бульк удаление с нод', 'total_nodes': len(nodes_by_limited_users)}
 

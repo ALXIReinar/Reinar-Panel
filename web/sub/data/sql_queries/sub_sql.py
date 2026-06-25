@@ -100,7 +100,7 @@ class SubscriptionQueries:
             UPDATE payed_subs
             SET is_active = false, status = $2
             WHERE is_active = true AND expire_date < now()
-            RETURNING id AS order_id, user_id, sub_plan_id
+            RETURNING id AS order_id, sub_plan_id, user_id
         ),
         -- 2. Собираем информацию о нодах для этих подписок
         expired_nodes_info AS (
@@ -141,6 +141,66 @@ class SubscriptionQueries:
                  flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path
         '''
         return await self.conn.fetch(query, CoreProtoActions.delete, PayStatuses.expired)
+
+
+    async def get_sub_nodes_for_bulk_action(self, users: list[dict]):
+        order_ids, sub_plan_ids, user_ids = zip(*tuple(u.values() for u in users))
+        # order_ids, sub_plan_ids, user_ids = zip(
+        #     *tuple(tuple(u['order_id'], u['sub_plan_id'], u['user_id']) for u in users)
+        # )
+        query = '''
+        WITH users_to_proto_cores AS (
+            SELECT order_id, sub_plan_id, user_id 
+            FROM UNNEST($1::bigint[], $2::integer[], $3::bigint[]) AS t(order_id, sub_plan_id, user_id)
+        ),
+        -- 3. Собираем информацию о нодах для этих подписок
+        expired_nodes_info AS (
+            SELECT u.uuid, u.tg_username, upc.order_id, vsp.id AS sub_node_id,
+                   vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, 
+                   pt.proto_python_lib,
+                   pt.flatten_json_users_key, 
+                   pt.flatten_user_identifier_key, 
+                   pt.reload_core_command,
+                   np.config_path, 
+                   pt.constant_user_data_obj, 
+                   pt.required_user_data_obj,
+                   pt.api_bulk_add_user_script,
+                   pt.bulk_add_script_custom_params,
+                   pt.api_bulk_delete_user_script,
+                   pt.bulk_delete_script_custom_params
+            FROM users_to_proto_cores upc
+            JOIN users u ON u.id = upc.user_id
+            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = upc.sub_plan_id 
+            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
+            JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
+            JOIN protocols p ON np.proto_id = p.id 
+            JOIN proto_templates pt ON p.tmp_id = pt.id 
+        )
+        -- 5. Группируем пользователей по нодам для пакетной отправки
+        SELECT node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, 
+               flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, 
+               constant_user_data_obj, required_user_data_obj, 
+               api_bulk_add_user_script, bulk_add_script_custom_params,
+               api_bulk_delete_user_script, bulk_delete_script_custom_params,
+               COALESCE(
+                   json_agg(
+                       json_build_object( 
+                           'uuid', uuid, 
+                           'tg_username', tg_username,
+                           'order_id', order_id,
+                           'sub_node_id', sub_node_id
+                       )
+                   ),
+                   '[]'::json
+               ) AS users
+        FROM expired_nodes_info
+        GROUP BY node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, 
+                 flatten_json_users_key, flatten_user_identifier_key,
+                 reload_core_command, config_path, constant_user_data_obj, required_user_data_obj, 
+                 api_bulk_add_user_script, bulk_add_script_custom_params,
+                 api_bulk_delete_user_script, bulk_delete_script_custom_params
+        '''
+        return await self.conn.fetch(query, order_ids, sub_plan_ids, user_ids)
 
 
     async def success_action_core_proto_user(self, sub_node_ids: list[int], operation: Literal['add', 'delete'], user_uuid: str):
