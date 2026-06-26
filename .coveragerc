@@ -1,0 +1,59 @@
+[run]
+# Где искать исходники для покрытия
+source = web
+
+# Исключить из покрытия
+omit =
+    web/tests/*
+    web/__pycache__/*
+    web/*/__pycache__/*
+    web/*/*/__pycache__/*
+    web/.pytest_cache/*
+    */.venv/*
+    */venv/*
+    web/sub/*
+    */tests/*
+    */test_*.py
+    */__init__.py
+    web/config_dir/config.py
+
+# Использовать относительные пути
+relative_files = True
+
+[report]
+# Показывать строки которые не покрыты тестами
+show_missing = True
+
+# Точность процентов
+precision = 2
+
+# Сортировка по проценту покрытия
+sort = Cover
+
+# Пропустить пустые файлы
+skip_empty = True
+
+# Исключить из отчёта
+exclude_lines =
+    # Стандартные исключения
+    pragma: no cover
+    def __repr__
+    def __str__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @abstractmethod
+    @abc.abstractmethod
+    # Логирование
+    log_event
+    logger.
+    print\(
+
+[html]
+# Директория для HTML отчёта
+directory = web/htmlcov
+
+[xml]
+# Файл для XML отчёта
+output = web/coverage.xml

@@ -3,7 +3,6 @@
 Тестируют добавление/удаление пользователей на ядрах протоколов через фоновую очередь
 """
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 
 @pytest.fixture
@@ -103,19 +102,6 @@ async def subscription_data(pg_pool, virtual_node_seed, sub_plan_seed):
             "vnode_on_inactive": vnode_on_inactive,  # ❌ На неактивной ноде
             "invisible_vnode": invisible_vnode,  # ❌ Невидимая
         }
-
-
-@pytest.fixture
-def mock_arq(client):
-    """Мокируем ARQ очередь"""
-    mock_arq_pool = AsyncMock()
-    mock_job = MagicMock()
-    mock_job.job_id = "test-job-12345"
-    mock_arq_pool.enqueue_job = AsyncMock(return_value=mock_job)
-    
-    # Заменяем ARQ в app state (используется arq_pool, а не arq)
-    client.app.state.arq_pool = mock_arq_pool
-    return mock_arq_pool
 
 
 class TestUserActionSuccess:

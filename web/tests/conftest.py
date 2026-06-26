@@ -58,6 +58,28 @@ async def _truncate_and_seed(conn: asyncpg.Connection):
         RESTART IDENTITY CASCADE
     """)
 
+    # Заполняем справочники констант (templates_statuses, online_statuses, pay_statuses)
+    await conn.execute("""
+        INSERT INTO templates_statuses (id, name) 
+        OVERRIDING SYSTEM VALUE 
+        VALUES (1, 'Системный'), (2, 'Пользовательский')
+        ON CONFLICT (id) DO NOTHING
+    """)
+    
+    await conn.execute("""
+        INSERT INTO online_statuses (id, title) 
+        OVERRIDING SYSTEM VALUE 
+        VALUES (1, 'Не подключался'), (2, 'Оффлайн'), (3, 'Онлайн')
+        ON CONFLICT (id) DO NOTHING
+    """)
+    
+    await conn.execute("""
+        INSERT INTO pay_statuses (id, name) 
+        OVERRIDING SYSTEM VALUE 
+        VALUES (1, 'pending'), (2, 'success'), (3, 'expired')
+        ON CONFLICT (id) DO NOTHING
+    """)
+
     # Создаём базового тестового админа
     from web.config_dir.config import encryption
     
@@ -70,10 +92,25 @@ async def _truncate_and_seed(conn: asyncpg.Connection):
         encryption.hash(test_admin_pass)
     )
     
+    # Создаём 2 удалённых пользователя с подписками (для проверки фильтрации is_deleted)
+    # Это гарантирует что все SQL запросы корректно игнорируют is_deleted = true
+    deleted_user_1_id = await conn.fetchval("""
+        INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
+        VALUES ($1, $2, $3, $4, true)
+        RETURNING id
+    """, 9999001, "deleted_user_1", "uuid-deleted-0001-0001-000000000001", "deleted_b64_token_1")
+    
+    deleted_user_2_id = await conn.fetchval("""
+        INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
+        VALUES ($1, $2, $3, $4, true)
+        RETURNING id
+    """, 9999002, "deleted_user_2", "uuid-deleted-0002-0002-000000000002", "deleted_b64_token_2")
+    
     return {
         "admin_id": admin_id,
         "admin_login": test_admin_login,
         "admin_pass": test_admin_pass,
+        "deleted_user_ids": [deleted_user_1_id, deleted_user_2_id],  # Для тестов фильтрации
     }
 
 
@@ -393,6 +430,28 @@ async def sub_plan_seed(pg_pool, db_seed):
             "plan_id_1": plan_id_1,
             "plan_id_2": plan_id_2
         }
+
+
+@pytest.fixture
+def mock_arq(client):
+    """
+    Мокируем ARQ очередь для тестирования фоновых задач.
+    Используется в тестах, где нужно проверить что задача отправлена в ARQ,
+    но не нужно реально её выполнять.
+    
+    Returns:
+        AsyncMock с методом enqueue_job, который возвращает job с id "test-job-12345"
+    """
+    from unittest.mock import AsyncMock, MagicMock
+    
+    mock_arq_pool = AsyncMock()
+    mock_job = MagicMock()
+    mock_job.job_id = "test-job-12345"
+    mock_arq_pool.enqueue_job = AsyncMock(return_value=mock_job)
+    
+    # Заменяем ARQ в app state (используется arq_pool, а не arq)
+    client.app.state.arq_pool = mock_arq_pool
+    return mock_arq_pool
 
 
 @pytest.fixture

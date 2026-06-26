@@ -38,7 +38,7 @@ class PaymentQueries:
 
 
     async def get_user_info(self, user_id: int):
-        query = 'SELECT uuid, tg_username FROM users WHERE id = $1'
+        query = 'SELECT uuid, tg_username FROM users WHERE id = $1 AND is_deleted = false'
         return await self.conn.fetchrow(query, user_id)
 
 
@@ -71,7 +71,7 @@ class PaymentQueries:
                    pt.bulk_add_script_custom_params, pt.flatten_json_users_key, pt.flatten_user_identifier_key, pt.reload_core_command,
                    np.config_path, pt.constant_user_data_obj, pt.required_user_data_obj
             FROM users_to_proto_cores upc
-            JOIN users u ON u.id = upc.user_id
+            JOIN users u ON u.id = upc.user_id AND u.is_deleted = false
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = upc.sub_plan_id 
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
@@ -104,7 +104,7 @@ class PaymentQueries:
     async def reset_user_traffic_per_day(self):
         query = '''
         WITH zero_traffic AS (
-            UPDATE users SET traffic_used_day_mb = 0
+            UPDATE users SET traffic_used_day_mb = 0 WHERE is_deleted = false
         ),
         users_to_proto_cores AS (
             UPDATE payed_subs SET is_limited = false
@@ -118,7 +118,7 @@ class PaymentQueries:
                    pt.bulk_add_script_custom_params, pt.flatten_json_users_key, pt.flatten_user_identifier_key, pt.reload_core_command,
                    np.config_path, pt.constant_user_data_obj, pt.required_user_data_obj
             FROM users_to_proto_cores upc
-            JOIN users u ON u.id = upc.user_id
+            JOIN users u ON u.id = upc.user_id AND u.is_deleted = false
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = upc.sub_plan_id 
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true 

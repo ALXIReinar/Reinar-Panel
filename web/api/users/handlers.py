@@ -27,9 +27,9 @@ async def put_to_arq_bg(
     action = action_simple.get(action, 'reset_traffic')
 
     "Выбираем нужную фоновую задачу"
-    bg_func_params = ('admin_request_bulk_action_users', (action, user_ids,)),
+    bg_func_params = ('admin_request_bulk_action_users', (action, user_ids,))
     if action == 'reset_traffic':
-        bg_func_params = ('reset_day_user_traffic', (user_ids,)),
+        bg_func_params = ('reset_day_user_traffic', (user_ids,))
 
     "Запускаем"
     arq_bg_task_name, task_args = bg_func_params

@@ -31,11 +31,20 @@ class UsersQueries:
     ):
         """Bulk создание пользователей с подписками"""
         insert_users_query = """
-        INSERT INTO users (tg_id, b64_id, tg_username, uuid)
-        SELECT t.tg_id, t.b64_id, t.tg_username, t.uuid
-        FROM UNNEST($1::bigint[], $2::varchar[], $3::varchar[], $4::varchar[]) AS t(tg_id, b64_id, tg_username, uuid)
-        ON CONFLICT (b64_id) DO NOTHING
-        RETURNING id, b64_id, tg_username
+        WITH input_data AS (
+            SELECT t.tg_id, t.b64_id, t.tg_username, t.uuid, t.sub_plan_id
+            FROM UNNEST($1::bigint[], $2::varchar[], $3::varchar[], $4::varchar[], $5::integer[]) AS t(tg_id, b64_id, tg_username, uuid, sub_plan_id)
+        ),
+        inserted AS (
+            INSERT INTO users (tg_id, b64_id, tg_username, uuid)
+            SELECT tg_id, b64_id, tg_username, uuid
+            FROM input_data
+            ON CONFLICT DO NOTHING
+            RETURNING id, b64_id, tg_username
+        )
+        SELECT ins.id, ins.b64_id, ins.tg_username, inp.sub_plan_id
+        FROM inserted ins
+        JOIN input_data inp ON ins.b64_id = inp.b64_id
         """
 
         "1. Вставка"
@@ -46,9 +55,9 @@ class UsersQueries:
         tg_ids = tuple(u['tg_id'] for u in users_data)
         tg_usernames = tuple(u['tg_username'] for u in users_data)
         uuids = tuple(str(uuid4()) for _ in range(users_count))
-
+        sub_plan_ids = tuple(u['sub_plan_id'] for u in users_data)
         "Вставка"
-        created_users = await self.conn.fetch(insert_users_query,tg_ids, b64_ids, tg_usernames, uuids)
+        created_users = await self.conn.fetch(insert_users_query,tg_ids, b64_ids, tg_usernames, uuids, sub_plan_ids)
         log_event(f'Успешно создали Пользователей и b64 подписки | users_len: {len(created_users)}')
 
         "2. Создаём подписки для созданных пользователей + фиксация в outbox"
@@ -56,31 +65,45 @@ class UsersQueries:
         WITH ins_subs AS (
             INSERT INTO payed_subs (user_id, sub_plan_id, is_active, created_at, expire_date)
             SELECT t.user_id, t.sub_plan_id, t.is_active, NOW(), NOW() + (t.ttl_days || ' days')::interval
-            FROM UNNEST($1::bigint[], $2::integer[], $3::boolean[], $4::integer[], $5::varchar[]) AS t(user_id, sub_plan_id, is_active, ttl_days, tg_username)
-            RETURNING id AS order_id, sub_plan_id, user_id, is_active, tg_username
+            FROM UNNEST($1::bigint[], $2::integer[], $3::boolean[], $4::integer[]) AS t(user_id, sub_plan_id, is_active, ttl_days)
+            RETURNING id AS order_id, sub_plan_id, user_id, is_active
         ),
         sub_nodes_info AS (
-            SELECT u.uuid, is.tg_username, is.order_id, is.user_id, is.sub_plan_id, np.id AS sub_node_id
-            FROM ins_subs is
-            JOIN users u ON u.id = is.user_id
-            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = is.sub_plan_id 
+            SELECT u.uuid, u.tg_username, ins_subs.order_id, ins_subs.user_id, ins_subs.sub_plan_id, np.id AS sub_node_id
+            FROM ins_subs
+            JOIN users u ON u.id = ins_subs.user_id
+            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = ins_subs.sub_plan_id 
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
+            WHERE ins_subs.is_active = true
+        ),
+        inserted_outbox AS (
+            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
+            SELECT uuid, tg_username, order_id, $5, sub_node_id
+            FROM sub_nodes_info
+            RETURNING order_id
         )
-        INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
-        SELECT uuid, tg_username, order_id, $2, sub_node_id
-        FROM sub_nodes_info
-        RETURNING order_id, sub_plan_id, user_id
+        SELECT sni.order_id, sni.sub_plan_id, sni.user_id
+        FROM sub_nodes_info sni
         """
 
         "Создаём маппинг для связи созданных пользователей с исходными данными"
-        data_map = {u['tg_username']: u for u in users_data}
+        # ВАЖНО: dict сохраняет порядок вставки (Python 3.7+), но перезаписывает дубликаты
+        # Поэтому берём только первое вхождение каждого tg_username
+        seen_usernames = set()
+        unique_users_data = []
+        for u in users_data:
+            if u['tg_username'] not in seen_usernames:
+                unique_users_data.append(u)
+                seen_usernames.add(u['tg_username'])
+        
+        data_map = {u['tg_username']: u for u in unique_users_data}
 
         user_ids = tuple(u['id'] for u in created_users)
-        sub_plan_ids = tuple(data_map[u['tg_username']]['sub_plan_id'] for u in users_data)
-        is_actives = tuple(data_map[u['tg_username']]['is_active'] for u in users_data)
-        ttl_days_list = tuple(data_map[u['tg_username']]['ttl_days'] for u in users_data)
-        user_for_arq_bg = await self.conn.fetch(insert_subs_query, user_ids, sub_plan_ids, is_actives, ttl_days_list, tuple(data_map.keys()))
+        sub_plan_ids = tuple(data_map[u['tg_username']]['sub_plan_id'] for u in created_users)
+        is_actives = tuple(data_map[u['tg_username']]['is_active'] for u in created_users)
+        ttl_days_list = tuple(data_map[u['tg_username']]['ttl_days'] for u in created_users)
+        user_for_arq_bg = await self.conn.fetch(insert_subs_query, user_ids, sub_plan_ids, is_actives, ttl_days_list, CoreProtoActions.add)
 
         return created_users, user_for_arq_bg
 
@@ -92,10 +115,10 @@ class UsersQueries:
         UPDATE payed_subs SET is_active = true FROM (
             SELECT u2.user_id, u.uuid, u.tg_username
             FROM (SELECT UNNEST($1::bigint[]) AS user_id) AS u2
-            JOIN users u ON u.id = u2.user_id
+            JOIN users u ON u.id = u2.user_id AND u.is_deleted = false
         ) AS input_users
-        WHERE user_id = input_users.user_id AND is_active = false
-        RETURNING id AS order_id, sub_plan_id, user_id, input_users.uuid, input_users.tg_username
+        WHERE payed_subs.user_id = input_users.user_id AND is_active = false AND is_limited = false
+        RETURNING id AS order_id, sub_plan_id, payed_subs.user_id, input_users.uuid, input_users.tg_username
         """
 
         "Деактивируем подписки"
@@ -103,30 +126,31 @@ class UsersQueries:
         UPDATE payed_subs SET is_active = false FROM (
             SELECT u2.user_id, u.uuid, u.tg_username
             FROM (SELECT UNNEST($1::bigint[]) AS user_id) AS u2
-            JOIN users u ON u.id = u2.user_id
+            JOIN users u ON u.id = u2.user_id AND u.is_deleted = false
         ) AS input_users
-        WHERE user_id = input_users.user_id AND is_active = true
-        RETURNING id AS order_id, sub_plan_id, user_id, input_users.uuid, input_users.tg_username
+        WHERE payed_subs.user_id = input_users.user_id AND is_active = true AND is_limited = false
+        RETURNING id AS order_id, sub_plan_id, payed_subs.user_id, input_users.uuid, input_users.tg_username
         """
 
         "Сброс трафика"
         query_reset_traffic = """
         UPDATE users SET traffic_used_day_mb = 0 FROM (
-            SELECT ps.id AS order_id, u2.user_id, ps.sub_plan_id 
+            SELECT ps.id AS order_id, u2.user_id, ps.sub_plan_id, ps.is_limited
             FROM (SELECT UNNEST($1::bigint[]) AS user_id) AS u2
             JOIN payed_subs ps ON ps.user_id = u2.user_id
+            WHERE ps.is_active = true
         ) AS input_users
-        WHERE id = input_users.user_id
-        RETURNING input_users.order_id, input_users.sub_plan_id, input_users.user_id, users.uuid, users.tg_username
+        WHERE users.id = input_users.user_id AND users.is_deleted = false
+        RETURNING input_users.order_id, input_users.sub_plan_id, input_users.user_id, users.uuid, users.tg_username, input_users.is_limited
         """
 
         "Outbox-фиксация перед отправкой в фон"
         action_map = {
-            'activate': (query_activate, CoreProtoActions.add),
-            'deactivate': (query_deactivate, CoreProtoActions.delete),
-            'reset_traffic': (query_reset_traffic, CoreProtoActions.add),
+            'activate': (query_activate, CoreProtoActions.add, ''),
+            'deactivate': (query_deactivate, CoreProtoActions.delete, ''),
+            'reset_traffic': (query_reset_traffic, CoreProtoActions.add, 'WHERE a.is_limited = true'),
         }
-        action_query, action_param = action_map[action]
+        action_query, action_param, is_limited_filter = action_map[action]
         base_query = f'''
         WITH action AS (
             {action_query}
@@ -137,11 +161,16 @@ class UsersQueries:
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = a.sub_plan_id 
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
+            {is_limited_filter}
+        ),
+        inserted AS (
+            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
+            SELECT uuid, tg_username, order_id, $2, sub_node_id
+            FROM sub_nodes_info
+            RETURNING order_id
         )
-        INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
-        SELECT uuid, tg_username, order_id, $2, sub_node_id
-        FROM sub_nodes_info
-        RETURNING order_id, sub_plan_id, user_id
+        SELECT sni.order_id, sni.sub_plan_id, sni.user_id
+        FROM sub_nodes_info sni
         '''
         return await self.conn.fetch(base_query, user_ids, action_param)
 
@@ -149,26 +178,36 @@ class UsersQueries:
     async def bulk_delete(self, user_ids: list[int]):
         """Удаление пользователей"""
         query = """
-        WITH del_users AS (
-            ...
-            -- DELETE FROM users 
-            -- SELECT DISTINCT u.id 
-            -- RETURNING order_id, sub_plan_id, user_id
+        WITH sub_off AS (
+            UPDATE payed_subs SET is_active = false
+            WHERE user_id = ANY($1) AND is_active = true
+            RETURNING user_id
+        ),
+        del_users AS (
+            UPDATE users SET is_deleted = true 
+            WHERE id = ANY($1) AND is_deleted = false
+            RETURNING id AS user_id, tg_username, uuid
         ),
         sub_nodes_info AS (
-            SELECT a.uuid, a.tg_username, a.order_id, a.user_id, a.sub_plan_id, np.id AS sub_node_id
-            FROM action a
-            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = a.sub_plan_id 
+            SELECT du.uuid, du.tg_username, ps.id AS order_id, du.user_id, ps.sub_plan_id, np.id AS sub_node_id
+            FROM del_users du
+            JOIN sub_off so ON du.user_id = so.user_id
+            JOIN payed_subs ps ON ps.user_id = so.user_id AND ps.is_limited = false -- Сборный фильтр, который поставит удаляться в фон только тех пользователей, которые точно есть в впн-ядрах
+            -- Это те пользователи, которые не удалены из-за лимита (is_limited = false) и те, у которых была активна подписка(is_active = true)
+            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = ps.sub_plan_id 
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
+        ),
+        inserted_outbox AS (
+            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
+            SELECT uuid, tg_username, order_id, $2, sub_node_id
+            FROM sub_nodes_info
+            RETURNING order_id
         )
-        INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
-        SELECT uuid, tg_username, order_id, $2, sub_node_id
-        FROM sub_nodes_info
-        RETURNING order_id, sub_plan_id, user_id
+        SELECT sni.order_id, sni.sub_plan_id, sni.user_id
+        FROM sub_nodes_info sni
         """
-
-        return await self.conn.fetch(query, user_ids)
+        return await self.conn.fetch(query, user_ids, CoreProtoActions.delete)
 
 
     async def all(self, last_id: int | None, sort_by: Literal['asc', 'desc'], limit: int) -> list:
@@ -200,7 +239,7 @@ class UsersQueries:
         FROM users u
         JOIN latest_sub ls ON ls.user_id = u.id
         JOIN sub_plans sp ON sp.id = ls.sub_plan_id
-        WHERE {cursor_condition}
+        WHERE u.is_deleted = false AND {cursor_condition}
         ORDER BY u.id {sort_by}
         LIMIT $1
         '''
@@ -215,6 +254,6 @@ class UsersQueries:
         FROM users u
         JOIN payed_subs ps ON ps.user_id = u.id
         JOIN sub_plans sp ON sp.id = ps.sub_plan_id
-        WHERE ps.id = $1
+        WHERE ps.id = $1 AND u.is_deleted = false
         '''
         return await self.conn.fetchrow(query, order_id)

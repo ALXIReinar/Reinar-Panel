@@ -48,6 +48,15 @@ async def get_user(order_id: Annotated[int, Query(alias='oid')], request: Reques
 async def bulk_create_users(body: UserBulkCreateSchema, request: Request, db: PgSqlDep, arq: ArqDep, _: JWTCookieDep):
     """
     Bulk создание пользователей с подписками
+
+    Может не вернуть некоторых пользователей(отправил 10, получил 8).
+    Это значит, что uniq на tg_username отработал - "Пользователь с таким именем уже существует"
+    * также могла коллизия на uuid или b64 произойти:)
+
+    Возможна вставка пользователей с несуществующим `sub_plan_id`. Это ForeignKeyViolation
+    * принцип "всё или ничего"
+    1. Можно проверять наличие sub_plan_id перед вставкой пользователей. Правда, это REPEATABLE READ + блокировка - в идеале
+    2. Можно try except ForeignKeyViolation при вставке в подписки делать. Но это тоже транзакция, чтобы роллбек был на `users` тоже
     """
     log_event(f'Bulk create пользователей | users_len: {len(body.users)}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
 
@@ -57,10 +66,12 @@ async def bulk_create_users(body: UserBulkCreateSchema, request: Request, db: Pg
 
     "2. Вставка на впн-ядрах"
     users_for_arq_bg = [dict(arq_u) for arq_u in users_for_arq_bg]
-    await put_to_arq_bg(arq, users_for_arq_bg, CoreProtoActions.word_add)
+    job_id = None
+    if users_for_arq_bg:  # Вызываем ARQ только если есть пользователи
+        job_id = await put_to_arq_bg(arq, users_for_arq_bg, CoreProtoActions.word_add)
 
     log_event(f'Создано пользователей | created_users_len: {len(created_users)}; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request,)
-    return {'success': True, 'message': f'Пользователи созданы!', 'users': created_users}
+    return {'success': True, 'message': f'Пользователи созданы!', 'users': created_users, 'arq_job_id': job_id}
 
 
 @router.put('/bulk_update')
@@ -77,7 +88,9 @@ async def bulk_update_users(body: UserBulkUpdateSchema, request: Request, db: Pg
     affected_users = await db.users.bulk_update_action(body.user_ids, body.action)
 
     "2. Пробрасываем фоновую задачу на исполнение 'action' на ядрах"
-    job_id = await put_to_arq_bg(arq, affected_users, body.action)
+    job_id = None
+    if affected_users:  # Вызываем ARQ только если есть пользователи
+        job_id = await put_to_arq_bg(arq, affected_users, body.action)
 
     log_event(f'Обновлено пользователей ({len(affected_users)}). Закинули исполнение операции в фон | job_id: \033[31m{job_id}\033[0m; action: \033[32m{body.action}\033[0m; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request)
     return {'success': True, 'message': f'Bulk Операция ({body.action}) выполнена', 'affected_count': len(affected_users), 'arq_job_id': job_id}
@@ -94,9 +107,10 @@ async def bulk_delete_users(body: UserBulkDeleteSchema, request: Request, db: Pg
     deleted_users = await db.users.bulk_delete(body.user_ids)
 
     "2. Удаление на впн-ядрах"
-    # TODO Доделать запрос, чтобы аутбокс делал и возвращал (order_id, sub_plan_id, user_id)
     users_for_arq_bg = [dict(arq_u) for arq_u in deleted_users]
-    await put_to_arq_bg(arq, users_for_arq_bg, CoreProtoActions.word_delete)
+    job_id = None
+    if users_for_arq_bg:  # Вызываем ARQ только если есть пользователи
+        job_id = await put_to_arq_bg(arq, users_for_arq_bg, CoreProtoActions.word_delete)
 
     log_event(f'Удалено пользователей: {len(deleted_users)}; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request, level='WARNING')
-    return {'success': True, 'message': f'Пользователи удалены!', 'deleted_count': len(deleted_users)}
+    return {'success': True, 'message': f'Пользователи удалены!', 'deleted_count': len(deleted_users), 'arq_job_id': job_id}

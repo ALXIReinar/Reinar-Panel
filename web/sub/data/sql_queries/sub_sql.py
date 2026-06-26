@@ -18,6 +18,7 @@ class SubscriptionQueries:
         JOIN payed_subs ps ON ps.user_id = u.id
         JOIN sub_plans sp ON sp.id = ps.sub_plan_id
         WHERE ps.is_active = true 
+          AND u.is_deleted = false
           AND u.traffic_used_day_mb < sp.traffic_limit_day
           AND ps.expire_date > now() 
           AND u.b64_id = $1
@@ -109,7 +110,7 @@ class SubscriptionQueries:
                    pt.api_bulk_delete_user_script, pt.bulk_delete_script_custom_params, pt.flatten_json_users_key, pt.flatten_user_identifier_key,
                    pt.reload_core_command, np.config_path
             FROM deactivated_subs ds
-            JOIN users u ON u.id = ds.user_id
+            JOIN users u ON u.id = ds.user_id AND u.is_deleted = false
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = ds.sub_plan_id 
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
@@ -169,7 +170,7 @@ class SubscriptionQueries:
                    pt.api_bulk_delete_user_script,
                    pt.bulk_delete_script_custom_params
             FROM users_to_proto_cores upc
-            JOIN users u ON u.id = upc.user_id
+            JOIN users u ON u.id = upc.user_id AND u.is_deleted = false
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = upc.sub_plan_id 
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
@@ -228,7 +229,7 @@ class SubscriptionQueries:
             UPDATE users
             SET traffic_used_day_mb = users.traffic_used_day_mb + t.traffic_add, online_status = $3, updated_at = NOW()
             FROM (SELECT UNNEST($1::varchar[]) AS username, UNNEST($2::bigint[]) AS traffic_add) AS t
-            WHERE users.tg_username = t.username
+            WHERE users.tg_username = t.username AND users.is_deleted = false
 			RETURNING users.id AS user_id, users.traffic_used_day_mb
         ),
         users_limited AS (
