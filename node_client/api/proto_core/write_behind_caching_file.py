@@ -89,11 +89,11 @@ class ConfigWriteBuffer:
                 flatten_user_identifier_key
             )
             if user_key_check is Exception:
-                raise KeyError(f'{flatten_user_identifier_key} не найден в user_obj')
+                return False, 500, f'{flatten_user_identifier_key} не найден в user_obj'
 
         except Exception as e:
             log_event(f'\033[35m[Worker]\033[0m Валидация параметров перед регистрацией провалилась | error: \033[34m{e}\033[0m', level='ERROR')
-            return False, e
+            return False, 500, str(repr(e))
 
         # 1. Сохраняем метаданные
         self.node_metadata[node_proto_id] = {
@@ -114,17 +114,17 @@ class ConfigWriteBuffer:
         self.worker_tasks[node_proto_id] = task
         
         log_event(f"Нода зарегистрирована | node_proto_id: \033[33m{node_proto_id}\033[0m | users_len: \033[32m{len(self.buffer_storage[node_proto_id])}\033[0m")
-        return True, f'Зарегистрирована очередь | node_proto_id: \033[32m{node_proto_id}\033[0m'
+        return True, 200, f'Зарегистрирована очередь | node_proto_id: \033[32m{node_proto_id}\033[0m'
 
 
     async def add_user(
         self, 
         node_proto_id: int,
         user_obj_or_identifier: dict | str,
-        filepath: str | None = None,
-        users_path: str | None = None,
+        filepath: str,
+        users_path: str,
+        flatten_user_identifier_key: str,
         reload_command: str | None = None,
-        flatten_user_identifier_key: str | None = None
     ):
         """
         Добавляет пользователя в буфер (O(1))
@@ -155,33 +155,33 @@ class ConfigWriteBuffer:
             "Опциональный апдейт пользователя в ядре"
             # self.buffer_storage[node_proto_id][uuid] = user_obj
             # await self.node_queues[node_proto_id].put({'op': 'update', 'uuid': uuid})
-            return True, 'Пользователь добавлен'
+            return True, 200, 'Пользователь добавлен'
 
         # Сценарий 2: Очередь существует, пользователя нет
         if node_proto_id in self.node_queues:
             log_event(f"Добавление пользователя | node_proto_id: \033[32m{node_proto_id}\033[0m | uuid: \033[33m{uuid}\033[0m")
             self.buffer_storage[node_proto_id][uuid] = user_obj_or_identifier
             await self.node_queues[node_proto_id].put({'op': 'add', 'uuid': uuid})
-            return True, 'Пользователь добавлен'
+            return True, 200, 'Пользователь добавлен'
 
-        # Сценарий 3: Первое обращение к ноде
         if not all([filepath, users_path]):
             raise ValueError(
                 f"При первом обращении к node_proto_id={node_proto_id} "
                 f"нужны filepath и users_path"
             )
 
+        # Сценарий 3: Первое обращение к ноде
         # Регистрируем ноду (загружаем существующих пользователей)
         log_event(f"Первое обращение к ноде | node_proto_id: \033[35m{node_proto_id}\033[0m | регистрируем")
-        reg_res, msg = await self.register_node(node_proto_id, filepath, users_path, flatten_user_identifier_key, reload_command, user_obj_or_identifier)
+        reg_res, status_code, msg = await self.register_node(node_proto_id, filepath, users_path, flatten_user_identifier_key, reload_command, user_obj_or_identifier)
         if not reg_res:
             log_event(f'Не удалось зарегистрировать ноду | node_proto_id: \033[31m{node_proto_id}\033[0m', level='WARNING')
-            return False, str(msg)
+            return False, status_code, str(msg)
 
         # Добавляем нового пользователя
         self.buffer_storage[node_proto_id][uuid] = user_obj_or_identifier
         await self.node_queues[node_proto_id].put({'op': 'add', 'uuid': uuid})
-        return True, 'Пользователь добавлен'
+        return True, 200, 'Пользователь добавлен'
 
 
     async def delete_user(self, node_proto_id: int, user_obj_or_identifier: dict | str, filepath: str, users_path: str, flatten_user_identifier_key: str, reload_command: str | None):
@@ -199,12 +199,12 @@ class ConfigWriteBuffer:
         "Проверяем очередь node_proto_id в буфере"
         if node_proto_id not in self.buffer_storage:
             log_event(f"Попытка удаления из незарегистрированной ноды, пробуем подгрузить её | node_proto_id: \033[33m{node_proto_id}\033[0m", level='WARNING')
-            reg_res, msg = await self.register_node(node_proto_id, filepath, users_path, flatten_user_identifier_key, reload_command)
+            reg_res, status_code, msg = await self.register_node(node_proto_id, filepath, users_path, flatten_user_identifier_key, reload_command)
 
             "Если нет, пытаемся зарегать"
             if not reg_res:
                 log_event(f'Не удалось зарегистрировать ноду | node_proto_id: \033[31m{node_proto_id}\033[0m', level='WARNING')
-                return False, str(msg)
+                return False, status_code, msg
 
         uuid = user_obj_or_identifier
         if isinstance(user_obj_or_identifier, dict):
@@ -214,14 +214,14 @@ class ConfigWriteBuffer:
         "Проверяем наличие пользователя"
         if not uuid in self.buffer_storage[node_proto_id]:
             log_event(f'Пользователя с uuid не существует в этом конфиге | uuid: \033[33m{uuid}\033[0m; config_file: \033[32m{filepath}\033[0m', level='WARNING')
-            return True, 'Пользователя уже не было'
+            return True, 200, 'Пользователя уже не было'
 
         "Удаляем из кэша и Добавляем в очередь"
         del self.buffer_storage[node_proto_id][uuid]
         log_event(f"Пользователь удалён из буфера | node_proto_id: \033[32m{node_proto_id}\033[0m | uuid: \033[32m{uuid}\033[0m")
 
         await self.node_queues[node_proto_id].put({'op': 'delete', 'uuid': uuid})
-        return True, 'Пользователь удалён'
+        return True, 200, 'Пользователь удалён'
 
 
     async def stop(self):
@@ -503,7 +503,7 @@ def flatten_key2value(
         # Простой select. Продвигаемся дальше
         try:
             current = current[key]
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, KeyError):
             current = current.get(key, Exception)
 
         # Ранний выход, если ключ не найден

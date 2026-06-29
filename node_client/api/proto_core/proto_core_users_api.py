@@ -52,7 +52,7 @@ async def add_user_to_core(body: AddUserCoreSchema, request: Request, buffer: Co
 
     "2. Добавление в ConfigWriteBuffer"
     # Добавляем пользователя (метод сам разберётся с регистрацией ноды)
-    add_res, msg = await buffer.add_user(
+    add_res, status_code, msg = await buffer.add_user(
         node_proto_id=body.node_proto_id,
         user_obj_or_identifier=body.user_obj,
         filepath=body.config_file_path,
@@ -69,8 +69,8 @@ async def add_user_to_core(body: AddUserCoreSchema, request: Request, buffer: Co
         return {'success': True, 'message': msg, 'hot_reload': hot_reload_success, 'hot_reload_message': hot_reload_message}
 
     # При ошибке, отдаёт в сообщении ошибку из core_buffer - Поэтому стоят неочевидно
-    log_event(f'Не удалось добавить пользователя в буфер, некорректные настройки | user_obj: \033[31m{body.user_obj}\033[0m', request=request, level='WARNING')
-    raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка добавления пользователя в ядро', 'error_message': msg})
+    log_event(f'Не удалось добавить пользователя в буфер, некорректные настройки | user_obj: \033[31m{body.user_obj}\033[0m', request=request, level='CRITICAL')
+    raise HTTPException(status_code=status_code, detail={'success': False, 'message': 'Ошибка добавления пользователя в ядро', 'error_message': msg})
 
 
 
@@ -115,7 +115,7 @@ async def delete_user_from_core(body: DeleteUserCoreSchema, request: Request, bu
             hot_reload_message = str(e)
     
     "2. Удаление из ConfigWriteBuffer"
-    del_res, msg = await buffer.delete_user(
+    del_res, status_code, msg = await buffer.delete_user(
         node_proto_id=body.node_proto_id,
         user_obj_or_identifier=body.user_obj,
         filepath=body.config_file_path,
@@ -132,7 +132,7 @@ async def delete_user_from_core(body: DeleteUserCoreSchema, request: Request, bu
 
     # При ошибке, отдаёт в сообщении ошибку из core_buffer - Поэтому стоят неочевидно
     log_event(f'Не удалось удалить пользователя из буфера | user_obj: \033[31m{body.user_obj}\033[0m', request=request, level='WARNING')
-    raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка удаления пользователя из ядра', 'error_message': msg})
+    raise HTTPException(status_code=status_code, detail={'success': False, 'message': 'Ошибка удаления пользователя из ядра', 'error_message': msg})
 
 
 

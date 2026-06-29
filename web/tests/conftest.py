@@ -24,18 +24,7 @@ def ensure_test_database():
     assert env.pg_db.startswith("test_"), f"Refusing to run tests against non-test database: {env.pg_db}"
 
 
-@pytest.hookimpl(hookwrapper=True)
-def pytest_runtest_makereport(item, call):
-    outcome = yield
-    rep = outcome.get_result()
-    setattr(item, "rep_" + rep.when, rep)
-
-
-
 async def _truncate_and_seed(conn: asyncpg.Connection):
-    """
-    Очищает и заполняет БД базовыми тестовыми данными для ReinarPanel.
-    """
     # Очищаем таблицы для тестов админов, протоколов и нод
     # CASCADE автоматически очистит зависимые таблицы
     await conn.execute("""
