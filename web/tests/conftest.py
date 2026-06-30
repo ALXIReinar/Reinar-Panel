@@ -1,4 +1,5 @@
 import os
+from typing import Any
 
 "ВАЖНО: Устанавливаем переменную окружения ДО любых импортов"
 os.environ['ENV_LOCAL_TEST_FILE'] = 'web/.env.api.test'
@@ -7,6 +8,9 @@ import asyncpg
 import httpx
 import pytest
 from fastapi import FastAPI
+from web.config_dir.config import encryption
+from redis.asyncio import Redis
+from web.config_dir.config import redis_settings
 from web.config_dir import config as cfg
 
 env = cfg.env
@@ -24,77 +28,79 @@ def ensure_test_database():
     assert env.pg_db.startswith("test_"), f"Refusing to run tests against non-test database: {env.pg_db}"
 
 
-async def _truncate_and_seed(conn: asyncpg.Connection):
+@pytest.fixture(scope="session")
+async def db_seed(db_pool):
     # Очищаем таблицы для тестов админов, протоколов и нод
     # CASCADE автоматически очистит зависимые таблицы
-    await conn.execute("""
-        TRUNCATE TABLE 
-            sessions_admins, 
-            admins, 
-            nodes_protocoles_spec_params_values,
-            template_spec_params,
-            nodes_protocols, 
-            nodes, 
-            protocols, 
-            proto_templates,
-            whitelist_commands,
-            vnodes_sub_plans,
-            sub_plans,
-            remote_execute_history,
-            payed_subs,
-            sub_nodes_outbox,
-            users
-        RESTART IDENTITY CASCADE
-    """)
-
-    # Заполняем справочники констант (templates_statuses, online_statuses, pay_statuses)
-    await conn.execute("""
-        INSERT INTO templates_statuses (id, name) 
-        OVERRIDING SYSTEM VALUE 
-        VALUES (1, 'Системный'), (2, 'Пользовательский')
-        ON CONFLICT (id) DO NOTHING
-    """)
-    
-    await conn.execute("""
-        INSERT INTO online_statuses (id, title) 
-        OVERRIDING SYSTEM VALUE 
-        VALUES (1, 'Не подключался'), (2, 'Оффлайн'), (3, 'Онлайн')
-        ON CONFLICT (id) DO NOTHING
-    """)
-    
-    await conn.execute("""
-        INSERT INTO pay_statuses (id, name) 
-        OVERRIDING SYSTEM VALUE 
-        VALUES (1, 'pending'), (2, 'success'), (3, 'expired')
-        ON CONFLICT (id) DO NOTHING
-    """)
-
-    # Создаём базового тестового админа
-    from web.config_dir.config import encryption
-    
     test_admin_login = "test_admin"
     test_admin_pass = "TestPass123!"  # Соответствует валидации пароля
-    
-    admin_id = await conn.fetchval(
-        "INSERT INTO admins (login, passw) VALUES ($1, $2) RETURNING id",
-        test_admin_login,
-        encryption.hash(test_admin_pass)
-    )
-    
-    # Создаём 2 удалённых пользователя с подписками (для проверки фильтрации is_deleted)
-    # Это гарантирует что все SQL запросы корректно игнорируют is_deleted = true
-    deleted_user_1_id = await conn.fetchval("""
-        INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-        VALUES ($1, $2, $3, $4, true)
-        RETURNING id
-    """, 9999001, "deleted_user_1", "uuid-deleted-0001-0001-000000000001", "deleted_b64_token_1")
-    
-    deleted_user_2_id = await conn.fetchval("""
-        INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-        VALUES ($1, $2, $3, $4, true)
-        RETURNING id
-    """, 9999002, "deleted_user_2", "uuid-deleted-0002-0002-000000000002", "deleted_b64_token_2")
-    
+    async with db_pool.acquire() as conn:
+        await conn.execute("""
+            TRUNCATE TABLE 
+                sessions_admins, 
+                admins, 
+                nodes_protocoles_spec_params_values,
+                template_spec_params,
+                nodes_protocols, 
+                nodes, 
+                protocols, 
+                proto_templates,
+                whitelist_commands,
+                vnodes_sub_plans,
+                sub_plans,
+                remote_execute_history,
+                payed_subs,
+                sub_nodes_outbox,
+                users
+            RESTART IDENTITY CASCADE
+        """)
+
+    async with db_pool.acquire() as conn:
+        # Заполняем справочники констант (templates_statuses, online_statuses, pay_statuses)
+        await conn.execute("""
+            INSERT INTO templates_statuses (id, name) 
+            OVERRIDING SYSTEM VALUE 
+            VALUES (1, 'Системный'), (2, 'Пользовательский')
+            ON CONFLICT (id) DO NOTHING
+        """)
+
+        await conn.execute("""
+            INSERT INTO online_statuses (id, title) 
+            OVERRIDING SYSTEM VALUE 
+            VALUES (1, 'Не подключался'), (2, 'Оффлайн'), (3, 'Онлайн')
+            ON CONFLICT (id) DO NOTHING
+        """)
+
+        await conn.execute("""
+            INSERT INTO pay_statuses (id, name) 
+            OVERRIDING SYSTEM VALUE 
+            VALUES (1, 'pending'), (2, 'success'), (3, 'expired')
+            ON CONFLICT (id) DO NOTHING
+        """)
+
+        # Создаём базового тестового админа
+
+    async with db_pool.acquire() as conn:
+        admin_id = await conn.fetchval(
+            "INSERT INTO admins (login, passw) VALUES ($1, $2) RETURNING id",
+            test_admin_login,
+            encryption.hash(test_admin_pass)
+        )
+
+        # Создаём 2 удалённых пользователя с подписками (для проверки фильтрации is_deleted)
+        # Это гарантирует что все SQL запросы корректно игнорируют is_deleted = true
+        deleted_user_1_id = await conn.fetchval("""
+            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
+            VALUES ($1, $2, $3, $4, true)
+            RETURNING id
+        """, 9999001, "deleted_user_1", "uuid-deleted-0001-0001-000000000001", "deleted_b64_token_1")
+
+        deleted_user_2_id = await conn.fetchval("""
+            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
+            VALUES ($1, $2, $3, $4, true)
+            RETURNING id
+        """, 9999002, "deleted_user_2", "uuid-deleted-0002-0002-000000000002", "deleted_b64_token_2")
+
     return {
         "admin_id": admin_id,
         "admin_login": test_admin_login,
@@ -103,7 +109,7 @@ async def _truncate_and_seed(conn: asyncpg.Connection):
     }
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="session")
 async def db_pool():
     """
     Создаёт пул соединений для каждого теста.
@@ -113,28 +119,16 @@ async def db_pool():
     await pool.close()
 
 
-@pytest.fixture(scope="function")
-async def db_seed(db_pool):
-    """
-    Очищает и заполняет БД базовыми тестовыми данными для каждого теста.
-    """
-    async with db_pool.acquire() as conn:
-        seed_info = await _truncate_and_seed(conn)
-
-    yield db_pool, seed_info
-
 
 @pytest.fixture(scope="function")
-async def client(db_seed):
-    pg_pool, seed_info = db_seed
+async def client(db_seed, db_pool):
     app = FastAPI()
     app.include_router(main_router)
-    app.state.pg_pool = pg_pool
-    app.state.seed_info = seed_info
+    app.state.pg_pool = db_pool
+    app.state.seed_info = db_seed
     
     # Инициализация Redis для тестов
-    from redis.asyncio import Redis
-    from web.config_dir.config import redis_settings
+
     redis = Redis(**redis_settings)
     app.state.redis = redis
 
@@ -150,7 +144,7 @@ async def client(db_seed):
         return await call_next(request)
 
     async def override_pgsql():
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             yield PgSql(conn)
 
     app.dependency_overrides[get_custom_pgsql] = override_pgsql
@@ -219,13 +213,13 @@ class FakeAiohttpSession:
 
 
 @pytest.fixture
-async def virtual_node_seed(pg_pool, physical_node_seed, proto_template_seed):
+async def virtual_node_seed(db_pool, physical_node_seed, proto_template_seed):
     """
     Создаёт тестовые виртуальные ноды (nodes_protocols) в БД.
     Возвращает словарь с vnode_id для использования в тестах.
     Зависит от physical_node_seed и proto_template_seed.
     """
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         # Создаём протокол для тестирования виртуальных нод
         proto_id = await conn.fetchval(
             """
@@ -311,25 +305,15 @@ async def flush_redis():
         await redis.close()
 
 
-@pytest.fixture(scope="function")
-def seed_info(db_seed):
-    return db_seed[1]
-
-
-@pytest.fixture(scope="function")
-def pg_pool(db_seed):
-    return db_seed[0]
-
-
 
 @pytest.fixture
-async def proto_template_seed(pg_pool, db_seed):
+async def proto_template_seed(db_pool, db_seed):
     """
     Создаёт тестовый шаблон протокола в БД.
     Возвращает tmp_id для использования в тестах.
     Зависит от db_seed для очистки БД перед каждым тестом.
     """
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         # Создаём первый тестовый шаблон протокола
         tmp_id = await conn.fetchval(
             """
@@ -378,13 +362,13 @@ async def proto_template_seed(pg_pool, db_seed):
 
 
 @pytest.fixture
-async def sub_plan_seed(pg_pool, db_seed):
+async def sub_plan_seed(db_pool, db_seed):
     """
     Создаёт тестовые планы подписок в БД.
     Возвращает словарь с plan_id для использования в тестах.
     Зависит от db_seed для очистки БД перед каждым тестом.
     """
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         # Создаём первый план подписки (активный)
         plan_id_1 = await conn.fetchval(
             """
@@ -444,13 +428,13 @@ def mock_arq(client):
 
 
 @pytest.fixture
-async def physical_node_seed(pg_pool, db_seed):
+async def physical_node_seed(db_pool, db_seed):
     """
     Создаёт тестовые физические ноды в БД.
     Возвращает словарь с node_id для использования в тестах.
     Зависит от db_seed для очистки БД перед каждым тестом.
     """
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         # Создаём первую тестовую физическую ноду (активная)
         node_id_1 = await conn.fetchval(
             """
