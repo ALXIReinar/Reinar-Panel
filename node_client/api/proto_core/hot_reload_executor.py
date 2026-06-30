@@ -81,7 +81,8 @@ class HotReloadExecutor:
                     local_scope.get('delete_user') or
                     local_scope.get('bulk_delete_users') or
                     local_scope.get('bulk_add_users') or
-                    local_scope.get('get_metrics')
+                    local_scope.get('get_metrics') or
+                    local_scope.get('parse')
             )
             if not action_user_func:
                 return False, "Ни одна из функций: (add_user, delete_user, bulk_delete_users) - не найдена в скрипте"

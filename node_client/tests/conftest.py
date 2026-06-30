@@ -3,24 +3,51 @@
 """
 import os
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
+import time
 
 # ВАЖНО: Устанавливаем переменную окружения ДО любых импортов
 os.environ['ENV_LOCAL_TEST_FILE'] = 'node_client/.env.node.test'
 
-import asyncpg
+from asyncpg import create_pool, Pool, Connection
 import httpx
+import orjson
 import pytest
 from fastapi import FastAPI
+from testcontainers.core.container import DockerContainer
+from testcontainers.core.waiting_utils import wait_for_logs
 
-from node_client.config import env
 from node_client.api import main_router
 from node_client.api.proto_core.write_behind_caching_file import ConfigWriteBuffer
 
 # Импорты утилит
 from node_client.tests.utils.db_helpers import load_template_by_protocol, get_all_active_templates
 from node_client.tests.utils.fake_core import create_mock_subprocess
+
+
+# ========== Dataclasses ==========
+
+@dataclass
+class TemplateScriptFields:
+    """
+    Поля скриптов из proto_templates
+    
+    Используется для унифицированного доступа к полям шаблона в тестах.
+    Аналогично ExecHistoryStatuses в web модуле.
+    """
+    add_user: str = 'api_add_user_script'
+    delete_user: str = 'api_delete_user_script'
+    bulk_add_users: str = 'api_bulk_add_user_script'
+    bulk_delete_users: str = 'api_bulk_delete_user_script'
+    get_metrics: str = 'api_metrics_script'
+    metrics_parser: str = 'metrics_parser_code'
+    lib_names: str = 'proto_python_lib'
+    custom_params_add: str = 'add_script_custom_params'
+    custom_params_delete: str = 'delete_script_custom_params'
+    custom_params_bulk_add: str = 'bulk_add_script_custom_params'
+    custom_params_bulk_delete: str = 'bulk_delete_script_custom_params'
 
 
 # ========== Pytest Configuration ==========
@@ -60,6 +87,12 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers", "vpn_core: параметризованные тесты для конкретных VPN ядер"
+    )
+    config.addinivalue_line(
+        "markers", "security: тесты проверяющие sandbox безопасности"
+    )
+    config.addinivalue_line(
+        "markers", "error_handling: тесты проверяющие обработку ошибок"
     )
 
 
@@ -121,40 +154,41 @@ def pytest_collection_modifyitems(config, items):
                         item.add_marker(pytest.mark.skip(reason=skip_msg))
 
 
+@pytest.fixture(scope="session", autouse=True)
+def ensure_test_database():
+    os.environ['PYTHONUTF8'] = '1'
+    pg_db = os.getenv('PG_DB')
+    assert isinstance(pg_db, str), "PG_DB is not set"
+    assert pg_db.startswith("test_"), f"Refusing to run tests against non-test database: {pg_db}"
+
+
 # ========== Database Fixtures ==========
 
-# Глобальный пул БД (переиспользуется между тестами)
-# Нужно хранить вместе с event loop для корректной работы
-_global_db_pool: asyncpg.Pool = None
-_pool_loop = None
-
-
 @pytest.fixture(scope="session")
-def db_pool_settings():
-    """Настройки подключения к тестовой БД"""
-    # Читаем настройки БД из env (они добавлены в .env.node.test)
-    # В нод-клиенте нет прямого доступа к БД в продакшене,
-    # но для тестов нам нужны креды для загрузки шаблонов
-    return {
-        "user": os.getenv("PG_USER", "test_reinar_user"),
-        "password": os.getenv("PG_PASSWORD", "CAK!uiAGd89_ADhlsanca"),
-        "database": os.getenv("PG_DB", "test_reinar_db"),
-        "host": os.getenv("PG_HOST", "127.0.0.1"),
-        "port": int(os.getenv("PG_PORT", "5432")),
-    }
+async def db_pool():
+    async def init(conn: Connection):
+        await conn.set_type_codec(
+            'jsonb',
+            encoder=lambda v: orjson.dumps(v).decode('utf-8'),
+            decoder=orjson.loads,
+            schema='pg_catalog',
+        )
+        await conn.set_type_codec(
+            'json',
+            encoder=lambda v: orjson.dumps(v).decode('utf-8'),
+            decoder=orjson.loads,
+            schema='pg_catalog',
+        )
 
+    pool = await create_pool(
+        user=os.getenv("PG_USER"),
+        password=os.getenv("PG_PASSWORD"),
+        database=os.getenv("PG_DB"),
+        host=os.getenv("PG_HOST"),
+        port=int(os.getenv("PG_PORT")),
+        init=init,
+    )
 
-@pytest.fixture
-async def db_pool(db_pool_settings):
-    """
-    Пул соединений с тестовой БД (создаётся для каждого теста)
-    
-    Простой подход: создаём новый пул для каждого теста.
-    Это немного медленнее, но избегает проблем с event loop.
-    
-    Для большинства тестов накладные расходы минимальны (~0.1-0.2 сек на тест).
-    """
-    pool = await asyncpg.create_pool(**db_pool_settings)
     yield pool
     await pool.close()
 
@@ -201,12 +235,60 @@ def is_mock_mode(test_mode):
     return test_mode == "mock"
 
 
-@pytest.fixture
-async def protocol_template(db_pool, enabled_vpn_cores):
+# ========== Real Core Fixtures (Docker testcontainers) ==========
+
+@pytest.fixture(scope="function")
+def xray_core_container(is_real_mode):
     """
-    Загружает шаблон протокола из БД
+    Поднимает реальный Xray контейнер для E2E тестов
     
-    Использует первое ядро из --vpn-core
+    Используется только при --mode=real
+    
+    Returns:
+        tuple[str, int]: (host_ip, api_port) для подключения к Xray API
+        
+    Raises:
+        pytest.skip: Если запущен в mock режиме
+    """
+    if not is_real_mode:
+        pytest.skip("Real core tests require --mode=real")
+    
+    # Путь к тестовому конфигу Xray
+    config_path = Path(__file__).parent / "utils" / "vless-tcp-server-metrics.json"
+    
+    if not config_path.exists():
+        pytest.skip(f"Xray config not found: {config_path}")
+    
+    # Создаём контейнер с Xray
+    container = DockerContainer("teddysun/xray:latest")
+    container.with_exposed_ports(10085, 443)  # API port, VLESS port
+    container.with_volume_mapping(str(config_path), "/etc/xray/config.json", mode="ro")
+    container.with_command("xray run -c /etc/xray/config.json")
+    
+    # Запускаем контейнер
+    container.start()
+    
+    try:
+        # Ждём когда Xray запустится (ищем логи о старте)
+        wait_for_logs(container, "started", timeout=10)
+        time.sleep(1)  # Дополнительная пауза для инициализации API
+        
+        # Получаем проброшенный порт API
+        api_port = container.get_exposed_port(10085)
+        host_ip = container.get_container_host_ip()
+        
+        yield (host_ip, int(api_port))
+        
+    finally:
+        # Останавливаем контейнер
+        container.stop()
+
+
+@pytest.fixture(scope="session")
+async def cached_protocol_template(db_pool, enabled_vpn_cores):
+    """
+    Загружается один раз из БД, затем переиспользуется во всех тестах.
+    Pytest автоматически кэширует результат благодаря scope="session".
     
     Returns:
         dict: Полный шаблон со всеми скриптами и метаданными
@@ -214,11 +296,9 @@ async def protocol_template(db_pool, enabled_vpn_cores):
     Raises:
         pytest.skip: Если шаблон не найден в БД
     """
-    # Берём первое ядро из списка
     protocol_name = enabled_vpn_cores[0] if enabled_vpn_cores else "xray"
-    
     template = await load_template_by_protocol(db_pool, protocol_name)
-    
+
     if not template:
         # Пробуем показать доступные шаблоны для помощи пользователю
         available = await get_all_active_templates(db_pool)
@@ -230,6 +310,87 @@ async def protocol_template(db_pool, enabled_vpn_cores):
         )
     
     return template
+
+
+@pytest.fixture
+async def protocol_template(cached_protocol_template):
+    """
+    Возвращает кэшированный шаблон протокола
+    
+    Обёртка для обратной совместимости с существующими тестами.
+    Все тесты используют один кэшированный шаблон.
+    
+    Returns:
+        dict: Полный шаблон со всеми скриптами и метаданными
+    """
+    return cached_protocol_template
+
+
+@pytest.fixture
+def metrics_parser_from_db(cached_protocol_template):
+    """
+    Загружает metrics_parser_code из кэшированного шаблона и возвращает parse функцию
+    
+    Использует реальный скрипт из proto_templates через кэш.
+    Скрипт выполняется через exec() как в продакшене.
+    
+    Returns:
+        callable: Функция parse(raw_metrics) для парсинга метрик
+        
+    Raises:
+        pytest.skip: Если metrics_parser_code отсутствует в шаблоне
+    """
+    parser_code = cached_protocol_template.get('metrics_parser_code')
+    
+    if not parser_code:
+        pytest.skip(
+            f"metrics_parser_code не найден в шаблоне '{cached_protocol_template.get('title', 'unknown')}'"
+        )
+    
+    # Выполняем код как в продакшене через exec()
+    # Добавляем необходимые модули в global scope
+    import json
+    import re
+    from collections import defaultdict
+    
+    local_scope = {}
+    global_scope = {
+        'json': json,
+        're': re,
+        'defaultdict': defaultdict
+    }
+    
+    exec(parser_code, global_scope, local_scope)
+    
+    return local_scope['parse']
+
+
+@pytest.fixture
+def get_script_from_template(cached_protocol_template):
+    """
+    Возвращает функцию для получения скрипта/поля из шаблона по имени
+    
+    Использует TemplateScriptFields для унифицированного доступа к полям.
+    
+    Returns:
+        callable: Функция _get(field_name: str) -> str
+        
+    Example:
+        script = get_script_from_template(TemplateScriptFields.add_user)
+        lib_names = get_script_from_template(TemplateScriptFields.lib_names)
+        
+    Raises:
+        pytest.skip: Если поле не найдено в шаблоне
+    """
+    def _get(field_name: str):
+        value = cached_protocol_template.get(field_name)
+        if value is None:
+            pytest.skip(
+                f"Поле '{field_name}' не найдено в шаблоне '{cached_protocol_template.get('title', 'unknown')}'"
+            )
+        return value
+    
+    return _get
 
 
 # ========== File System Fixtures ==========
@@ -407,6 +568,51 @@ async def client_with_real_buffer(fast_buffer):
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
         ac.app = app
         yield ac
+
+
+# ========== E2E Test Fixtures ==========
+
+@pytest.fixture
+async def e2e_buffer(tmp_path):
+    """
+    ConfigWriteBuffer для E2E тестов с очень быстрым timeout
+    
+    timeout=0.3 сек для быстрого срабатывания воркера в тестах
+    """
+    buffer = ConfigWriteBuffer(max_batch=5, timeout=0.3)
+    yield buffer
+    await buffer.stop()
+
+
+@pytest.fixture
+async def e2e_client(e2e_buffer):
+    """
+    FastAPI TestClient для E2E тестов с реальным буфером
+    
+    Используется для полномасштабных E2E тестов пайплайна:
+    HTTP → Hot-reload → WBC → Disk → Reload
+    """
+    app = FastAPI()
+    app.include_router(main_router)
+    app.state.core_buffer = e2e_buffer
+    
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        ac.app = app
+        yield ac
+
+
+@pytest.fixture
+def e2e_config_path(tmp_path, base_config_path):
+    """
+    Временный конфиг для E2E теста (изолированный для каждого теста)
+    
+    Копирует базовый конфиг в уникальную временную директорию
+    """
+    import shutil
+    e2e_config = tmp_path / "e2e_config.json"
+    shutil.copy(base_config_path, e2e_config)
+    return e2e_config
 
 
 # ========== Utility Fixtures ==========

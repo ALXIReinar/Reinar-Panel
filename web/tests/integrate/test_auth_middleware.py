@@ -40,7 +40,7 @@ def _valid_access_token(sub: str, session_id: str) -> str:
 
 
 @pytest.fixture
-async def mw_client(pg_pool, seed_info, monkeypatch):
+async def mw_client(db_pool, db_seed, monkeypatch):
     app = FastAPI()
 
     @app.get("/api/v1/private/hello")
@@ -58,9 +58,9 @@ async def mw_client(pg_pool, seed_info, monkeypatch):
 
     app.add_middleware(AuthUXASGIMiddleware)
     app.add_middleware(ASGILoggingMiddleware)
-    app.state.pg_pool = pg_pool
+    app.state.db_pool = db_pool
 
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
         exp_dt = now_dt + timedelta(hours=1)
         await conn.execute(
@@ -70,7 +70,7 @@ async def mw_client(pg_pool, seed_info, monkeypatch):
             ON CONFLICT (session_id) DO UPDATE SET iat=$3, exp=$4, refresh_token=$5, ip=$7
             """,
             "sess1",
-            seed_info["admin_id"],
+            db_seed["admin_id"],
             now_dt,
             exp_dt,
             "valid_rt",
@@ -117,8 +117,8 @@ async def test_invalid_access_token_returns_401(mw_client):
 
 
 @pytest.mark.asyncio
-async def test_expired_access_token_reissued_with_valid_refresh(mw_client, seed_info):
-    expired_at = _expired_access_token(str(seed_info["admin_id"]), "sess1")
+async def test_expired_access_token_reissued_with_valid_refresh(mw_client, db_seed):
+    expired_at = _expired_access_token(str(db_seed["admin_id"]), "sess1")
     cookies = {"access_token": expired_at, "refresh_token": "valid_rt"}
     resp = await mw_client.get("/api/v1/private/hello", headers=_headers_with_ip("8.8.8.8"), cookies=cookies)
     assert resp.status_code == 200
@@ -128,8 +128,8 @@ async def test_expired_access_token_reissued_with_valid_refresh(mw_client, seed_
 
 
 @pytest.mark.asyncio
-async def test_expired_access_token_with_invalid_refresh_401(mw_client, seed_info):
-    expired_at = _expired_access_token(str(seed_info["admin_id"]), "sess1")
+async def test_expired_access_token_with_invalid_refresh_401(mw_client, db_seed):
+    expired_at = _expired_access_token(str(db_seed["admin_id"]), "sess1")
     cookies = {"access_token": expired_at, "refresh_token": "bad_refresh"}
     resp = await mw_client.get("/api/v1/private/hello", headers=_headers_with_ip("8.8.8.8"), cookies=cookies)
     assert resp.status_code == 401
@@ -137,8 +137,8 @@ async def test_expired_access_token_with_invalid_refresh_401(mw_client, seed_inf
 
 
 @pytest.mark.asyncio
-async def test_di_sets_cookie_on_reissue(mw_client, seed_info):
-    expired_at = _expired_access_token(str(seed_info["admin_id"]), "sess1")
+async def test_di_sets_cookie_on_reissue(mw_client, db_seed):
+    expired_at = _expired_access_token(str(db_seed["admin_id"]), "sess1")
     cookies = {"access_token": expired_at, "refresh_token": "valid_rt"}
     resp = await mw_client.get("/api/v1/private/with-di", headers=_headers_with_ip("8.8.8.8"), cookies=cookies)
     assert resp.status_code == 200

@@ -11,7 +11,7 @@ class TestCreatePhysicalNode:
     """Тесты для POST /api/v1/private/nodes/create"""
     
     @pytest.mark.asyncio
-    async def test_create_node_success(self, client, seed_info):
+    async def test_create_node_success(self, client, db_seed):
         """Успешное создание физической ноды с валидным ответом от микросервиса"""
         # Мокируем успешный ответ от healthcheck
         client.app.state.cmd_center_aiohttp = FakeAiohttpSession(
@@ -42,7 +42,7 @@ class TestCreatePhysicalNode:
         assert data["message"] == "Нода создана"
     
     @pytest.mark.asyncio
-    async def test_create_node_connection_error(self, client, seed_info):
+    async def test_create_node_connection_error(self, client, db_seed):
         """Ошибка подключения к микросервису (502 Bad Gateway)"""
         # Мокируем ClientError (нода не отвечает)
         client.app.state.cmd_center_aiohttp = FakeAiohttpSession(raise_error=True)
@@ -65,7 +65,7 @@ class TestCreatePhysicalNode:
         assert "err_message" in data["detail"]
 
     @pytest.mark.asyncio
-    async def test_create_node_invalid_response(self, client, seed_info):
+    async def test_create_node_invalid_response(self, client, db_seed):
         """Невалидный ответ от микросервиса (400 Bad Request)"""
         # Мокаем ответ aiohttp
         client.app.state.cmd_center_aiohttp = FakeAiohttpSession(
@@ -91,7 +91,7 @@ class TestCreatePhysicalNode:
         assert "node_resp" in data["detail"]
     
     @pytest.mark.asyncio
-    async def test_create_node_duplicate(self, client, seed_info):
+    async def test_create_node_duplicate(self, client, db_seed):
         """Попытка создать дубликат ноды (409 Conflict)"""
         # Создаём первую ноду успешно
         client.app.state.cmd_center_aiohttp = FakeAiohttpSession(
@@ -138,7 +138,7 @@ class TestGetAllPhysicalNodes:
     """Тесты для GET /api/v1/private/nodes/all"""
     
     @pytest.mark.asyncio
-    async def test_get_all_nodes_empty(self, client, seed_info):
+    async def test_get_all_nodes_empty(self, client, db_seed):
         """Получение пустого списка нод (нет нод в БД)"""
         response = await client.get("/api/v1/private/nodes/all?limit=10&offset=0")
         
@@ -204,7 +204,7 @@ class TestGetPhysicalNodeById:
         assert data["node"]["title"] == "Test Physical Node 1"
     
     @pytest.mark.asyncio
-    async def test_get_node_not_found(self, client, seed_info):
+    async def test_get_node_not_found(self, client, db_seed):
         """Нода не найдена (404)"""
         response = await client.get("/api/v1/private/nodes/9999")
         

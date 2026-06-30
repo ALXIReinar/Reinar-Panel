@@ -174,7 +174,7 @@ class TestGetVirtualNodeById:
         assert vnode["config_path"] == "/etc/test-proto/config1.json"
     
     @pytest.mark.asyncio
-    async def test_get_vnode_not_found(self, client, seed_info):
+    async def test_get_vnode_not_found(self, client, db_seed):
         """Виртуальная нода не найдена (404)"""
         response = await client.get("/api/v1/private/nodes/protocols/9999")
         
@@ -350,7 +350,7 @@ class TestUpdateVirtualNode:
         assert "Конфликт портов" in data["detail"]["message"]
     
     @pytest.mark.asyncio
-    async def test_update_vnode_not_found(self, client, seed_info):
+    async def test_update_vnode_not_found(self, client, db_seed):
         """Обновление несуществующей виртуальной ноды (404)"""
         response = await client.put(
             "/api/v1/private/nodes/protocols/update",

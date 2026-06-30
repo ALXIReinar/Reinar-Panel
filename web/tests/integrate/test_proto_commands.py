@@ -7,7 +7,7 @@ from httpx import AsyncClient
 
 
 @pytest.fixture
-async def protocol_with_commands_seed(client: AsyncClient, db_seed, proto_template_seed, pg_pool):
+async def protocol_with_commands_seed(client: AsyncClient, db_seed, proto_template_seed, db_pool):
     """
     Создаёт протокол и добавляет к нему несколько команд для тестов.
     Возвращает proto_id и список cmd_ids.
@@ -20,7 +20,7 @@ async def protocol_with_commands_seed(client: AsyncClient, db_seed, proto_templa
     proto_id = response.json()["proto_id"]
     
     # Создаём команды напрямую через БД
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         cmd_ids = []
         commands_data = [
             {"cmd_title": "add_user", "command": "xray add user --name {username}"},

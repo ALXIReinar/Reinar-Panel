@@ -9,7 +9,7 @@ class TestCreateSubPlan:
     """Тесты для POST /api/v1/private/subscriptions/plans/create"""
     
     @pytest.mark.asyncio
-    async def test_create_plan_success(self, client, seed_info):
+    async def test_create_plan_success(self, client, db_seed):
         """Успешное создание плана подписки"""
         response = await client.post(
             "/api/v1/private/subscriptions/plans/create",
@@ -41,7 +41,7 @@ class TestCreateSubPlan:
         assert "уже существует" in data["detail"]["message"]
     
     @pytest.mark.asyncio
-    async def test_create_plan_empty_title(self, client, seed_info):
+    async def test_create_plan_empty_title(self, client, db_seed):
         """Валидация: пустое название (422)"""
         response = await client.post(
             "/api/v1/private/subscriptions/plans/create",
@@ -264,7 +264,7 @@ class TestUpdateSubPlan:
         assert "Некоторые ноды не были откреплены" in data["detach_res"]["detach_message"]
     
     @pytest.mark.asyncio
-    async def test_update_plan_not_found(self, client, seed_info):
+    async def test_update_plan_not_found(self, client, db_seed):
         """План не найден (404)"""
         response = await client.put(
             "/api/v1/private/subscriptions/plans/update",
@@ -349,7 +349,7 @@ class TestGetAllSubPlans:
     """Тесты для GET /api/v1/private/subscriptions/plans/all"""
     
     @pytest.mark.asyncio
-    async def test_get_all_plans_empty(self, client, seed_info):
+    async def test_get_all_plans_empty(self, client, db_seed):
         """Получение пустого списка планов"""
         response = await client.get("/api/v1/private/subscriptions/plans/all?limit=20")
         
@@ -442,7 +442,7 @@ class TestGetSubPlanById:
         assert len(data["vnodes"]) == 0
     
     @pytest.mark.asyncio
-    async def test_get_plan_not_found(self, client, seed_info):
+    async def test_get_plan_not_found(self, client, db_seed):
         """План не найден (404)"""
         response = await client.get("/api/v1/private/subscriptions/plans/get/9999")
         

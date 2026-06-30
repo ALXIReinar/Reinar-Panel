@@ -105,12 +105,12 @@ async def test_show_seances(client):
 
 
 @pytest.mark.asyncio
-async def test_set_new_password(client, seed_info):
+async def test_set_new_password(client, db_seed):
     """Тест смены пароля администратора"""
     # Используем базового админа из seed
-    test_admin_id = seed_info["admin_id"]
-    old_password = seed_info["admin_pass"]
-    test_login = seed_info["admin_login"]
+    test_admin_id = db_seed["admin_id"]
+    old_password = db_seed["admin_pass"]
+    test_login = db_seed["admin_login"]
 
     # Меняем пароль
     new_password = "NewPass456!"
@@ -141,10 +141,10 @@ async def test_set_new_password(client, seed_info):
 
 
 @pytest.mark.asyncio
-async def test_set_new_password_hashes_password(client, seed_info):
+async def test_set_new_password_hashes_password(client, db_seed):
     """Тест проверки правильного хеширования пароля при смене"""
-    test_admin_id = seed_info["admin_id"]
-    test_login = seed_info["admin_login"]
+    test_admin_id = db_seed["admin_id"]
+    test_login = db_seed["admin_login"]
     new_password = "Hashed@Pass789"
 
     # Меняем пароль

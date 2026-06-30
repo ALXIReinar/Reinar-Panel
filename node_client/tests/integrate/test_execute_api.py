@@ -265,3 +265,197 @@ async def test_execute_command_exception_handling(client):
         data = response.json()
         assert data["detail"]["success"] is False
         assert "ошибка" in data["detail"]["message"].lower()
+
+
+# ========== Группа 4: Тесты для /metrics endpoint ==========
+
+@pytest.mark.asyncio
+async def test_get_metrics_with_script_success(client):
+    """Успешное получение метрик через скрипт get_metrics"""
+    with patch('node_client.api.execute_api.HotReloadExecutor.execute_action_script') as mock_executor:
+        # Мокируем успешный результат выполнения скрипта
+        mock_metrics = '{"stat": [{"name": "user>>>test@test.com>>>traffic>>>uplink", "value": 1024}]}'
+        mock_executor.return_value = (True, mock_metrics)
+        
+        response = await client.post("/api/v1/server/node/metrics", json={
+            "metrics_script": "async def get_metrics(node_ip, core_port, custom_params): return 'metrics'",
+            "core_lib": ["xtlsapi"],
+            "metrics_port": 10085,
+            "command": "xray api statsquery --server=127.0.0.1:{}"
+        })
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert data["success"] is True
+        assert data["stdout"] == mock_metrics
+        
+        # Проверяем что HotReloadExecutor был вызван с правильными параметрами
+        mock_executor.assert_called_once()
+        call_kwargs = mock_executor.call_args[1]
+        assert call_kwargs["action"] == "get_metrics"
+        assert call_kwargs["node_ip"] == "127.0.0.1"
+        assert call_kwargs["core_api_port"] == 10085
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_fallback_to_cli(client):
+    """Fallback на CLI команду когда скрипт провалился"""
+    with patch('node_client.api.execute_api.HotReloadExecutor.execute_action_script') as mock_executor, \
+         patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
+        
+        # Скрипт провалился
+        mock_executor.return_value = (False, "Script failed")
+        
+        # CLI команда успешна
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = '{"stat": [{"name": "user>>>cli@test.com>>>traffic>>>downlink", "value": 2048}]}'
+        mock_result.stderr = ""
+        mock_subprocess.return_value = mock_result
+        
+        response = await client.post("/api/v1/server/node/metrics", json={
+            "metrics_script": "async def get_metrics(): raise Exception('fail')",
+            "core_lib": ["xtlsapi"],
+            "metrics_port": 10085,
+            "command": "xray api statsquery --server=127.0.0.1:{}"
+        })
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert data["success"] is True
+        assert "cli@test.com" in data["stdout"]
+        
+        # Проверяем что CLI команда была вызвана
+        mock_subprocess.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_no_script_uses_cli(client):
+    """Использование CLI когда скрипт не передан"""
+    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
+        
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = 'metrics from cli'
+        mock_result.stderr = ""
+        mock_subprocess.return_value = mock_result
+        
+        response = await client.post("/api/v1/server/node/metrics", json={
+            "metrics_script": None,  # Нет скрипта
+            "core_lib": [],
+            "metrics_port": 10085,
+            "command": "xray api statsquery --server=127.0.0.1:{}"
+        })
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert data["success"] is True
+        assert data["stdout"] == "metrics from cli"
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_cli_command_timeout(client):
+    """408 при timeout CLI команды"""
+    with patch('node_client.api.execute_api.HotReloadExecutor.execute_action_script') as mock_executor, \
+         patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
+        
+        # Скрипт провалился или отсутствует
+        mock_executor.return_value = (False, "No script")
+        
+        # CLI команда timeout
+        mock_subprocess.side_effect = subprocess.TimeoutExpired(
+            cmd="xray api statsquery",
+            timeout=10
+        )
+        
+        response = await client.post("/api/v1/server/node/metrics", json={
+            "metrics_script": None,
+            "core_lib": [],
+            "metrics_port": 10085,
+            "command": "xray api statsquery --server=127.0.0.1:{}"
+        })
+        
+        assert response.status_code == 408
+        data = response.json()
+        
+        assert data["detail"]["success"] is False
+        assert "timeout" in data["detail"]["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_cli_non_zero_exit(client):
+    """400 при ненулевом exit code CLI команды"""
+    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
+        
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = "xray: command not found"
+        mock_subprocess.return_value = mock_result
+        
+        response = await client.post("/api/v1/server/node/metrics", json={
+            "metrics_script": None,
+            "core_lib": [],
+            "metrics_port": 10085,
+            "command": "xray api statsquery --server=127.0.0.1:{}"
+        })
+        
+        assert response.status_code == 400
+        data = response.json()
+        
+        assert data["detail"]["error"] == "Failed to get stats"
+        assert data["detail"]["exit_code"] == 1
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_exception_handling(client):
+    """500 при непредвиденной ошибке"""
+    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
+        
+        # Симулируем непредвиденное исключение
+        mock_subprocess.side_effect = RuntimeError("Unexpected error")
+        
+        response = await client.post("/api/v1/server/node/metrics", json={
+            "metrics_script": None,
+            "core_lib": [],
+            "metrics_port": 10085,
+            "command": "xray api statsquery --server=127.0.0.1:{}"
+        })
+        
+        assert response.status_code == 500
+        data = response.json()
+        
+        assert data["detail"]["success"] is False
+        assert "ошибка" in data["detail"]["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_command_formatting(client):
+    """Проверка правильного форматирования команды с портом"""
+    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
+        
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "metrics"
+        mock_result.stderr = ""
+        mock_subprocess.return_value = mock_result
+        
+        response = await client.post("/api/v1/server/node/metrics", json={
+            "metrics_script": None,
+            "core_lib": [],
+            "metrics_port": 12345,
+            "command": "xray api statsquery --server=127.0.0.1:{} -pattern user"
+        })
+        
+        assert response.status_code == 200
+        
+        # Проверяем что команда была отформатирована с портом
+        call_args = mock_subprocess.call_args
+        command_parts = call_args[0][0]  # Первый позиционный аргумент
+        
+        # Команда должна содержать порт 12345
+        full_command = ' '.join(command_parts)
+        assert '12345' in full_command

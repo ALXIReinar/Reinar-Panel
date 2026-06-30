@@ -46,6 +46,10 @@ def execute_command(body: ExecuteCommandSchema):
 
 @router.post('/metrics')
 async def get_metrics(body: MetricsSchema):
+
+    # xray api statsquery --server=127.0.0.1:{} -pattern "user>>>" -reset
+    cmd_str = body.command.format(body.metrics_port)
+    # xray api statsquery --server=127.0.0.1:10085 -pattern "user>>>" -reset
     try:
         "1. Пробуем получить метрики по Апи ядра"
         if body.metrics_script and body.metrics_port:
@@ -60,9 +64,6 @@ async def get_metrics(body: MetricsSchema):
                 return {'success': True, 'stdout': raw_metrics}
 
         "2. Получение метрик по команде в cli, если не удалось по скрипту/нет скрипта"
-        # xray api statsquery --server=127.0.0.1:{} -pattern "user>>>" -reset
-        cmd_str = body.command.format(body.metrics_port)
-        # xray api statsquery --server=127.0.0.1:10085 -pattern "user>>>" -reset
         result = subprocess.run(
             cmd_str.split(), # ["xray", "api", "statsquery", "--server=127.0.0.1:10085", "-pattern", '"user>>>"', "-reset"]
             capture_output=True,
@@ -77,6 +78,10 @@ async def get_metrics(body: MetricsSchema):
 
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=408, detail={"success": False, "message": f"Команда превысила timeout (10s)", "command": cmd_str})
+
+    except HTTPException:
+        # Re-raise HTTPException. Иначе все исключения будут перехватываться как 500 в "Exception as e"
+        raise
 
     except Exception as e:
         raise HTTPException(status_code=500, detail={"success": False, "message": f"Ошибка выполнения команды: {str(e)}", "command": cmd_str})

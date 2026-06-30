@@ -23,7 +23,7 @@ async def load_template_by_protocol(pool: asyncpg.Pool, protocol_name: str) -> O
                 id, title, proto_python_lib, api_add_user_script, api_delete_user_script,
                 api_bulk_add_user_script, api_bulk_delete_user_script,
                 flatten_json_users_key, flatten_user_identifier_key, 
-                reload_core_command, metrics_command, api_metrics_script,
+                reload_core_command, metrics_command, api_metrics_script, metrics_parser_code,
                 add_script_custom_params, delete_script_custom_params,
                 bulk_add_script_custom_params, bulk_delete_script_custom_params,
                 is_accepted, status
@@ -57,7 +57,7 @@ async def load_template_by_id(pool: asyncpg.Pool, template_id: int) -> Optional[
                 id, title, proto_python_lib, api_add_user_script, api_delete_user_script,
                 api_bulk_add_user_script, api_bulk_delete_user_script,
                 flatten_json_users_key, flatten_user_identifier_key, 
-                reload_core_command, metrics_command, api_metrics_script,
+                reload_core_command, metrics_command, api_metrics_script, metrics_parser_code,
                 add_script_custom_params, delete_script_custom_params,
                 bulk_add_script_custom_params, bulk_delete_script_custom_params,
                 is_accepted, status
