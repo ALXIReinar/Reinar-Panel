@@ -83,17 +83,8 @@ async def test_show_seances(client):
     assert login_resp.status_code == 200
     cookies = login_resp.cookies
     
-    # Извлекаем session_id из access_token
-    import jwt
-    access_token = cookies.get("access_token")
-    decoded = jwt.decode(access_token, options={"verify_signature": False})
-    session_id = decoded.get("s_id")
-    
-    # Устанавливаем правильные значения в middleware
-    client.app.state.test_admin_id = 2  # ID зарегистрированного админа
-    client.app.state.test_session_id = session_id  # Реальный session_id из токена
-
-    # Получение списка сессий
+    # Получение списка сессий (используем cookies с токеном)
+    # Middleware извлечёт admin_id и session_id из access_token автоматически
     resp = await client.post("/api/v1/private/admins/seances", cookies=cookies)
     assert resp.status_code == 200
 

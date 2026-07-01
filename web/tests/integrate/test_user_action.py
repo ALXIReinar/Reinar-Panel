@@ -6,14 +6,14 @@ import pytest
 
 
 @pytest.fixture
-async def subscription_data(pg_pool, virtual_node_seed, sub_plan_seed):
+async def subscription_data(db_pool, virtual_node_seed, sub_plan_seed):
     """
     Создаём разнообразные данные для тестирования фильтрации:
     - Активная/неактивная физическая нода
     - Видимая/невидимая виртуальная нода
     - Активная/неактивная подписка
     """
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         # Создаём тестового пользователя в таблице users
         user_id = await conn.fetchval(
             """
@@ -108,7 +108,7 @@ class TestUserActionSuccess:
     """Тесты успешного добавления/удаления пользователя"""
     
     @pytest.mark.asyncio
-    async def test_user_action_add_success(self, client, subscription_data, mock_arq, pg_pool):
+    async def test_user_action_add_success(self, client, subscription_data, mock_arq, db_pool):
         """Успешное добавление пользователя - задача попала в очередь"""
         user_id = subscription_data["user_id"]
         order_id = subscription_data["active_order_id"]
@@ -139,7 +139,7 @@ class TestUserActionSuccess:
         assert call_args[0][4] == "add"  # action
         
         # Проверяем что в outbox создалась запись
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             outbox_count = await conn.fetchval(
                 "SELECT COUNT(*) FROM sub_nodes_outbox WHERE order_id = $1",
                 order_id
@@ -147,7 +147,7 @@ class TestUserActionSuccess:
             assert outbox_count == 1  # Только 1 видимая нода на активной машине
     
     @pytest.mark.asyncio
-    async def test_user_action_delete_success(self, client, subscription_data, mock_arq, pg_pool):
+    async def test_user_action_delete_success(self, client, subscription_data, mock_arq, db_pool):
         """Успешное удаление пользователя"""
         user_id = subscription_data["user_id"]
         order_id = subscription_data["active_order_id"]
@@ -177,7 +177,7 @@ class TestUserActionFiltering:
     """Тесты фильтрации нод по различным условиям"""
     
     @pytest.mark.asyncio
-    async def test_user_action_filters_inactive_nodes(self, client, subscription_data, mock_arq, pg_pool):
+    async def test_user_action_filters_inactive_nodes(self, client, subscription_data, mock_arq, db_pool):
         """Неактивные физические ноды (is_active=false) не попадают в выборку"""
         user_id = subscription_data["user_id"]
         order_id = subscription_data["active_order_id"]

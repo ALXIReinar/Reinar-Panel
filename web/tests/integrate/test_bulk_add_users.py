@@ -16,13 +16,13 @@ class TestBulkAddSuccess:
     """Тесты успешного создания пользователей с подписками"""
     
     @pytest.mark.asyncio
-    async def test_bulk_add_creates_users_and_subs(self, client, virtual_node_seed, sub_plan_seed, mock_arq, pg_pool):
+    async def test_bulk_add_creates_users_and_subs(self, client, virtual_node_seed, sub_plan_seed, mock_arq, db_pool):
         """Успешное создание пользователей и их подписок"""
         plan_id = sub_plan_seed["plan_id_1"]
         vnode_id = virtual_node_seed["vnode_id_1"]
         
         # Привязываем vnode к плану
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
                 vnode_id, plan_id
@@ -57,7 +57,7 @@ class TestBulkAddSuccess:
         assert len(data["users"]) == 2
         
         # Проверяем что пользователи созданы в БД
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             users = await conn.fetch(
                 "SELECT id, tg_username, tg_id, b64_id, uuid FROM users WHERE tg_username = ANY($1) ORDER BY tg_username",
                 ["new_user_1", "new_user_2"]
@@ -83,12 +83,12 @@ class TestBulkAddSuccess:
                 assert sub["is_active"] is True
     
     @pytest.mark.asyncio
-    async def test_bulk_add_generates_unique_b64_and_uuid(self, client, virtual_node_seed, sub_plan_seed, mock_arq, pg_pool):
+    async def test_bulk_add_generates_unique_b64_and_uuid(self, client, virtual_node_seed, sub_plan_seed, mock_arq, db_pool):
         """Проверка что b64_id и uuid уникальны для каждого пользователя"""
         plan_id = sub_plan_seed["plan_id_1"]
         vnode_id = virtual_node_seed["vnode_id_1"]
         
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
                 vnode_id, plan_id
@@ -107,7 +107,7 @@ class TestBulkAddSuccess:
         assert response.status_code == 200
         
         # Проверяем уникальность b64_id и uuid
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             users = await conn.fetch(
                 "SELECT b64_id, uuid FROM users WHERE tg_username LIKE 'unique_user_%' ORDER BY tg_username"
             )
@@ -127,12 +127,12 @@ class TestBulkAddSuccess:
                 assert uuid.count('-') == 4
     
     @pytest.mark.asyncio
-    async def test_bulk_add_returns_created_users(self, client, virtual_node_seed, sub_plan_seed, mock_arq, pg_pool):
+    async def test_bulk_add_returns_created_users(self, client, virtual_node_seed, sub_plan_seed, mock_arq, db_pool):
         """Проверка правильного формата возвращаемых данных"""
         plan_id = sub_plan_seed["plan_id_1"]
         vnode_id = virtual_node_seed["vnode_id_1"]
         
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
                 vnode_id, plan_id
@@ -170,12 +170,12 @@ class TestBulkAddOutboxAndArq:
     """Тесты записи в outbox и вызова ARQ"""
     
     @pytest.mark.asyncio
-    async def test_bulk_add_creates_outbox_for_active_subs(self, client, virtual_node_seed, sub_plan_seed, mock_arq, pg_pool):
+    async def test_bulk_add_creates_outbox_for_active_subs(self, client, virtual_node_seed, sub_plan_seed, mock_arq, db_pool):
         """Активные подписки создают записи в sub_nodes_outbox с operation=add"""
         plan_id = sub_plan_seed["plan_id_1"]
         vnode_id = virtual_node_seed["vnode_id_1"]
         
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
                 vnode_id, plan_id
@@ -194,7 +194,7 @@ class TestBulkAddOutboxAndArq:
         assert response.status_code == 200
         
         # Проверяем запись в outbox
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             outbox = await conn.fetch(
                 """
                 SELECT o.order_id, o.operation, ps.user_id
@@ -211,12 +211,12 @@ class TestBulkAddOutboxAndArq:
                 assert record["operation"] == 1  # CoreProtoActions.add
     
     @pytest.mark.asyncio
-    async def test_bulk_add_inactive_subs_no_outbox(self, client, virtual_node_seed, sub_plan_seed, mock_arq, pg_pool):
+    async def test_bulk_add_inactive_subs_no_outbox(self, client, virtual_node_seed, sub_plan_seed, mock_arq, db_pool):
         """Неактивные подписки НЕ создают записи в outbox"""
         plan_id = sub_plan_seed["plan_id_1"]
         vnode_id = virtual_node_seed["vnode_id_1"]
         
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
                 vnode_id, plan_id
@@ -234,7 +234,7 @@ class TestBulkAddOutboxAndArq:
         assert response.status_code == 200
         
         # Проверяем что в outbox ничего нет
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             user_id = await conn.fetchval(
                 "SELECT id FROM users WHERE tg_username = $1",
                 "inactive_sub_user"
@@ -258,12 +258,12 @@ class TestBulkAddOutboxAndArq:
             assert is_active is False
     
     @pytest.mark.asyncio
-    async def test_bulk_add_calls_arq_with_add_action(self, client, virtual_node_seed, sub_plan_seed, mock_arq, pg_pool):
+    async def test_bulk_add_calls_arq_with_add_action(self, client, virtual_node_seed, sub_plan_seed, mock_arq, db_pool):
         """Проверка вызова ARQ с правильными параметрами"""
         plan_id = sub_plan_seed["plan_id_1"]
         vnode_id = virtual_node_seed["vnode_id_1"]
         
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
                 vnode_id, plan_id
@@ -339,7 +339,7 @@ class TestBulkAddValidation:
         assert "detail" in data
     
     @pytest.mark.asyncio
-    async def test_bulk_add_nonexistent_sub_plan(self, client, mock_arq, pg_pool):
+    async def test_bulk_add_nonexistent_sub_plan(self, client, mock_arq, db_pool):
         """Несуществующий sub_plan_id вызывает ForeignKeyViolation - исключение не перехватывается"""
         users_data = [
             {"tg_username": "nonexistent_plan_user", "tg_id": 3000701, "sub_plan_id": 99999, "ttl_days": 30, "is_active": True}
@@ -355,12 +355,12 @@ class TestBulkAddValidation:
             )
     
     @pytest.mark.asyncio
-    async def test_bulk_add_duplicate_tg_username_in_request(self, client, virtual_node_seed, sub_plan_seed, mock_arq, pg_pool):
+    async def test_bulk_add_duplicate_tg_username_in_request(self, client, virtual_node_seed, sub_plan_seed, mock_arq, db_pool):
         """Дубликаты tg_username в одном запросе - игнорируются через ON CONFLICT DO NOTHING"""
         plan_id = sub_plan_seed["plan_id_1"]
         vnode_id = virtual_node_seed["vnode_id_1"]
         
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
                 vnode_id, plan_id
@@ -383,7 +383,7 @@ class TestBulkAddValidation:
         assert data["success"] is True
         
         # Проверяем что создан только один пользователь (второй проигнорирован)
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             count = await conn.fetchval(
                 "SELECT COUNT(*) FROM users WHERE tg_username = $1",
                 "duplicate_user"
@@ -395,9 +395,9 @@ class TestBulkAddEdgeCases:
     """Тесты edge cases: фильтры нод, смешанные статусы"""
     
     @pytest.mark.asyncio
-    async def test_bulk_add_invisible_vnode_no_outbox(self, client, virtual_node_seed, sub_plan_seed, mock_arq, pg_pool):
+    async def test_bulk_add_invisible_vnode_no_outbox(self, client, virtual_node_seed, sub_plan_seed, mock_arq, db_pool):
         """vnode с user_visible=false не создаёт запись в outbox"""
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             # Создаём невидимую виртуальную ноду
             node_id = virtual_node_seed["node_id_1"]
             protocol_id = virtual_node_seed["proto_id"]
@@ -430,7 +430,7 @@ class TestBulkAddEdgeCases:
         assert response.status_code == 200
         
         # Проверяем что пользователь и подписка созданы
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             user_id = await conn.fetchval(
                 "SELECT id FROM users WHERE tg_username = $1",
                 "invisible_vnode_user"
@@ -455,9 +455,9 @@ class TestBulkAddEdgeCases:
             assert outbox_count == 0
     
     @pytest.mark.asyncio
-    async def test_bulk_add_inactive_physical_node_no_outbox(self, client, virtual_node_seed, sub_plan_seed, mock_arq, pg_pool):
+    async def test_bulk_add_inactive_physical_node_no_outbox(self, client, virtual_node_seed, sub_plan_seed, mock_arq, db_pool):
         """Физ нода с is_active=false не создаёт запись в outbox"""
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             # Создаём неактивную физическую ноду
             inactive_node_id = await conn.fetchval(
                 """
@@ -499,7 +499,7 @@ class TestBulkAddEdgeCases:
         assert response.status_code == 200
         
         # Проверяем что пользователь и подписка созданы
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             user_id = await conn.fetchval(
                 "SELECT id FROM users WHERE tg_username = $1",
                 "inactive_node_user"
@@ -518,12 +518,12 @@ class TestBulkAddEdgeCases:
             assert outbox_count == 0
     
     @pytest.mark.asyncio
-    async def test_bulk_add_mixed_active_inactive(self, client, virtual_node_seed, sub_plan_seed, mock_arq, pg_pool):
+    async def test_bulk_add_mixed_active_inactive(self, client, virtual_node_seed, sub_plan_seed, mock_arq, db_pool):
         """Смесь активных и неактивных подписок - в outbox только активные"""
         plan_id = sub_plan_seed["plan_id_1"]
         vnode_id = virtual_node_seed["vnode_id_1"]
         
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
                 vnode_id, plan_id
@@ -545,7 +545,7 @@ class TestBulkAddEdgeCases:
         assert len(data["users"]) == 3
         
         # Проверяем что в outbox только 2 активные подписки
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             active_users = await conn.fetch(
                 "SELECT id FROM users WHERE tg_username = ANY($1)",
                 ["mixed_user_active", "mixed_user_active_2"]
@@ -578,12 +578,12 @@ class TestBulkAddEdgeCases:
             assert inactive_outbox_count == 0
     
     @pytest.mark.asyncio
-    async def test_bulk_add_conflict_on_b64_id(self, client, virtual_node_seed, sub_plan_seed, mock_arq, pg_pool):
+    async def test_bulk_add_conflict_on_b64_id(self, client, virtual_node_seed, sub_plan_seed, mock_arq, db_pool):
         """При конфликте b64_id (ON CONFLICT DO NOTHING) пользователь не создаётся"""
         plan_id = sub_plan_seed["plan_id_1"]
         vnode_id = virtual_node_seed["vnode_id_1"]
         
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
                 vnode_id, plan_id

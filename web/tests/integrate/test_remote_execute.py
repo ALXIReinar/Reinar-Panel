@@ -10,13 +10,13 @@ class TestRemoteExecuteSuccess:
     """Тесты успешного выполнения команды на ноде"""
     
     @pytest.mark.asyncio
-    async def test_execute_success(self, client, virtual_node_seed, pg_pool, flush_redis):
+    async def test_execute_success(self, client, virtual_node_seed, db_pool, flush_redis):
         """Успешное выполнение команды на ноде"""
         vnode_id = virtual_node_seed["vnode_id_1"]
         node_id_1 = virtual_node_seed["node_id_1"]
         
         # Добавляем команду в whitelist (только base_command - первое слово)
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO whitelist_commands (command, is_active) VALUES ($1, $2)",
                 "systemctl", True
@@ -34,7 +34,7 @@ class TestRemoteExecuteSuccess:
         )
         
         # Получаем данные ноды для запроса
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             node_data = await conn.fetchrow(
                 "SELECT n.private_ip, n.api_port FROM nodes n WHERE n.id = $1",
                 node_id_1
@@ -57,7 +57,7 @@ class TestRemoteExecuteSuccess:
         assert data["stderr"] == ""
         
         # Проверяем что запись в истории создалась и обновилась
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             history = await conn.fetchrow(
                 "SELECT * FROM remote_execute_history WHERE command = $1",
                 "systemctl status nginx"
@@ -69,13 +69,13 @@ class TestRemoteExecuteSuccess:
             assert history["node_success"] is True
     
     @pytest.mark.asyncio
-    async def test_execute_history_saved(self, client, virtual_node_seed, pg_pool, flush_redis):
+    async def test_execute_history_saved(self, client, virtual_node_seed, db_pool, flush_redis):
         """Проверка что action_id сохраняется в remote_execute_history"""
         vnode_id = virtual_node_seed["vnode_id_1"]
         node_id_1 = virtual_node_seed["node_id_1"]
         
         # Добавляем команду в whitelist (только base_command - первое слово)
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO whitelist_commands (command, is_active) VALUES ($1, $2)",
                 "df", True
@@ -93,7 +93,7 @@ class TestRemoteExecuteSuccess:
         )
         
         # Получаем данные ноды
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             node_data = await conn.fetchrow(
                 "SELECT n.private_ip, n.api_port FROM nodes n WHERE n.id = $1",
                 node_id_1
@@ -112,7 +112,7 @@ class TestRemoteExecuteSuccess:
         assert response.status_code == 200
         
         # Проверяем что запись создалась в БД
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             history_count = await conn.fetchval(
                 "SELECT COUNT(*) FROM remote_execute_history WHERE command = $1",
                 "df -h"
@@ -124,21 +124,21 @@ class TestRemoteExecuteErrors:
     """Тесты ошибок при выполнении команды"""
     
     @pytest.mark.asyncio
-    async def test_execute_not_whitelisted(self, client, virtual_node_seed, pg_pool, flush_redis):
+    async def test_execute_not_whitelisted(self, client, virtual_node_seed, db_pool, flush_redis):
         """Команда не в whitelist (400)"""
         vnode_id = virtual_node_seed["vnode_id_1"]
         node_id_1 = virtual_node_seed["node_id_1"]
         
         # Добавляем другую команду в whitelist, чтобы активировать систему whitelist
         # но НЕ добавляем проверяемую команду nc - она должна быть заблокирована
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO whitelist_commands (command, is_active) VALUES ($1, $2)",
                 "ls", True
             )
         
         # Получаем данные ноды
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             node_data = await conn.fetchrow(
                 "SELECT n.private_ip, n.api_port FROM nodes n WHERE n.id = $1",
                 node_id_1
@@ -160,20 +160,20 @@ class TestRemoteExecuteErrors:
         assert "белого списка" in data["detail"]["message"]
         
         # Проверяем что история НЕ создалась
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             history_count = await conn.fetchval(
                 "SELECT COUNT(*) FROM remote_execute_history"
             )
             assert history_count == 0
     
     @pytest.mark.asyncio
-    async def test_execute_node_unreachable(self, client, virtual_node_seed, pg_pool, flush_redis):
+    async def test_execute_node_unreachable(self, client, virtual_node_seed, db_pool, flush_redis):
         """Нода не отвечает (ClientError) - история с failed_on_admin"""
         vnode_id = virtual_node_seed["vnode_id_1"]
         node_id_1 = virtual_node_seed["node_id_1"]
         
         # Добавляем команду в whitelist (только base_command - первое слово)
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO whitelist_commands (command, is_active) VALUES ($1, $2)",
                 "ps", True
@@ -183,7 +183,7 @@ class TestRemoteExecuteErrors:
         client.app.state.cmd_center_aiohttp = FakeAiohttpSession(raise_error=True)
         
         # Получаем данные ноды
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             node_data = await conn.fetchrow(
                 "SELECT n.private_ip, n.api_port FROM nodes n WHERE n.id = $1",
                 node_id_1
@@ -204,7 +204,7 @@ class TestRemoteExecuteErrors:
         assert "Ошибка исполнения на админке" in data["detail"]
         
         # Проверяем что история создалась со статусом failed_on_admin
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             history = await conn.fetchrow(
                 "SELECT * FROM remote_execute_history WHERE command = $1",
                 "ps aux"
@@ -215,13 +215,13 @@ class TestRemoteExecuteErrors:
             assert history["exception_text"] is not None
     
     @pytest.mark.asyncio
-    async def test_execute_node_error_response(self, client, virtual_node_seed, pg_pool, flush_redis):
+    async def test_execute_node_error_response(self, client, virtual_node_seed, db_pool, flush_redis):
         """Нода ответила с ошибкой (ClientResponseError) - история с failed_on_node"""
         vnode_id = virtual_node_seed["vnode_id_1"]
         node_id_1 = virtual_node_seed["node_id_1"]
         
         # Добавляем команду в whitelist (только base_command - первое слово)
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO whitelist_commands (command, is_active) VALUES ($1, $2)",
                 "ls", True
@@ -234,7 +234,7 @@ class TestRemoteExecuteErrors:
         )
         
         # Получаем данные ноды
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             node_data = await conn.fetchrow(
                 "SELECT n.private_ip, n.api_port FROM nodes n WHERE n.id = $1",
                 node_id_1
@@ -256,7 +256,7 @@ class TestRemoteExecuteErrors:
         assert "Ошибка исполнения на ноде" in data["detail"]["message"]
         
         # Проверяем что история создалась со статусом failed_on_node
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             history = await conn.fetchrow(
                 "SELECT * FROM remote_execute_history WHERE command = $1",
                 "ls /nonexistent"
@@ -271,13 +271,13 @@ class TestRemoteExecuteHistoryUpdates:
     """Тесты обновления истории выполнения команд"""
     
     @pytest.mark.asyncio
-    async def test_execute_history_updated_on_success(self, client, virtual_node_seed, pg_pool, flush_redis):
+    async def test_execute_history_updated_on_success(self, client, virtual_node_seed, db_pool, flush_redis):
         """Обновление истории при успехе - проверка полей"""
         vnode_id = virtual_node_seed["vnode_id_1"]
         node_id_1 = virtual_node_seed["node_id_1"]
         
         # Добавляем команду в whitelist (только base_command - первое слово)
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO whitelist_commands (command, is_active) VALUES ($1, $2)",
                 "echo", True
@@ -295,7 +295,7 @@ class TestRemoteExecuteHistoryUpdates:
         )
         
         # Получаем данные ноды
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             node_data = await conn.fetchrow(
                 "SELECT n.private_ip, n.api_port FROM nodes n WHERE n.id = $1",
                 node_id_1
@@ -314,7 +314,7 @@ class TestRemoteExecuteHistoryUpdates:
         assert response.status_code == 200
         
         # Детальная проверка полей в истории
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             history = await conn.fetchrow(
                 "SELECT * FROM remote_execute_history WHERE command = $1",
                 "echo test"
@@ -330,13 +330,13 @@ class TestRemoteExecuteHistoryUpdates:
             assert history["updated_at"] is not None
     
     @pytest.mark.asyncio
-    async def test_execute_history_updated_on_error(self, client, virtual_node_seed, pg_pool, flush_redis):
+    async def test_execute_history_updated_on_error(self, client, virtual_node_seed, db_pool, flush_redis):
         """Обновление истории при ошибке - проверка exception_text"""
         vnode_id = virtual_node_seed["vnode_id_1"]
         node_id_1 = virtual_node_seed["node_id_1"]
         
         # Добавляем команду в whitelist (только base_command - первое слово)
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO whitelist_commands (command, is_active) VALUES ($1, $2)",
                 "cat", True
@@ -346,7 +346,7 @@ class TestRemoteExecuteHistoryUpdates:
         client.app.state.cmd_center_aiohttp = FakeAiohttpSession(raise_error=True)
         
         # Получаем данные ноды
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             node_data = await conn.fetchrow(
                 "SELECT n.private_ip, n.api_port FROM nodes n WHERE n.id = $1",
                 node_id_1
@@ -365,7 +365,7 @@ class TestRemoteExecuteHistoryUpdates:
         assert response.status_code == 500
         
         # Проверяем exception_text в истории
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             history = await conn.fetchrow(
                 "SELECT * FROM remote_execute_history WHERE command = $1",
                 "cat /etc/shadow"

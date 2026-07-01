@@ -317,12 +317,12 @@ class TestDeletePhysicalNode:
         assert get_response.status_code == 404
     
     @pytest.mark.asyncio
-    async def test_delete_node_cascade(self, client, physical_node_seed, pg_pool, proto_template_seed):
+    async def test_delete_node_cascade(self, client, physical_node_seed, db_pool, proto_template_seed):
         """Каскадное удаление виртуальных нод при удалении физической ноды"""
         node_id = physical_node_seed["node_id_1"]
         
         # Сначала создаём протокол для FK constraint
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             proto_id = await conn.fetchval(
                 """
                 INSERT INTO protocols (tmp_id, name)
@@ -350,7 +350,7 @@ class TestDeletePhysicalNode:
             )
         
         # Проверяем что виртуальная нода существует
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             vnode_exists_before = await conn.fetchval(
                 "SELECT EXISTS(SELECT 1 FROM nodes_protocols WHERE id = $1)",
                 vnode_id
@@ -362,7 +362,7 @@ class TestDeletePhysicalNode:
         assert response.status_code == 200
         
         # Проверяем что виртуальная нода тоже удалилась (CASCADE)
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             vnode_exists_after = await conn.fetchval(
                 "SELECT EXISTS(SELECT 1 FROM nodes_protocols WHERE id = $1)",
                 vnode_id

@@ -10,12 +10,12 @@ class TestConfigFileReadSuccess:
     """Тесты успешного чтения конфиг-файла"""
     
     @pytest.mark.asyncio
-    async def test_read_config_success(self, client, virtual_node_seed, pg_pool):
+    async def test_read_config_success(self, client, virtual_node_seed, db_pool):
         """Успешное чтение конфиг-файла с ноды"""
         vnode_id = virtual_node_seed["vnode_id_1"]
         
         # Устанавливаем config_path для виртуальной ноды
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "UPDATE nodes_protocols SET config_path = $1 WHERE id = $2",
                 "/etc/xray/config.json", vnode_id
@@ -44,12 +44,12 @@ class TestConfigFileReadSuccess:
         assert data["message"] == "Получен конфиг-файл от ноды"
     
     @pytest.mark.asyncio
-    async def test_read_config_with_flatten_key(self, client, virtual_node_seed, pg_pool):
+    async def test_read_config_with_flatten_key(self, client, virtual_node_seed, db_pool):
         """Чтение конфиг-файла с параметром flatten_json_users_key"""
         vnode_id = virtual_node_seed["vnode_id_1"]
         
         # Устанавливаем config_path
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "UPDATE nodes_protocols SET config_path = $1 WHERE id = $2",
                 "/etc/v2ray/config.json", vnode_id
@@ -97,12 +97,12 @@ class TestConfigFileReadErrors:
         assert "не найдена" in data["detail"]["message"]
     
     @pytest.mark.asyncio
-    async def test_read_config_no_config_path(self, client, virtual_node_seed, pg_pool):
+    async def test_read_config_no_config_path(self, client, virtual_node_seed, db_pool):
         """config_path не указан (400)"""
         vnode_id = virtual_node_seed["vnode_id_1"]
         
         # Убираем config_path (устанавливаем NULL)
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "UPDATE nodes_protocols SET config_path = NULL WHERE id = $1",
                 vnode_id
@@ -121,12 +121,12 @@ class TestConfigFileReadErrors:
         assert "не указан" in data["detail"]["message"]
     
     @pytest.mark.asyncio
-    async def test_read_config_node_error(self, client, virtual_node_seed, pg_pool):
+    async def test_read_config_node_error(self, client, virtual_node_seed, db_pool):
         """Нода ответила с ошибкой - файл не найден (400)"""
         vnode_id = virtual_node_seed["vnode_id_1"]
         
         # Устанавливаем несуществующий путь
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "UPDATE nodes_protocols SET config_path = $1 WHERE id = $2",
                 "/nonexistent/config.json", vnode_id
@@ -151,12 +151,12 @@ class TestConfigFileReadErrors:
         assert "Ошибка исполнения на ноде" in data["detail"]["message"]
     
     @pytest.mark.asyncio
-    async def test_read_config_node_unreachable(self, client, virtual_node_seed, pg_pool):
+    async def test_read_config_node_unreachable(self, client, virtual_node_seed, db_pool):
         """Нода недоступна - ClientError (400)"""
         vnode_id = virtual_node_seed["vnode_id_1"]
         
         # Устанавливаем config_path
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "UPDATE nodes_protocols SET config_path = $1 WHERE id = $2",
                 "/etc/xray/config.json", vnode_id

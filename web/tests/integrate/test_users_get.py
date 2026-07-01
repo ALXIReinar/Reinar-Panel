@@ -12,13 +12,13 @@ import pytest
 
 
 @pytest.fixture
-async def users_for_get(pg_pool, virtual_node_seed, sub_plan_seed):
+async def users_for_get(db_pool, virtual_node_seed, sub_plan_seed):
     """
     Создаём тестовых пользователей с подписками для GET endpoints:
     - 5 пользователей с активными подписками
     - У некоторых будет несколько подписок (проверка latest priority)
     """
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         # Привязываем vnode к плану
         vnode_id_1 = virtual_node_seed["vnode_id_1"]
         plan_id_1 = sub_plan_seed["plan_id_1"]
@@ -209,10 +209,10 @@ class TestGetUsers:
         assert user_1["sub_active"] is True
     
     @pytest.mark.asyncio
-    async def test_get_users_empty_list(self, client, pg_pool):
+    async def test_get_users_empty_list(self, client, db_pool):
         """Пустой список если нет пользователей"""
         # Очищаем пользователей
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
         
         response = await client.get("/api/v1/private/users/get")
@@ -227,7 +227,7 @@ class TestGetUserById:
     """Тесты GET /private/users/get_by_id (получить одного пользователя)"""
     
     @pytest.mark.asyncio
-    async def test_get_user_by_id_success(self, client, users_for_get, pg_pool):
+    async def test_get_user_by_id_success(self, client, users_for_get, db_pool):
         """Успешное получение пользователя по order_id"""
         order_id = users_for_get["order_ids"][0]
         
@@ -270,7 +270,7 @@ class TestGetUserById:
         assert "message" in data["detail"]
     
     @pytest.mark.asyncio
-    async def test_get_user_by_id_all_fields(self, client, users_for_get, pg_pool):
+    async def test_get_user_by_id_all_fields(self, client, users_for_get, db_pool):
         """Проверка корректности всех полей"""
         order_id = users_for_get["order_ids"][2]
         

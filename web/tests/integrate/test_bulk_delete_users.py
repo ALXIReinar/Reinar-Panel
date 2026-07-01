@@ -14,14 +14,14 @@ import json
 
 
 @pytest.fixture
-async def users_with_subs_for_delete(pg_pool, virtual_node_seed, sub_plan_seed):
+async def users_with_subs_for_delete(db_pool, virtual_node_seed, sub_plan_seed):
     """
     Создаём тестовых пользователей с подписками для bulk delete:
     - 2 пользователя с активными подписками (is_limited=false)
     - 1 пользователь с активной подпиской (is_limited=true) - не должен попасть в outbox
     - 1 пользователь с неактивной подпиской - не должен попасть в outbox
     """
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         # Создаём 4 тестовых пользователей
         user_ids = []
         for i in range(4):
@@ -98,7 +98,7 @@ class TestBulkDeleteSuccess:
     """Тесты успешного удаления пользователей"""
     
     @pytest.mark.asyncio
-    async def test_bulk_delete_removes_users(self, client, users_with_subs_for_delete, mock_arq, pg_pool):
+    async def test_bulk_delete_removes_users(self, client, users_with_subs_for_delete, mock_arq, db_pool):
         """Успешное удаление пользователей из БД"""
         user_ids = users_with_subs_for_delete["active_unlim_user_ids"]
         
@@ -114,7 +114,7 @@ class TestBulkDeleteSuccess:
         assert data["deleted_count"] == 2
         
         # Проверяем что пользователи помечены как удалённые (soft delete)
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             users = await conn.fetch(
                 "SELECT id, is_deleted FROM users WHERE id = ANY($1)",
                 user_ids
@@ -124,12 +124,12 @@ class TestBulkDeleteSuccess:
                 assert user["is_deleted"] is True  # Помечены как удалённые
     
     @pytest.mark.asyncio
-    async def test_bulk_delete_deactivates_subscriptions(self, client, users_with_subs_for_delete, mock_arq, pg_pool):
+    async def test_bulk_delete_deactivates_subscriptions(self, client, users_with_subs_for_delete, mock_arq, db_pool):
         """Удаление деактивирует подписки перед удалением пользователей"""
         user_ids = users_with_subs_for_delete["active_unlim_user_ids"]
         
         # Проверяем что подписки активны ДО удаления
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             active_before = await conn.fetch(
                 "SELECT id, is_active FROM payed_subs WHERE user_id = ANY($1)",
                 user_ids
@@ -148,7 +148,7 @@ class TestBulkDeleteSuccess:
         
         # Проверяем что подписки деактивированы (is_active=false)
         # Подписки НЕ удаляются каскадно, а остаются в БД с is_active=false
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             subs_after = await conn.fetch(
                 "SELECT id, is_active FROM payed_subs WHERE user_id = ANY($1)",
                 user_ids
@@ -158,7 +158,7 @@ class TestBulkDeleteSuccess:
                 assert sub["is_active"] is False  # Деактивированы
     
     @pytest.mark.asyncio
-    async def test_bulk_delete_returns_correct_count(self, client, users_with_subs_for_delete, mock_arq, pg_pool):
+    async def test_bulk_delete_returns_correct_count(self, client, users_with_subs_for_delete, mock_arq, db_pool):
         """Проверка правильного deleted_count в ответе"""
         user_ids = users_with_subs_for_delete["user_ids"][:3]  # Удаляем 3 пользователей
         
@@ -178,7 +178,7 @@ class TestBulkDeleteOutboxAndArq:
     """Тесты записи в outbox и вызова ARQ"""
     
     @pytest.mark.asyncio
-    async def test_bulk_delete_creates_outbox_for_active_subs(self, client, users_with_subs_for_delete, mock_arq, pg_pool):
+    async def test_bulk_delete_creates_outbox_for_active_subs(self, client, users_with_subs_for_delete, mock_arq, db_pool):
         """Удаление создаёт записи в sub_nodes_outbox с operation=delete"""
         user_ids = users_with_subs_for_delete["active_unlim_user_ids"]
         
@@ -191,7 +191,7 @@ class TestBulkDeleteOutboxAndArq:
         assert response.status_code == 200
         
         # Проверяем запись в outbox
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             outbox = await conn.fetch(
                 """
                 SELECT o.order_id, o.operation
@@ -206,7 +206,7 @@ class TestBulkDeleteOutboxAndArq:
                 assert record["operation"] == 2  # CoreProtoActions.delete
     
     @pytest.mark.asyncio
-    async def test_bulk_delete_only_is_limited_false_in_outbox(self, client, users_with_subs_for_delete, mock_arq, pg_pool):
+    async def test_bulk_delete_only_is_limited_false_in_outbox(self, client, users_with_subs_for_delete, mock_arq, db_pool):
         """Только пользователи с is_limited=false попадают в outbox"""
         # Удаляем всех пользователей
         all_user_ids = users_with_subs_for_delete["user_ids"]
@@ -224,7 +224,7 @@ class TestBulkDeleteOutboxAndArq:
         assert data["deleted_count"] == 2
         
         # Проверяем outbox
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             # Проверяем что is_limited=false в outbox
             outbox_unlim = await conn.fetch(
                 """
@@ -323,7 +323,7 @@ class TestBulkDeleteEdgeCases:
         mock_arq.enqueue_job.assert_not_called()
     
     @pytest.mark.asyncio
-    async def test_bulk_delete_inactive_subscription_not_in_outbox(self, client, users_with_subs_for_delete, mock_arq, pg_pool):
+    async def test_bulk_delete_inactive_subscription_not_in_outbox(self, client, users_with_subs_for_delete, mock_arq, db_pool):
         """Пользователь с неактивной подпиской НЕ попадает в outbox"""
         inactive_user_id = users_with_subs_for_delete["inactive_user_id"]
         
@@ -338,7 +338,7 @@ class TestBulkDeleteEdgeCases:
         assert data["deleted_count"] == 0  # Не попал в outbox
         
         # Проверяем что пользователь помечен как удалённый (soft delete)
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             is_deleted = await conn.fetchval(
                 "SELECT is_deleted FROM users WHERE id = $1",
                 inactive_user_id
@@ -356,7 +356,7 @@ class TestBulkDeleteEdgeCases:
             assert outbox_count == 0
     
     @pytest.mark.asyncio
-    async def test_bulk_delete_is_limited_user_not_in_outbox(self, client, users_with_subs_for_delete, mock_arq, pg_pool):
+    async def test_bulk_delete_is_limited_user_not_in_outbox(self, client, users_with_subs_for_delete, mock_arq, db_pool):
         """Пользователь с is_limited=true НЕ попадает в outbox"""
         limited_user_id = users_with_subs_for_delete["limited_user_id"]
         
@@ -371,7 +371,7 @@ class TestBulkDeleteEdgeCases:
         assert data["deleted_count"] == 0  # Не попал в outbox
         
         # Проверяем что пользователь помечен как удалённый (soft delete)
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             is_deleted = await conn.fetchval(
                 "SELECT is_deleted FROM users WHERE id = $1",
                 limited_user_id
@@ -389,9 +389,9 @@ class TestBulkDeleteEdgeCases:
             assert outbox_count == 0
     
     @pytest.mark.asyncio
-    async def test_bulk_delete_invisible_vnode_no_outbox(self, client, virtual_node_seed, sub_plan_seed, mock_arq, pg_pool):
+    async def test_bulk_delete_invisible_vnode_no_outbox(self, client, virtual_node_seed, sub_plan_seed, mock_arq, db_pool):
         """vnode с user_visible=false не создаёт запись в outbox"""
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             # Создаём невидимую vnode
             node_id = virtual_node_seed["node_id_1"]
             protocol_id = virtual_node_seed["proto_id"]
@@ -440,7 +440,7 @@ class TestBulkDeleteEdgeCases:
         assert data["deleted_count"] == 0  # Не попал в outbox (invisible vnode)
         
         # Проверяем что пользователь помечен как удалённый (soft delete)
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             is_deleted = await conn.fetchval(
                 "SELECT is_deleted FROM users WHERE id = $1",
                 user_id
@@ -455,9 +455,9 @@ class TestBulkDeleteEdgeCases:
             assert outbox_count == 0
     
     @pytest.mark.asyncio
-    async def test_bulk_delete_inactive_node_no_outbox(self, client, virtual_node_seed, sub_plan_seed, mock_arq, pg_pool):
+    async def test_bulk_delete_inactive_node_no_outbox(self, client, virtual_node_seed, sub_plan_seed, mock_arq, db_pool):
         """Физ нода с is_active=false не создаёт запись в outbox"""
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             # Создаём неактивную ноду
             inactive_node_id = await conn.fetchval(
                 """
@@ -515,7 +515,7 @@ class TestBulkDeleteEdgeCases:
         assert data["deleted_count"] == 0  # Не попал в outbox (inactive node)
         
         # Проверяем что пользователь помечен как удалённый (soft delete)
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             is_deleted = await conn.fetchval(
                 "SELECT is_deleted FROM users WHERE id = $1",
                 user_id

@@ -146,14 +146,14 @@ class TestUpdateSubPlan:
         assert vnode_id_2 in vnode_ids
     
     @pytest.mark.asyncio
-    async def test_update_plan_detach_vnodes(self, client, sub_plan_seed, virtual_node_seed, pg_pool):
+    async def test_update_plan_detach_vnodes(self, client, sub_plan_seed, virtual_node_seed, db_pool):
         """Обновление с detach виртуальных нод (remove_node_proto_ids)"""
         plan_id = sub_plan_seed["plan_id_1"]
         vnode_id_1 = virtual_node_seed["vnode_id_1"]
         vnode_id_2 = virtual_node_seed["vnode_id_2"]
         
         # Сначала привязываем ноды
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO vnodes_sub_plans (sub_plan_id, node_proto_id) VALUES ($1, $2), ($1, $3)",
                 plan_id, vnode_id_1, vnode_id_2
@@ -181,7 +181,7 @@ class TestUpdateSubPlan:
         assert vnodes[0]["node_proto_id"] == vnode_id_2
     
     @pytest.mark.asyncio
-    async def test_update_plan_attach_and_detach(self, client, sub_plan_seed, virtual_node_seed, pg_pool):
+    async def test_update_plan_attach_and_detach(self, client, sub_plan_seed, virtual_node_seed, db_pool):
         """Одновременный attach + detach виртуальных нод"""
         plan_id = sub_plan_seed["plan_id_1"]
         vnode_id_1 = virtual_node_seed["vnode_id_1"]
@@ -189,7 +189,7 @@ class TestUpdateSubPlan:
         vnode_id_3 = virtual_node_seed["vnode_id_3"]
         
         # Привязываем vnode_id_1
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO vnodes_sub_plans (sub_plan_id, node_proto_id) VALUES ($1, $2)",
                 plan_id, vnode_id_1
@@ -284,7 +284,7 @@ class TestDeleteSubPlan:
     """Тесты для DELETE /api/v1/private/subscriptions/plans/delete"""
     
     @pytest.mark.asyncio
-    async def test_delete_plan_success(self, client, sub_plan_seed, pg_pool):
+    async def test_delete_plan_success(self, client, sub_plan_seed, db_pool):
         """Успешное удаление плана"""
         plan_id = sub_plan_seed["plan_id_2"]
         
@@ -300,7 +300,7 @@ class TestDeleteSubPlan:
         assert data["message"] == "Группа подписок удалена"
         
         # Проверяем что план действительно удалён
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             exists = await conn.fetchval(
                 "SELECT EXISTS(SELECT 1 FROM sub_plans WHERE id = $1)",
                 plan_id
@@ -308,20 +308,20 @@ class TestDeleteSubPlan:
             assert exists is False
     
     @pytest.mark.asyncio
-    async def test_delete_plan_cascade(self, client, sub_plan_seed, virtual_node_seed, pg_pool):
+    async def test_delete_plan_cascade(self, client, sub_plan_seed, virtual_node_seed, db_pool):
         """CASCADE удаление связей в vnodes_sub_plans"""
         plan_id = sub_plan_seed["plan_id_1"]
         vnode_id = virtual_node_seed["vnode_id_1"]
         
         # Привязываем виртуальную ноду к плану
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             link_id = await conn.fetchval(
                 "INSERT INTO vnodes_sub_plans (sub_plan_id, node_proto_id) VALUES ($1, $2) RETURNING id",
                 plan_id, vnode_id
             )
         
         # Проверяем что связь существует
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             link_exists_before = await conn.fetchval(
                 "SELECT EXISTS(SELECT 1 FROM vnodes_sub_plans WHERE id = $1)",
                 link_id
@@ -337,7 +337,7 @@ class TestDeleteSubPlan:
         assert response.status_code == 200
         
         # Проверяем что связь тоже удалилась (CASCADE)
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             link_exists_after = await conn.fetchval(
                 "SELECT EXISTS(SELECT 1 FROM vnodes_sub_plans WHERE id = $1)",
                 link_id
@@ -384,14 +384,14 @@ class TestGetSubPlanById:
     """Тесты для GET /api/v1/private/subscriptions/plans/get/{plan_id}"""
     
     @pytest.mark.asyncio
-    async def test_get_plan_with_vnodes(self, client, sub_plan_seed, virtual_node_seed, pg_pool):
+    async def test_get_plan_with_vnodes(self, client, sub_plan_seed, virtual_node_seed, db_pool):
         """Успешное получение плана с привязанными виртуальными нодами"""
         plan_id = sub_plan_seed["plan_id_1"]
         vnode_id_1 = virtual_node_seed["vnode_id_1"]
         vnode_id_2 = virtual_node_seed["vnode_id_2"]
         
         # Привязываем виртуальные ноды к плану
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO vnodes_sub_plans (sub_plan_id, node_proto_id) VALUES ($1, $2), ($1, $3)",
                 plan_id, vnode_id_1, vnode_id_2

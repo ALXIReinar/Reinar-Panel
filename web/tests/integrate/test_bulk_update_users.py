@@ -12,14 +12,14 @@ import pytest
 
 
 @pytest.fixture
-async def users_with_subs(pg_pool, virtual_node_seed, sub_plan_seed):
+async def users_with_subs(db_pool, virtual_node_seed, sub_plan_seed):
     """
     Создаём тестовых пользователей с подписками для bulk update:
     - 2 пользователя с активными подписками (для deactivate теста)
     - 2 пользователя с неактивными подписками (для activate теста)
     - 1 пользователь с трафиком (для reset_traffic теста)
     """
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         # Создаём 5 тестовых пользователей
         user_ids = []
         for i in range(5):
@@ -98,7 +98,7 @@ class TestBulkUpdateActivate:
     """Тесты активации подписок (action='activate')"""
     
     @pytest.mark.asyncio
-    async def test_activate_success(self, client, users_with_subs, mock_arq, pg_pool):
+    async def test_activate_success(self, client, users_with_subs, mock_arq, db_pool):
         """Успешная активация неактивных подписок"""
         user_ids = users_with_subs["inactive_user_ids"]
         
@@ -118,7 +118,7 @@ class TestBulkUpdateActivate:
         assert data["arq_job_id"] == "test-job-12345"
         
         # Проверяем что подписки активированы в БД
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             activated = await conn.fetch(
                 "SELECT id, is_active FROM payed_subs WHERE user_id = ANY($1) ORDER BY id",
                 user_ids
@@ -128,7 +128,7 @@ class TestBulkUpdateActivate:
                 assert sub["is_active"] is True
     
     @pytest.mark.asyncio
-    async def test_activate_creates_outbox_records(self, client, users_with_subs, mock_arq, pg_pool):
+    async def test_activate_creates_outbox_records(self, client, users_with_subs, mock_arq, db_pool):
         """Активация создаёт записи в sub_nodes_outbox с operation=add"""
         user_ids = users_with_subs["inactive_user_ids"]
         
@@ -143,7 +143,7 @@ class TestBulkUpdateActivate:
         assert response.status_code == 200
         
         # Проверяем запись в outbox
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             outbox = await conn.fetch(
                 """
                 SELECT order_id, operation FROM sub_nodes_outbox
@@ -197,7 +197,7 @@ class TestBulkUpdateDeactivate:
     """Тесты деактивации подписок (action='deactivate')"""
     
     @pytest.mark.asyncio
-    async def test_deactivate_success(self, client, users_with_subs, mock_arq, pg_pool):
+    async def test_deactivate_success(self, client, users_with_subs, mock_arq, db_pool):
         """Успешная деактивация активных подписок"""
         user_ids = users_with_subs["active_user_ids"]
         
@@ -215,7 +215,7 @@ class TestBulkUpdateDeactivate:
         assert data["affected_count"] == 2
         
         # Проверяем что подписки деактивированы в БД
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             deactivated = await conn.fetch(
                 "SELECT id, is_active FROM payed_subs WHERE user_id = ANY($1) ORDER BY id",
                 user_ids
@@ -225,7 +225,7 @@ class TestBulkUpdateDeactivate:
                 assert sub["is_active"] is False
     
     @pytest.mark.asyncio
-    async def test_deactivate_creates_outbox_with_delete_operation(self, client, users_with_subs, mock_arq, pg_pool):
+    async def test_deactivate_creates_outbox_with_delete_operation(self, client, users_with_subs, mock_arq, db_pool):
         """Деактивация создаёт записи в outbox с operation=delete"""
         user_ids = users_with_subs["active_user_ids"]
         
@@ -240,7 +240,7 @@ class TestBulkUpdateDeactivate:
         assert response.status_code == 200
         
         # Проверяем запись в outbox
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             outbox = await conn.fetch(
                 """
                 SELECT order_id, operation FROM sub_nodes_outbox
@@ -283,7 +283,7 @@ class TestBulkUpdateResetTraffic:
     """Тесты сброса трафика (action='reset_traffic')"""
     
     @pytest.mark.asyncio
-    async def test_reset_traffic_success(self, client, users_with_subs, mock_arq, pg_pool):
+    async def test_reset_traffic_success(self, client, users_with_subs, mock_arq, db_pool):
         """Успешный сброс дневного трафика пользователя"""
         user_id = users_with_subs["traffic_user_id"]
         
@@ -301,7 +301,7 @@ class TestBulkUpdateResetTraffic:
         assert data["affected_count"] == 1
         
         # Проверяем что трафик обнулён
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             traffic = await conn.fetchval(
                 "SELECT traffic_used_day_mb FROM users WHERE id = $1",
                 user_id
@@ -390,9 +390,9 @@ class TestBulkUpdateEdgeCases:
     """Тесты edge cases: is_limited, множественные подписки, фильтры нод"""
     
     @pytest.mark.asyncio
-    async def test_activate_skips_limited_subscriptions(self, client, pg_pool, virtual_node_seed, sub_plan_seed, mock_arq):
+    async def test_activate_skips_limited_subscriptions(self, client, db_pool, virtual_node_seed, sub_plan_seed, mock_arq):
         """Пользователь с is_limited=true НЕ попадает в outbox при activate"""
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             # Создаём пользователя с неактивной подпиской is_limited=true
             user_id = await conn.fetchval(
                 "INSERT INTO users (tg_id, tg_username, uuid) VALUES ($1, $2, $3) RETURNING id",
@@ -431,7 +431,7 @@ class TestBulkUpdateEdgeCases:
         assert data["affected_count"] == 0  # Не затронул is_limited=true
         
         # Проверяем что в outbox ничего не попало
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             outbox_count = await conn.fetchval(
                 "SELECT COUNT(*) FROM sub_nodes_outbox WHERE order_id = $1",
                 order_id
@@ -446,9 +446,9 @@ class TestBulkUpdateEdgeCases:
             assert is_active is False
     
     @pytest.mark.asyncio
-    async def test_deactivate_skips_limited_subscriptions(self, client, pg_pool, virtual_node_seed, sub_plan_seed, mock_arq):
+    async def test_deactivate_skips_limited_subscriptions(self, client, db_pool, virtual_node_seed, sub_plan_seed, mock_arq):
         """Пользователь с is_limited=true НЕ попадает в outbox при deactivate"""
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             # Создаём пользователя с активной подпиской is_limited=true
             user_id = await conn.fetchval(
                 "INSERT INTO users (tg_id, tg_username, uuid) VALUES ($1, $2, $3) RETURNING id",
@@ -486,7 +486,7 @@ class TestBulkUpdateEdgeCases:
         assert data["affected_count"] == 0  # Не затронул is_limited=true
         
         # Проверяем что в outbox ничего не попало
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             outbox_count = await conn.fetchval(
                 "SELECT COUNT(*) FROM sub_nodes_outbox WHERE order_id = $1",
                 order_id
@@ -501,9 +501,9 @@ class TestBulkUpdateEdgeCases:
             assert is_active is True
     
     @pytest.mark.asyncio
-    async def test_reset_traffic_resets_all_but_outbox_only_limited(self, client, pg_pool, virtual_node_seed, sub_plan_seed, mock_arq):
+    async def test_reset_traffic_resets_all_but_outbox_only_limited(self, client, db_pool, virtual_node_seed, sub_plan_seed, mock_arq):
         """reset_traffic обнуляет трафик всем, но в outbox попадают только is_limited=true"""
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             # Создаём 2 пользователей: один limited, другой нет
             user_id_limited = await conn.fetchval(
                 "INSERT INTO users (tg_id, tg_username, uuid, traffic_used_day_mb) VALUES ($1, $2, $3, $4) RETURNING id",
@@ -553,7 +553,7 @@ class TestBulkUpdateEdgeCases:
         assert data["affected_count"] == 1  # Только limited попал в outbox
         
         # Проверяем что трафик обнулён у ОБОИХ
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             traffic_limited = await conn.fetchval(
                 "SELECT traffic_used_day_mb FROM users WHERE id = $1",
                 user_id_limited
@@ -578,9 +578,9 @@ class TestBulkUpdateEdgeCases:
             assert outbox_normal == 0  # normal пользователь НЕ в outbox
     
     @pytest.mark.asyncio
-    async def test_user_with_multiple_subscriptions_activate_only_inactive(self, client, pg_pool, virtual_node_seed, sub_plan_seed, mock_arq):
+    async def test_user_with_multiple_subscriptions_activate_only_inactive(self, client, db_pool, virtual_node_seed, sub_plan_seed, mock_arq):
         """У пользователя 2 подписки на РАЗНЫЕ планы: активируется только неактивная"""
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             # Создаём пользователя
             user_id = await conn.fetchval(
                 "INSERT INTO users (tg_id, tg_username, uuid) VALUES ($1, $2, $3) RETURNING id",
@@ -627,7 +627,7 @@ class TestBulkUpdateEdgeCases:
         assert data["affected_count"] == 1  # Затронута только неактивная подписка
         
         # Проверяем что активировалась только неактивная подписка
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             active_sub_status = await conn.fetchval(
                 "SELECT is_active FROM payed_subs WHERE id = $1",
                 order_id_active
@@ -653,9 +653,9 @@ class TestBulkUpdateEdgeCases:
             assert outbox_inactive == 1
     
     @pytest.mark.asyncio
-    async def test_invisible_vnode_not_in_outbox(self, client, pg_pool, virtual_node_seed, sub_plan_seed, mock_arq):
+    async def test_invisible_vnode_not_in_outbox(self, client, db_pool, virtual_node_seed, sub_plan_seed, mock_arq):
         """vnode с user_visible=false не создаёт запись в outbox"""
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             # Создаём невидимую виртуальную ноду
             node_id = virtual_node_seed["node_id_1"]
             protocol_id = virtual_node_seed["proto_id"]
@@ -706,7 +706,7 @@ class TestBulkUpdateEdgeCases:
         # Подписка активируется, но в outbox не попадает
         
         # Проверяем что подписка активирована
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             is_active = await conn.fetchval(
                 "SELECT is_active FROM payed_subs WHERE id = $1",
                 order_id
@@ -721,9 +721,9 @@ class TestBulkUpdateEdgeCases:
             assert outbox_count == 0
     
     @pytest.mark.asyncio
-    async def test_inactive_physical_node_not_in_outbox(self, client, pg_pool, virtual_node_seed, sub_plan_seed, mock_arq):
+    async def test_inactive_physical_node_not_in_outbox(self, client, db_pool, virtual_node_seed, sub_plan_seed, mock_arq):
         """Физ нода с is_active=false не создаёт запись в outbox"""
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             # Создаём неактивную физическую ноду
             inactive_node_id = await conn.fetchval(
                 """
@@ -783,7 +783,7 @@ class TestBulkUpdateEdgeCases:
         # Подписка активируется, но в outbox не попадает
         
         # Проверяем что подписка активирована
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             is_active = await conn.fetchval(
                 "SELECT is_active FROM payed_subs WHERE id = $1",
                 order_id

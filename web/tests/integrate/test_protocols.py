@@ -286,7 +286,7 @@ async def test_delete_protocol_success(client: AsyncClient, db_seed, proto_templ
 
 
 @pytest.mark.asyncio
-async def test_delete_protocol_with_nodes(client: AsyncClient, db_seed, proto_template_seed, pg_pool):
+async def test_delete_protocol_with_nodes(client: AsyncClient, db_seed, proto_template_seed, db_pool):
     """Удаление протокола, используемого нодами (409 Conflict)"""
     # Создаём протокол
     create_response = await client.post(
@@ -296,7 +296,7 @@ async def test_delete_protocol_with_nodes(client: AsyncClient, db_seed, proto_te
     proto_id = create_response.json()["proto_id"]
     
     # Создаём ноду, использующую этот протокол
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         # Сначала создаём физическую ноду
         node_id = await conn.fetchval(
             """

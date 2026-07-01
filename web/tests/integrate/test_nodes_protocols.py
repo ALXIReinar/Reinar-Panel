@@ -9,10 +9,10 @@ class TestCreateVirtualNode:
     """Тесты для POST /api/v1/private/nodes/protocols/create"""
     
     @pytest.mark.asyncio
-    async def test_create_vnode_success(self, client, physical_node_seed, proto_template_seed, pg_pool):
+    async def test_create_vnode_success(self, client, physical_node_seed, proto_template_seed, db_pool):
         """Успешное создание виртуальной ноды"""
         # Создаём протокол для теста
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             proto_id = await conn.fetchval(
                 "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
                 proto_template_seed["tmp_id"],
@@ -36,7 +36,7 @@ class TestCreateVirtualNode:
         assert data["message"] == "Успешно добавили виртуальную ноду"
         
         # Проверяем что нода создалась в БД
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             vnode = await conn.fetchrow(
                 "SELECT * FROM nodes_protocols WHERE id = $1",
                 data["node_protocol_id"]
@@ -46,10 +46,10 @@ class TestCreateVirtualNode:
             assert vnode["sub_node_address"] == "new-vnode.example.com"
     
     @pytest.mark.asyncio
-    async def test_create_vnode_node_not_found(self, client, proto_template_seed, pg_pool):
+    async def test_create_vnode_node_not_found(self, client, proto_template_seed, db_pool):
         """Физическая нода не найдена (404)"""
         # Создаём протокол для теста
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             proto_id = await conn.fetchval(
                 "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
                 proto_template_seed["tmp_id"],
@@ -387,7 +387,7 @@ class TestDeleteVirtualNode:
     """Тесты для DELETE /api/v1/private/nodes/protocols/{np_id}"""
     
     @pytest.mark.asyncio
-    async def test_delete_vnode_success(self, client, virtual_node_seed, pg_pool):
+    async def test_delete_vnode_success(self, client, virtual_node_seed, db_pool):
         """Успешное удаление виртуальной ноды"""
         vnode_id = virtual_node_seed["vnode_id_3"]
         
@@ -399,7 +399,7 @@ class TestDeleteVirtualNode:
         assert data["message"] == "Виртуальная нода удалена"
         
         # Проверяем что нода действительно удалена из БД
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             vnode_exists = await conn.fetchval(
                 "SELECT EXISTS(SELECT 1 FROM nodes_protocols WHERE id = $1)",
                 vnode_id

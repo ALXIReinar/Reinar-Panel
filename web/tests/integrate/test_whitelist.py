@@ -10,10 +10,10 @@ from redis.asyncio import Redis
 # ==================== GET /private/whitelist/all ====================
 
 @pytest.mark.asyncio
-async def test_get_whitelist_empty_cache_loads_from_db(client: AsyncClient, db_seed, flush_redis, pg_pool):
+async def test_get_whitelist_empty_cache_loads_from_db(client: AsyncClient, db_seed, flush_redis, db_pool):
     """Пустой кэш → загрузка из БД и сохранение в Redis"""
     # Создаём команды в БД
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO whitelist_commands (command, is_active) VALUES ($1, $2), ($3, $4)",
             "ls", True, "cat", False
@@ -38,10 +38,10 @@ async def test_get_whitelist_empty_cache_loads_from_db(client: AsyncClient, db_s
 
 
 @pytest.mark.asyncio
-async def test_get_whitelist_from_cache(client: AsyncClient, db_seed, flush_redis, pg_pool):
+async def test_get_whitelist_from_cache(client: AsyncClient, db_seed, flush_redis, db_pool):
     """Заполненный кэш → возврат из Redis без обращения к БД"""
     # Создаём команды в БД
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO whitelist_commands (command, is_active) VALUES ($1, $2)",
             "pwd", True
@@ -52,7 +52,7 @@ async def test_get_whitelist_from_cache(client: AsyncClient, db_seed, flush_redi
     assert response1.status_code == 200
     
     # Удаляем команду из БД (но кэш остаётся)
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         await conn.execute("DELETE FROM whitelist_commands WHERE command = 'pwd'")
     
     # Второй запрос возвращает из кэша (команда всё ещё там)
@@ -64,9 +64,9 @@ async def test_get_whitelist_from_cache(client: AsyncClient, db_seed, flush_redi
 
 
 @pytest.mark.asyncio
-async def test_get_whitelist_data_structure(client: AsyncClient, db_seed, pg_pool):
+async def test_get_whitelist_data_structure(client: AsyncClient, db_seed, db_pool):
     """Проверка структуры возвращаемых данных (id, command, is_active)"""
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO whitelist_commands (command, is_active) VALUES ($1, $2)",
             "echo", True
@@ -89,10 +89,10 @@ async def test_get_whitelist_data_structure(client: AsyncClient, db_seed, pg_poo
 # ==================== PUT /private/whitelist/bulk_update ====================
 
 @pytest.mark.asyncio
-async def test_bulk_update_activate_commands_flushes_redis(client: AsyncClient, db_seed, flush_redis, pg_pool):
+async def test_bulk_update_activate_commands_flushes_redis(client: AsyncClient, db_seed, flush_redis, db_pool):
     """Активация команд + проверка сброса Redis кэша"""
     # Создаём неактивные команды
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         cmd1_id = await conn.fetchval(
             "INSERT INTO whitelist_commands (command, is_active) VALUES ($1, $2) RETURNING id",
             "grep", False
@@ -129,10 +129,10 @@ async def test_bulk_update_activate_commands_flushes_redis(client: AsyncClient, 
 
 
 @pytest.mark.asyncio
-async def test_bulk_update_deactivate_commands_flushes_redis(client: AsyncClient, db_seed, flush_redis, pg_pool):
+async def test_bulk_update_deactivate_commands_flushes_redis(client: AsyncClient, db_seed, flush_redis, db_pool):
     """Деактивация команд + проверка сброса Redis кэша"""
     # Создаём активные команды
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         cmd1_id = await conn.fetchval(
             "INSERT INTO whitelist_commands (command, is_active) VALUES ($1, $2) RETURNING id",
             "rm", True
@@ -166,9 +166,9 @@ async def test_bulk_update_deactivate_commands_flushes_redis(client: AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_bulk_update_combined_operations(client: AsyncClient, db_seed, flush_redis, pg_pool):
+async def test_bulk_update_combined_operations(client: AsyncClient, db_seed, flush_redis, db_pool):
     """Комбинированная операция (activate + deactivate) + проверка сброса Redis"""
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         active_id = await conn.fetchval(
             "INSERT INTO whitelist_commands (command, is_active) VALUES ($1, $2) RETURNING id",
             "mv", True
@@ -202,10 +202,10 @@ async def test_bulk_update_combined_operations(client: AsyncClient, db_seed, flu
 
 
 @pytest.mark.asyncio
-async def test_bulk_update_deactivate_all_disables_whitelist_mode(client: AsyncClient, db_seed, flush_redis, pg_pool):
+async def test_bulk_update_deactivate_all_disables_whitelist_mode(client: AsyncClient, db_seed, flush_redis, db_pool):
     """Деактивация всех команд → whitelist_mode отключается"""
     # Создаём только одну активную команду
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         cmd_id = await conn.fetchval(
             "INSERT INTO whitelist_commands (command, is_active) VALUES ($1, $2) RETURNING id",
             "whoami", True
@@ -232,7 +232,7 @@ async def test_bulk_update_deactivate_all_disables_whitelist_mode(client: AsyncC
     # Проверяем, что теперь нет активных команд (whitelist_mode должен быть False)
     # Это проверяется через поведение is_whitelisted в реальном использовании
     # Здесь мы просто проверяем, что деактивация прошла успешно
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         active_count = await conn.fetchval(
             "SELECT COUNT(*) FROM whitelist_commands WHERE is_active = true"
         )
@@ -270,10 +270,10 @@ async def test_bulk_add_commands_flushes_redis(client: AsyncClient, db_seed, flu
 
 
 @pytest.mark.asyncio
-async def test_bulk_add_partial_with_duplicates(client: AsyncClient, db_seed, pg_pool):
+async def test_bulk_add_partial_with_duplicates(client: AsyncClient, db_seed, db_pool):
     """Частичное добавление (дубликаты игнорируются) + статус 202"""
     # Создаём существующую команду
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO whitelist_commands (command, is_active) VALUES ($1, $2)",
             "head", True
@@ -297,7 +297,7 @@ async def test_bulk_add_partial_with_duplicates(client: AsyncClient, db_seed, pg
 
 
 @pytest.mark.asyncio
-async def test_bulk_add_first_command_enables_whitelist_mode(client: AsyncClient, db_seed, flush_redis, pg_pool):
+async def test_bulk_add_first_command_enables_whitelist_mode(client: AsyncClient, db_seed, flush_redis, db_pool):
     """Добавление первой команды в пустой whitelist → whitelist_mode включается"""
     # Проверяем, что whitelist пуст
     get_response = await client.get("/api/v1/private/whitelist/all")
@@ -322,7 +322,7 @@ async def test_bulk_add_first_command_enables_whitelist_mode(client: AsyncClient
     assert commands[0]["command"] == "hostname"
     
     # whitelist_mode должен быть True (есть хотя бы одна команда)
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         count = await conn.fetchval("SELECT COUNT(*) FROM whitelist_commands")
     assert count > 0
 
@@ -330,10 +330,10 @@ async def test_bulk_add_first_command_enables_whitelist_mode(client: AsyncClient
 # ==================== DELETE /private/whitelist/bulk_delete ====================
 
 @pytest.mark.asyncio
-async def test_bulk_delete_commands_flushes_redis(client: AsyncClient, db_seed, flush_redis, pg_pool):
+async def test_bulk_delete_commands_flushes_redis(client: AsyncClient, db_seed, flush_redis, db_pool):
     """Успешное удаление команд + проверка сброса Redis кэша"""
     # Создаём команды
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         cmd1_id = await conn.fetchval(
             "INSERT INTO whitelist_commands (command, is_active) VALUES ($1, $2) RETURNING id",
             "df", True
@@ -367,10 +367,10 @@ async def test_bulk_delete_commands_flushes_redis(client: AsyncClient, db_seed, 
 
 
 @pytest.mark.asyncio
-async def test_bulk_delete_all_disables_whitelist_mode(client: AsyncClient, db_seed, flush_redis, pg_pool):
+async def test_bulk_delete_all_disables_whitelist_mode(client: AsyncClient, db_seed, flush_redis, db_pool):
     """Удаление всех команд → whitelist_mode отключается"""
     # Создаём несколько команд
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         cmd1_id = await conn.fetchval(
             "INSERT INTO whitelist_commands (command, is_active) VALUES ($1, $2) RETURNING id",
             "uptime", True
@@ -400,13 +400,13 @@ async def test_bulk_delete_all_disables_whitelist_mode(client: AsyncClient, db_s
     assert len(get_response.json()["commands"]) == 0
     
     # whitelist_mode должен быть False (нет команд)
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         count = await conn.fetchval("SELECT COUNT(*) FROM whitelist_commands")
     assert count == 0
 
 
 @pytest.mark.asyncio
-async def test_bulk_delete_nonexistent_ids_succeeds(client: AsyncClient, db_seed, pg_pool):
+async def test_bulk_delete_nonexistent_ids_succeeds(client: AsyncClient, db_seed, db_pool):
     """Удаление несуществующих ID завершается успешно (без ошибок)"""
     # Пытаемся удалить несуществующие ID
     response = await client.request(

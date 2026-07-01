@@ -44,10 +44,10 @@ async def test_get_all_templates_multiple(client: AsyncClient, proto_template_se
 
 
 @pytest.mark.asyncio
-async def test_get_all_templates_pagination(client: AsyncClient, db_seed, pg_pool):
+async def test_get_all_templates_pagination(client: AsyncClient, db_seed, db_pool):
     """Проверка cursor-based пагинации (last_id, asc/desc)"""
     # Создаём 5 шаблонов
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         tmp_ids = []
         for i in range(5):
             tmp_id = await conn.fetchval(
@@ -84,10 +84,10 @@ async def test_get_all_templates_pagination(client: AsyncClient, db_seed, pg_poo
 
 
 @pytest.mark.asyncio
-async def test_get_all_templates_limit_boundary(client: AsyncClient, db_seed, pg_pool):
+async def test_get_all_templates_limit_boundary(client: AsyncClient, db_seed, db_pool):
     """Граничный случай: limit=100 (максимум)"""
     # Создаём 50 шаблонов
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         for i in range(50):
             await conn.execute(
                 "INSERT INTO proto_templates (title, status) VALUES ($1, $2)",
@@ -105,12 +105,12 @@ async def test_get_all_templates_limit_boundary(client: AsyncClient, db_seed, pg
 # ==================== GET /private/templates/by_id ====================
 
 @pytest.mark.asyncio
-async def test_get_template_by_id_full(client: AsyncClient, proto_template_seed, pg_pool):
+async def test_get_template_by_id_full(client: AsyncClient, proto_template_seed, db_pool):
     """Успешное получение полных данных шаблона с spec_params (spec_only=false)"""
     tmp_id = proto_template_seed["tmp_id"]
     
     # Создаём spec параметры для шаблона
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO template_spec_params (key, tmp_id) VALUES ($1, $2), ($3, $4)",
             "pbk", tmp_id, "flow", tmp_id
@@ -138,12 +138,12 @@ async def test_get_template_by_id_full(client: AsyncClient, proto_template_seed,
 
 
 @pytest.mark.asyncio
-async def test_get_template_by_id_spec_only(client: AsyncClient, proto_template_seed, pg_pool):
+async def test_get_template_by_id_spec_only(client: AsyncClient, proto_template_seed, db_pool):
     """Облегчённая версия (spec_only=true) - только spec_params"""
     tmp_id = proto_template_seed["tmp_id"]
     
     # Создаём spec параметры
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO template_spec_params (key, tmp_id) VALUES ($1, $2)",
             "security", tmp_id
@@ -283,10 +283,10 @@ async def test_update_template_url_validation(client: AsyncClient, proto_templat
 # ==================== DELETE /private/templates/delete ====================
 
 @pytest.mark.asyncio
-async def test_delete_template_success(client: AsyncClient, db_seed, pg_pool):
+async def test_delete_template_success(client: AsyncClient, db_seed, db_pool):
     """Успешное удаление шаблона"""
     # Создаём шаблон для удаления
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         tmp_id = await conn.fetchval(
             "INSERT INTO proto_templates (title, status) VALUES ($1, $2) RETURNING id",
             "ToDelete",
@@ -318,12 +318,12 @@ async def test_delete_template_not_found(client: AsyncClient, db_seed):
 
 
 @pytest.mark.asyncio
-async def test_delete_template_used_by_protocol(client: AsyncClient, proto_template_seed, pg_pool):
+async def test_delete_template_used_by_protocol(client: AsyncClient, proto_template_seed, db_pool):
     """Удаление шаблона, используемого протоколом (409 Conflict)"""
     tmp_id = proto_template_seed["tmp_id"]
     
     # Создаём протокол, использующий этот шаблон
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO protocols (name, tmp_id) VALUES ($1, $2)",
             "UsedProtocol",

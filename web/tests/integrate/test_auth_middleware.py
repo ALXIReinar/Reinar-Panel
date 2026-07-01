@@ -58,7 +58,7 @@ async def mw_client(db_pool, db_seed, monkeypatch):
 
     app.add_middleware(AuthUXASGIMiddleware)
     app.add_middleware(ASGILoggingMiddleware)
-    app.state.db_pool = db_pool
+    app.state.pg_pool = db_pool  # Middleware ожидает pg_pool, а не db_pool
 
     async with db_pool.acquire() as conn:
         now_dt = datetime.now(timezone.utc).replace(tzinfo=None)

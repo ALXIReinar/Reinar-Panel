@@ -7,14 +7,14 @@ from httpx import AsyncClient
 
 
 @pytest.fixture
-async def vnode_with_spec_seed(client: AsyncClient, proto_template_seed, pg_pool):
+async def vnode_with_spec_seed(client: AsyncClient, proto_template_seed, db_pool):
     """
     Создаёт виртуальную ноду со spec параметрами для тестов.
     Возвращает node_proto_id и список spec_key_ids.
     """
     tmp_id = proto_template_seed["tmp_id"]
     
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         # Создаём физическую ноду
         node_id = await conn.fetchval(
             "INSERT INTO nodes (ip, api_port, node_name, title) VALUES ($1, $2, $3, $4) RETURNING id",
@@ -72,9 +72,9 @@ async def vnode_with_spec_seed(client: AsyncClient, proto_template_seed, pg_pool
 # ==================== GET /private/specs/vnode/get_spec_values ====================
 
 @pytest.mark.asyncio
-async def test_get_spec_values_empty(client: AsyncClient, proto_template_seed, pg_pool):
+async def test_get_spec_values_empty(client: AsyncClient, proto_template_seed, db_pool):
     """Получение пустого списка spec значений для виртуальной ноды без параметров"""
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         # Создаём виртуальную ноду без spec параметров
         node_id = await conn.fetchval(
             "INSERT INTO nodes (ip, api_port, node_name, title) VALUES ($1, $2, $3, $4) RETURNING id",
@@ -198,12 +198,12 @@ async def test_set_keys_update_success(client: AsyncClient, vnode_with_spec_seed
 
 
 @pytest.mark.asyncio
-async def test_set_keys_delete_success(client: AsyncClient, proto_template_seed, pg_pool):
+async def test_set_keys_delete_success(client: AsyncClient, proto_template_seed, db_pool):
     """Успешное удаление spec ключей (без значений)"""
     tmp_id = proto_template_seed["tmp_id"]
     
     # Создаём ключи для удаления (без связанных значений)
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         key1_id = await conn.fetchval(
             "INSERT INTO template_spec_params (tmp_id, key) VALUES ($1, $2) RETURNING id",
             tmp_id,
@@ -233,13 +233,13 @@ async def test_set_keys_delete_success(client: AsyncClient, proto_template_seed,
 
 
 @pytest.mark.asyncio
-async def test_set_keys_combined_operations(client: AsyncClient, vnode_with_spec_seed, pg_pool):
+async def test_set_keys_combined_operations(client: AsyncClient, vnode_with_spec_seed, db_pool):
     """Комбинированная операция: add + update + delete"""
     tmp_id = vnode_with_spec_seed["tmp_id"]
     spec_key_ids = vnode_with_spec_seed["spec_key_ids"]
     
     # Создаём ключ для удаления (без значений)
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         delete_key_id = await conn.fetchval(
             "INSERT INTO template_spec_params (tmp_id, key) VALUES ($1, $2) RETURNING id",
             tmp_id,
@@ -296,11 +296,11 @@ async def test_set_keys_duplicate_conflict(client: AsyncClient, vnode_with_spec_
 # ==================== PUT /private/specs/vnode/set_key_values ====================
 
 @pytest.mark.asyncio
-async def test_set_key_values_insert(client: AsyncClient, proto_template_seed, pg_pool):
+async def test_set_key_values_insert(client: AsyncClient, proto_template_seed, db_pool):
     """Установка значений для новых spec параметров (INSERT) с проверкой возвращаемых ID"""
     tmp_id = proto_template_seed["tmp_id"]
     
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         # Создаём виртуальную ноду
         node_id = await conn.fetchval(
             "INSERT INTO nodes (ip, api_port, node_name, title) VALUES ($1, $2, $3, $4) RETURNING id",

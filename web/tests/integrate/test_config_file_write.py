@@ -8,14 +8,14 @@ from web.tests.conftest import FakeAiohttpSession
 
 
 @pytest.fixture
-async def vnode_with_template(pg_pool, virtual_node_seed, proto_template_seed):
+async def vnode_with_template(db_pool, virtual_node_seed, proto_template_seed):
     """
     Виртуальная нода с настроенным шаблоном и spec параметрами
     """
     vnode_id = virtual_node_seed["vnode_id_1"]
     tmp_id = proto_template_seed["tmp_id"]
     
-    async with pg_pool.acquire() as conn:
+    async with db_pool.acquire() as conn:
         # Устанавливаем config_path для виртуальной ноды
         await conn.execute(
             "UPDATE nodes_protocols SET config_path = $1 WHERE id = $2",
@@ -77,7 +77,7 @@ class TestConfigFileWriteSuccess:
     """Тесты успешной записи конфиг-файла"""
     
     @pytest.mark.asyncio
-    async def test_write_config_success(self, client, vnode_with_template, pg_pool):
+    async def test_write_config_success(self, client, vnode_with_template, db_pool):
         """Успешная запись конфиг-файла и генерация ссылки"""
         vnode_id = vnode_with_template  # Фикстура уже возвращает int
         
@@ -121,7 +121,7 @@ class TestConfigFileWriteSuccess:
         assert "pbk=TEST_PUBLIC_KEY_ABC123" in link
     
     @pytest.mark.asyncio
-    async def test_write_config_updates_config_link_in_db(self, client, vnode_with_template, pg_pool):
+    async def test_write_config_updates_config_link_in_db(self, client, vnode_with_template, db_pool):
         """Проверка что config_link обновляется в БД"""
         vnode_id = vnode_with_template
         
@@ -133,7 +133,7 @@ class TestConfigFileWriteSuccess:
         config_content = '{"log": {"loglevel": "info"}, "inbounds": [{"port": 10085}, {"port": 443}]}'
         
         # Проверяем что config_link пустой ДО записи
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             old_link = await conn.fetchval(
                 "SELECT config_link FROM nodes_protocols WHERE id = $1",
                 vnode_id
@@ -152,7 +152,7 @@ class TestConfigFileWriteSuccess:
         assert response.status_code == 200
         
         # Проверяем что config_link обновился ПОСЛЕ записи
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             new_link = await conn.fetchval(
                 "SELECT config_link FROM nodes_protocols WHERE id = $1",
                 vnode_id
@@ -162,7 +162,7 @@ class TestConfigFileWriteSuccess:
             assert "pbk=TEST_PUBLIC_KEY_ABC123" in new_link
     
     @pytest.mark.asyncio
-    async def test_write_config_with_flatten_key(self, client, vnode_with_template, pg_pool):
+    async def test_write_config_with_flatten_key(self, client, vnode_with_template, db_pool):
         """Запись конфиг-файла с параметром flatten_json_users_key"""
         vnode_id = vnode_with_template
         
@@ -224,12 +224,12 @@ class TestConfigFileWriteErrors:
         assert "не найдена" in data["detail"]["message"]
     
     @pytest.mark.asyncio
-    async def test_write_config_no_config_path(self, client, virtual_node_seed, pg_pool):
+    async def test_write_config_no_config_path(self, client, virtual_node_seed, db_pool):
         """config_path не указан (400)"""
         vnode_id = virtual_node_seed["vnode_id_1"]
         
         # Убираем config_path (устанавливаем NULL)
-        async with pg_pool.acquire() as conn:
+        async with db_pool.acquire() as conn:
             await conn.execute(
                 "UPDATE nodes_protocols SET config_path = NULL WHERE id = $1",
                 vnode_id
@@ -250,7 +250,7 @@ class TestConfigFileWriteErrors:
         assert "не указан" in data["detail"]["message"]
     
     @pytest.mark.asyncio
-    async def test_write_config_node_error(self, client, vnode_with_template, pg_pool):
+    async def test_write_config_node_error(self, client, vnode_with_template, db_pool):
         """Нода ответила с ошибкой - нет прав записи (400)"""
         vnode_id = vnode_with_template
         
@@ -275,7 +275,7 @@ class TestConfigFileWriteErrors:
         assert "Ошибка исполнения на ноде" in data["detail"]["message"]
     
     @pytest.mark.asyncio
-    async def test_write_config_node_unreachable(self, client, vnode_with_template, pg_pool):
+    async def test_write_config_node_unreachable(self, client, vnode_with_template, db_pool):
         """Нода недоступна - ClientError (400)"""
         vnode_id = vnode_with_template
         
@@ -297,7 +297,7 @@ class TestConfigFileWriteErrors:
         assert "Ошибка исполнения на ноде" in data["detail"]["message"]
     
     @pytest.mark.asyncio
-    async def test_write_config_link_generation_failed(self, client, vnode_with_template, pg_pool):
+    async def test_write_config_link_generation_failed(self, client, vnode_with_template, db_pool):
         """Ошибка генерации ссылки - spec ключ отсутствует в шаблоне (409)"""
         vnode_id = vnode_with_template
         
