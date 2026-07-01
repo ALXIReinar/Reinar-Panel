@@ -41,13 +41,14 @@ def test_parse_json_string_from_cli():
     assert user2['total_mb_used'] == 2048
 
 
-@pytest.mark.db
-def test_parse_json_dict_from_xtlsapi(...):
-    """Парсинг JSON dict от xtlsapi.XrayClient"""
-    parse = ...
-    
-    json_dict = {
-        "stat": [
+# TODO: Implement test_parse_json_dict_from_xtlsapi
+# @pytest.mark.db
+# def test_parse_json_dict_from_xtlsapi(...):
+#     """Парсинг JSON dict от xtlsapi.XrayClient"""
+#     parse = ...
+#     
+#     json_dict = {
+#         "stat": [
             {"name": "user>>>admin@test.com>>>traffic>>>downlink", "value": 5368709120},
             {"name": "user>>>admin@test.com>>>traffic>>>uplink", "value": 1073741824}
         ]

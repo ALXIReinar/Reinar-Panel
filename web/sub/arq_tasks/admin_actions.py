@@ -12,7 +12,7 @@ from web.sub.data.postgres import PgSql
 
 @pg_sql_dep
 @arq_dep
-async def admin_request_bulk_action_users(action: Literal['delete', 'add'] | CoreProtoActions, users: list[int], db: PgSql = None, arq: ArqRedis = None):
+async def admin_request_bulk_action_users(ctx: dict, action: Literal['delete', 'add'] | CoreProtoActions, users: list[int], db: PgSql = None, arq: ArqRedis = None):
     sub_nodes = await db.sub.get_sub_nodes_for_bulk_action(users)
     
     sem = asyncio.Semaphore(env.action_on_core_proto_limit)
@@ -24,9 +24,13 @@ async def admin_request_bulk_action_users(action: Literal['delete', 'add'] | Cor
                 'delete': (vnode['api_bulk_delete_user_script'], vnode['bulk_delete_script_custom_params']),
                 'add': (vnode['api_bulk_add_user_script'], vnode['bulk_add_script_custom_params']),
             }
+            arq_func_name = {
+                'add': 'bulk_add_users_into_single_node',
+                'delete': 'bulk_delete_users_from_single_node'
+            }
             log_event(f'\033[36m[ARQ Admin Actioner]\033[0m Отправляем Бульк запрос на фоновое исполнение | action: \033[31m{action}\033[0m; node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
             job = await arq.enqueue_job(
-                'bulk_delete_users_from_single_node',
+                arq_func_name[action],
                 vnode['node_proto_id'],
                 vnode['private_ip'],
                 vnode['api_port'],

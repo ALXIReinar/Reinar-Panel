@@ -154,7 +154,7 @@ class SubscriptionQueries:
             SELECT order_id, sub_plan_id, user_id 
             FROM UNNEST($1::bigint[], $2::integer[], $3::bigint[]) AS t(order_id, sub_plan_id, user_id)
         ),
-        -- 3. Собираем информацию о нодах для этих подписок
+        -- 2. Собираем информацию о нодах для этих подписок
         expired_nodes_info AS (
             SELECT u.uuid, u.tg_username, upc.order_id, vsp.id AS sub_node_id,
                    vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, 
@@ -177,7 +177,7 @@ class SubscriptionQueries:
             JOIN protocols p ON np.proto_id = p.id 
             JOIN proto_templates pt ON p.tmp_id = pt.id 
         )
-        -- 5. Группируем пользователей по нодам для пакетной отправки
+        -- 3. Группируем пользователей по нодам для пакетной отправки
         SELECT node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, 
                flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, 
                constant_user_data_obj, required_user_data_obj, 
