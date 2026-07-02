@@ -48,7 +48,7 @@ class SubscriptionQueries:
         
         Использует Outbox pattern:
         1. Читает ноды из подписки
-        2. Вставляет записи в sub_nodes_outbox со статусом 'is_retried = false'
+        2. Вставляет записи в sub_nodes_outbox
         3. Возвращает полные данные нод для обработки
         """
         query = '''
@@ -125,7 +125,7 @@ class SubscriptionQueries:
         )
         -- 4. Группируем пользователей по нодам для пакетной отправки
         SELECT node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script, 
-               flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path,
+               flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, bulk_delete_script_custom_params,
                COALESCE(
                    json_agg(
                        json_build_object( 
@@ -139,7 +139,7 @@ class SubscriptionQueries:
                ) AS users
         FROM expired_nodes_info
         GROUP BY node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script, 
-                 flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path
+                 flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, bulk_delete_script_custom_params
         '''
         return await self.conn.fetch(query, CoreProtoActions.delete, PayStatuses.expired)
 

@@ -326,44 +326,6 @@ async def protocol_template(cached_protocol_template):
     return cached_protocol_template
 
 
-@pytest.fixture
-def metrics_parser_from_db(cached_protocol_template):
-    """
-    Загружает metrics_parser_code из кэшированного шаблона и возвращает parse функцию
-    
-    Использует реальный скрипт из proto_templates через кэш.
-    Скрипт выполняется через exec() как в продакшене.
-    
-    Returns:
-        callable: Функция parse(raw_metrics) для парсинга метрик
-        
-    Raises:
-        pytest.skip: Если metrics_parser_code отсутствует в шаблоне
-    """
-    parser_code = cached_protocol_template.get('metrics_parser_code')
-    
-    if not parser_code:
-        pytest.skip(
-            f"metrics_parser_code не найден в шаблоне '{cached_protocol_template.get('title', 'unknown')}'"
-        )
-    
-    # Выполняем код как в продакшене через exec()
-    # Добавляем необходимые модули в global scope
-    import json
-    import re
-    from collections import defaultdict
-    
-    local_scope = {}
-    global_scope = {
-        'json': json,
-        're': re,
-        'defaultdict': defaultdict
-    }
-    
-    exec(parser_code, global_scope, local_scope)
-    
-    return local_scope['parse']
-
 
 @pytest.fixture
 def get_script_from_template(cached_protocol_template):

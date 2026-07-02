@@ -11,7 +11,7 @@ from web.sub.data.postgres import PgSql
 @pg_sql_dep
 @arq_dep
 async def reset_day_user_traffic(ctx: dict, users: list[dict] | None = None, db: PgSql = None, arq: ArqRedis = None):
-    log_event(f'\033[35m[ARQ Traffic Reset]\033[0m Обнуление трафика пользователей. \033[34m(Крона, если user_ids = None)\033[0m | user_ids: {user_ids}', level='WARNING')
+    log_event(f'\033[35m[ARQ Traffic Reset]\033[0m Обнуление трафика пользователей. \033[34m(Крона, если users = None)\033[0m | users: {users}', level='WARNING')
     if users:
         unlock_users_by_node = await db.users_subs.reset_traffic_by_users(users)
     else:

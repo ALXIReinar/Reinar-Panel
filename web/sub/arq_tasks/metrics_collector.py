@@ -3,10 +3,12 @@ import importlib
 import json
 import math
 import re
+import traceback
 from collections import defaultdict
 
 import flatten_json
 import jmespath
+import orjson
 from aiohttp import ClientResponseError, ClientSession
 from arq import ArqRedis
 from asyncpg import Pool
@@ -39,7 +41,7 @@ async def traffic_sync_scheduler(ctx: dict, db: PgSql = None, arq: ArqRedis = No
     "Ставим задачу сбора метрик в очередь. Task Chaining"
     job = await arq.enqueue_job('collect_traffic_metrics', nodes)
     log_event(
-        f'\033[36m[ARQ Metrics Collector]\033[0m Найдены ноды для сбора метрик. Задача поставлена в очередь | job_id: \033[33m{job.job_id}\033[0m; nodes_count: \033[32m{len(nodes)}\033[0m')
+        f'\033[36m[ARQ Metrics Collector]\033[0m Найдены ноды для сбора метрик. Task Chaining, depth: \033[35m0\033[0m. Задача поставлена в очередь | job_id: \033[33m{job.job_id}\033[0m; nodes_count: \033[32m{len(nodes)}\033[0m')
     return {'success': True, 'job_id': job.job_id, 'nodes_count': len(nodes)}
 
 
@@ -81,10 +83,18 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[dict], aio_http: Client
                     resp_data = await resp.json()
                 
                 "Парсим stdout скриптом пользователя"
-                # parsed_data, troubles = await parse_node_output(node['metrics_parser_code'], resp_data_stdout, node['sub_required_libs'])
-                parsed_data, troubles = await parse_node_output(node['metrics_parser_code'], resp_data['stdout'], node['sub_required_libs'])
-                if parsed_data is None:
+                script_res, script_res_pack, err_msg = await parse_node_output(node['metrics_parser_code'], resp_data['stdout'], node['sub_required_libs'])
+
+                "Ошибка в скрипте. Ранняя остановка"
+                if not script_res:
+                    log_event(f'\033[31m[ARQ Metrics Collector]\033[0m Скрипт упал с ошибкой. stdout не удалось обработать | err: {err_msg}; node_proto_id: \033[33m{node["id"]}\033[0m', level='WARNING')
+                    return
+
+                "Трафик пользователей, Проблемные пользователи"
+                parsed_data, troubles = script_res_pack
+                if troubles:
                     log_event(f'\033[36m[ARQ Metrics Collector]\033[0m Часть stdout не удалось обработать | troubles: {troubles}; node_proto_id: \033[33m{node["id"]}\033[0m', level='WARNING')
+
 
                 "Обновляем трафик, если был"
                 if parsed_data:
@@ -161,23 +171,34 @@ async def bulk_delete_by_traffic_limit(ctx: dict, outbox_event_ids: list, arq: A
     return {'success': True, 'message': 'Запущено Бульк удаление с нод', 'total_nodes': len(nodes_by_limited_users)}
 
 
-async def parse_node_output(script_text: str, stdout: str, lib_names: str):
+async def parse_node_output(script_text: str, stdout: str, lib_names: str | None) -> tuple[bool, tuple, str]:
     """
     Выполняет динамический код парсера.
     В скрипте должна быть определена функция parse(data)
 
     WARNING. Возможна миграция обработки сырых метрик на нод-клиент
     Current: нод-клиент отдаёт сырой выход из get_metrics скрипта. Он обрабатывается на саб-сервисе/МС фона
+
+    :returns
+        Happy case: True, (user_statistics, troubles), 'Plug Message'
+        Other Exception cases: False, (None, None), 'Err Reason'
     """
+    "Обработка строки-списка библиотек"
+    if lib_names is None:
+        lib_names = []
+    else:
+        lib_names = lib_names.split(',')
     try:
         # Подгружаем библиотеки пользователя
-        user_libs = {lib_name: importlib.import_module(lib_name) for lib_name in lib_names}
+        user_libs = {lib_name.strip(): importlib.import_module(lib_name.strip()) for lib_name in lib_names}
         # Локальное окружение для скрипта
         local_scope = {}
         # Доступные либы в окружении исполняемого скрипта
         global_scope = {
             **user_libs,
             "json": json,
+            "asyncio": asyncio,
+            "orjson": orjson,
             "re": re,
             "math": math,
             "defaultdict": defaultdict,
@@ -188,7 +209,9 @@ async def parse_node_output(script_text: str, stdout: str, lib_names: str):
                 "int": int, "str": str, "float": float, "list": list, "dict": dict,
                 "set": set, "len": len, "range": range, "round": round, "print": print,
                 "enumerate": enumerate, "zip": zip, "map": map, "filter": filter,
-                "Exception": Exception, "ValueError": ValueError
+                "isinstance": isinstance, "type": type, "dir": dir, "all": all, "any": any,
+                "Exception": Exception, "ValueError": ValueError, "KeyError": KeyError,
+                "NameError": NameError, "TypeError": TypeError, "AttributeError": AttributeError
             }
         }
         # Выполняем скрипт
@@ -197,7 +220,7 @@ async def parse_node_output(script_text: str, stdout: str, lib_names: str):
         "Вызываем функцию из скрипта"
         parse_func = local_scope.get("parse")
         if not parse_func:
-            return False, "функция parse не найдена в скрипте!"
+            return False, (None, None), "функция parse не найдена в скрипте!"
 
         result = parse_func(stdout)
 
@@ -206,14 +229,21 @@ async def parse_node_output(script_text: str, stdout: str, lib_names: str):
             result = await result
 
         log_event(f"Успешно Обработали stdout сбора метрик")
-        return result
+        return True, result, 'Успешно Обработали stdout сбора метрик'
 
     except ImportError as e:
-        error_msg = f"Библиотека {lib_names} не найдена | original_exception: {e}"
-        log_event(error_msg, level='CRITICAL')
-        return None, error_msg
+        log_event(f"\033[31mОШИБКА ИМПОРТА БИБЛИОТЕКИ\033[0m\nБиблиотека: {lib_names}\nAction: Parse Metrics\nДетали: {str(repr(e))}",level='CRITICAL')
+        return False, (None, None), f"Библиотека {lib_names} не найдена. Убедитесь что она установлена в виртуальном окружении."
+
+    except SyntaxError as e:
+        script_lines = script_text.split('\n')
+        error_line = script_lines[e.lineno - 1] if e.lineno and e.lineno <= len(script_lines) else "???"
+
+        log_event(f"\033[31mСИНТАКСИЧЕСКАЯ ОШИБКА В СКРИПТЕ\033[0m\nAction: Parse Metrics\nСтрока {e.lineno}: {error_line}\nОшибка: {e.msg}\nПозиция: {' ' * (e.offset - 1) if e.offset else ''}^\n", level='CRITICAL')
+
+        return False, (None, None), f"Синтаксическая ошибка в скрипте: {e.msg} (строка {e.lineno})"
 
     except Exception as e:
-        error_msg = f"Ошибка выполнения action_script скрипта | exception: {e}"
-        log_event(error_msg, level='CRITICAL')
-        return None, error_msg
+        tb_str = traceback.format_exc()
+        log_event(f"\033[31mОШИБКА ВЫПОЛНЕНИЯ СКРИПТА\033[0m\nAction: Parse Metrics\nБиблиотеки: {lib_names}\nТип ошибки: {type(e).__name__}\nСообщение: {str(e)}\n\nTraceback:\n{tb_str}\n", level='CRITICAL')
+        return False, (None, None), f"Ошибка выполнения скрипта ({type(e).__name__}): {str(e)}"

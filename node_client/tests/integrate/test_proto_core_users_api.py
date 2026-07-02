@@ -150,7 +150,7 @@ async def test_add_user_with_hot_reload_success(client, mock_buffer, mock_hot_re
     """
     payload = create_add_user_payload(
         core_port=10086,
-        core_lib=["grpcio"],
+        core_lib="grpcio",
         add_script="add_user_script.py"
     )
     
@@ -184,7 +184,7 @@ async def test_add_user_hot_reload_fails_continues_with_file(client, mock_buffer
     
     payload = create_add_user_payload(
         core_port=10086,
-        core_lib=["grpcio"],
+        core_lib="grpcio",
         add_script="add_user_script.py",
         reload_core_command="systemctl reload xray"
     )
@@ -286,7 +286,7 @@ async def test_delete_user_with_hot_reload(client, mock_buffer, mock_hot_reload)
     """
     payload = create_delete_user_payload(
         core_port=10086,
-        core_lib=["grpcio"],
+        core_lib="grpcio",
         delete_script="delete_user_script.py"
     )
     
@@ -421,7 +421,7 @@ async def test_bulk_add_with_hot_reload(client, mock_buffer, mock_hot_reload):
         "flatten_user_identifier_key": "email",
         "reload_core_command": "systemctl reload xray",
         "core_port": 10086,
-        "core_lib": ["grpcio"],
+        "core_lib": "grpcio",
         "bulk_add_script": "bulk_add_script.py",
         "custom_params": None
     }

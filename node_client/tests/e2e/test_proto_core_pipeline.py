@@ -112,7 +112,7 @@ async def test_add_user_without_api_script_only_file(
             "flatten_json_users_key": "inbounds___1___settings___clients",
             "flatten_user_identifier_key": "email",
             "reload_core_command": "echo 'reload'",
-            "core_lib": lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+            "core_lib": lib_names,
             "core_port": 10085,
             # НЕТ API-скрипта!
             "add_script": None,
@@ -190,7 +190,7 @@ async def test_delete_user_without_api_script_only_file(
         "flatten_json_users_key": "inbounds___1___settings___clients",
         "flatten_user_identifier_key": "email",
         "reload_core_command": "echo 'reload'",
-        "core_lib": lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        "core_lib": lib_names,
         "core_port": 10085,
         "add_script": None,
         "custom_params": {}
@@ -228,7 +228,7 @@ async def test_delete_user_without_api_script_only_file(
             "flatten_json_users_key": "inbounds___1___settings___clients",
             "flatten_user_identifier_key": "email",
             "reload_core_command": "echo 'reload'",
-            "core_lib": lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+            "core_lib": lib_names,
             "core_port": 10085,
             # НЕТ delete-скрипта!
             "delete_script": None,
@@ -312,7 +312,7 @@ async def test_add_user_with_api_script_success_no_reload(
             "flatten_json_users_key": "inbounds___1___settings___clients",
             "flatten_user_identifier_key": "email",
             "reload_core_command": "echo 'reload'",
-            "core_lib": lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+            "core_lib": lib_names,
             "core_port": 10085,
             # Есть API-скрипт!
             "add_script": add_script,
@@ -401,7 +401,7 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
             "flatten_json_users_key": "inbounds___1___settings___clients",
             "flatten_user_identifier_key": "email",
             "reload_core_command": "echo 'reload'",
-            "core_lib": lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+            "core_lib": lib_names,
             "core_port": 10085,
             # Скрипт который провалится
             "add_script": broken_script,
@@ -489,7 +489,7 @@ async def test_bulk_add_users_with_api_script_unlimit_flush(
         "flatten_json_users_key": "inbounds___1___settings___clients",
         "flatten_user_identifier_key": "email",
         "reload_core_command": "echo 'reload'",
-        "core_lib": lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        "core_lib": lib_names,
         "core_port": 10085,
         "bulk_add_script": bulk_add_script,
         "custom_params": custom_params
@@ -579,7 +579,7 @@ async def test_bulk_delete_users_without_api_script(
             "flatten_json_users_key": "inbounds___1___settings___clients",
             "flatten_user_identifier_key": "email",
             "reload_core_command": "",  # Пустая строка вместо None
-            "core_lib": lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+            "core_lib": lib_names,
             "core_port": 10085,
             "add_script": None,
             "custom_params": {}
@@ -603,7 +603,7 @@ async def test_bulk_delete_users_without_api_script(
         "flatten_json_users_key": "inbounds___1___settings___clients",
         "flatten_user_identifier_key": "email",
         "reload_core_command": "echo 'reload'",
-        "core_lib": lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        "core_lib": lib_names,
         "core_port": 10085,
         # НЕТ bulk_delete_script
         "bulk_delete_script": None,
@@ -702,7 +702,7 @@ async def test_e2e_add_user_with_hot_reload_and_verify_metrics(
         "flatten_json_users_key": "inbounds___1___settings___clients",
         "flatten_user_identifier_key": "email",
         "reload_core_command": "echo 'reload'",
-        "core_lib": lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        "core_lib": lib_names,
         "core_port": core_port,
         "add_script": add_script,
         "custom_params": custom_params_add
@@ -720,7 +720,7 @@ async def test_e2e_add_user_with_hot_reload_and_verify_metrics(
     metrics_request = {
         "command": "xray api statsquery --server=127.0.0.1:{}",
         "metrics_script": metrics_script,
-        "core_lib": lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        "core_lib": lib_names,
         "metrics_port": core_port
     }
     
@@ -802,7 +802,7 @@ async def test_e2e_delete_user_and_verify_removed(
         "flatten_json_users_key": "inbounds___1___settings___clients",
         "flatten_user_identifier_key": "email",
         "reload_core_command": "",
-        "core_lib": lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        "core_lib": lib_names,
         "core_port": core_port,
         "add_script": add_script,
         "custom_params": custom_params_add
@@ -826,7 +826,7 @@ async def test_e2e_delete_user_and_verify_removed(
         "flatten_json_users_key": "inbounds___1___settings___clients",
         "flatten_user_identifier_key": "email",
         "reload_core_command": "echo 'reload'",
-        "core_lib": lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        "core_lib": lib_names,
         "core_port": core_port,
         "delete_script": delete_script,
         "custom_params": custom_params_delete
@@ -916,7 +916,7 @@ async def test_e2e_bulk_operations_with_verification(
         "flatten_json_users_key": "inbounds___1___settings___clients",
         "flatten_user_identifier_key": "email",
         "reload_core_command": "",
-        "core_lib": lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        "core_lib": lib_names,
         "core_port": core_port,
         "bulk_add_script": bulk_add_script,
         "custom_params": custom_params_bulk_add
@@ -957,7 +957,7 @@ async def test_e2e_bulk_operations_with_verification(
         "flatten_json_users_key": "inbounds___1___settings___clients",
         "flatten_user_identifier_key": "email",
         "reload_core_command": "echo 'reload'",
-        "core_lib": lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        "core_lib": lib_names,
         "core_port": core_port,
         "bulk_delete_script": bulk_delete_script,
         "custom_params": custom_params_bulk_delete

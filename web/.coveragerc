@@ -16,6 +16,11 @@ omit =
     */test_*.py
     */__init__.py
     web/config_dir/config.py
+    web/arq_tasks/cron_tasks.py
+    web/arq_tasks/depends_fabric.py
+    web/config_dir/arq_config.py
+    web/main.py
+    web/utils/arq_logger_config.py
 
 # Использовать относительные пути
 relative_files = True

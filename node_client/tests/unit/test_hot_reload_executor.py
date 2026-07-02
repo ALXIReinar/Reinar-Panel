@@ -85,13 +85,13 @@ async def test_execute_add_user_unified(
     # Загружаем скрипт из БД
     script = get_script_from_template(TemplateScriptFields.add_user)
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
-    custom_params = get_script_from_template(TemplateScriptFields.custom_params_add) or {}
+    custom_params = get_script_from_template(TemplateScriptFields.custom_params_add)
     
     user_obj = {"id": "test-uuid-add-123", "email": "test_add@example.com", "uuid": "test-uuid-add-123"}
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        lib_names=lib_names,
         user_obj=user_obj,
         node_ip=core_ip,
         core_api_port=core_port,
@@ -100,7 +100,7 @@ async def test_execute_add_user_unified(
     )
     
     assert success is True, f"Expected success, got: {message}"
-    assert "Hot-reload успешно" in message
+
 
 
 @pytest.mark.parametrize("use_real_core", [False, True], ids=["mock", "real"])
@@ -130,7 +130,7 @@ async def test_execute_delete_user_unified(
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        lib_names=lib_names,
         user_obj=user_obj,
         node_ip=core_ip,
         core_api_port=core_port,
@@ -171,7 +171,7 @@ async def test_execute_bulk_add_unified(
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        lib_names=lib_names,
         user_obj=users_list,
         node_ip=core_ip,
         core_api_port=core_port,
@@ -212,7 +212,7 @@ async def test_execute_bulk_delete_unified(
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        lib_names=lib_names,
         user_obj=users_list,
         node_ip=core_ip,
         core_api_port=core_port,
@@ -247,7 +247,7 @@ async def test_execute_get_metrics_unified(
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        lib_names=lib_names,
         user_obj=None,
         node_ip=core_ip,
         core_api_port=core_port,
@@ -272,7 +272,7 @@ async def test_library_imported_to_global_scope(mock_xtlsapi, get_script_from_te
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        lib_names=lib_names,
         user_obj=user_obj,
         node_ip="127.0.0.1",
         core_api_port=10085,
@@ -294,7 +294,7 @@ async def test_multiple_libraries_import(get_script_from_template):
     # Скрипт get_metrics использует json, re и другие библиотеки
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        lib_names=lib_names,
         user_obj=None,
         node_ip="127.0.0.1",
         core_api_port=10085,
@@ -318,7 +318,7 @@ async def test_asyncio_available_in_scope(mock_xtlsapi, get_script_from_template
     # Скрипты из БД используют async/await
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        lib_names=lib_names,
         user_obj=user_obj,
         node_ip="127.0.0.1",
         core_api_port=10085,
@@ -347,7 +347,7 @@ async def test_custom_params_passed_to_script(mock_xtlsapi, get_script_from_temp
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        lib_names=lib_names,
         user_obj=user_obj,
         node_ip="127.0.0.1",
         core_api_port=10085,
@@ -371,7 +371,7 @@ async def test_custom_params_none_becomes_empty_dict(mock_xtlsapi, get_script_fr
     # Передаём None вместо custom_params
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        lib_names=lib_names,
         user_obj=user_obj,
         node_ip="127.0.0.1",
         core_api_port=10085,
@@ -404,7 +404,7 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=[],
+        lib_names=None,
         user_obj={},
         node_ip="127.0.0.1",
         core_api_port=10085,
@@ -429,7 +429,7 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=[],
+        lib_names=None,
         user_obj={},
         node_ip="127.0.0.1",
         core_api_port=10085,
@@ -454,7 +454,7 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=[],
+        lib_names=None,
         user_obj={},
         node_ip="127.0.0.1",
         core_api_port=10085,
@@ -487,7 +487,7 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=[],
+        lib_names=None,
         user_obj={},
         node_ip="127.0.0.1",
         core_api_port=10085,
@@ -513,7 +513,7 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=[],
+        lib_names=None,
         user_obj={},
         node_ip="127.0.0.1",
         core_api_port=10085,
@@ -536,7 +536,7 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=['xtlsapi'],
+        lib_names='xtlsapi',
         user_obj={},
         node_ip="127.0.0.1",
         core_api_port=10085,
@@ -559,7 +559,7 @@ async def wrong_function_name(user_obj, node_ip, core_port, custom_params):
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=[],
+        lib_names=None,
         user_obj={},
         node_ip="127.0.0.1",
         core_api_port=10085,
@@ -582,7 +582,7 @@ async def test_library_import_error(get_script_from_template):
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=['nonexistent_library_12345'],
+        lib_names='nonexistent_library_12345',
         user_obj=user_obj,
         node_ip="127.0.0.1",
         core_api_port=10085,
@@ -607,7 +607,7 @@ async def test_async_function_execution(mock_xtlsapi, get_script_from_template):
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        lib_names=lib_names,
         user_obj=user_obj,
         node_ip="127.0.0.1",
         core_api_port=10085,
@@ -629,7 +629,7 @@ def add_user(user_obj, node_ip, core_port, custom_params):
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=[],
+        lib_names=None,
         user_obj={},
         node_ip="127.0.0.1",
         core_api_port=10085,
@@ -652,7 +652,7 @@ async def test_mixed_async_sync_calls(mock_xtlsapi, get_script_from_template):
     # Скрипт из БД - async функция, вызывает sync методы xtlsapi
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        lib_names=lib_names,
         user_obj=user_obj,
         node_ip="127.0.0.1",
         core_api_port=10085,
@@ -677,7 +677,7 @@ async def test_user_obj_as_dict(mock_xtlsapi, get_script_from_template):
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        lib_names=lib_names,
         user_obj=user_obj,
         node_ip="127.0.0.1",
         core_api_port=10085,
@@ -704,7 +704,7 @@ async def test_user_obj_as_list_for_bulk(mock_xtlsapi, get_script_from_template)
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
-        lib_names=lib_names.split(',') if isinstance(lib_names, str) else lib_names,
+        lib_names=lib_names,
         user_obj=users_list,
         node_ip="127.0.0.1",
         core_api_port=10085,

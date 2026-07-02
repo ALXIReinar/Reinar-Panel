@@ -22,7 +22,7 @@ class HotReloadExecutor:
     @staticmethod
     async def execute_action_script(
             script: str,
-            lib_names: str,
+            lib_names: str | None,
             node_ip: str,
             core_api_port: int,
             action: Literal["add_user", "delete_user", "bulk_delete_users", "bulk_add_users", "get_metrics"],
@@ -47,10 +47,16 @@ class HotReloadExecutor:
         """
         if custom_params is None:
             custom_params = {}
+
+        "Обработка строки-списка библиотек"
+        if lib_names is None:
+            lib_names = []
+        else:
+            lib_names = lib_names.split(',')
         try:
 
             "Создаём локальное окружение для выполнения скрипта"
-            user_libs = {lib_name: importlib.import_module(lib_name) for lib_name in lib_names} # Подгружаем библиотеки пользователя
+            user_libs = {lib_name.strip(): importlib.import_module(lib_name.strip()) for lib_name in lib_names} # Подгружаем библиотеки пользователя
             local_scope = {}
             global_scope = {
                 **user_libs,
@@ -102,7 +108,7 @@ class HotReloadExecutor:
                 result = await result
 
             log_event(f"Hot-reload успешно выполнен для пользователя | user_obj: \033[37m{user_obj}\033[0m")
-            return True, f"Hot-reload успешно. script_result: {result}"
+            return True, result
             
         except ImportError as e:
             log_event(f"\033[31mОШИБКА ИМПОРТА БИБЛИОТЕКИ\033[0m\nБиблиотека: {lib_names}\nAction: {action}\nДетали: {str(repr(e))}", level='CRITICAL')

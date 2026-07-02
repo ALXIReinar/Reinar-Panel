@@ -1,0 +1,88 @@
+[run]
+# Измеряем покрытие ТОЛЬКО для node_client
+source = node_client
+
+# Исключить из измерения покрытия
+omit =
+    # Тесты
+    node_client/tests/*
+    */tests/*
+    */test_*.py
+    
+    # Конфигурационные файлы
+    node_client/config.py
+    node_client/logger_config.py
+    
+    # Entry points
+    node_client/main.py
+    
+    # Логи
+    node_client/node_logs/*
+    
+    # Python служебные файлы
+    */__init__.py
+    */__pycache__/*
+    node_client/__pycache__/*
+    node_client/*/__pycache__/*
+    node_client/*/*/__pycache__/*
+    
+    # Virtual environments
+    */.venv/*
+    */venv/*
+    
+    # Pytest cache
+    node_client/.pytest_cache/*
+    
+    # Shell scripts
+    node_client/*.sh
+
+# Использовать относительные пути
+relative_files = True
+
+[report]
+# Показывать строки которые не покрыты тестами
+show_missing = True
+
+# Точность процентов (2 знака после запятой)
+precision = 2
+
+# Сортировка по проценту покрытия
+sort = Cover
+
+# Пропустить пустые файлы
+skip_empty = True
+
+# Исключить из отчёта (игнорируемые строки)
+exclude_lines =
+    # Стандартные исключения
+    pragma: no cover
+    def __repr__
+    def __str__
+    raise AssertionError
+    raise NotImplementedError
+    
+    # Entry points
+    if __name__ == .__main__.:
+    
+    # Type checking
+    if TYPE_CHECKING:
+    from typing import TYPE_CHECKING
+    
+    # Abstract methods
+    @abstractmethod
+    @abc.abstractmethod
+    
+    # Логирование (не тестируем логи)
+    logger\.
+    print\(
+    
+    # Defensive programming
+    pass
+
+[html]
+# Директория для HTML отчёта
+directory = node_client/htmlcov
+
+[xml]
+# Файл для XML отчёта (для CI/CD интеграций)
+output = node_client/coverage.xml
