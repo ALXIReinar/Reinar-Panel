@@ -42,6 +42,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: web-service
+    image: reinar_panel/web_service
     depends_on:
       pg_db:
         condition: service_healthy

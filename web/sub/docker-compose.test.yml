@@ -1,0 +1,65 @@
+name: test_reinar_panel_sub
+
+services:
+  pg_db:
+    image: postgres:16
+    container_name: pg_db
+    environment:
+      - POSTGRES_USER=${PG_ADMIN}
+      - POSTGRES_PASSWORD=${PG_ADMIN_PASSWORD}
+      - POSTGRES_DB=test_${PG_DB}
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${PG_ADMIN}" ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: on-failure
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../secrets/test_dumps:/docker-entrypoint-initdb.d:z
+    ports:
+      - "127.0.0.1:5431:5432"
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --appendonly
+      - "yes"
+    volumes:
+      - redis_data:/data
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:6378:6379"
+
+  sub-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: test_sub-service
+    image: reinar_panel/sub_service
+    command: python -m pytest web/sub/tests -v
+    depends_on:
+      pg_db:
+        condition: service_healthy
+    environment:
+      - ENV_FILE=/run/secrets/env.sub.test
+    network_mode: host
+    secrets:
+      - env.sub.test
+
+
+secrets:
+  env.sub.test:
+    file: .env.sub.test
+
+volumes:
+  pgdata:
+    driver: local
+  redis_data:
+    driver: local

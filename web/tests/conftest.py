@@ -86,8 +86,7 @@ async def db_seed(db_pool):
                 users,
                 templates_statuses,
                 online_statuses,
-                pay_statuses,
-                node_statuses
+                pay_statuses
             RESTART IDENTITY CASCADE
         """)
         

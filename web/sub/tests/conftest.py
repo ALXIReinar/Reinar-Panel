@@ -67,8 +67,7 @@ async def db_seed(db_pool):
                 users,
                 templates_statuses,
                 online_statuses,
-                pay_statuses,
-                node_statuses
+                pay_statuses
             RESTART IDENTITY CASCADE
         """)
         
@@ -89,12 +88,6 @@ async def db_seed(db_pool):
             INSERT INTO pay_statuses (id, name) 
             OVERRIDING SYSTEM VALUE 
             VALUES (1, 'pending'), (2, 'success'), (3, 'expired')
-        """)
-
-        await conn.execute("""
-            INSERT INTO node_statuses (id, name)
-            OVERRIDING SYSTEM VALUE
-            VALUES (1, 'active'), (2, 'inactive')
         """)
     
     return {"db_cleaned": True}

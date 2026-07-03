@@ -1,0 +1,68 @@
+name: test_reinar_panel_admin
+
+services:
+  pg_db:
+    image: postgres:16
+    container_name: pg_db
+    environment:
+      - POSTGRES_USER=${PG_ADMIN}
+      - POSTGRES_PASSWORD=${PG_ADMIN_PASSWORD}
+      - POSTGRES_DB=test_${PG_DB}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_ADMIN}"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: on-failure
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./secrets/test_dumps:/docker-entrypoint-initdb.d:z        # Изменена инит-папка!
+    ports:
+      - "127.0.0.1:5431:5432"
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --appendonly
+      - "yes"
+    volumes:
+      - redis_data:/data
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:6378:6379"
+
+  web-service:
+    image: reinar_panel/web_service:latest
+    command: python -m pytest web/tests -v
+    container_name: test_web-service
+    depends_on:
+      pg_db:
+        condition: service_healthy
+    environment:
+      - ENV_FILE=/run/secrets/env.api.test
+    network_mode: host
+    secrets:
+      - env.api.test
+      - private_key.pem
+      - public_key.pem
+
+volumes:
+  pgdata:
+    driver: local
+  redis_data:
+    driver: local
+
+secrets:
+  env.api.test:
+    file: .env.api.test
+  private_key.pem:
+    file: secrets/test_keys/private_key.pem
+  public_key.pem:
+    file: secrets/test_keys/public_key.pem
+

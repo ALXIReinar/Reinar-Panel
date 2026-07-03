@@ -1,0 +1,119 @@
+name: Admin CI
+
+# Запускаем при пуше в main или при создании Pull Request в main
+on:
+  push:
+    branches: ["main", "dev/backend"]
+  pull_request:
+    branches: ["main", "dev/backend"]
+
+jobs:
+  # 1. Сборка проекта
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Decode and extract artifacts
+        run: |
+          echo "📦 Распаковка артефактов..."
+          echo "${{ vars.ARTIFACTS_B64 }}" | base64 -d > artifacts.tar.gz
+          tar -xzf artifacts.tar.gz
+          echo "✓ Артефакты распакованы"
+
+      - name: Generate RSA keys for tests
+        run: |
+          echo "🔐 Генерация RSA ключей для тестов..."
+          mkdir -p web/secrets/test_keys
+          openssl genrsa -out web/secrets/test_keys/private_key.pem 2048
+          openssl rsa -in web/secrets/test_keys/private_key.pem -outform PEM -pubout -out web/secrets/test_keys/public_key.pem
+          echo "✓ Ключи сгенерированы"
+
+      - name: Setup test environment file
+        run: |
+          echo "📝 Создание .env.api.test..."
+          echo "${{ vars.ENV_API_TEST_FILE }}" > web/.env.api.test
+          echo "UVICORN_PORT=${{ vars.ADMIN_PORT }}" >> web/.env.api.test
+          echo "✓ Файл окружения создан"
+
+      - name: Build Docker image
+        run: |
+          echo "🔨 Начинаем сборку..."
+          docker build -t reinar_panel/web_service:latest web/
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Decode and extract artifacts
+        run: |
+          echo "📦 Распаковка артефактов..."
+          echo "${{ vars.ARTIFACTS_B64 }}" | base64 -d > artifacts.tar.gz
+          tar -xzf artifacts.tar.gz
+          echo "✓ Артефакты распакованы"
+
+      - name: Generate RSA keys for tests
+        run: |
+          echo "🔐 Генерация RSA ключей для тестов..."
+          mkdir -p web/secrets/test_keys
+          openssl genrsa -out web/secrets/test_keys/private_key.pem 2048
+          openssl rsa -in web/secrets/test_keys/private_key.pem -outform PEM -pubout -out web/secrets/test_keys/public_key.pem
+          echo "✓ Ключи сгенерированы"
+
+      - name: Setup test environment file
+        run: |
+          echo "📝 Создание .env.api.test..."
+          echo "${{ vars.ENV_API_TEST_FILE }}" > web/.env.api.test
+          echo "UVICORN_PORT=${{ vars.ADMIN_PORT }}" >> web/.env.api.test
+          echo "✓ Файл окружения создан"
+
+      - name: Run tests
+        run: |
+          echo "🧪 Запускаем тесты..."
+          docker compose -f web/docker-compose.test_admin.yml up --abort-on-container-exit --exit-code-from web-service
+
+      - name: Stop test containers
+        if: always()
+        run: |
+          echo "🛑 Остановка тестовых контейнеров..."
+          docker compose -f web/docker-compose.test_admin.yml down -v
+          echo "✓ Контейнеры остановлены"
+
+  # 3. Установка и Healthcheck (запустится только если test успешен)
+  install-test:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Installation Script
+        env:
+          ADMIN_PORT: ${{ vars.ADMIN_PORT }}
+        run: |
+          echo "🚀 Запускаем скрипт установки..."
+          chmod +x ./web/scripts/install.sh
+          sudo ./web/scripts/install.sh
+
+      - name: Verify Service Health
+        env:
+          ADMIN_PORT: ${{ vars.ADMIN_PORT }}
+        run: |
+          echo "⏳ Проверка работоспособности сервиса..."
+          for i in {1..12}; do
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:${ADMIN_PORT}/api/v1/healthcheck | grep -q "200"; then
+              echo "✅ Сервис успешно запущен и готов к работе!"
+              exit 0
+            fi
+            echo "Ожидание... ($i/12)"
+            sleep 5
+          done
+          
+          echo "❌ Ошибка: Сервис не удалось запустить"
+          echo "📋 Логи контейнера:"
+          docker logs web-service || true
+          exit 1
