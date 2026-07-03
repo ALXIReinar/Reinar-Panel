@@ -11,19 +11,29 @@ jobs:
   # 1. Сборка проекта
   build:
     runs-on: ubuntu-latest
+    environment: test_admin
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Debug - Check available variables
+        run: |
+          echo "🔍 Проверка доступных переменных..."
+          echo "ARTIFACTS_B64 length: ${#ARTIFACTS_B64}"
+          echo "Branch: ${{ github.ref }}"
+          echo "Event: ${{ github.event_name }}"
+        env:
+          ARTIFACTS_B64: ${{ vars.ARTIFACTS_B64 }}
+
       - name: Decode and extract artifacts
         run: |
           echo "📦 Распаковка артефактов..."
-          if [ -z "${{ vars.ARTIFACTS_B64 }}" ]; then
+          if [ -z "$ARTIFACTS_B64" ]; then
             echo "❌ Ошибка: переменная ARTIFACTS_B64 не установлена или пуста"
-            echo "Настройте её в Settings → Secrets and variables → Actions → Variables"
+            echo "Настройте её в Settings → Environments → test_admin"
             exit 1
           fi
-          echo "${{ vars.ARTIFACTS_B64 }}" | base64 -d > artifacts.tar.gz
+          echo "$ARTIFACTS_B64" | base64 -d > artifacts.tar.gz
           if [ $? -ne 0 ]; then
             echo "❌ Ошибка декодирования base64"
             exit 1
@@ -35,6 +45,8 @@ jobs:
           fi
           echo "✓ Артефакты распакованы"
           ls -la web/secrets/ || true
+        env:
+          ARTIFACTS_B64: ${{ vars.ARTIFACTS_B64 }}
 
       - name: Generate RSA keys for tests
         run: |
@@ -43,21 +55,6 @@ jobs:
           openssl genrsa -out web/secrets/test_keys/private_key.pem 2048
           openssl rsa -in web/secrets/test_keys/private_key.pem -outform PEM -pubout -out web/secrets/test_keys/public_key.pem
           echo "✓ Ключи сгенерированы"
-
-      - name: Setup test environment file
-        run: |
-          echo "📝 Создание .env.api.test..."
-          if [ -z "${{ vars.ENV_API_TEST_FILE }}" ]; then
-            echo "❌ Ошибка: переменная ENV_API_TEST_FILE не установлена"
-            exit 1
-          fi
-          if [ -z "${{ vars.ADMIN_PORT }}" ]; then
-            echo "❌ Ошибка: переменная ADMIN_PORT не установлена"
-            exit 1
-          fi
-          echo "${{ vars.ENV_API_TEST_FILE }}" > web/.env.api.test
-          echo "UVICORN_PORT=${{ vars.ADMIN_PORT }}" >> web/.env.api.test
-          echo "✓ Файл окружения создан"
 
       - name: Build Docker image
         run: |
@@ -67,6 +64,7 @@ jobs:
   test:
     needs: build
     runs-on: ubuntu-latest
+    environment: test_admin
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -74,23 +72,17 @@ jobs:
       - name: Decode and extract artifacts
         run: |
           echo "📦 Распаковка артефактов..."
-          if [ -z "${{ vars.ARTIFACTS_B64 }}" ]; then
-            echo "❌ Ошибка: переменная ARTIFACTS_B64 не установлена или пуста"
-            echo "Настройте её в Settings → Secrets and variables → Actions → Variables"
+          if [ -z "$ARTIFACTS_B64" ]; then
+            echo "❌ Ошибка: переменная ARTIFACTS_B64 не установлена"
+            echo "Проверьте environment 'test_admin'"
             exit 1
           fi
-          echo "${{ vars.ARTIFACTS_B64 }}" | base64 -d > artifacts.tar.gz
-          if [ $? -ne 0 ]; then
-            echo "❌ Ошибка декодирования base64"
-            exit 1
-          fi
+          echo "$ARTIFACTS_B64" | base64 -d > artifacts.tar.gz
           tar -xzf artifacts.tar.gz
-          if [ $? -ne 0 ]; then
-            echo "❌ Ошибка распаковки tar.gz"
-            exit 1
-          fi
           echo "✓ Артефакты распакованы"
           ls -la web/secrets/ || true
+        env:
+          ARTIFACTS_B64: ${{ vars.ARTIFACTS_B64 }}
 
       - name: Generate RSA keys for tests
         run: |
@@ -103,17 +95,20 @@ jobs:
       - name: Setup test environment file
         run: |
           echo "📝 Создание .env.api.test..."
-          if [ -z "${{ vars.ENV_API_TEST_FILE }}" ]; then
+          if [ -z "$ENV_API_TEST_FILE" ]; then
             echo "❌ Ошибка: переменная ENV_API_TEST_FILE не установлена"
             exit 1
           fi
-          if [ -z "${{ vars.ADMIN_PORT }}" ]; then
+          if [ -z "$ADMIN_PORT" ]; then
             echo "❌ Ошибка: переменная ADMIN_PORT не установлена"
             exit 1
           fi
-          echo "${{ vars.ENV_API_TEST_FILE }}" > web/.env.api.test
-          echo "UVICORN_PORT=${{ vars.ADMIN_PORT }}" >> web/.env.api.test
+          echo "$ENV_API_TEST_FILE" > web/.env.api.test
+          echo "UVICORN_PORT=$ADMIN_PORT" >> web/.env.api.test
           echo "✓ Файл окружения создан"
+        env:
+          ENV_API_TEST_FILE: ${{ vars.ENV_API_TEST_FILE }}
+          ADMIN_PORT: ${{ vars.ADMIN_PORT }}
 
       - name: Run tests
         run: |
@@ -131,6 +126,7 @@ jobs:
   install-test:
     needs: test
     runs-on: ubuntu-latest
+    environment: test_admin
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -140,8 +136,9 @@ jobs:
           ADMIN_PORT: ${{ vars.ADMIN_PORT }}
         run: |
           echo "🚀 Запускаем скрипт установки..."
+          echo "ADMIN_PORT: ${ADMIN_PORT}"
           chmod +x ./web/scripts/install.sh
-          sudo ./web/scripts/install.sh
+          sudo -E ./web/scripts/install.sh
 
       - name: Verify Service Health
         env:
