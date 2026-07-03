@@ -9,19 +9,25 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/web_service
+  # IMAGE_NAME устанавливается в каждой job отдельно с lowercase преобразованием
 
 jobs:
-  # 1. Сборка проекта
+  # 1. Сборка образа и публикация в GHCR с SHA тегом
+  # Образ переиспользуется в test job для ускорения CI
   build:
     runs-on: ubuntu-latest
     environment: test_admin
     permissions:
       contents: read
       packages: write
+    env:
+      IMAGE_NAME: ${{ github.repository }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set lowercase image name
+        run: echo "IMAGE_NAME_LOWER=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')/web_service" >> $GITHUB_ENV
 
       - name: Decode and extract artifacts
         run: |
@@ -49,7 +55,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}
           tags: |
             type=sha,prefix=,format=short
 
@@ -61,6 +67,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+  # 2. Тестирование с переиспользованием образа из GHCR
+  # Образ пуллится из реестра вместо повторной сборки для экономии времени
   test:
     needs: build
     runs-on: ubuntu-latest
@@ -68,9 +76,14 @@ jobs:
     permissions:
       contents: read
       packages: read
+    env:
+      IMAGE_NAME: ${{ github.repository }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set lowercase image name
+        run: echo "IMAGE_NAME_LOWER=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')/web_service" >> $GITHUB_ENV
 
       - name: Decode and extract artifacts
         run: |
@@ -107,7 +120,7 @@ jobs:
         run: |
           echo "📥 Получение образа из GHCR..."
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:${SHORT_SHA}"
           docker pull ${IMAGE_TAG}
           docker tag ${IMAGE_TAG} reinar_panel/web_service:${SHORT_SHA}
           echo "IMAGE_TAG=${SHORT_SHA}" >> $GITHUB_ENV
@@ -119,7 +132,8 @@ jobs:
         if: always()
         run: docker compose -f web/docker-compose.test_admin.yml down -v
 
-  # 3. Установка и Healthcheck (запустится только если test успешен)
+  # 3. Установка и Healthcheck
+  # Использует локальную сборку через install.sh (production сценарий)
   install-test:
     needs: test
     runs-on: ubuntu-latest

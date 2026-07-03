@@ -1,5 +1,7 @@
 name: test_reinar_panel_admin
 
+# Используется в CI для тестирования
+# IMAGE_TAG передается из GitHub Actions с SHA коммита (например: abc1234)
 services:
   pg_db:
     image: postgres:16
