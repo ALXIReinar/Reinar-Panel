@@ -58,53 +58,59 @@ echo -e "\nОбновление системы"
 apt-get update -y && apt-get upgrade -y
 
 echo -e "\nНастройка имени Ноды"
-read -p "Введите имя ноды(будет отображаться в админ панели): " NODE_NAME
+
+if [ -z "$NODE_NAME" ]; then
+    read -p "Введите имя ноды(будет отображаться в админ панели): " NODE_NAME
+fi
 
 # Интерактивный выбор порта
 echo -e "\n${YELLOW}Настройка порта для Node Client${NC}"
 DEFAULT_PORT=8100
+if [ -z "$NODE_PORT" ]; then
+    while true; do
+        read -p "Введите порт для API (по умолчанию $DEFAULT_PORT): " USER_PORT
+        USER_PORT=${USER_PORT:-$DEFAULT_PORT}
 
-while true; do
-    read -p "Введите порт для API (по умолчанию $DEFAULT_PORT): " USER_PORT
-    USER_PORT=${USER_PORT:-$DEFAULT_PORT}
-    
-    # Проверка что порт - число
-    if ! [[ "$USER_PORT" =~ ^[0-9]+$ ]]; then
-        echo -e "${RED}✗${NC} Ошибка: Порт должен быть числом"
-        continue
-    fi
-    
-    # Проверка диапазона портов
-    if [ "$USER_PORT" -lt 1024 ] || [ "$USER_PORT" -gt 65535 ]; then
-        echo -e "${RED}✗${NC} Ошибка: Порт должен быть в диапазоне 1024-65535"
-        continue
-    fi
-    
-    # Проверка занятости порта
-    if lsof -Pi :$USER_PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
-        echo -e "${RED}✗${NC} Порт $USER_PORT уже занят"
-        echo -e "${YELLOW}Процесс использующий порт:${NC}"
-        lsof -Pi :$USER_PORT -sTCP:LISTEN
-        read -p "Выбрать другой порт? (y/N): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${YELLOW}Установка отменена${NC}"
-            exit 1
+        # Проверка что порт - число
+        if ! [[ "$USER_PORT" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}✗${NC} Ошибка: Порт должен быть числом"
+            continue
         fi
-        continue
-    fi
-    
-    echo -e "${GREEN}✓${NC} Порт $USER_PORT доступен"
-    break
-done
 
-NODE_PORT=$USER_PORT
+        # Проверка диапазона портов
+        if [ "$USER_PORT" -lt 1024 ] || [ "$USER_PORT" -gt 65535 ]; then
+            echo -e "${RED}✗${NC} Ошибка: Порт должен быть в диапазоне 1024-65535"
+            continue
+        fi
+
+        # Проверка занятости порта
+        if lsof -Pi :$USER_PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo -e "${RED}✗${NC} Порт $USER_PORT уже занят"
+            echo -e "${YELLOW}Процесс использующий порт:${NC}"
+            lsof -Pi :$USER_PORT -sTCP:LISTEN
+            read -p "Выбрать другой порт? (y/N): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo -e "${YELLOW}Установка отменена${NC}"
+                exit 1
+            fi
+            continue
+        fi
+
+        echo -e "${GREEN}✓${NC} Порт $USER_PORT доступен"
+        break
+    done
+
+    NODE_PORT=$USER_PORT
+fi
 
 # Запрос приватного IP админки
 echo -e "\n${YELLOW}Настройка приватной сети${NC}"
 DEFAULT_ADMIN_IP="10.0.0.1"
 
-read -p "Введите приватный IP админ-панели (по умолчанию $DEFAULT_ADMIN_IP): " ADMIN_PRIVATE_IP
+if [ -z "$ADMIN_PRIVATE_IP" ]; then
+    read -p "Введите приватный IP админ-панели (по умолчанию $DEFAULT_ADMIN_IP): " ADMIN_PRIVATE_IP
+fi
 ADMIN_PRIVATE_IP=${ADMIN_PRIVATE_IP:-$DEFAULT_ADMIN_IP}
 
 echo -e "${GREEN}✓${NC} Приватный IP админки: $ADMIN_PRIVATE_IP"

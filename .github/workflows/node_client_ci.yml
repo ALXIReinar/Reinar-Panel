@@ -1,0 +1,119 @@
+name: Node Client CI
+
+on:
+  push:
+    branches: ["main", "dev/node"]
+  pull_request:
+    branches: ["main", "dev/node"]
+
+jobs:
+  # 1. Тестирование с использованием БД
+  build-test:
+    runs-on: ubuntu-latest
+    environment: node_client
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Decode and extract artifacts
+        run: |
+          echo "📦 Распаковка артефактов..."
+          echo "$ARTIFACTS_B64" | base64 -d > artifacts.tar.gz
+          tar -xzf artifacts.tar.gz
+        env:
+          ARTIFACTS_B64: ${{ vars.ARTIFACTS_B64 }}
+
+      - name: Setup test environment file
+        run: |
+          echo "📝 Создание .env.node.test..."
+          cat > node_client/.env.node.test <<EOF
+          ${{ vars.ENV_NODE_TEST_FILE }}
+
+          NODE_PORT=${{ vars.NODE_PORT }}
+          NODE_NAME=${{ vars.NODE_NAME }}
+          ADMIN_PANEL_PRIVATE_IP=${{ vars.ADMIN_PANEL_PRIVATE_IP }}
+          EOF
+
+      - name: Docker Up DB
+        run: docker compose -f node_client/docker-compose.test.yml up --build -d
+
+      - name: Check DB
+        run: |
+          echo "⏳ Проверка healthcheck PostgreSQL..."
+          for i in {1..12}; do
+            if docker exec pg_db pg_isready -U postgres; then
+              exit 0
+            fi
+            sleep 5
+          done
+          docker logs pg_db || true
+          exit 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Requirements
+        run: pip install -r node_client/requirements.txt
+
+      - name: Run Tests
+        run: python -m pytest node_client/tests -v --vpn-core vless --mode real
+
+      - name: Stop test containers
+        if: always()
+        run: docker compose -f node_client/docker-compose.test.yml down -v
+
+  # 2. Установка и Healthcheck
+  install-test:
+    needs: build-test
+    runs-on: ubuntu-latest
+    environment: node_client
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Decode and extract artifacts
+        run: |
+          echo "📦 Распаковка артефактов..."
+          echo "$ARTIFACTS_B64" | base64 -d > artifacts.tar.gz
+          tar -xzf artifacts.tar.gz
+        env:
+          ARTIFACTS_B64: ${{ vars.ARTIFACTS_B64 }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Node Client
+        env:
+          NODE_PORT: ${{ vars.NODE_PORT }}
+          NODE_NAME: ${{ vars.NODE_NAME }}
+        run: |
+          echo "🚀 Установка Node Client..."
+          chmod +x ./node_client/scripts/install.sh
+          sudo -E ./node_client/scripts/install.sh || {
+            echo "❌ Ошибка установки Node Client"
+            exit 1
+          }
+
+      - name: Verify Node Client Health
+        env:
+          NODE_PORT: ${{ vars.NODE_PORT }}
+        run: |
+          echo "⏳ Проверка healthcheck Node Client..."
+          for i in {1..12}; do
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:${NODE_PORT}/api/v1/server/node/ping | grep -q "200"; then
+              echo "✅ Node Client успешно запущен"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "❌ Превышено время ожидания. Логи сервиса:"
+          sudo journalctl -u vpn-node-client.service -n 100 --no-pager || true
+          exit 1
