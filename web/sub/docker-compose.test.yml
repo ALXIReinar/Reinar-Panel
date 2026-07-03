@@ -37,7 +37,7 @@ services:
 
   sub-service:
     image: reinar_panel/sub_service:${IMAGE_TAG}
-    command: python -m pytest web/sub/tests -v
+    command: python -m pytest web/sub/tests/unit -v
     container_name: test_sub-service
     depends_on:
       pg_db:

@@ -195,7 +195,7 @@ jobs:
         run: |
           echo "⏳ Проверка healthcheck Sub Service..."
           for i in {1..12}; do
-            if curl -s -o /dev/null -w "%{http_code}" http://localhost:${SUB_PORT}/docs | grep -q "200"; then
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:${SUB_PORT}/api/v1/healthcheck | grep -q "200"; then
               exit 0
             fi
             sleep 5

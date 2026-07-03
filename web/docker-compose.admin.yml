@@ -19,7 +19,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./secrets/dumps:/docker-entrypoint-initdb.d:z
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5431:5432"
 
   redis:
     image: redis:7.2-alpine
@@ -35,7 +35,7 @@ services:
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:6378:6379"
 
   web-service:
     build:
