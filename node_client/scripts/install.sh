@@ -31,13 +31,16 @@ echo -e "${GREEN}✓${NC} Права root подтверждены"
 # Определение директории скрипта
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+NODE_CLIENT_DIR="$(dirname "$SCRIPT_DIR")"
+
+
 # Проверка наличия необходимых файлов
 echo -e "\n${YELLOW}Проверка исходных файлов...${NC}"
 REQUIRED_FILES=("requirements.txt" "main.py" "config.py")
 REQUIRED_DIRS=("api" "schemas")
 
 for file in "${REQUIRED_FILES[@]}"; do
-    if [ ! -f "$SCRIPT_DIR/$file" ]; then
+    if [ ! -f "$NODE_CLIENT_DIR/$file" ]; then
         echo -e "${RED}✗${NC} Файл не найден: $file"
         echo "Убедитесь, что скрипт запущен из директории node_client/"
         exit 1
@@ -45,7 +48,7 @@ for file in "${REQUIRED_FILES[@]}"; do
 done
 
 for dir in "${REQUIRED_DIRS[@]}"; do
-    if [ ! -d "$SCRIPT_DIR/$dir" ]; then
+    if [ ! -d "$NODE_CLIENT_DIR/$dir" ]; then
         echo -e "${RED}✗${NC} Директория не найдена: $dir"
         echo "Убедитесь, что скрипт запущен из директории node_client/"
         exit 1
@@ -159,14 +162,14 @@ echo -e "\n${YELLOW}Копирование файлов приложения...$
 
 # Копируем папку node_client как пакет
 mkdir -p $INSTALL_DIR/node_client
-cp -r $SCRIPT_DIR/api $INSTALL_DIR/node_client/
-cp -r $SCRIPT_DIR/schemas $INSTALL_DIR/node_client/
-cp $SCRIPT_DIR/*.py $INSTALL_DIR/node_client/ 2>/dev/null || true
+cp -r $NODE_CLIENT_DIR/api $INSTALL_DIR/node_client/
+cp -r $NODE_CLIENT_DIR/schemas $INSTALL_DIR/node_client/
+cp $NODE_CLIENT_DIR/*.py $INSTALL_DIR/node_client/ 2>/dev/null || true
 
 # Копируем файлы конфигурации и зависимости в корень
-cp $SCRIPT_DIR/requirements.txt $INSTALL_DIR/
-cp $SCRIPT_DIR/.env.example $INSTALL_DIR/ 2>/dev/null || true
-cp $SCRIPT_DIR/README.md $INSTALL_DIR/ 2>/dev/null || true
+cp $NODE_CLIENT_DIR/requirements.txt $INSTALL_DIR/
+cp $NODE_CLIENT_DIR/.env.example $INSTALL_DIR/ 2>/dev/null || true
+cp $NODE_CLIENT_DIR/README.md $INSTALL_DIR/ 2>/dev/null || true
 
 # Копируем uninstall.sh в директорию установки
 cp $SCRIPT_DIR/uninstall.sh $INSTALL_DIR/ 2>/dev/null || true
