@@ -269,6 +269,12 @@ fi
 # Экспорт переменной для docker compose
 export ADMIN_PORT
 
+# Подготовка директорий логов с правильными правами
+echo -e "\n${YELLOW}Подготовка директорий логов...${NC}"
+mkdir -p "$INSTALL_DIR/web_logs" "$INSTALL_DIR/arq_logs"
+chmod -R 777 "$INSTALL_DIR/web_logs" "$INSTALL_DIR/arq_logs"
+echo -e "${GREEN}✓${NC} Директории логов подготовлены"
+
 # Остановка существующих контейнеров
 echo -e "\n${YELLOW}Остановка существующих контейнеров...${NC}"
 cd "$INSTALL_DIR"
