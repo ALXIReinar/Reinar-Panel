@@ -13,11 +13,12 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
-      start_period: 30s
+      start_period: 60s
     restart: on-failure
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./secrets/dumps:/docker-entrypoint-initdb.d:z
+    network_mode: host
     ports:
       - "127.0.0.1:5432:5432"
 
@@ -34,8 +35,7 @@ services:
       - redis_data:/data
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-    ports:
-      - "127.0.0.1:6379:6379"
+    network_mode: host
 
   web-service:
     build:

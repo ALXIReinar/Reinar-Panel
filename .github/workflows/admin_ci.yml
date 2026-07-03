@@ -154,13 +154,25 @@ jobs:
         env:
           ARTIFACTS_B64: ${{ vars.ARTIFACTS_B64 }}
 
+      - name: Check and free ports
+        run: |
+          echo "🔍 Проверка занятости портов..."
+          sudo lsof -i :5432 || echo "Порт 5432 свободен"
+          sudo lsof -i :6379 || echo "Порт 6379 свободен"
+
       - name: Run Installation Script
         env:
           ADMIN_PORT: ${{ vars.ADMIN_PORT }}
         run: |
           echo "🚀 Запуск скрипта установки..."
           chmod +x ./web/scripts/install.sh
-          sudo -E ./web/scripts/install.sh
+          sudo -E ./web/scripts/install.sh || {
+            echo "❌ Ошибка установки, логи контейнеров:"
+            sudo docker logs pg_db 2>&1 || echo "Контейнер pg_db не найден"
+            sudo docker logs redis 2>&1 || echo "Контейнер redis не найден"
+            sudo docker logs web-service 2>&1 || echo "Контейнер web-service не найден"
+            exit 1
+          }
 
       - name: Verify Service Health
         env:
