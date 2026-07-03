@@ -36,8 +36,6 @@ echo -e "${GREEN}✓${NC} OpenSSL найден: $(openssl version)"
 
 # Определение директории скрипта
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-# Скрипт находится в web/scripts/, поднимаемся на уровень выше в web/
-WEB_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Проверка наличия необходимых файлов
 echo -e "\n${YELLOW}Проверка исходных файлов...${NC}"
@@ -45,17 +43,17 @@ REQUIRED_FILES=("docker-compose.admin.yml" "Dockerfile" "requirements.txt" "main
 REQUIRED_DIRS=("api" "config_dir" "data" "schemas" "utils" "secrets")
 
 for file in "${REQUIRED_FILES[@]}"; do
-    if [ ! -f "$WEB_DIR/$file" ]; then
+    if [ ! -f "$SCRIPT_DIR/$file" ]; then
         echo -e "${RED}✗${NC} Файл не найден: $file"
-        echo "Убедитесь, что структура проекта корректна"
+        echo "Убедитесь, что скрипт запущен из директории web/"
         exit 1
     fi
 done
 
 for dir in "${REQUIRED_DIRS[@]}"; do
-    if [ ! -d "$WEB_DIR/$dir" ]; then
+    if [ ! -d "$SCRIPT_DIR/$dir" ]; then
         echo -e "${RED}✗${NC} Директория не найдена: $dir"
-        echo "Убедитесь, что структура проекта корректна"
+        echo "Убедитесь, что скрипт запущен из директории web/"
         exit 1
     fi
 done
@@ -133,11 +131,11 @@ echo -e "${GREEN}✓${NC} Директория создана"
 # Копирование файлов
 echo -e "\n${YELLOW}Копирование файлов приложения...${NC}"
 
-# Копируем всю структуру web/ в /opt/vpn-panel/web/
-cp -r "$WEB_DIR"/* "$INSTALL_DIR/" 2>/dev/null || true
+# Копируем всю структуру web/ в /opt/vpn-panel/admin/
+cp -r "$SCRIPT_DIR"/* "$INSTALL_DIR/" 2>/dev/null || true
 
 # Убедимся, что скрипты установки не попали в production
-rm -rf "$INSTALL_DIR/scripts" 2>/dev/null || true
+rm -f "$INSTALL_DIR/install.sh" 2>/dev/null || true
 
 echo -e "${GREEN}✓${NC} Файлы скопированы"
 

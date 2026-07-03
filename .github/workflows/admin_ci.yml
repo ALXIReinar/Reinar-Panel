@@ -146,6 +146,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Decode and extract artifacts
+        run: |
+          echo "📦 Распаковка артефактов..."
+          echo "$ARTIFACTS_B64" | base64 -d > artifacts.tar.gz
+          tar -xzf artifacts.tar.gz
+        env:
+          ARTIFACTS_B64: ${{ vars.ARTIFACTS_B64 }}
+
       - name: Run Installation Script
         env:
           ADMIN_PORT: ${{ vars.ADMIN_PORT }}
