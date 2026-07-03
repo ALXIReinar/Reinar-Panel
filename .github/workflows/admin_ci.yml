@@ -18,9 +18,23 @@ jobs:
       - name: Decode and extract artifacts
         run: |
           echo "📦 Распаковка артефактов..."
+          if [ -z "${{ vars.ARTIFACTS_B64 }}" ]; then
+            echo "❌ Ошибка: переменная ARTIFACTS_B64 не установлена или пуста"
+            echo "Настройте её в Settings → Secrets and variables → Actions → Variables"
+            exit 1
+          fi
           echo "${{ vars.ARTIFACTS_B64 }}" | base64 -d > artifacts.tar.gz
+          if [ $? -ne 0 ]; then
+            echo "❌ Ошибка декодирования base64"
+            exit 1
+          fi
           tar -xzf artifacts.tar.gz
+          if [ $? -ne 0 ]; then
+            echo "❌ Ошибка распаковки tar.gz"
+            exit 1
+          fi
           echo "✓ Артефакты распакованы"
+          ls -la web/secrets/ || true
 
       - name: Generate RSA keys for tests
         run: |
@@ -33,6 +47,14 @@ jobs:
       - name: Setup test environment file
         run: |
           echo "📝 Создание .env.api.test..."
+          if [ -z "${{ vars.ENV_API_TEST_FILE }}" ]; then
+            echo "❌ Ошибка: переменная ENV_API_TEST_FILE не установлена"
+            exit 1
+          fi
+          if [ -z "${{ vars.ADMIN_PORT }}" ]; then
+            echo "❌ Ошибка: переменная ADMIN_PORT не установлена"
+            exit 1
+          fi
           echo "${{ vars.ENV_API_TEST_FILE }}" > web/.env.api.test
           echo "UVICORN_PORT=${{ vars.ADMIN_PORT }}" >> web/.env.api.test
           echo "✓ Файл окружения создан"
@@ -52,9 +74,23 @@ jobs:
       - name: Decode and extract artifacts
         run: |
           echo "📦 Распаковка артефактов..."
+          if [ -z "${{ vars.ARTIFACTS_B64 }}" ]; then
+            echo "❌ Ошибка: переменная ARTIFACTS_B64 не установлена или пуста"
+            echo "Настройте её в Settings → Secrets and variables → Actions → Variables"
+            exit 1
+          fi
           echo "${{ vars.ARTIFACTS_B64 }}" | base64 -d > artifacts.tar.gz
+          if [ $? -ne 0 ]; then
+            echo "❌ Ошибка декодирования base64"
+            exit 1
+          fi
           tar -xzf artifacts.tar.gz
+          if [ $? -ne 0 ]; then
+            echo "❌ Ошибка распаковки tar.gz"
+            exit 1
+          fi
           echo "✓ Артефакты распакованы"
+          ls -la web/secrets/ || true
 
       - name: Generate RSA keys for tests
         run: |
@@ -67,6 +103,14 @@ jobs:
       - name: Setup test environment file
         run: |
           echo "📝 Создание .env.api.test..."
+          if [ -z "${{ vars.ENV_API_TEST_FILE }}" ]; then
+            echo "❌ Ошибка: переменная ENV_API_TEST_FILE не установлена"
+            exit 1
+          fi
+          if [ -z "${{ vars.ADMIN_PORT }}" ]; then
+            echo "❌ Ошибка: переменная ADMIN_PORT не установлена"
+            exit 1
+          fi
           echo "${{ vars.ENV_API_TEST_FILE }}" > web/.env.api.test
           echo "UVICORN_PORT=${{ vars.ADMIN_PORT }}" >> web/.env.api.test
           echo "✓ Файл окружения создан"
