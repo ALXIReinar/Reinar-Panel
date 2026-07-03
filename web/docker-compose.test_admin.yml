@@ -21,7 +21,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./secrets/test_dumps:/docker-entrypoint-initdb.d:z        # Изменена инит-папка!
     ports:
-      - "127.0.0.1:5431:5432"
+      - "127.0.0.1:5432:5432"
 
   redis:
     image: redis:7.2-alpine
@@ -37,7 +37,7 @@ services:
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
     ports:
-      - "127.0.0.1:6378:6379"
+      - "127.0.0.1:6379:6379"
 
   web-service:
     image: reinar_panel/web_service:${IMAGE_TAG:-latest}
