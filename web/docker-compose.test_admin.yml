@@ -38,7 +38,7 @@ services:
       - "127.0.0.1:6378:6379"
 
   web-service:
-    image: reinar_panel/web_service:latest
+    image: reinar_panel/web_service:${IMAGE_TAG:-latest}
     command: python -m pytest web/tests -v
     container_name: test_web-service
     depends_on:

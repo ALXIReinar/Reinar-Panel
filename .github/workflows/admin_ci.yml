@@ -7,64 +7,67 @@ on:
   pull_request:
     branches: ["main", "dev/backend"]
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/web_service
+
 jobs:
   # 1. Сборка проекта
   build:
     runs-on: ubuntu-latest
     environment: test_admin
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Debug - Check available variables
-        run: |
-          echo "🔍 Проверка доступных переменных..."
-          echo "ARTIFACTS_B64 length: ${#ARTIFACTS_B64}"
-          echo "Branch: ${{ github.ref }}"
-          echo "Event: ${{ github.event_name }}"
-        env:
-          ARTIFACTS_B64: ${{ vars.ARTIFACTS_B64 }}
-
       - name: Decode and extract artifacts
         run: |
           echo "📦 Распаковка артефактов..."
-          if [ -z "$ARTIFACTS_B64" ]; then
-            echo "❌ Ошибка: переменная ARTIFACTS_B64 не установлена или пуста"
-            echo "Настройте её в Settings → Environments → test_admin"
-            exit 1
-          fi
           echo "$ARTIFACTS_B64" | base64 -d > artifacts.tar.gz
-          if [ $? -ne 0 ]; then
-            echo "❌ Ошибка декодирования base64"
-            exit 1
-          fi
           tar -xzf artifacts.tar.gz
-          if [ $? -ne 0 ]; then
-            echo "❌ Ошибка распаковки tar.gz"
-            exit 1
-          fi
-          echo "✓ Артефакты распакованы"
-          ls -la web/secrets/ || true
         env:
           ARTIFACTS_B64: ${{ vars.ARTIFACTS_B64 }}
 
       - name: Generate RSA keys for tests
         run: |
-          echo "🔐 Генерация RSA ключей для тестов..."
+          echo "🔐 Генерация RSA ключей..."
           mkdir -p web/secrets/test_keys
           openssl genrsa -out web/secrets/test_keys/private_key.pem 2048
           openssl rsa -in web/secrets/test_keys/private_key.pem -outform PEM -pubout -out web/secrets/test_keys/public_key.pem
-          echo "✓ Ключи сгенерированы"
 
-      - name: Build Docker image
-        run: |
-          echo "🔨 Начинаем сборку..."
-          docker build -t reinar_panel/web_service:latest web/
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=,format=short
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./web
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
   test:
     needs: build
     runs-on: ubuntu-latest
     environment: test_admin
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -72,55 +75,49 @@ jobs:
       - name: Decode and extract artifacts
         run: |
           echo "📦 Распаковка артефактов..."
-          if [ -z "$ARTIFACTS_B64" ]; then
-            echo "❌ Ошибка: переменная ARTIFACTS_B64 не установлена"
-            echo "Проверьте environment 'test_admin'"
-            exit 1
-          fi
           echo "$ARTIFACTS_B64" | base64 -d > artifacts.tar.gz
           tar -xzf artifacts.tar.gz
-          echo "✓ Артефакты распакованы"
-          ls -la web/secrets/ || true
         env:
           ARTIFACTS_B64: ${{ vars.ARTIFACTS_B64 }}
 
       - name: Generate RSA keys for tests
         run: |
-          echo "🔐 Генерация RSA ключей для тестов..."
+          echo "🔐 Генерация RSA ключей..."
           mkdir -p web/secrets/test_keys
           openssl genrsa -out web/secrets/test_keys/private_key.pem 2048
           openssl rsa -in web/secrets/test_keys/private_key.pem -outform PEM -pubout -out web/secrets/test_keys/public_key.pem
-          echo "✓ Ключи сгенерированы"
 
       - name: Setup test environment file
         run: |
           echo "📝 Создание .env.api.test..."
-          if [ -z "$ENV_API_TEST_FILE" ]; then
-            echo "❌ Ошибка: переменная ENV_API_TEST_FILE не установлена"
-            exit 1
-          fi
-          if [ -z "$ADMIN_PORT" ]; then
-            echo "❌ Ошибка: переменная ADMIN_PORT не установлена"
-            exit 1
-          fi
           echo "$ENV_API_TEST_FILE" > web/.env.api.test
           echo "UVICORN_PORT=$ADMIN_PORT" >> web/.env.api.test
-          echo "✓ Файл окружения создан"
         env:
           ENV_API_TEST_FILE: ${{ vars.ENV_API_TEST_FILE }}
           ADMIN_PORT: ${{ vars.ADMIN_PORT }}
 
-      - name: Run tests
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Docker image from GHCR
         run: |
-          echo "🧪 Запускаем тесты..."
-          docker compose -f web/docker-compose.test_admin.yml up --abort-on-container-exit --exit-code-from web-service
+          echo "📥 Получение образа из GHCR..."
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHORT_SHA}"
+          docker pull ${IMAGE_TAG}
+          docker tag ${IMAGE_TAG} reinar_panel/web_service:${SHORT_SHA}
+          echo "IMAGE_TAG=${SHORT_SHA}" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: docker compose -f web/docker-compose.test_admin.yml up --abort-on-container-exit --exit-code-from web-service
 
       - name: Stop test containers
         if: always()
-        run: |
-          echo "🛑 Остановка тестовых контейнеров..."
-          docker compose -f web/docker-compose.test_admin.yml down -v
-          echo "✓ Контейнеры остановлены"
+        run: docker compose -f web/docker-compose.test_admin.yml down -v
 
   # 3. Установка и Healthcheck (запустится только если test успешен)
   install-test:
@@ -135,8 +132,7 @@ jobs:
         env:
           ADMIN_PORT: ${{ vars.ADMIN_PORT }}
         run: |
-          echo "🚀 Запускаем скрипт установки..."
-          echo "ADMIN_PORT: ${ADMIN_PORT}"
+          echo "🚀 Запуск скрипта установки..."
           chmod +x ./web/scripts/install.sh
           sudo -E ./web/scripts/install.sh
 
@@ -144,17 +140,12 @@ jobs:
         env:
           ADMIN_PORT: ${{ vars.ADMIN_PORT }}
         run: |
-          echo "⏳ Проверка работоспособности сервиса..."
+          echo "⏳ Проверка healthcheck..."
           for i in {1..12}; do
             if curl -s -o /dev/null -w "%{http_code}" http://localhost:${ADMIN_PORT}/api/v1/healthcheck | grep -q "200"; then
-              echo "✅ Сервис успешно запущен и готов к работе!"
               exit 0
             fi
-            echo "Ожидание... ($i/12)"
             sleep 5
           done
-          
-          echo "❌ Ошибка: Сервис не удалось запустить"
-          echo "📋 Логи контейнера:"
           docker logs web-service || true
           exit 1
