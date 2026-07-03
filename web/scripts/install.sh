@@ -169,7 +169,7 @@ if [ ! -f "$KEYS_DIR/private_key.pem" ] || [ ! -f "$KEYS_DIR/public_key.pem" ]; 
     openssl rsa -in "$KEYS_DIR/private_key.pem" -outform PEM -pubout -out "$KEYS_DIR/public_key.pem"
     
     # Установка прав
-    chmod 600 "$KEYS_DIR/private_key.pem"
+    chmod 644 "$KEYS_DIR/private_key.pem"
     chmod 644 "$KEYS_DIR/public_key.pem"
     
     echo -e "${GREEN}✓${NC} JWT ключи сгенерированы"
