@@ -42,7 +42,7 @@ services:
   web-service:
     image: reinar_panel/web_service:${IMAGE_TAG:-latest}
 #    command: python -m pytest web/tests -v
-    command: python -m pytest web/tests/unit/test_generate_link_from_json.py -v
+    command: python -m pytest web/tests -v
     container_name: test_web-service
     depends_on:
       pg_db:
