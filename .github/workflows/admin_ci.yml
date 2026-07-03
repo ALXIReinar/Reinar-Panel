@@ -43,6 +43,8 @@ jobs:
           mkdir -p web/secrets/test_keys
           openssl genrsa -out web/secrets/test_keys/private_key.pem 2048
           openssl rsa -in web/secrets/test_keys/private_key.pem -outform PEM -pubout -out web/secrets/test_keys/public_key.pem
+          chmod 644 web/secrets/test_keys/private_key.pem
+          chmod 644 web/secrets/test_keys/public_key.pem
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -99,6 +101,8 @@ jobs:
           mkdir -p web/secrets/test_keys
           openssl genrsa -out web/secrets/test_keys/private_key.pem 2048
           openssl rsa -in web/secrets/test_keys/private_key.pem -outform PEM -pubout -out web/secrets/test_keys/public_key.pem
+          chmod 644 web/secrets/test_keys/private_key.pem
+          chmod 644 web/secrets/test_keys/public_key.pem
 
       - name: Setup test environment file
         run: |
