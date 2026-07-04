@@ -203,10 +203,10 @@ echo -e "\n${YELLOW}Перезапуск Docker Compose...${NC}"
 cd "$INSTALL_DIR"
 
 # Останавливаем текущие контейнеры
-docker compose -f /opt/vpn-panel/web/docker-compose.yml down
+docker compose -f /opt/vpn-panel/web/docker-compose.admin.yml down
 
 # Запускаем с новой конфигурацией
-docker compose up -d --build
+docker compose -f /opt/vpn-panel/web/docker-compose.yml up -d --build
 
 # Ожидание запуска
 echo -e "\n${YELLOW}Ожидание запуска сервисов...${NC}"

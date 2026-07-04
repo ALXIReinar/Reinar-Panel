@@ -47,7 +47,6 @@ services:
     secrets:
       - env.sub.prod
 
-
 secrets:
   env.sub.prod:
     file: .env.sub.prod
