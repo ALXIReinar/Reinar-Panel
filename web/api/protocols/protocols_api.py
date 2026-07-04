@@ -27,10 +27,11 @@ async def create_proto(body: ProtocolCreateSchema, db: PgSqlDep, request: Reques
 
 @router.get('/all', summary="Получить все протоколы")
 async def get_all_protos(q_params: Annotated[ProtoPagenSchema, Query()], request: Request, db: PgSqlDep, _: JWTCookieDep):
-    protocols = await db.protocols.get_all_protocols(q_params.offset, q_params.limit)
+    protocols = await db.protocols.get_all_protocols(q_params.offset, q_params.limit, q_params.tmp_id)
     if not protocols:
         log_event(f'Отдали все протоколы | admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
 
+    log_event(f'Отдали протоколы | tmp_id для фильтра: \033[32m{q_params.tmp_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     return {'protocols': protocols}
 
 

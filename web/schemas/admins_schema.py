@@ -40,7 +40,7 @@ class TokenPayloadSchema(BaseModel):
     user_agent: str = Field(max_length=200)
     ip: str = Field(max_length=45)  # IPv6 может быть до 45 символов
 
-    @field_validator('user_agent')
+    @field_validator('user_agent', mode='after')
     @classmethod
     def sanitize_user_agent(cls, value: str) -> str:
         # Экранируем HTML и удаляем потенциально опасные символы
@@ -51,7 +51,7 @@ class TokenPayloadSchema(BaseModel):
 
 
 class UpdatePasswSchema(ValidatePasswSchema):
-    user_id: int
+    admin_id: int
 
 class AdminLogInSchema(BaseModel):
     login: str = Field(max_length=128, min_length=3)

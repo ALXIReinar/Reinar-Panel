@@ -34,21 +34,31 @@ class ProtocolsQueries:
         return 200, '', proto_info
 
 
-    async def get_all_protocols(self, offset: int, limit: int):
+    async def get_all_protocols(self, offset: int, limit: int, tmp_id: int | None):
+        sql_params = (limit, offset)
+        tmp_filter = ''
+
+        # Фильтр "Какие протоколы используют этот шаблон"
+        if tmp_id is not None:
+            tmp_filter = 'WHERE tmp_id = $3'
+            sql_params += (tmp_id,)
+
         """Получить все протоколы"""
-        query = """
+        query = f"""
         SELECT p.id AS proto_id, p.name, p.created_at, p.tmp_id, pt.title AS tmp_name FROM protocols p
         JOIN proto_templates pt ON pt.id = p.tmp_id
+        {tmp_filter}
         LIMIT $1 OFFSET $2
         """
-        return await self.conn.fetch(query, limit, offset)
+        return await self.conn.fetch(query, *sql_params)
 
 
     async def delete_protocol(self, proto_id: int):
         """Удалить протокол"""
-        query = "DELETE FROM protocols WHERE id = $1 RETURNING id"
+        query = "DELETE FROM protocols WHERE id = $1"
 
         try:
-            return 200, "Протокол удалён", await self.conn.fetchrow(query, proto_id)
+            await self.conn.execute(query, proto_id)
+            return 200, "Протокол удалён"
         except ForeignKeyViolationError:
             return 409, "Протокол не может быть удалён. Некоторые ноды используют его"

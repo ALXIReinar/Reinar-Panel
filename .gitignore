@@ -166,3 +166,6 @@ secrets/
 1.py
 *.json
 calculate_logs_size.py
+*.tar.gz
+*.tar
+*.b64

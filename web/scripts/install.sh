@@ -36,24 +36,26 @@ echo -e "${GREEN}✓${NC} OpenSSL найден: $(openssl version)"
 
 # Определение директории скрипта
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# Скрипт находится в web/scripts/, поднимаемся на уровень выше в web/
+WEB_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Проверка наличия необходимых файлов
 echo -e "\n${YELLOW}Проверка исходных файлов...${NC}"
-REQUIRED_FILES=("docker-compose.server.yml" "Dockerfile" "requirements.txt" "main.py")
+REQUIRED_FILES=("docker-compose.admin.yml" "Dockerfile" "requirements.txt" "main.py")
 REQUIRED_DIRS=("api" "config_dir" "data" "schemas" "utils" "secrets")
 
 for file in "${REQUIRED_FILES[@]}"; do
-    if [ ! -f "$SCRIPT_DIR/$file" ]; then
+    if [ ! -f "$WEB_DIR/$file" ]; then
         echo -e "${RED}✗${NC} Файл не найден: $file"
-        echo "Убедитесь, что скрипт запущен из директории web/"
+        echo "Убедитесь, что структура проекта корректна"
         exit 1
     fi
 done
 
 for dir in "${REQUIRED_DIRS[@]}"; do
-    if [ ! -d "$SCRIPT_DIR/$dir" ]; then
+    if [ ! -d "$WEB_DIR/$dir" ]; then
         echo -e "${RED}✗${NC} Директория не найдена: $dir"
-        echo "Убедитесь, что скрипт запущен из директории web/"
+        echo "Убедитесь, что структура проекта корректна"
         exit 1
     fi
 done
@@ -82,41 +84,46 @@ echo -e "${GREEN}✓${NC} Docker Compose найден"
 echo -e "\n${YELLOW}Настройка порта для Admin Panel${NC}"
 DEFAULT_PORT=8000
 
-while true; do
-    read -p "Введите порт для Admin Panel (по умолчанию $DEFAULT_PORT): " USER_PORT
-    USER_PORT=${USER_PORT:-$DEFAULT_PORT}
-    
-    # Проверка что порт - число
-    if ! [[ "$USER_PORT" =~ ^[0-9]+$ ]]; then
-        echo -e "${RED}✗${NC} Ошибка: Порт должен быть числом"
-        continue
-    fi
-    
-    # Проверка диапазона портов
-    if [ "$USER_PORT" -lt 1024 ] || [ "$USER_PORT" -gt 65535 ]; then
-        echo -e "${RED}✗${NC} Ошибка: Порт должен быть в диапазоне 1024-65535"
-        continue
-    fi
-    
-    # Проверка занятости порта
-    if lsof -Pi :$USER_PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
-        echo -e "${RED}✗${NC} Порт $USER_PORT уже занят"
-        echo -e "${YELLOW}Процесс использующий порт:${NC}"
-        lsof -Pi :$USER_PORT -sTCP:LISTEN
-        read -p "Выбрать другой порт? (y/N): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${YELLOW}Установка отменена${NC}"
-            exit 1
+# Если переменная ADMIN_PORT задана (например, в CI), используем её
+if [ -z "$ADMIN_PORT" ]; then
+    while true; do
+        read -p "Введите порт для Admin Panel (по умолчанию $DEFAULT_PORT): " USER_PORT
+        USER_PORT=${USER_PORT:-$DEFAULT_PORT}
+        
+        # Проверка что порт - число
+        if ! [[ "$USER_PORT" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}✗${NC} Ошибка: Порт должен быть числом"
+            continue
         fi
-        continue
-    fi
+        
+        # Проверка диапазона портов
+        if [ "$USER_PORT" -lt 1024 ] || [ "$USER_PORT" -gt 65535 ]; then
+            echo -e "${RED}✗${NC} Ошибка: Порт должен быть в диапазоне 1024-65535"
+            continue
+        fi
+        
+        # Проверка занятости порта
+        if lsof -Pi :$USER_PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo -e "${RED}✗${NC} Порт $USER_PORT уже занят"
+            echo -e "${YELLOW}Процесс использующий порт:${NC}"
+            lsof -Pi :$USER_PORT -sTCP:LISTEN
+            read -p "Выбрать другой порт? (y/N): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo -e "${YELLOW}Установка отменена${NC}"
+                exit 1
+            fi
+            continue
+        fi
+        
+        echo -e "${GREEN}✓${NC} Порт $USER_PORT доступен"
+        break
+    done
     
-    echo -e "${GREEN}✓${NC} Порт $USER_PORT доступен"
-    break
-done
-
-ADMIN_PORT=$USER_PORT
+    ADMIN_PORT=$USER_PORT
+else
+    echo -e "${GREEN}✓${NC} Используется порт из переменной окружения: $ADMIN_PORT"
+fi
 
 # Создание директории установки
 echo -e "\n${YELLOW}Создание директории ${INSTALL_DIR}...${NC}"
@@ -126,11 +133,8 @@ echo -e "${GREEN}✓${NC} Директория создана"
 # Копирование файлов
 echo -e "\n${YELLOW}Копирование файлов приложения...${NC}"
 
-# Копируем всю структуру web/ в /opt/vpn-panel/admin/
-cp -r "$SCRIPT_DIR"/* "$INSTALL_DIR/" 2>/dev/null || true
-
-# Убедимся, что скрипты установки не попали в production
-rm -f "$INSTALL_DIR/install.sh" 2>/dev/null || true
+# Копируем всю структуру web/ в /opt/vpn-panel/web/
+cp -r "$WEB_DIR"/* "$INSTALL_DIR/" 2>/dev/null || true
 
 echo -e "${GREEN}✓${NC} Файлы скопированы"
 
@@ -165,7 +169,7 @@ if [ ! -f "$KEYS_DIR/private_key.pem" ] || [ ! -f "$KEYS_DIR/public_key.pem" ]; 
     openssl rsa -in "$KEYS_DIR/private_key.pem" -outform PEM -pubout -out "$KEYS_DIR/public_key.pem"
     
     # Установка прав
-    chmod 600 "$KEYS_DIR/private_key.pem"
+    chmod 644 "$KEYS_DIR/private_key.pem"
     chmod 644 "$KEYS_DIR/public_key.pem"
     
     echo -e "${GREEN}✓${NC} JWT ключи сгенерированы"
@@ -265,26 +269,32 @@ fi
 # Экспорт переменной для docker compose
 export ADMIN_PORT
 
+# Подготовка директорий логов с правильными правами
+echo -e "\n${YELLOW}Подготовка директорий логов...${NC}"
+mkdir -p "$INSTALL_DIR/web_logs" "$INSTALL_DIR/arq_logs"
+chmod -R 777 "$INSTALL_DIR/web_logs" "$INSTALL_DIR/arq_logs"
+echo -e "${GREEN}✓${NC} Директории логов подготовлены"
+
 # Остановка существующих контейнеров
 echo -e "\n${YELLOW}Остановка существующих контейнеров...${NC}"
 cd "$INSTALL_DIR"
-docker compose -f docker-compose.server.yml down 2>/dev/null || true
+docker compose -f docker-compose.admin.yml down 2>/dev/null || true
 echo -e "${GREEN}✓${NC} Контейнеры остановлены"
 
 # Сборка и запуск
 echo -e "\n${YELLOW}Сборка и запуск контейнеров...${NC}"
-docker compose -f docker-compose.server.yml up -d --build
+docker compose -f docker-compose.admin.yml up -d --build
 
 # Ожидание запуска
 echo -e "\n${YELLOW}Ожидание запуска сервисов...${NC}"
 sleep 5
 
 # Проверка статуса
-if docker compose -f docker-compose.server.yml ps | grep -q "Up"; then
+if docker compose -f docker-compose.admin.yml ps | grep -q "Up"; then
     echo -e "${GREEN}✓${NC} Контейнеры успешно запущены"
 else
     echo -e "${RED}✗${NC} Ошибка запуска контейнеров"
-    echo "Проверьте логи: cd $INSTALL_DIR && docker compose -f docker-compose.server.yml logs"
+    echo "Проверьте логи: cd $INSTALL_DIR && docker compose -f docker-compose.admin.yml logs"
     exit 1
 fi
 
@@ -311,11 +321,11 @@ echo -e "Admin Panel доступна по адресу: ${GREEN}http://localhos
 
 echo -e "${YELLOW}Управление сервисами:${NC}"
 echo -e "  Перейти в директорию: ${BLUE}cd $INSTALL_DIR${NC}"
-echo -e "  Статус:      ${BLUE}docker compose -f docker-compose.server.yml ps${NC}"
-echo -e "  Остановка:   ${BLUE}docker compose -f docker-compose.server.yml down${NC}"
-echo -e "  Запуск:      ${BLUE}docker compose -f docker-compose.server.yml up -d${NC}"
-echo -e "  Перезапуск:  ${BLUE}docker compose -f docker-compose.server.yml restart${NC}"
-echo -e "  Логи:        ${BLUE}docker compose -f docker-compose.server.yml logs -f${NC}\n"
+echo -e "  Статус:      ${BLUE}docker compose -f docker-compose.admin.yml ps${NC}"
+echo -e "  Остановка:   ${BLUE}docker compose -f docker-compose.admin.yml down${NC}"
+echo -e "  Запуск:      ${BLUE}docker compose -f docker-compose.admin.yml up -d${NC}"
+echo -e "  Перезапуск:  ${BLUE}docker compose -f docker-compose.admin.yml restart${NC}"
+echo -e "  Логи:        ${BLUE}docker compose -f docker-compose.admin.yml logs -f${NC}\n"
 
 echo -e "${YELLOW}Конфигурация:${NC}"
 echo -e "  Docker Compose: ${BLUE}$ENV_FILE${NC}"

@@ -48,55 +48,74 @@ echo -e "${GREEN}✓${NC} Docker Compose найден"
 echo -e "\n${YELLOW}Настройка порта для Sub Service${NC}"
 DEFAULT_PORT=8080
 
-while true; do
-    read -p "Введите порт для Sub Service (по умолчанию $DEFAULT_PORT): " USER_PORT
-    USER_PORT=${USER_PORT:-$DEFAULT_PORT}
-    
-    # Проверка что порт - число
-    if ! [[ "$USER_PORT" =~ ^[0-9]+$ ]]; then
-        echo -e "${RED}✗${NC} Ошибка: Порт должен быть числом"
-        continue
-    fi
-    
-    # Проверка диапазона портов
-    if [ "$USER_PORT" -lt 1024 ] || [ "$USER_PORT" -gt 65535 ]; then
-        echo -e "${RED}✗${NC} Ошибка: Порт должен быть в диапазоне 1024-65535"
-        continue
-    fi
-    
-    # Проверка занятости порта
-    if lsof -Pi :$USER_PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
-        echo -e "${RED}✗${NC} Порт $USER_PORT уже занят"
-        echo -e "${YELLOW}Процесс использующий порт:${NC}"
-        lsof -Pi :$USER_PORT -sTCP:LISTEN
-        read -p "Выбрать другой порт? (y/N): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${YELLOW}Установка отменена${NC}"
-            exit 1
+# Если переменная SUB_PORT задана (например, в CI), используем её
+if [ -z "$SUB_PORT" ]; then
+    while true; do
+        read -p "Введите порт для Sub Service (по умолчанию $DEFAULT_PORT): " USER_PORT
+        USER_PORT=${USER_PORT:-$DEFAULT_PORT}
+        
+        # Проверка что порт - число
+        if ! [[ "$USER_PORT" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}✗${NC} Ошибка: Порт должен быть числом"
+            continue
         fi
-        continue
-    fi
+        
+        # Проверка диапазона портов
+        if [ "$USER_PORT" -lt 1024 ] || [ "$USER_PORT" -gt 65535 ]; then
+            echo -e "${RED}✗${NC} Ошибка: Порт должен быть в диапазоне 1024-65535"
+            continue
+        fi
+        
+        # Проверка занятости порта
+        if lsof -Pi :$USER_PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo -e "${RED}✗${NC} Порт $USER_PORT уже занят"
+            echo -e "${YELLOW}Процесс использующий порт:${NC}"
+            lsof -Pi :$USER_PORT -sTCP:LISTEN
+            read -p "Выбрать другой порт? (y/N): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo -e "${YELLOW}Установка отменена${NC}"
+                exit 1
+            fi
+            continue
+        fi
+        
+        echo -e "${GREEN}✓${NC} Порт $USER_PORT доступен"
+        break
+    done
     
-    echo -e "${GREEN}✓${NC} Порт $USER_PORT доступен"
-    break
-done
-
-SUB_PORT=$USER_PORT
+    SUB_PORT=$USER_PORT
+else
+    echo -e "${GREEN}✓${NC} Используется порт из переменной окружения: $SUB_PORT"
+fi
 
 # Запрос Robokassa credentials
 echo -e "\n${YELLOW}Настройка Robokassa${NC}"
-echo -e "${BLUE}Для работы платёжной системы требуются данные от Robokassa${NC}"
 
-read -p "Введите Robokassa Shop Login: " ROBO_SHOP_LOGIN
-read -p "Введите Robokassa Password 1: " ROBO_PASSW_1
-read -p "Введите Robokassa Password 2: " ROBO_PASSW_2
+# Если переменные заданы (например, в CI), используем их
+if [ -z "$ROBO_SHOP_LOGIN" ]; then
+    echo -e "${BLUE}Для работы платёжной системы требуются данные от Robokassa${NC}"
+    read -p "Введите Robokassa Shop Login: " ROBO_SHOP_LOGIN
+fi
+
+if [ -z "$ROBO_PASSW_1" ]; then
+    read -p "Введите Robokassa Password 1: " ROBO_PASSW_1
+fi
+
+if [ -z "$ROBO_PASSW_2" ]; then
+    read -p "Введите Robokassa Password 2: " ROBO_PASSW_2
+fi
 
 # Запрос Telegram Bot Link
 echo -e "\n${YELLOW}Настройка Telegram Bot${NC}"
 DEFAULT_TG_BOT="https://t.me/your_bot"
-read -p "Введите ссылку на Telegram бота (по умолчанию $DEFAULT_TG_BOT): " TG_BOT_LINK
-TG_BOT_LINK=${TG_BOT_LINK:-$DEFAULT_TG_BOT}
+
+if [ -z "$TG_BOT_LINK" ]; then
+    read -p "Введите ссылку на Telegram бота (по умолчанию $DEFAULT_TG_BOT): " TG_BOT_LINK
+    TG_BOT_LINK=${TG_BOT_LINK:-$DEFAULT_TG_BOT}
+else
+    echo -e "${GREEN}✓${NC} Используется ссылка на бота из переменной окружения: $TG_BOT_LINK"
+fi
 
 # Путь к .env файлу
 ENV_SUB_FILE="$SUB_DIR/.env.sub.prod"
@@ -173,15 +192,21 @@ fi
 
 echo -e "${GREEN}✓${NC} .env обновлён"
 
+# Подготовка директорий логов для sub-сервиса
+echo -e "\n${YELLOW}Подготовка директорий логов...${NC}"
+mkdir -p "$SUB_DIR/sub_logs" "$SUB_DIR/arq_logs"
+chmod -R 777 "$SUB_DIR/sub_logs" "$SUB_DIR/arq_logs"
+echo -e "${GREEN}✓${NC} Директории логов подготовлены"
+
 # Перезапуск Docker Compose
 echo -e "\n${YELLOW}Перезапуск Docker Compose...${NC}"
 cd "$INSTALL_DIR"
 
 # Останавливаем текущие контейнеры
-docker compose -f /opt/vpn-panel/web/docker-compose.yml down
+docker compose -f /opt/vpn-panel/web/docker-compose.admin.yml down
 
 # Запускаем с новой конфигурацией
-docker compose up -d --build
+docker compose -f /opt/vpn-panel/web/docker-compose.yml up -d --build
 
 # Ожидание запуска
 echo -e "\n${YELLOW}Ожидание запуска сервисов...${NC}"

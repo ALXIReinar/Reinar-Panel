@@ -6,7 +6,7 @@ class ProtoTemplatesQueries:
     def __init__(self, conn: Connection):
         self.conn = conn
 
-    async def get_all(self, last_id: int | None, sort_by: str, limit: int, proto_id: int | None):
+    async def get_all(self, last_id: int | None, sort_by: str, limit: int):
         """Получить список всех шаблонов с пагинацией и фильтрацией по proto_id"""
         
         # Формируем WHERE условия
@@ -24,13 +24,13 @@ class ProtoTemplatesQueries:
             param_idx += 1
         
         # Фильтр по proto_id (если указан)
-        proto_join = ''
-        if proto_id is not None:
-            proto_join = 'JOIN protocols p ON p.tmp_id = pt.id'
-            where_conditions.append(f"p.id = ${param_idx}")
-            params.append(proto_id)
-            param_idx += 1
-        
+        # proto_join = ''
+        # if proto_id is not None:
+        #     proto_join = 'JOIN protocols p ON p.tmp_id = pt.id'
+        #     where_conditions.append(f"p.id = ${param_idx}")
+        #     params.append(proto_id)
+        #     param_idx += 1
+
         # Собираем WHERE clause
         where_clause = ''
         if where_conditions:
@@ -39,7 +39,6 @@ class ProtoTemplatesQueries:
         query = f"""
         SELECT pt.id, pt.title, pt.url_tmp, pt.status, pt.is_accepted, pt.proto_python_lib
         FROM proto_templates pt
-        {proto_join}
         {where_clause}
         ORDER BY id {sort_by}
         LIMIT $1

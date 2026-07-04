@@ -1,7 +1,7 @@
-# Main Docker Compose file
-# Объединяет web и sub сервисы через include
+# Запуск web и sub сервисы как один Docker Stack
+name: reinar_panel
 
 include:
-  - docker-compose.server.yml
+  - docker-compose.admin.yml
   # Раскомментируйте после установки sub сервиса (web/sub/install.sh)
   - sub/docker-compose.yml

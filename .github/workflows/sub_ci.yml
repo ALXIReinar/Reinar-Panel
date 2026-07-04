@@ -1,0 +1,204 @@
+name: Sub Service CI
+
+on:
+  push:
+    branches: ["main", "dev/sub"]
+  pull_request:
+    branches: ["main", "dev/backend"]
+
+env:
+  REGISTRY: ghcr.io
+  # IMAGE_NAME устанавливается в каждой job отдельно с lowercase преобразованием
+
+jobs:
+  # 1. Сборка образа и публикация в GHCR с SHA тегом
+  build:
+    runs-on: ubuntu-latest
+    environment: sub
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE_NAME: ${{ github.repository }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set lowercase image name
+        run: echo "IMAGE_NAME_LOWER=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')/sub_service" >> $GITHUB_ENV
+
+      - name: Decode and extract artifacts
+        run: |
+          echo "📦 Распаковка артефактов..."
+          echo "$ARTIFACTS_B64" | base64 -d > artifacts.tar.gz
+          tar -xzf artifacts.tar.gz
+        env:
+          ARTIFACTS_B64: ${{ vars.ARTIFACTS_B64 }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}
+          tags: |
+            type=sha,prefix=,format=short
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./web/sub
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # 2. Тестирование с переиспользованием образа из GHCR
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: sub
+    permissions:
+      contents: read
+      packages: read
+    env:
+      IMAGE_NAME: ${{ github.repository }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set lowercase image name
+        run: echo "IMAGE_NAME_LOWER=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')/sub_service" >> $GITHUB_ENV
+
+      - name: Decode and extract artifacts
+        run: |
+          echo "📦 Распаковка артефактов..."
+          echo "$ARTIFACTS_B64" | base64 -d > artifacts.tar.gz
+          tar -xzf artifacts.tar.gz
+        env:
+          ARTIFACTS_B64: ${{ vars.ARTIFACTS_B64 }}
+
+      - name: Setup test environment file
+        run: |
+          echo "📝 Создание .env.sub.test..."
+          cat > web/sub/.env.sub.test <<EOF
+          PG_USER=test_reinar_user
+          PG_PASSWORD=CAK!uiAGd89_ADhlsanca
+          PG_DB=test_reinar_db
+          PG_HOST=pg_db
+          PG_PORT=5432
+          PG_MAX_CONNECTIONS=50
+
+          REDIS_PASSWORD=R'F&scBdorS8@0A-1!
+          REDIS_MAX_CONNECTIONS=50
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+
+          UVICORN_WORKERS=1
+          POST_PROCESSING_RESPONSES=1
+          UVICORN_PORT=${{ vars.SUB_PORT }}
+
+          ROBO_SHOP_LOGIN=${{ secrets.ROBO_SHOP_LOGIN }}
+          ROBO_CRYPT_ALGORITHM=sha256
+          ROBO_PASSW_1=${{ secrets.ROBO_PASSW_1 }}
+          ROBO_PASSW_2=${{ secrets.ROBO_PASSW_2 }}
+
+          ARQ_QUEUE_NAME=arq:test_cron_background_queue
+          ARQ_MAX_JOBS=10
+          ARQ_JOB_TIMEOUT=300
+
+          ACTION_ON_CORE_PROTO_LIMIT=10
+          SUBSCRIPTION_UPDATE_INTERVAL=12
+          TG_BOT_LINK=${{ vars.TG_BOT_LINK }}
+
+          APP_MODE=docker
+          EOF
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Docker image from GHCR
+        run: |
+          echo "📥 Получение образа из GHCR..."
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:${SHORT_SHA}"
+          docker pull ${IMAGE_TAG}
+          docker tag ${IMAGE_TAG} reinar_panel/sub_service:${SHORT_SHA}
+          echo "IMAGE_TAG=${SHORT_SHA}" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: docker compose -f web/sub/docker-compose.test.yml up --abort-on-container-exit --exit-code-from sub-service
+
+      - name: Stop test containers
+        if: always()
+        run: docker compose -f web/sub/docker-compose.test.yml down -v
+
+  # 3. Установка и Healthcheck
+  # Сначала устанавливаем admin, затем sub-сервис
+  install-test:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: sub
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Decode and extract artifacts
+        run: |
+          echo "📦 Распаковка артефактов..."
+          echo "$ARTIFACTS_B64" | base64 -d > artifacts.tar.gz
+          tar -xzf artifacts.tar.gz
+        env:
+          ARTIFACTS_B64: ${{ vars.ARTIFACTS_B64 }}
+
+      - name: Install Admin Panel first
+        env:
+          ADMIN_PORT: ${{ vars.ADMIN_PORT }}
+        run: |
+          echo "🚀 Установка Admin Panel..."
+          chmod +x ./web/scripts/install.sh
+          sudo -E ./web/scripts/install.sh || {
+            echo "❌ Ошибка установки Admin Panel"
+            sudo docker logs pg_db 2>&1 || true
+            sudo docker logs web-service 2>&1 || true
+            exit 1
+          }
+
+      - name: Install Sub Service
+        env:
+          SUB_PORT: ${{ vars.SUB_PORT }}
+          ROBO_SHOP_LOGIN: ${{ secrets.ROBO_SHOP_LOGIN }}
+          ROBO_PASSW_1: ${{ secrets.ROBO_PASSW_1 }}
+          ROBO_PASSW_2: ${{ secrets.ROBO_PASSW_2 }}
+          TG_BOT_LINK: ${{ vars.TG_BOT_LINK }}
+        run: |
+          echo "🚀 Установка Sub Service..."
+          chmod +x ./web/sub/scripts/install.sh
+          sudo -E ./web/sub/scripts/install.sh || {
+            echo "❌ Ошибка установки Sub Service"
+            sudo docker logs sub-service 2>&1 || true
+            exit 1
+          }
+
+      - name: Verify Sub Service Health
+        env:
+          SUB_PORT: ${{ vars.SUB_PORT }}
+        run: |
+          echo "⏳ Проверка healthcheck Sub Service..."
+          for i in {1..12}; do
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:${SUB_PORT}/api/v1/healthcheck | grep -q "200"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          sudo docker logs sub-service || true
+          exit 1

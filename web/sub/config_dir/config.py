@@ -5,12 +5,11 @@ from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
-from uuid import UUID
 
 import orjson
 from aiohttp import ClientSession
 from arq.connections import RedisSettings, ArqRedis
-from asyncpg import Connection, Record
+from asyncpg import Connection
 from fastapi import Depends
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
@@ -122,7 +121,7 @@ def get_redis_settings(envs: Settings):
         'port': getattr(envs, cfg['redis_port']),
         'decode_responses': True,
     }
-    if envs.app_mode != 'local':
+    if envs.app_mode != AppMode.LOCAL:
         redis_conf['password'] = envs.redis_password
     return redis_conf
 

@@ -1,10 +1,17 @@
+import asyncio
 import base64
+import importlib
 import json
 import math
 import re
+import traceback
 import urllib.parse
+from collections import defaultdict
 from typing import Annotated
 
+import flatten_json
+import jmespath
+import orjson
 from fastapi import APIRouter, Response, Path
 from starlette.requests import Request
 
@@ -23,6 +30,12 @@ def healthcheck():
 
 @router.get('/sub/{b64_id}')
 async def sub(params: Annotated[SubUrlSchema, Path()], db: PgSqlDep, request: Request):
+    """
+    Подумать над тем, чтобы передавать список локаций в скрипт обработки конфиг-ссылок перед выдачей пользователю
+
+    В соображениях производительности
+    Лучше 100 ссылок обработать за один запуск sandbox, чем 100 раз запускать эту самую песочницу
+    """
     sub_meta, config_data = await db.sub.get_sub_links(params.b64_id)
 
     "Подписка пользователя деактивирована/не существует"
@@ -37,7 +50,7 @@ async def sub(params: Annotated[SubUrlSchema, Path()], db: PgSqlDep, request: Re
     "Обрабатываем каждую ссылку через кастомный скрипт"
     ready_config_links, errors = [], []
     for proto_user_conf in config_data:
-        res = executing_link_processing(
+        res = await executing_link_processing(
             sub_prepare_script=proto_user_conf['sub_prepare_script'],
             required_libs=proto_user_conf['required_libs'],
             user_uuid=sub_meta['user_uuid'],
@@ -88,33 +101,68 @@ def process2vpn_client_format(any_obj: str | list[str], description: str = None)
     return base64.b64encode(any_obj.encode()).decode()
 
 
-def executing_link_processing(sub_prepare_script: str, required_libs: str, user_uuid: str, config_link: str, user_id: int):
-    depend_libs = {lib_name.strip(): lib_name.strip() for lib_name in required_libs.split(',')}
-    local_scope = {}
-    global_scope = {
-        "json": json,
-        "re": re,
-        "math": math,
-        # добавляем либы, выбранные пользователем
-        **depend_libs,
-        # Запрещаем опасные встроенные функции типа open, eval, import
-        "__builtins__": {
-            "int": int, "str": str, "float": float, "list": list, "dict": dict,
-            "set": set, "len": len, "range": range, "round": round, "print": print,
-            "enumerate": enumerate, "zip": zip, "map": map, "filter": filter,
-            "Exception": Exception, "ValueError": ValueError
-        }
-    }
-
+async def executing_link_processing(sub_prepare_script: str, required_libs: str, user_uuid: str, config_link: str, user_id: int):
+    "Обработка строки-списка библиотек"
+    if required_libs is None:
+        lib_names = []
+    else:
+        lib_names = required_libs.split(',')
     try:
+        # Подгружаем библиотеки пользователя
+        user_libs = {lib_name.strip(): importlib.import_module(lib_name.strip()) for lib_name in lib_names}
+        # Локальное окружение для скрипта
+        local_scope = {}
+        # Доступные либы в окружении исполняемого скрипта
+        global_scope = {
+            **user_libs,
+            "json": json,
+            "asyncio": asyncio,
+            "orjson": orjson,
+            "re": re,
+            "math": math,
+            "defaultdict": defaultdict,
+            "jmespath": jmespath,
+            "flatten_json": flatten_json,
+            # Запрещаем опасные встроенные функции типа open, eval, import
+            "__builtins__": {
+                "int": int, "str": str, "float": float, "list": list, "dict": dict,
+                "set": set, "len": len, "range": range, "round": round, "print": print,
+                "enumerate": enumerate, "zip": zip, "map": map, "filter": filter,
+                "isinstance": isinstance, "type": type, "dir": dir, "all": all, "any": any,
+                "Exception": Exception, "ValueError": ValueError, "KeyError": KeyError,
+                "NameError": NameError, "TypeError": TypeError, "AttributeError": AttributeError
+            }
+        }
+        # Выполняем скрипт
         exec(sub_prepare_script, global_scope, local_scope)
-        # Вызываем функцию prepare_sub, которую юзер написал в шаблоне
-        return True, local_scope['prepare_sub'](user_uuid, config_link)
 
-    except ImportError as ie:
-        log_event(f"Библиотека, указанная пользователем не установлена в окружении | user_id: \033[31m{user_id}\033[0m; lib_name: \033[36m{ie.name}\033[0m", level='ERROR')
+        "Вызываем функцию из скрипта"
+        parse_func = local_scope.get("prepare_sub")
+        if not parse_func:
+            return False, 500, "Ошибка сервера"
+
+        result = parse_func(user_uuid, config_link)
+
+        "Если async"
+        if asyncio.iscoroutine(result):
+            result = await result
+
+        # Вызываем функцию prepare_sub, которую юзер написал в шаблоне
+        return True, result
+
+
+    except ImportError as e:
+        log_event(f"\033[31mОШИБКА ИМПОРТА БИБЛИОТЕКИ\033[0m\nБиблиотека: {lib_names}\nAction: Sub Link Prepare\nДетали: {str(repr(e))}",level='CRITICAL')
         return False, 500, "Сервер не смог обработать список локаций в подписке"
 
+    except SyntaxError as e:
+        script_lines = sub_prepare_script.split('\n')
+        error_line = script_lines[e.lineno - 1] if e.lineno and e.lineno <= len(script_lines) else "???"
+
+        log_event(f"\033[31mСИНТАКСИЧЕСКАЯ ОШИБКА В СКРИПТЕ\033[0m\nAction: Sub Link Prepare\nСтрока {e.lineno}: {error_line}\nОшибка: {e.msg}\nПозиция: {' ' * (e.offset - 1) if e.offset else ''}^\n", level='CRITICAL')
+        return False, 500, "Ошибка сервера"
+
     except Exception as e:
-        log_event(f'Упал скрипт парсинга stdout метрик | user_id: \033[31m{user_id}\033[0m; code: {sub_prepare_script}; exception: {e}', level='CRITICAL')
+        tb_str = traceback.format_exc()
+        log_event(f"\033[31mОШИБКА ВЫПОЛНЕНИЯ СКРИПТА\033[0m\nAction: Sub Link Prepare\nБиблиотеки: {lib_names}\nТип ошибки: {type(e).__name__}\nСообщение: {str(e)}\n\nTraceback:\n{tb_str}\n", level='CRITICAL')
         return False, 500, "Ошибка сервера"

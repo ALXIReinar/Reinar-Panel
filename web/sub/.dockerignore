@@ -161,8 +161,8 @@ cython_debug/
 .idea/
 .venv/
 *.env*
-install.sh
-uninstall.sh
+scripts/install.sh
+scripts/uninstall.sh
 *.md
 .git/
 .gitignore

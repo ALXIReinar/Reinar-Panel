@@ -8,5 +8,6 @@ class ProtocolCreateSchema(BaseModel):
 
 
 class ProtoPagenSchema(BaseModel):
+    tmp_id: int | None = None
     offset: int = Field(0)
     limit: int = Field(15, le=15)

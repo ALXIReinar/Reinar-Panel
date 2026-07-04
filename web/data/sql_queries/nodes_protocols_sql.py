@@ -15,8 +15,7 @@ class NodesProtocolsQueries:
     async def create_node_protocol(self, node_id: int, proto_id: int, title: str, sub_node_address: str | None):
         """Добавить протокол на ноду"""
         query = """
-        INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address) VALUES ($1, $2, $3, $4)
-        ON CONFLICT DO NOTHING RETURNING id
+        INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address) VALUES ($1, $2, $3, $4) RETURNING id
         """
         try:
             return await self.conn.fetchval(query, node_id, proto_id, title, sub_node_address), "Успешно добавили виртуальную ноду"
@@ -215,13 +214,13 @@ class NodesProtocolsQueries:
             JOIN protocols p ON np.proto_id = p.id
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true
             JOIN proto_templates pt ON p.tmp_id = pt.id
-            WHERE ps.is_active = true AND ps.user_id = $1
+            WHERE ps.id = $3 AND ps.is_active = true
         ),
         outbox_insert AS (
             INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
-            SELECT $2, $3, $4, $5, vnodes_read.sub_node_id
+            SELECT $1, $2, $3, $4, vnodes_read.sub_node_id
             FROM vnodes_read
         )
         SELECT * FROM vnodes_read
         '''
-        return await self.conn.fetch(query, user_id, user_uuid, tg_username, order_id, CoreProtoActions.name2id[operation])
+        return await self.conn.fetch(query, user_uuid, tg_username, order_id, CoreProtoActions.name2id[operation])

@@ -41,9 +41,9 @@ async def set_spec_params_values(body: SpecValuesSetSchema, request: Request, db
     """Синхронизация spec параметров виртуальной ноды (UPSERT)"""
     log_event(f'Set spec значений | node_proto_id: \033[33m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
 
-    await db.template_spec_params.set_spec_values(
+    db_spec_values = await db.template_spec_params.set_spec_values(
         node_proto_id=body.node_proto_id, new_specs=[obj.model_dump() for obj in body.spec_param_values]
     )
 
     log_event(f'spec_values синхронизированы | \033[33m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
-    return {'success': True, 'message': "Specs успешно заданы"}
+    return {'success': True, 'message': "Specs успешно заданы", "spec_value_ids": db_spec_values}

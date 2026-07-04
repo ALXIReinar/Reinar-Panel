@@ -42,7 +42,7 @@ async def get_all_templates(params: GetTmpSchema, request: Request, db: PgSqlDep
     ]
     ```
     """
-    templates = await db.proto_templates.get_all(params.last_id, params.sort_by, params.limit, params.proto_id)
+    templates = await db.proto_templates.get_all(params.last_id, params.sort_by, params.limit)
     log_event(f'Отдали список шаблонов | tmp_len: \033[32m{len(templates["templates"])}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     return {'success': True, **templates}
 
