@@ -94,6 +94,8 @@ jobs:
         env:
           NODE_PORT: ${{ vars.NODE_PORT }}
           NODE_NAME: ${{ vars.NODE_NAME }}
+          ADMIN_PANEL_PRIVATE_IP: ${{ vars.ADMIN_PANEL_PRIVATE_IP }}
+          CI: 1
         run: |
           echo "🚀 Установка Node Client..."
           chmod +x ./node_client/scripts/install.sh

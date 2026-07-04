@@ -57,8 +57,10 @@ done
 
 echo -e "${GREEN}✓${NC} Все необходимые файлы найдены"
 
-echo -e "\nОбновление системы"
-apt-get update -y && apt-get upgrade -y
+if [ -z "$CI" ]; then
+    echo -e "\nОбновление системы"
+    apt-get update -y && apt-get upgrade -y
+fi
 
 echo -e "\nНастройка имени Ноды"
 
@@ -111,12 +113,12 @@ fi
 echo -e "\n${YELLOW}Настройка приватной сети${NC}"
 DEFAULT_ADMIN_IP="10.0.0.1"
 
-if [ -z "$ADMIN_PRIVATE_IP" ]; then
-    read -p "Введите приватный IP админ-панели (по умолчанию $DEFAULT_ADMIN_IP): " ADMIN_PRIVATE_IP
+if [ -z "$ADMIN_PANEL_PRIVATE_IP" ]; then
+    read -p "Введите приватный IP админ-панели (по умолчанию $DEFAULT_ADMIN_IP): " ADMIN_PANEL_PRIVATE_IP
 fi
-ADMIN_PRIVATE_IP=${ADMIN_PRIVATE_IP:-$DEFAULT_ADMIN_IP}
+ADMIN_PANEL_PRIVATE_IP=${ADMIN_PANEL_PRIVATE_IP:-$DEFAULT_ADMIN_IP}
 
-echo -e "${GREEN}✓${NC} Приватный IP админки: $ADMIN_PRIVATE_IP"
+echo -e "${GREEN}✓${NC} Приватный IP админки: $ADMIN_PANEL_PRIVATE_IP"
 
 # Проверка наличия Python
 echo -e "\n${YELLOW}Проверка Python...${NC}"
@@ -214,7 +216,7 @@ WRITE_BUFFER_INTERVAL=10
 WRITE_BUFFER_SIZE=5
 
 # Приватный IP админ-панели
-ADMIN_PANEL_PRIVATE_IP=${ADMIN_PRIVATE_IP}
+ADMIN_PANEL_PRIVATE_IP=${ADMIN_PANEL_PRIVATE_IP}
 ENVEOF
     echo -e "${GREEN}✓${NC} Конфигурация создана: $INSTALL_DIR/.env.node.prod"
 else
@@ -229,9 +231,9 @@ else
     if ! grep -q "ADMIN_PANEL_PRIVATE_IP" $INSTALL_DIR/.env.node.prod; then
         echo "" >> $INSTALL_DIR/.env.node.prod
         echo "# Приватный IP админ-панели" >> $INSTALL_DIR/.env.node.prod
-        echo "ADMIN_PANEL_PRIVATE_IP=$ADMIN_PRIVATE_IP" >> $INSTALL_DIR/.env.node.prod
+        echo "ADMIN_PANEL_PRIVATE_IP=$ADMIN_PANEL_PRIVATE_IP" >> $INSTALL_DIR/.env.node.prod
     else
-        sed -i "s/^ADMIN_PANEL_PRIVATE_IP=.*/ADMIN_PANEL_PRIVATE_IP=$ADMIN_PRIVATE_IP/" $INSTALL_DIR/.env.node.prod
+        sed -i "s/^ADMIN_PANEL_PRIVATE_IP=.*/ADMIN_PANEL_PRIVATE_IP=$ADMIN_PANEL_PRIVATE_IP/" $INSTALL_DIR/.env.node.prod
     fi
     
     # Добавляем Write Buffer настройки если их нет
