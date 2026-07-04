@@ -31,13 +31,16 @@ echo -e "${GREEN}✓${NC} Права root подтверждены"
 # Определение директории скрипта
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+NODE_CLIENT_DIR="$(dirname "$SCRIPT_DIR")"
+
+
 # Проверка наличия необходимых файлов
 echo -e "\n${YELLOW}Проверка исходных файлов...${NC}"
 REQUIRED_FILES=("requirements.txt" "main.py" "config.py")
 REQUIRED_DIRS=("api" "schemas")
 
 for file in "${REQUIRED_FILES[@]}"; do
-    if [ ! -f "$SCRIPT_DIR/$file" ]; then
+    if [ ! -f "$NODE_CLIENT_DIR/$file" ]; then
         echo -e "${RED}✗${NC} Файл не найден: $file"
         echo "Убедитесь, что скрипт запущен из директории node_client/"
         exit 1
@@ -45,7 +48,7 @@ for file in "${REQUIRED_FILES[@]}"; do
 done
 
 for dir in "${REQUIRED_DIRS[@]}"; do
-    if [ ! -d "$SCRIPT_DIR/$dir" ]; then
+    if [ ! -d "$NODE_CLIENT_DIR/$dir" ]; then
         echo -e "${RED}✗${NC} Директория не найдена: $dir"
         echo "Убедитесь, что скрипт запущен из директории node_client/"
         exit 1
@@ -54,60 +57,68 @@ done
 
 echo -e "${GREEN}✓${NC} Все необходимые файлы найдены"
 
-echo -e "\nОбновление системы"
-apt-get update -y && apt-get upgrade -y
+if [ -z "$CI" ]; then
+    echo -e "\nОбновление системы"
+    apt-get update -y && apt-get upgrade -y
+fi
 
 echo -e "\nНастройка имени Ноды"
-read -p "Введите имя ноды(будет отображаться в админ панели): " NODE_NAME
+
+if [ -z "$NODE_NAME" ]; then
+    read -p "Введите имя ноды(будет отображаться в админ панели): " NODE_NAME
+fi
 
 # Интерактивный выбор порта
 echo -e "\n${YELLOW}Настройка порта для Node Client${NC}"
 DEFAULT_PORT=8100
+if [ -z "$NODE_PORT" ]; then
+    while true; do
+        read -p "Введите порт для API (по умолчанию $DEFAULT_PORT): " USER_PORT
+        USER_PORT=${USER_PORT:-$DEFAULT_PORT}
 
-while true; do
-    read -p "Введите порт для API (по умолчанию $DEFAULT_PORT): " USER_PORT
-    USER_PORT=${USER_PORT:-$DEFAULT_PORT}
-    
-    # Проверка что порт - число
-    if ! [[ "$USER_PORT" =~ ^[0-9]+$ ]]; then
-        echo -e "${RED}✗${NC} Ошибка: Порт должен быть числом"
-        continue
-    fi
-    
-    # Проверка диапазона портов
-    if [ "$USER_PORT" -lt 1024 ] || [ "$USER_PORT" -gt 65535 ]; then
-        echo -e "${RED}✗${NC} Ошибка: Порт должен быть в диапазоне 1024-65535"
-        continue
-    fi
-    
-    # Проверка занятости порта
-    if lsof -Pi :$USER_PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
-        echo -e "${RED}✗${NC} Порт $USER_PORT уже занят"
-        echo -e "${YELLOW}Процесс использующий порт:${NC}"
-        lsof -Pi :$USER_PORT -sTCP:LISTEN
-        read -p "Выбрать другой порт? (y/N): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${YELLOW}Установка отменена${NC}"
-            exit 1
+        # Проверка что порт - число
+        if ! [[ "$USER_PORT" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}✗${NC} Ошибка: Порт должен быть числом"
+            continue
         fi
-        continue
-    fi
-    
-    echo -e "${GREEN}✓${NC} Порт $USER_PORT доступен"
-    break
-done
 
-NODE_PORT=$USER_PORT
+        # Проверка диапазона портов
+        if [ "$USER_PORT" -lt 1024 ] || [ "$USER_PORT" -gt 65535 ]; then
+            echo -e "${RED}✗${NC} Ошибка: Порт должен быть в диапазоне 1024-65535"
+            continue
+        fi
+
+        # Проверка занятости порта
+        if lsof -Pi :$USER_PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo -e "${RED}✗${NC} Порт $USER_PORT уже занят"
+            echo -e "${YELLOW}Процесс использующий порт:${NC}"
+            lsof -Pi :$USER_PORT -sTCP:LISTEN
+            read -p "Выбрать другой порт? (y/N): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo -e "${YELLOW}Установка отменена${NC}"
+                exit 1
+            fi
+            continue
+        fi
+
+        echo -e "${GREEN}✓${NC} Порт $USER_PORT доступен"
+        break
+    done
+
+    NODE_PORT=$USER_PORT
+fi
 
 # Запрос приватного IP админки
 echo -e "\n${YELLOW}Настройка приватной сети${NC}"
 DEFAULT_ADMIN_IP="10.0.0.1"
 
-read -p "Введите приватный IP админ-панели (по умолчанию $DEFAULT_ADMIN_IP): " ADMIN_PRIVATE_IP
-ADMIN_PRIVATE_IP=${ADMIN_PRIVATE_IP:-$DEFAULT_ADMIN_IP}
+if [ -z "$ADMIN_PANEL_PRIVATE_IP" ]; then
+    read -p "Введите приватный IP админ-панели (по умолчанию $DEFAULT_ADMIN_IP): " ADMIN_PANEL_PRIVATE_IP
+fi
+ADMIN_PANEL_PRIVATE_IP=${ADMIN_PANEL_PRIVATE_IP:-$DEFAULT_ADMIN_IP}
 
-echo -e "${GREEN}✓${NC} Приватный IP админки: $ADMIN_PRIVATE_IP"
+echo -e "${GREEN}✓${NC} Приватный IP админки: $ADMIN_PANEL_PRIVATE_IP"
 
 # Проверка наличия Python
 echo -e "\n${YELLOW}Проверка Python...${NC}"
@@ -153,14 +164,14 @@ echo -e "\n${YELLOW}Копирование файлов приложения...$
 
 # Копируем папку node_client как пакет
 mkdir -p $INSTALL_DIR/node_client
-cp -r $SCRIPT_DIR/api $INSTALL_DIR/node_client/
-cp -r $SCRIPT_DIR/schemas $INSTALL_DIR/node_client/
-cp $SCRIPT_DIR/*.py $INSTALL_DIR/node_client/ 2>/dev/null || true
+cp -r $NODE_CLIENT_DIR/api $INSTALL_DIR/node_client/
+cp -r $NODE_CLIENT_DIR/schemas $INSTALL_DIR/node_client/
+cp $NODE_CLIENT_DIR/*.py $INSTALL_DIR/node_client/ 2>/dev/null || true
 
 # Копируем файлы конфигурации и зависимости в корень
-cp $SCRIPT_DIR/requirements.txt $INSTALL_DIR/
-cp $SCRIPT_DIR/.env.example $INSTALL_DIR/ 2>/dev/null || true
-cp $SCRIPT_DIR/README.md $INSTALL_DIR/ 2>/dev/null || true
+cp $NODE_CLIENT_DIR/requirements.txt $INSTALL_DIR/
+cp $NODE_CLIENT_DIR/.env.example $INSTALL_DIR/ 2>/dev/null || true
+cp $NODE_CLIENT_DIR/README.md $INSTALL_DIR/ 2>/dev/null || true
 
 # Копируем uninstall.sh в директорию установки
 cp $SCRIPT_DIR/uninstall.sh $INSTALL_DIR/ 2>/dev/null || true
@@ -205,7 +216,7 @@ WRITE_BUFFER_INTERVAL=10
 WRITE_BUFFER_SIZE=5
 
 # Приватный IP админ-панели
-ADMIN_PANEL_PRIVATE_IP=${ADMIN_PRIVATE_IP}
+ADMIN_PANEL_PRIVATE_IP=${ADMIN_PANEL_PRIVATE_IP}
 ENVEOF
     echo -e "${GREEN}✓${NC} Конфигурация создана: $INSTALL_DIR/.env.node.prod"
 else
@@ -220,9 +231,9 @@ else
     if ! grep -q "ADMIN_PANEL_PRIVATE_IP" $INSTALL_DIR/.env.node.prod; then
         echo "" >> $INSTALL_DIR/.env.node.prod
         echo "# Приватный IP админ-панели" >> $INSTALL_DIR/.env.node.prod
-        echo "ADMIN_PANEL_PRIVATE_IP=$ADMIN_PRIVATE_IP" >> $INSTALL_DIR/.env.node.prod
+        echo "ADMIN_PANEL_PRIVATE_IP=$ADMIN_PANEL_PRIVATE_IP" >> $INSTALL_DIR/.env.node.prod
     else
-        sed -i "s/^ADMIN_PANEL_PRIVATE_IP=.*/ADMIN_PANEL_PRIVATE_IP=$ADMIN_PRIVATE_IP/" $INSTALL_DIR/.env.node.prod
+        sed -i "s/^ADMIN_PANEL_PRIVATE_IP=.*/ADMIN_PANEL_PRIVATE_IP=$ADMIN_PANEL_PRIVATE_IP/" $INSTALL_DIR/.env.node.prod
     fi
     
     # Добавляем Write Buffer настройки если их нет
