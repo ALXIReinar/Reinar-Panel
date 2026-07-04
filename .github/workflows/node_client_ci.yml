@@ -4,7 +4,7 @@ on:
   push:
     branches: ["main", "dev/node"]
   pull_request:
-    branches: ["main", "dev/node"]
+    branches: ["main"]
 
 jobs:
   # 1. Тестирование с использованием БД
