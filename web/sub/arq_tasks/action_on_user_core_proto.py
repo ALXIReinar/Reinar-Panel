@@ -4,7 +4,7 @@ from typing import Literal
 from aiohttp import ClientSession, ClientResponseError
 from arq import ArqRedis
 
-from web.sub.anything import NodeUris
+from web.sub.anything import NodeUris, CoreProtoActions
 from web.sub.arq_tasks.depends_fabric import aiohttp_dep, arq_dep, pg_sql_dep
 from web.sub.config_dir.config import env
 from web.sub.data.postgres import PgSql
@@ -101,7 +101,7 @@ async def action_on_core_proto_by_sub_plan(
 
                 success_count += 1
                 log_event(f'\033[33m[ARQ]\033[0m Пользователь добавлен | node_proto_id: \033[36m{node["node_proto_id"]}\033[0m')
-                success_nodes.append(node['sub_node_id'])
+                success_nodes.append(node['node_proto_id'])
 
             except ClientResponseError as e:
                 "3.2.1. Шаблон некорректно настроен. Ошибки в параметрах для управления конфиг-файлом ядра"

@@ -171,14 +171,13 @@ async def add_user(
     1. Поиск доступных пользователю нод по **единственной** подписке, Outbox запись
     2. Закидываем задачу в фон
     """
-    log_event(f'Операция над пользователем на ядрах протоколов | action: {body.action}; user_id: \033[36m{body.user_id}\033[0m; order_id: \033[35m{body.order_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    log_event(f'Операция над пользователем на ядрах протоколов | action: {body.action}; user_id: \033[36m{body.user_id}\033[0m; user_sub_id: \033[35m{body.user_sub_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
 
     "Все ноды по подписке. Запрос на добавление на каждую ноду"
     sub_nodes = await db.nodes_protocols.get_core_proto_deps_by_user_sub(
-        user_id=body.user_id,
         user_uuid=body.uuid,
         tg_username=body.tg_username,
-        order_id=body.order_id,
+        user_sub_id=body.user_sub_id,
         operation=body.action
     )
     sub_nodes_serializable = [dict(node) for node in sub_nodes]
@@ -189,5 +188,5 @@ async def add_user(
         sub_nodes_serializable,
         body.action,
     )
-    log_event(f'Пользователь в фоне добавляется/удаляется на ядрах виртуальных нод | job_id: \033[35m{job.job_id}\033[0m; action: {body.action}; user_id: {body.user_id}; order_id: {body.order_id}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    log_event(f'Пользователь в фоне добавляется/удаляется на ядрах виртуальных нод | job_id: \033[35m{job.job_id}\033[0m; action: {body.action}; user_id: {body.user_id}; user_sub_id: {body.user_sub_id}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     return {'success': True, 'message': 'Пользователь обрабатывается в фоновой очереди', 'job_id': job.job_id}

@@ -15,7 +15,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 from starlette.requests import Request
 
-from web.sub.config_dir.env_modes import APP_MODE_CONFIG, AppMode
+from web.sub.config_dir.env_modes import APP_MODE_CONFIG, AppMode, PayMode
 
 env_files = (
     os.getenv('ENV_FILE') or
@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     action_on_core_proto_limit: int
 
     app_mode: AppMode
+    pay_mode: PayMode
     subscription_update_interval: str
     post_processing_responses: bool
     tg_bot_link: str

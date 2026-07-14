@@ -23,7 +23,7 @@ async def retry_stuck_core_proto_actions(ctx: dict, db: PgSql = None, arq: ArqRe
         async with (sem):
             "Находим ноды по подписке, ретраим"
             async with db_pool.acquire() as conn:
-                sub_nodes = await PgSql(conn).sub.get_nodes_to_core_proto_action(action_info['order_id'])
+                sub_nodes = await PgSql(conn).sub.get_nodes_to_core_proto_action(action_info['user_sub_id'])
             if len(sub_nodes) > 0:
                 # Преобразуем asyncpg.Record в dict для сериализации
                 sub_nodes_serializable = [dict(node) for node in sub_nodes]

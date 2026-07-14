@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from asyncpg import Connection, ForeignKeyViolationError
 
@@ -10,31 +10,41 @@ class PaymentQueries:
         self.conn = conn
 
 
-    async def order_subscription(self, user_id: int, sub_plan_id: int):
-        query = '''
-        WITH order_ins AS (
-            INSERT INTO payed_subs (user_id, sub_plan_id) VALUES ($1, $2) RETURNING id, user_id
-        ),
-        old_sub AS (
-            SELECT ps.user_id, ps.expire_date AS old_expire_date FROM payed_subs ps WHERE user_id = $1 AND ps.is_active = true
-        )
-        SELECT oi.id AS order_id, COALESCE(os.old_expire_date, NOW()) AS old_expire_date
-        FROM order_ins oi
-        LEFT JOIN old_sub os ON os.user_id = oi.user_id
-        '''
+    async def order_subscription(self, user_id: int):
+        query = 'INSERT INTO pay_orders (user_id, status) VALUES ($1, $2) RETURNING id'
         try:
-            return await self.conn.fetchrow(query, user_id, sub_plan_id)
+            return await self.conn.fetchval(query, user_id, PayStatuses.pending)
         except ForeignKeyViolationError:
             return None
 
 
-    async def activate_subscription(self, order_id: int, expire_date: datetime, user_id: int):
-        """READ COMMITTED - оставляем только потому, что у платёжки есть механика идемпотентности. По-хорошему блокировки и REPEATABLE READ"""
-        query_deactivate = 'UPDATE payed_subs SET is_active = false WHERE user_id = $1'
-        query_activate = 'UPDATE payed_subs SET is_active = true, expire_date = $2, status = $3 WHERE id = $1'
-        async with self.conn.transaction():
-            await self.conn.execute(query_deactivate, user_id)
-            await self.conn.execute(query_activate, order_id, expire_date, PayStatuses.success)
+    async def activate_subscription(self, order_id: int, user_id: int, sub_plan_id: int, sub_days: int):
+        query = """
+        WITH updated_order AS (
+            -- 1. Обновляем статус заказа на "Оплачен" (допустим, status = 2)
+            UPDATE pay_orders SET status = $5 
+            WHERE id = $1 
+            RETURNING id, user_id
+        )
+        -- 2. Вставляем или обновляем состояние подписки (Upsert)
+        INSERT INTO user_subs (order_id, user_id, sub_plan_id, is_active, expire_date)
+        VALUES ($1, $2, $3, true, NOW() + $4::interval)
+        ON CONFLICT (user_id, sub_plan_id) 
+        DO UPDATE SET 
+            -- Если подписка уже есть (живая или мертвая), обновляем:
+            order_id = EXCLUDED.order_id, -- Привязываем к новому платежу!
+            is_active = true, 
+            is_limited = false,
+            expire_date = CASE 
+                -- Если она жива и еще не истекла -> плюсуем к остатку
+                WHEN user_subs.is_active = true AND user_subs.expire_date > NOW() 
+                THEN user_subs.expire_date + $4::interval
+                -- Если она истекла или выключена -> начинаем отсчет от сейчас
+                ELSE NOW() + $4::interval
+            END
+        RETURNING id, expire_date
+        """
+        await self.conn.fetchrow(query, order_id, user_id, sub_plan_id, timedelta(days=sub_days), PayStatuses.success)
 
 
     async def get_user_info(self, user_id: int):
@@ -46,7 +56,7 @@ class PaymentQueries:
         query = '''
         WITH retrieve_upd AS (
             UPDATE sub_nodes_outbox SET is_retried = true WHERE is_retried = false AND created_at < now() - interval '1 hour'
-            RETURNING id, user_uuid, tg_username, order_id, operation
+            RETURNING id, user_uuid, tg_username, user_sub_id, operation
         )
         SELECT * FROM retrieve_upd
         ORDER BY id
@@ -57,16 +67,16 @@ class PaymentQueries:
     async def reset_traffic_by_users(self, users: list[dict]):
         # order_ids, sub_plan_ids, user_ids = zip(*tuple(u.values() for u in user_ids))
         order_ids, sub_plan_ids, user_ids = zip(
-            *tuple(tuple(u['order_id'], u['sub_plan_id'], u['user_id']) for u in users)
+            *tuple(tuple(u['user_sub_id'], u['sub_plan_id'], u['user_id']) for u in users)
         )
         query = '''
         WITH users_to_proto_cores AS (
-            SELECT order_id, sub_plan_id, user_id 
-            FROM UNNEST($1::bigint[], $2::integer[], $3::bigint[]) AS t(order_id, sub_plan_id, user_id)
+            SELECT user_sub_id, sub_plan_id, user_id 
+            FROM UNNEST($1::bigint[], $2::integer[], $3::bigint[]) AS t(user_sub_id, sub_plan_id, user_id)
         ),
         -- 3. Собираем информацию о нодах для этих подписок
         expired_nodes_info AS (
-            SELECT u.uuid, u.tg_username, upc.order_id, vsp.id AS sub_node_id,
+            SELECT u.uuid, u.tg_username, upc.user_sub_id, vsp.id AS sub_node_id,
                    vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib, pt.api_bulk_add_user_script,
                    pt.bulk_add_script_custom_params, pt.flatten_json_users_key, pt.flatten_user_identifier_key, pt.reload_core_command,
                    np.config_path, pt.constant_user_data_obj, pt.required_user_data_obj
@@ -87,8 +97,8 @@ class PaymentQueries:
                        json_build_object( 
                            'uuid', uuid, 
                            'tg_username', tg_username,
-                           'order_id', order_id,
-                           'sub_node_id', sub_node_id
+                           'user_sub_id', user_sub_id,
+                           'node_proto_id', node_proto_id
                        )
                    ),
                    '[]'::json
@@ -107,13 +117,13 @@ class PaymentQueries:
             UPDATE users SET traffic_used_day_mb = 0 WHERE is_deleted = false
         ),
         users_to_proto_cores AS (
-            UPDATE payed_subs SET is_limited = false
+            UPDATE user_subs SET is_limited = false
             WHERE is_active = true AND is_limited = true
-            RETURNING id AS order_id, sub_plan_id, user_id
+            RETURNING id AS user_sub_id, sub_plan_id, user_id
         ),
         -- 3. Собираем информацию о нодах для этих подписок
         expired_nodes_info AS (
-            SELECT u.uuid, u.tg_username, upc.order_id, vsp.id AS sub_node_id,
+            SELECT u.uuid, u.tg_username, upc.user_sub_id, vsp.id AS sub_node_id,
                    vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib, pt.api_bulk_add_user_script,
                    pt.bulk_add_script_custom_params, pt.flatten_json_users_key, pt.flatten_user_identifier_key, pt.reload_core_command,
                    np.config_path, pt.constant_user_data_obj, pt.required_user_data_obj
@@ -127,8 +137,8 @@ class PaymentQueries:
         ),
         -- 4. Фиксируем операцию удаления в outbox (двухэтапный ack)
         insert_outbox AS (
-            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
-            SELECT uuid, tg_username, order_id, $1, sub_node_id
+            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, user_sub_id, operation, node_proto_id)
+            SELECT uuid, tg_username, user_sub_id, $1, sub_node_id
             FROM expired_nodes_info
         )
         -- 5. Группируем пользователей по нодам для пакетной отправки
@@ -140,8 +150,8 @@ class PaymentQueries:
                        json_build_object( 
                            'uuid', uuid, 
                            'tg_username', tg_username,
-                           'order_id', order_id,
-                           'sub_node_id', sub_node_id
+                           'user_sub_id', user_sub_id,
+                           'node_proto_id', node_proto_id
                        )
                    ),
                    '[]'::json
@@ -154,7 +164,7 @@ class PaymentQueries:
         return await self.conn.fetch(query, CoreProtoActions.add)
 
 
-    async def get_all_nodes_for_metrics(self):
+    async def get_all_nodes_for_metrics_cron(self):
         query = '''
         SELECT np.id, n.ip, n.private_ip, n.api_port, np.metrics_port, pt.metrics_command, pt.api_metrics_script, pt.proto_python_lib,
                pt.metrics_parser_code, pt.sub_required_libs

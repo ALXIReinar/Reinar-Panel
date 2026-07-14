@@ -22,11 +22,6 @@ from web.sub.schemas import SubUrlSchema
 
 router = APIRouter(tags=['Subscriptions Service'])
 
-@router.get('/healthcheck')
-def healthcheck():
-    return {'status': True, 'service': 'sub-service'}
-
-
 
 @router.get('/sub/{b64_id}')
 async def sub(params: Annotated[SubUrlSchema, Path()], db: PgSqlDep, request: Request):

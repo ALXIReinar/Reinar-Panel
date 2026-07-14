@@ -5,6 +5,10 @@ class AppMode(str, Enum):
     PROD = "prod"
     DOCKER = "docker"
 
+class PayMode(str, Enum):
+    TEST = "test"
+    PROD = "prod"
+
 
 APP_MODE_CONFIG = {
     AppMode.LOCAL: {

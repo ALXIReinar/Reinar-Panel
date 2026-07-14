@@ -201,26 +201,26 @@ class NodesProtocolsQueries:
 
 
     async def get_core_proto_deps_by_user_sub(
-            self, user_id: int, user_uuid: str, tg_username: str, order_id: int, operation: Literal['add', 'delete']
+            self, user_uuid: str, tg_username: str, user_sub_id: int, operation: Literal['add', 'delete']
     ):
         query = '''
         WITH vnodes_read AS (
-            SELECT np.id as node_proto_id, vsp.id AS sub_node_id,n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
+            SELECT np.id as node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
                    pt.api_add_user_script, pt.api_delete_user_script, pt.reload_core_command, np.config_path, pt.flatten_json_users_key, pt.required_user_data_obj,
                    pt.constant_user_data_obj, pt.flatten_user_identifier_key, pt.add_script_custom_params, pt.delete_script_custom_params
-            FROM payed_subs ps
-            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = ps.sub_plan_id
+            FROM user_subs us
+            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = us.sub_plan_id
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
             JOIN protocols p ON np.proto_id = p.id
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true
             JOIN proto_templates pt ON p.tmp_id = pt.id
-            WHERE ps.id = $3 AND ps.is_active = true
+            WHERE us.id = $3 AND us.is_active = true
         ),
         outbox_insert AS (
-            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
-            SELECT $1, $2, $3, $4, vnodes_read.sub_node_id
+            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, user_sub_id, operation, node_proto_id)
+            SELECT $1, $2, $3, $4, vnodes_read.node_proto_id
             FROM vnodes_read
         )
         SELECT * FROM vnodes_read
         '''
-        return await self.conn.fetch(query, user_uuid, tg_username, order_id, CoreProtoActions.name2id[operation])
+        return await self.conn.fetch(query, user_uuid, tg_username, user_sub_id, CoreProtoActions.name2id[operation])

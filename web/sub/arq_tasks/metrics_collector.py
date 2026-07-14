@@ -31,7 +31,7 @@ async def traffic_sync_scheduler(ctx: dict, db: PgSql = None, arq: ArqRedis = No
     log_event('\033[36m[ARQ Metrics Collector]\033[0m Планировщик синхронизации трафика запущен')
 
     "Получаем список АКТИВНЫХ и ВИДИМЫХ для пользователя нод, с которых можно собрать метрики(есть metrics_port)"
-    nodes = await db.users_subs.get_all_nodes_for_metrics()
+    nodes = await db.users_subs.get_all_nodes_for_metrics_cron()
     nodes = [dict(node) for node in nodes]
 
     if not nodes:

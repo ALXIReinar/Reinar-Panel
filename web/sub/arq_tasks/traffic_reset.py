@@ -109,10 +109,10 @@ async def bulk_add_users_into_single_node(
             resp.raise_for_status()
 
         "Очищаем outbox при успешном добавлении"
-        sub_node_ids = [u['sub_node_id'] for u in users]
-        order_ids = [u['order_id'] for u in users]
+        node_proto_ids = [u['node_proto_id'] for u in users]
+        user_sub_ids = [u['user_sub_id'] for u in users]
 
-        await db.sub.success_bulk_core_proto_users(sub_node_ids, order_ids, CoreProtoActions.add)
+        await db.sub.success_bulk_core_proto_users(node_proto_ids, user_sub_ids, CoreProtoActions.add)
         log_event(f'\033[35m[ARQ Bulk Add]\033[0m Юзеры Добавлены в конфиг-файл ядра | users_len: \033[35m{len(users)}\033[0m; node_proto_id: \033[33m{node_proto_id}\033[0m; private_ip: \033[33m{private_ip}\033[0m; api_port: \033[35m{api_port}\033[0m')
         return {'success': True, 'message': 'Пользователи добавлены в инстанс ядра'}
 
