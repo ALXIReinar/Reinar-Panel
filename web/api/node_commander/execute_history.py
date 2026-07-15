@@ -5,7 +5,7 @@ from web.data.postgres import PgSqlDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
 from web.utils.logger_config import log_event
 
-router = APIRouter(prefix='/cmd_center/history', tags=['Command Center History'])
+router = APIRouter(prefix='/private/cmd_center/history', tags=['Command Center History'])
 
 
 @router.get('/all')

@@ -1,14 +1,12 @@
 from typing import Annotated
 
-from aiohttp import ClientResponseError, ClientTimeout, ClientError
+from aiohttp import ClientResponseError, ClientError
 from fastapi import APIRouter, HTTPException
 from fastapi.params import Query
 from starlette.requests import Request
-from starlette.responses import JSONResponse
 
 from web.api.protocols.proto_links_templates.handlers import generate_link_from_json
-from web.config_dir.config import NodeExecAiohttpDep, env, ArqDep
-from web.config_dir.env_modes import AppMode
+from web.config_dir.config import NodeExecAiohttpDep, ArqDep
 from web.data.postgres import PgSqlDep
 from web.data.redis_storage import RedisDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
@@ -17,7 +15,7 @@ from web.utils.anything import NodeUris, ExecHistoryStatuses
 from web.data.redis_storage import CommandWhitelistCache
 from web.utils.logger_config import log_event
 
-router = APIRouter(prefix='/cmd_center', tags=['Command Center Admin2Node'])
+router = APIRouter(prefix='/private/cmd_center', tags=['Command Center Admin2Node'])
 
 
 
@@ -139,7 +137,7 @@ async def config_file_write(body: WriteConfigSchema, request: Request, db: PgSql
         success_status, sub_ready_link = generate_link_from_json(config_link_tmp, body.file_content, spec_params, node_ip_or_domain, node_title)
         if not success_status:
             log_event(f'Генерация ссылок упала | error_reason: \033[34m{sub_ready_link}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
-            return JSONResponse(status_code=409, content={'success': False, 'message': 'Исключение при генерации ссылки по шаблону', 'err_message': sub_ready_link})
+            raise HTTPException(status_code=409, detail={'success': False, 'message': 'Исключение при генерации ссылки по шаблону', 'err_message': sub_ready_link})
 
         "2. Генерируем конфиг-ссылку для подписок"
         await db.nodes_protocols.update_config_link(body.node_proto_id, sub_ready_link)

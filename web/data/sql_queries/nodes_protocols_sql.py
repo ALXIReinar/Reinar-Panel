@@ -13,7 +13,7 @@ class NodesProtocolsQueries:
         self.conn = conn
     
     async def create_node_protocol(self, node_id: int, proto_id: int, title: str, sub_node_address: str | None):
-        """Добавить протокол на ноду"""
+        """Добавить впн ядро"""
         query = """
         INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address) VALUES ($1, $2, $3, $4) RETURNING id
         """
@@ -27,23 +27,21 @@ class NodesProtocolsQueries:
         """Получить виртуальную ноду по ID"""
         query = """
         SELECT
-            np.node_id, np.proto_id, p.name as proto_name, n.ip as node_ip, n.private_ip as node_private_ip, n.api_port as node_api_port,
-            np.sub_node_address, np.proto_port, np.metrics_port, n.is_active, np.user_visible, np.title, np.config_link, 
-            np.config_path, n.title as node_title, np.created_at, np.updated_at
+            np.node_id, np.proto_id, p.name as proto_name, n.ip, n.private_ip, n.api_port, np.sub_node_address, np.proto_port,
+            np.metrics_port, n.is_active, np.user_visible, np.title, np.config_link, np.config_path, n.title as node_title,
+            np.created_at
         FROM nodes_protocols np
         JOIN nodes n ON np.node_id = n.id
         JOIN protocols p ON np.proto_id = p.id
         WHERE np.id = $1
         """
         return await self.conn.fetchrow(query, np_id)
-    
-    
+
+
     async def get_node_protocols(self, node_id: int, limit: int, offset: int):
-        """Получить все протоколы на физической ноде"""
+        """Получить все виртуальные ноды на физической ноде"""
         query = """
-        SELECT 
-            np.node_id, np.proto_id, p.name as proto_name, n.ip as node_ip, n.private_ip as node_private_ip, n.api_port as node_api_port,
-            np.sub_node_address, np.proto_port, np.metrics_port, n.is_active, np.user_visible, np.title, np.created_at, np.updated_at
+        SELECT np.id as node_proto_id, np.proto_id, p.name as proto_name, np.sub_node_address, np.proto_port, np.metrics_port, np.user_visible, np.title
         FROM nodes_protocols np
         JOIN protocols p ON np.proto_id = p.id
         JOIN nodes n ON np.node_id = n.id
@@ -51,19 +49,6 @@ class NodesProtocolsQueries:
         LIMIT $2 OFFSET $3
         """
         return await self.conn.fetch(query, node_id, limit, offset)
-    
-    
-    async def get_protocol_nodes(self, proto_id: int):
-        """Получить все ноды с определённым протоколом"""
-        query = """
-        SELECT np.id, np.node_id, np.proto_id, n.ip as node_ip, n.private_ip as node_private_ip, np.config_path,
-               n.api_port as node_api_port, np.sub_node_address, n.title as node_title, n.is_active as node_is_active,
-               np.created_at, np.updated_at
-        FROM nodes_protocols np
-        JOIN nodes n ON np.node_id = n.id
-        WHERE np.proto_id = $1
-        """
-        return await self.conn.fetch(query, proto_id)
 
     
     async def update_node_protocol(

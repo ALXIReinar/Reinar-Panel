@@ -2,7 +2,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 from starlette.requests import Request
-from starlette.responses import JSONResponse
 
 from web.data.postgres import PgSqlDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
