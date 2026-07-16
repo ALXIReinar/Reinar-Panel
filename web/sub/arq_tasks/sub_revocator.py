@@ -73,6 +73,9 @@ async def bulk_delete_users_from_single_node(
         arq: ArqRedis = None,
         aio_http: ClientSession = None,
 ):
+    """
+    Логика outbox. Рекомендуется перейти на outbox_ids scoping, подход с парой (node_proto_id, user_sub_id, action) менее надёжный
+    """
     log_event(f'\033[31m[ARQ Bulk Delete]\033[0m Юзер на удаление из конфиг-файла ядра | users_len: \033[35m{len(users)}\033[0m; node_proto_id: \033[33m{node_proto_id}\033[0m; private_ip: \033[33m{private_ip}\033[0m; api_port: \033[35m{api_port}\033[0m')
     url = f"http://{private_ip}:{api_port}{NodeUris.proto_core_bulk_delete_users}"
     # url = f"http://localhost:8200{NodeUris.proto_core_bulk_delete_users}"
@@ -97,7 +100,7 @@ async def bulk_delete_users_from_single_node(
         node_proto_ids = [u['node_proto_id'] for u in users]
         user_sub_ids = [u['user_sub_id'] for u in users]
 
-        await db.sub.success_bulk_core_proto_users(node_proto_ids, user_sub_ids, CoreProtoActions.delete)
+        await db.sub.success_bulk_action_core_proto_users(node_proto_ids, user_sub_ids, CoreProtoActions.delete)
         log_event(f'\033[31m[ARQ Bulk Delete]\033[0m Юзеры удалены из конфиг-файла ядра | users_len: \033[35m{len(users)}\033[0m; node_proto_id: \033[33m{node_proto_id}\033[0m; private_ip: \033[33m{private_ip}\033[0m; api_port: \033[35m{api_port}\033[0m')
         return {'success': True, 'message': 'Пользователи удалены из инстанса ядра'}
     except ClientResponseError as err:

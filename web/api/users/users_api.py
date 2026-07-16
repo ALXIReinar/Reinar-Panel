@@ -33,45 +33,27 @@ async def get_users(request: Request, db: PgSqlDep, _: JWTCookieDep,
 
 
 @router.get('/get_by_id')
-async def get_user(order_id: Annotated[int, Query(alias='oid')], request: Request, db: PgSqlDep, _: JWTCookieDep):
-    user = await db.users.get_by_id(order_id)
+async def get_user(user_id: Annotated[int, Query(alias='uid')], request: Request, db: PgSqlDep, _: JWTCookieDep):
+    user, subs = await db.users.get_by_id(user_id)
     if not user:
-        log_event(f'Не удалось найти пользователя | payed_subs.id: \033[32m{order_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
+        log_event(f'Не удалось найти пользователя | user_id: \033[32m{user_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
         raise HTTPException(status_code=404, detail={'success': False, 'message': 'Пользователь не найден'})
 
-    log_event(f'Выдали Extent Юзера | payed_subs.id: \033[32m{order_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
-    return {'success': True, 'user': user}
+    log_event(f'Выдали Extent Юзера | user_id: \033[32m{user_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    return {'success': True, 'user': user, 'subscriptions': subs}
 
 
 
 @router.post('/bulk_add')
 async def bulk_create_users(body: UserBulkCreateSchema, request: Request, db: PgSqlDep, arq: ArqDep, _: JWTCookieDep):
-    """
-    Bulk создание пользователей с подписками
-
-    Может не вернуть некоторых пользователей(отправил 10, получил 8).
-    Это значит, что uniq на tg_username отработал - "Пользователь с таким именем уже существует"
-    * также могла коллизия на uuid или b64 произойти:)
-
-    Возможна вставка пользователей с несуществующим `sub_plan_id`. Это ForeignKeyViolation
-    * принцип "всё или ничего"
-    1. Можно проверять наличие sub_plan_id перед вставкой пользователей. Правда, это REPEATABLE READ + блокировка - в идеале
-    2. Можно try except ForeignKeyViolation при вставке в подписки делать. Но это тоже транзакция, чтобы роллбек был на `users` тоже
-    """
+    """Bulk создание пользователей"""
     log_event(f'Bulk create пользователей | users_len: {len(body.users)}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
 
-    "1. Вставка на уровне данных"
     users_data = [user.model_dump() for user in body.users]
-    created_users, users_for_arq_bg = await db.users.bulk_create_with_subs(users_data)
-
-    "2. Вставка на впн-ядрах"
-    users_for_arq_bg = [dict(arq_u) for arq_u in users_for_arq_bg]
-    job_id = None
-    if users_for_arq_bg:  # Вызываем ARQ только если есть пользователи
-        job_id = await put_to_arq_bg(arq, users_for_arq_bg, CoreProtoActions.word_add)
+    created_users = await db.users.bulk_create(users_data)
 
     log_event(f'Создано пользователей | created_users_len: {len(created_users)}; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request,)
-    return {'success': True, 'message': f'Пользователи созданы!', 'users': created_users, 'arq_job_id': job_id}
+    return {'success': True, 'message': f'Пользователи созданы!', 'users': created_users}
 
 
 @router.put('/bulk_update')
@@ -114,3 +96,13 @@ async def bulk_delete_users(body: UserBulkDeleteSchema, request: Request, db: Pg
 
     log_event(f'Удалено пользователей: {len(deleted_users)}; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request, level='WARNING')
     return {'success': True, 'message': f'Пользователи удалены!', 'deleted_count': len(deleted_users), 'arq_job_id': job_id}
+
+
+@router.put('/update')
+async def edit_user(body: UserUpdateSchema, request: Request, db: PgSqlDep, arq: ArqDep, _: JWTCookieDep):
+    await db.users.update(
+        user_id=body.user_id,
+        tg_username=...,
+        sub_plan_ids=...
+    )
+

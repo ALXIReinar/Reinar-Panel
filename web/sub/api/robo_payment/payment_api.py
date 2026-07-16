@@ -9,7 +9,7 @@ from starlette.requests import Request
 from web.sub.anything import Constants, RobokassaUrls, CoreProtoActions
 from web.sub.api.robo_payment.handlers import crypt_strategy, create_signature, payment_meta4signature_string
 from web.sub.config_dir.config import env, ArqDep
-from web.sub.config_dir.env_modes import AppMode, PayMode
+from web.sub.config_dir.env_modes import PayMode
 from web.sub.config_dir.logger_config import log_event
 from web.sub.data.postgres import PgSqlDep
 from web.sub.data.redis_storage import RedisDep
@@ -82,22 +82,21 @@ async def processing_pay_result(form: Annotated[WebhookRoboPayload, Form()], req
         return f"OK{form.InvId}"
 
     "3.1. Активация подписку пользователя"
-    user_sub_id = await db.users_subs.activate_subscription(form.InvId, form.Shp_user_id, form.Shp_sub_plan_id, form.Shp_sub_days)
-    log_event(f'Активировали подписку | user_id: \033[32m{form.Shp_user_id}\033[0m; order_id: \033[33m{form.InvId}\033[0m; user_sub_id: \033[35m{user_sub_id}\033[0m', request=request)
+    user_sub = await db.users_subs.activate_subscription(form.InvId, form.Shp_user_id, form.Shp_sub_plan_id, form.Shp_sub_days)
+    log_event(f'Активировали подписку | user_id: \033[32m{form.Shp_user_id}\033[0m; order_id: \033[33m{form.InvId}\033[0m; user_sub_id: \033[35m{user_sub['id']}\033[0m', request=request)
 
     "3.2. Запускаем в фон таску на добавление пользователя в ядра нод, указанных в подписке"
-    # User Meta
-    user_info = await db.users_subs.get_user_info(form.Shp_user_id)
+
     # Находим ноды по подписке, фиксируем попытку вставки пользователя в ядра протоколов
     sub_nodes = await db.sub.get_core_proto_deps_by_user_id(
-        form.Shp_user_id, user_info['uuid'], user_info['tg_username'], user_sub_id, CoreProtoActions.add
+        form.Shp_user_id, user_sub['uuid'], user_sub['id'], CoreProtoActions.add
     )
     # Преобразуем asyncpg.Record в dict для сериализации
     sub_nodes_serializable = [dict(node) for node in sub_nodes]
     
     job = await arq.enqueue_job(
-        'action_on_core_proto_by_sub_plan', user_info['uuid'], user_info['tg_username'], sub_nodes_serializable, CoreProtoActions.word_add
+        'action_on_core_proto_by_sub_plan', user_sub['uuid'], user_sub['id'], sub_nodes_serializable, CoreProtoActions.word_add
     )
 
-    log_event(f'Кинули добавление пользователя на впн-ноды в Arq | job_id: \033[33m{job.job_id}\033[0m; user_id: \033[31m{form.Shp_user_id}\033[0m; user_uuid: \033[35m{user_info['uuid']}\033[0m; order_id: \033[33m{form.InvId}\033[0m', request=request)
+    log_event(f'Кинули добавление пользователя на впн-ноды в Arq | job_id: \033[33m{job.job_id}\033[0m; user_id: \033[31m{form.Shp_user_id}\033[0m; user_uuid: \033[35m{user_sub['uuid']}\033[0m; order_id: \033[33m{form.InvId}\033[0m', request=request)
     return f"OK{form.InvId}"

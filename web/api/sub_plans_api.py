@@ -27,7 +27,16 @@ async def create_sub_plan(body: SubPlanCreateSchema, request: Request, db: PgSql
 
 @router.put('/update')
 async def update_sub_plan(body: SubPlanUpdateSchema, request: Request, db: PgSqlDep, _: JWTCookieDep):
-    """Обновление группы подписок"""
+    """
+    Обновление группы подписок
+
+    Есть понятие
+    - дневной лимит
+    - общий лимит
+
+    Чтобы назначить - укажите значение в мегабайтах
+    Чтобы отключить - оставить нетронутым/указать null
+    """
     log_event(f'Обновление группы подписок | plan_id: \033[35m{body.id}\033[0m; body: \033[37m{repr(body)}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
 
     # Обновляем основные поля группы

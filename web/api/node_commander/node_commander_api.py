@@ -174,7 +174,6 @@ async def add_user(
     "Все ноды по подписке. Запрос на добавление на каждую ноду"
     sub_nodes = await db.nodes_protocols.get_core_proto_deps_by_user_sub(
         user_uuid=body.uuid,
-        tg_username=body.tg_username,
         user_sub_id=body.user_sub_id,
         operation=body.action
     )

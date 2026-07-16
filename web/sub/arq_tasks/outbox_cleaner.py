@@ -31,7 +31,7 @@ async def retry_stuck_core_proto_actions(ctx: dict, db: PgSql = None, arq: ArqRe
                 job = await arq.enqueue_job(
                     'action_on_core_proto_by_sub_plan',
                     action_info['user_uuid'],
-                    action_info['tg_username'],
+                    action_info['user_sub_id'],
                     sub_nodes_serializable,
                     CoreProtoActions.id2name[action_info['operation']],
                 )

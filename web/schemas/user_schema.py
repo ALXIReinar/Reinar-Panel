@@ -6,9 +6,6 @@ class UserCreateItem(BaseModel):
     """Один пользователь для bulk insert"""
     tg_username: str = Field(..., max_length=32, description="Уникальный ник пользователя в ТГ")
     tg_id: Optional[int] = Field(None, description="Telegram ID (опционально)")
-    sub_plan_id: int = Field(..., description="ID тарифного плана")
-    ttl_days: int = Field(..., gt=0, description="Длительность подписки в днях")
-    is_active: bool = Field(True, description="Статус активации подписки")
 
 
 class UserBulkCreateSchema(BaseModel):

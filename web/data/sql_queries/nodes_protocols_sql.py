@@ -186,11 +186,11 @@ class NodesProtocolsQueries:
 
 
     async def get_core_proto_deps_by_user_sub(
-            self, user_uuid: str, tg_username: str, user_sub_id: int, operation: Literal['add', 'delete']
+            self, user_uuid: str, user_sub_id: int, operation: Literal['add', 'delete']
     ):
         query = '''
         WITH vnodes_read AS (
-            SELECT np.id as node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
+            SELECT vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
                    pt.api_add_user_script, pt.api_delete_user_script, pt.reload_core_command, np.config_path, pt.flatten_json_users_key, pt.required_user_data_obj,
                    pt.constant_user_data_obj, pt.flatten_user_identifier_key, pt.add_script_custom_params, pt.delete_script_custom_params
             FROM user_subs us
@@ -202,10 +202,10 @@ class NodesProtocolsQueries:
             WHERE us.id = $3 AND us.is_active = true
         ),
         outbox_insert AS (
-            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, user_sub_id, operation, node_proto_id)
-            SELECT $1, $2, $3, $4, vnodes_read.node_proto_id
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+            SELECT $1, $2, $3, vnodes_read.node_proto_id
             FROM vnodes_read
         )
         SELECT * FROM vnodes_read
         '''
-        return await self.conn.fetch(query, user_uuid, tg_username, user_sub_id, CoreProtoActions.name2id[operation])
+        return await self.conn.fetch(query, user_uuid, user_sub_id, CoreProtoActions.name2id[operation])

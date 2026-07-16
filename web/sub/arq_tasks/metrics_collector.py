@@ -98,12 +98,12 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[dict], aio_http: Client
 
                 "Обновляем трафик, если был"
                 if parsed_data:
-                    usernames, traffic_adds = zip(*tuple(
+                    user_sub_ids, traffic_adds = zip(*tuple(
                         tuple(user_dict.values()) for user_dict in parsed_data
                     ))
                     async with pool.acquire() as conn:
                         log_event(f'\033[35m[ARQ Metrics Collector Metrics Collector]\033[0m Outbox операций по удалению пользователей с ядра | node_proto_id: \033[36m{node["id"]}\033[0m;')
-                        outbox_event_ids = await PgSql(conn).sub.update_traffic(usernames, traffic_adds)
+                        outbox_event_ids = await PgSql(conn).sub.update_traffic(user_sub_ids, traffic_adds)
 
                     if outbox_event_ids:
                         outbox_event_ids = [oe_id['id'] for oe_id in outbox_event_ids]
