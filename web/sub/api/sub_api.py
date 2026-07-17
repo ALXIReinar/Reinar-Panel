@@ -68,13 +68,15 @@ async def sub(params: Annotated[SubUrlSchema, Path()], db: PgSqlDep, request: Re
         ready_config_links = error_messages_for_client('Приносим свои извинения за технические неполадки', 'Мы уже в курсе и решаем эту проблему')
 
     "Готовим ответ для Впн клиента"
-    user_traffic, sub_plan_limit, exp_date = sub_meta['traffic_used_day_mb'], sub_meta['sub_plan_limit'], int(sub_meta['expire_date'].timestamp())
+    user_traffic, sub_plan_limit = sub_meta['traffic_used_day_mb'], sub_meta['sub_plan_limit']
+    exp_date = int(sub_meta['expire_date'].timestamp()) if sub_meta['expire_date'] is not None else 0
+
     response = Response(
         content=process2vpn_client_format(ready_config_links),
         media_type='text/plain',
         headers={
             "Subscription-Userinfo": f"upload=0; download={user_traffic}; total={sub_plan_limit}; expire={exp_date}",
-            'profile-title': sub_meta['title'], # Только латиница
+            'profile-title': f"base64:{base64.b64encode(sub_meta['title'].encode()).decode()}",
             "profile-update-interval": env.subscription_update_interval,  # Обновлять каждые 12 часов
             "profile-web-page-url": env.tg_bot_link,
             "announce": f"base64:{base64.b64encode(sub_meta['description'].encode()).decode()}",

@@ -57,7 +57,7 @@ async def test_get_protocol_commands_empty(client: AsyncClient, db_seed, proto_t
     proto_id = response.json()["proto_id"]
     
     # Получаем команды
-    response = await client.get(f"/api/v1/private/protocol-commands/by_proto/{proto_id}")
+    response = await client.get(f"/api/v1/private/protocol-commands/{proto_id}")
     
     assert response.status_code == 200
     data = response.json()
@@ -70,7 +70,7 @@ async def test_get_protocol_commands_multiple(client: AsyncClient, protocol_with
     """Получение списка с несколькими командами"""
     proto_id = protocol_with_commands_seed["proto_id"]
     
-    response = await client.get(f"/api/v1/private/protocol-commands/by_proto/{proto_id}")
+    response = await client.get(f"/api/v1/private/protocol-commands/{proto_id}")
     
     assert response.status_code == 200
     data = response.json()
@@ -105,7 +105,7 @@ async def test_bulk_insert_commands_success(client: AsyncClient, db_seed, proto_
     ]
     
     response = await client.post(
-        "/api/v1/private/protocol-commands/bulk/insert",
+        "/api/v1/private/protocol-commands/bulk/add",
         json={"proto_id": proto_id, "commands": commands}
     )
     
@@ -133,7 +133,7 @@ async def test_bulk_insert_single_command(client: AsyncClient, db_seed, proto_te
     ]
     
     response = await client.post(
-        "/api/v1/private/protocol-commands/bulk/insert",
+        "/api/v1/private/protocol-commands/bulk/add",
         json={"proto_id": proto_id, "commands": commands}
     )
     
@@ -152,7 +152,7 @@ async def test_bulk_insert_invalid_proto_id(client: AsyncClient, db_seed):
     
     # Используем несуществующий proto_id (в пределах smallint)
     response = await client.post(
-        "/api/v1/private/protocol-commands/bulk/insert",
+        "/api/v1/private/protocol-commands/bulk/add",
         json={"proto_id": 9999, "commands": commands}
     )
     
@@ -191,7 +191,7 @@ async def test_bulk_update_commands_success(client: AsyncClient, protocol_with_c
     assert "Обновлено команд: 3" in data["message"]
     
     # Проверяем, что команды действительно обновились
-    get_response = await client.get(f"/api/v1/private/protocol-commands/by_proto/{proto_id}")
+    get_response = await client.get(f"/api/v1/private/protocol-commands/{proto_id}")
     commands_list = get_response.json()["commands"]
     
     # Проверяем первую обновлённую команду
@@ -247,7 +247,7 @@ async def test_bulk_delete_commands_success(client: AsyncClient, protocol_with_c
     assert "Удалено команд: 2" in data["message"]
     
     # Проверяем, что команды удалены
-    get_response = await client.get(f"/api/v1/private/protocol-commands/by_proto/{proto_id}")
+    get_response = await client.get(f"/api/v1/private/protocol-commands/{proto_id}")
     remaining_commands = get_response.json()["commands"]
     assert len(remaining_commands) == 1
     assert remaining_commands[0]["cmd_id"] == cmd_ids[2]
@@ -273,6 +273,6 @@ async def test_bulk_delete_partial(client: AsyncClient, protocol_with_commands_s
     assert data["deleted_count"] == 1
     
     # Проверяем, что удалилась только одна команда
-    get_response = await client.get(f"/api/v1/private/protocol-commands/by_proto/{proto_id}")
+    get_response = await client.get(f"/api/v1/private/protocol-commands/{proto_id}")
     remaining_commands = get_response.json()["commands"]
     assert len(remaining_commands) == 2

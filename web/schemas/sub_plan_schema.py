@@ -9,7 +9,6 @@ class SubPlanCreateSchema(BaseModel):
 
 class SubPlanUpdateSchema(BaseModel):
     """Схема для обновления группы подписок"""
-    id: int = Field(..., description="ID группы")
     title: Optional[str] = Field(None, min_length=1, max_length=128, description="Название группы")
     description: Optional[str] = Field(None, description="Описание группы")
     ttl_days: Optional[int] = Field(None, gt=0, description="Длительность подписки в днях")
@@ -18,8 +17,6 @@ class SubPlanUpdateSchema(BaseModel):
     is_active: Optional[bool] = Field(None, description="Статус активности группы")
     add_node_proto_ids: Optional[list[int]] = Field(None, description="ID виртуальных нод для привязки")
     remove_node_proto_ids: Optional[list[int]] = Field(None, description="ID виртуальных нод для отвязки")
-
-
-class SubPlanDeleteSchema(BaseModel):
-    """Схема для удаления группы подписок"""
-    id: int = Field(..., description="ID группы")
+    traffic_limit_total: int | None = Field(None)
+    infinite_traffic: bool | None = Field(None)
+    infinite_expire: bool | None = Field(None)

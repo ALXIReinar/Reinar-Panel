@@ -25,10 +25,10 @@ async def add_protocol_to_node_api(body: NodeProtocolCreateSchema, db: PgSqlDep,
     return {'success': True, 'node_protocol_id': np_id, 'message': msg}
 
 
-@router.get('/protocols/by_node', summary="Получить все протоколы на ноде")
-async def get_node_protocols_api(q_params: Annotated[GetNodeProtoSchema, Query()], request: Request, db: PgSqlDep, _: JWTCookieDep):
-    protocols = await db.nodes_protocols.get_node_protocols(q_params.node_id, q_params.limit, q_params.offset)
-    log_event(f'Отдали протоколы ноды | node_id: \033[33m{q_params.node_id}\033[0m; count: \033[32m{len(protocols)}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+@router.get('/protocols/info/{np_id}', summary="Получить все протоколы на ноде")
+async def get_node_protocols_api(np_id: int, q_params: Annotated[GetNodeProtoSchema, Query()], request: Request, db: PgSqlDep, _: JWTCookieDep):
+    protocols = await db.nodes_protocols.get_node_protocols(np_id, q_params.limit, q_params.offset)
+    log_event(f'Отдали протоколы ноды | node_id: \033[33m{np_id}\033[0m; count: \033[32m{len(protocols)}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     return {'protocols': protocols}
 
 
@@ -43,8 +43,8 @@ async def get_node_protocol_api(np_id: int, request: Request, db: PgSqlDep, _: J
     return {'node_protocol': node_protocol}
 
 
-@router.put('/protocols/update', summary="Обновить виртуальную ноду")
-async def update_node_protocol_api(body: UpdateNodeProtoSchema, db: PgSqlDep, request: Request, _: JWTCookieDep):
+@router.put('/protocols/{np_id}', summary="Обновить виртуальную ноду")
+async def update_node_protocol_api(np_id: int, body: UpdateNodeProtoSchema, db: PgSqlDep, request: Request, _: JWTCookieDep):
     """
     Позволяет изменять все свойства виртуальной ноды (инстанса протокола на сервере)
 
@@ -57,10 +57,10 @@ async def update_node_protocol_api(body: UpdateNodeProtoSchema, db: PgSqlDep, re
     3. Подумать над тем, чтобы ставить user_visible = False автоматически. Чтобы активировать ноду,
     необходимо какой-то тест прогнать. Можно политику безопасности предложить, удобно для провайдеров
     """
-    log_event(f"Обновление виртуальной ноды | node_proto_id: \033[35m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request)
+    log_event(f"Обновление виртуальной ноды | node_proto_id: \033[35m{np_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request)
     
     status_code, message = await db.nodes_protocols.update_node_protocol(
-        np_id=body.node_proto_id,
+        np_id=np_id,
         config_path=body.config_path,
         title=body.title,
         metrics_port=body.metrics_port,
@@ -71,15 +71,15 @@ async def update_node_protocol_api(body: UpdateNodeProtoSchema, db: PgSqlDep, re
 
     "Конфликт портов на сервере"
     if status_code == 409:
-        log_event(f"Конфликт портов при обновлении | node_proto_id: \033[33m{body.node_proto_id}\033[0m; proto_port: \033[35m{body.proto_port}\033[0m; metrics_port: \033[32m{body.metrics_port}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request, level='WARNING')
+        log_event(f"Конфликт портов при обновлении | node_proto_id: \033[33m{np_id}\033[0m; proto_port: \033[35m{body.proto_port}\033[0m; metrics_port: \033[32m{body.metrics_port}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request, level='WARNING')
         raise HTTPException(status_code=409, detail={'success': False, 'message': message})
 
     "Нода не найдена"
     if status_code == 404:
-        log_event(f"Виртуальная нода не найдена | node_proto_id: \033[31m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request, level='WARNING')
+        log_event(f"Виртуальная нода не найдена | node_proto_id: \033[31m{np_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request, level='WARNING')
         raise HTTPException(status_code=404, detail={'success': False, 'message': message})
 
-    log_event(f"Виртуальная нода обновлена | node_proto_id: \033[32m{body.node_proto_id}\033[0m; node_proto_body: \033[36m{repr(body)}\033[0m;admin_id: \033[32m{request.state.admin_id}\033[0m", request=request)
+    log_event(f"Виртуальная нода обновлена | node_proto_id: \033[32m{np_id}\033[0m; node_proto_body: \033[36m{repr(body)}\033[0m;admin_id: \033[32m{request.state.admin_id}\033[0m", request=request)
     return {'success': True, 'message': message}
 
 

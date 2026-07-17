@@ -13,8 +13,8 @@ class SubscriptionQueries:
         query_sub_meta = '''
         SELECT 
             us.sub_plan_id, sp.title, sp.description, (COALESCE(us.traffic_limit_day, us.used_mb_limit, 0)) AS sub_plan_limit, us.user_id, us.uuid AS user_uuid,
-            COALESCE(us.traffic_used_day_mb, us.used_mb), 
-            (CASE WHEN us.infinite_expire = true THEN 'no_limit' ELSE us.expire_date END) AS expire_date
+            COALESCE(us.traffic_used_day_mb, us.used_mb) AS traffic_used_day_mb, 
+            (CASE WHEN us.infinite_expire = true THEN null ELSE us.expire_date END) AS expire_date
         FROM users u
         JOIN user_subs us ON us.user_id = u.id
         JOIN sub_plans sp ON sp.id = us.sub_plan_id
@@ -22,10 +22,10 @@ class SubscriptionQueries:
           AND u.is_deleted = false
           AND (
                   -- Проверка превышения общего лимита
-                  (us.infinite_traffic AND us.used_mb_limit IS NOT NULL AND us.used_mb >= us.used_mb_limit)
+                  (us.infinite_traffic OR (us.used_mb_limit IS NOT NULL AND us.used_mb < us.used_mb_limit))
                   OR
                   -- Проверка превышения дневного лимита (если он включен)
-                  (us.infinite_traffic AND us.traffic_limit_day IS NOT NULL AND us.traffic_used_day_mb >= us.traffic_limit_day)
+                  (us.infinite_traffic OR (us.traffic_limit_day IS NOT NULL AND us.traffic_used_day_mb < us.traffic_limit_day))
           )
           AND (us.infinite_expire = true OR us.expire_date > now())
           AND us.b64_id = $1
@@ -48,7 +48,7 @@ class SubscriptionQueries:
 
 
     async def get_core_proto_deps_by_user_id(
-            self, user_id: int, user_uuid: str, user_sub_id: int, operation: CoreProtoActions | int
+            self, user_uuid: str, user_sub_id: int, operation: CoreProtoActions | int
     ):
         """
         Получить ноды для действия над пользователем в ядре протокола + зафиксировать в outbox
@@ -69,16 +69,16 @@ class SubscriptionQueries:
             JOIN protocols p ON np.proto_id = p.id
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true
             JOIN proto_templates pt ON p.tmp_id = pt.id
-            WHERE us.is_active = true AND us.user_id = $1
+            WHERE us.is_active = true AND us.id = $2
         ),
         outbox_insert AS (
             INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
-            SELECT $2, $3, $4, $5, vnodes_read.node_proto_id
+            SELECT $1, $2, $3, vnodes_read.node_proto_id
             FROM vnodes_read
         )
         SELECT * FROM vnodes_read
         '''
-        return await self.conn.fetch(query, user_id, user_uuid, user_sub_id, operation)
+        return await self.conn.fetch(query, user_uuid, user_sub_id, operation)
 
 
     async def get_nodes_to_core_proto_action(self, user_sub_id: int):

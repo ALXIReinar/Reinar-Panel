@@ -117,7 +117,7 @@ async def test_get_template_by_id_full(client: AsyncClient, proto_template_seed,
         )
     
     # Получаем полные данные
-    response = await client.get(f"/api/v1/private/templates/by_id?tmp_id={tmp_id}&so=false")
+    response = await client.get(f"/api/v1/private/templates/{tmp_id}?so=false")
     
     assert response.status_code == 200
     data = response.json()
@@ -150,7 +150,7 @@ async def test_get_template_by_id_spec_only(client: AsyncClient, proto_template_
         )
     
     # Получаем только spec_params
-    response = await client.get(f"/api/v1/private/templates/by_id?tmp_id={tmp_id}&so=true")
+    response = await client.get(f"/api/v1/private/templates/{tmp_id}?so=true")
     
     assert response.status_code == 200
     data = response.json()
@@ -166,7 +166,7 @@ async def test_get_template_by_id_spec_only(client: AsyncClient, proto_template_
 @pytest.mark.asyncio
 async def test_get_template_by_id_not_found(client: AsyncClient, db_seed):
     """Несуществующий tmp_id возвращает 404"""
-    response = await client.get("/api/v1/private/templates/by_id?tmp_id=9999&so=false")
+    response = await client.get("/api/v1/private/templates/9999?so=false")
     
     assert response.status_code == 404
     data = response.json()
@@ -180,7 +180,7 @@ async def test_get_template_by_id_not_found(client: AsyncClient, db_seed):
 async def test_add_template_success(client: AsyncClient, db_seed):
     """Успешное создание шаблона"""
     response = await client.post(
-        "/api/v1/private/templates/add",
+        "/api/v1/private/templates/create",
         json={"title": "New Template"}
     )
     
@@ -197,7 +197,7 @@ async def test_add_template_duplicate_title(client: AsyncClient, proto_template_
     """Попытка создать дубликат title (409 Conflict)"""
     # Пытаемся создать шаблон с существующим title
     response = await client.post(
-        "/api/v1/private/templates/add",
+        "/api/v1/private/templates/create",
         json={"title": "TestProtocol Template"}  # Уже существует из фикстуры
     )
     
@@ -215,7 +215,6 @@ async def test_update_template_success(client: AsyncClient, proto_template_seed)
     tmp_id = proto_template_seed["tmp_id"]
     
     update_data = {
-        "tmp_id": tmp_id,
         "title": "Updated Template",
         "url_tmp": "vless://{user_uuid}@example.com:443",
         "reload_core_command": "systemctl reload xray",
@@ -225,7 +224,7 @@ async def test_update_template_success(client: AsyncClient, proto_template_seed)
     }
     
     response = await client.put(
-        "/api/v1/private/templates/update",
+        f"/api/v1/private/templates/{tmp_id}",
         json=update_data
     )
     
@@ -235,7 +234,7 @@ async def test_update_template_success(client: AsyncClient, proto_template_seed)
     assert data["message"] == "Шаблон обновлён"
     
     # Проверяем, что данные действительно обновились
-    get_response = await client.get(f"/api/v1/private/templates/by_id?tmp_id={tmp_id}&so=false")
+    get_response = await client.get(f"/api/v1/private/templates/{tmp_id}?so=false")
     template_data = get_response.json()["template"]["template"]
     assert template_data["title"] == "Updated Template"
     assert template_data["proto_python_lib"] == "grpcio"
@@ -245,9 +244,8 @@ async def test_update_template_success(client: AsyncClient, proto_template_seed)
 async def test_update_template_not_found(client: AsyncClient, db_seed):
     """Обновление несуществующего шаблона возвращает 404"""
     response = await client.put(
-        "/api/v1/private/templates/update",
+        f"/api/v1/private/templates/9999",
         json={
-            "tmp_id": 9999,
             "title": "NonExistent"
         }
     )
@@ -265,9 +263,8 @@ async def test_update_template_url_validation(client: AsyncClient, proto_templat
     
     # Пытаемся обновить url_tmp без обязательного плейсхолдера
     response = await client.put(
-        "/api/v1/private/templates/update",
+        f"/api/v1/private/templates/{tmp_id}",
         json={
-            "tmp_id": tmp_id,
             "url_tmp": "vless://invalid@example.com:443"  # Нет {user_uuid}
         }
     )
@@ -294,7 +291,7 @@ async def test_delete_template_success(client: AsyncClient, db_seed, db_pool):
         )
     
     # Удаляем шаблон
-    response = await client.delete(f"/api/v1/private/templates/delete?tmp_id={tmp_id}")
+    response = await client.delete(f"/api/v1/private/templates/{tmp_id}")
     
     assert response.status_code == 200
     data = response.json()
@@ -302,14 +299,14 @@ async def test_delete_template_success(client: AsyncClient, db_seed, db_pool):
     assert data["message"] == "Шаблон удалён"
     
     # Проверяем, что шаблон действительно удалён
-    get_response = await client.get(f"/api/v1/private/templates/by_id?tmp_id={tmp_id}&so=false")
+    get_response = await client.get(f"/api/v1/private/templates/{tmp_id}?so=false")
     assert get_response.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_delete_template_not_found(client: AsyncClient, db_seed):
     """Удаление несуществующего шаблона возвращает 404"""
-    response = await client.delete("/api/v1/private/templates/delete?tmp_id=9999")
+    response = await client.delete("/api/v1/private/templates/9999")
     
     assert response.status_code == 404
     data = response.json()
@@ -331,7 +328,7 @@ async def test_delete_template_used_by_protocol(client: AsyncClient, proto_templ
         )
     
     # Пытаемся удалить используемый шаблон
-    response = await client.delete(f"/api/v1/private/templates/delete?tmp_id={tmp_id}")
+    response = await client.delete(f"/api/v1/private/templates/{tmp_id}")
     
     assert response.status_code == 409
     data = response.json()

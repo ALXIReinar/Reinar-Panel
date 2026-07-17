@@ -5,7 +5,6 @@ from pydantic_core.core_schema import ValidationInfo
 
 
 class GetNodeProtoSchema(BaseModel):
-    node_id: int
     limit: int = Field(le=30)
     offset: int = Field(0, ge=0)
 
@@ -19,7 +18,6 @@ class NodeProtocolCreateSchema(BaseModel):
 
 class UpdateNodeProtoSchema(BaseModel):
     """Схема для обновления виртуальной ноды"""
-    node_proto_id: int = Field(..., gt=0, description="ID виртуальной ноды")
     config_path: str | None = Field(None, min_length=1, description="Путь к конфигу протокола")
     title: str | None = Field(None, min_length=1, max_length=30, description="Название виртуальной ноды")
     metrics_port: int | None = Field(None, ge=1024, le=65535, description="Порт для сбора метрик трафика")

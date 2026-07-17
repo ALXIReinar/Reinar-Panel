@@ -1,7 +1,6 @@
-from typing import Literal, Annotated
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
-from fastapi.params import Query
 from starlette.requests import Request
 
 from web.api.users.handlers import put_to_arq_bg
@@ -20,7 +19,7 @@ router = APIRouter(prefix='/private/users', tags=['Users Management'])
 
 
 
-@router.get('/get')
+@router.get('/all')
 async def get_users(request: Request, db: PgSqlDep, _: JWTCookieDep,
     last_id: int | None = None,
     sort_by: Literal['asc', 'desc'] = 'desc',
@@ -32,8 +31,8 @@ async def get_users(request: Request, db: PgSqlDep, _: JWTCookieDep,
     return {'success': True, 'users': users}
 
 
-@router.get('/get_by_id')
-async def get_user(user_id: Annotated[int, Query(alias='uid')], request: Request, db: PgSqlDep, _: JWTCookieDep):
+@router.get('/{user_id}')
+async def get_user(user_id: int, request: Request, db: PgSqlDep, _: JWTCookieDep):
     user, subs = await db.users.get_by_id(user_id)
     if not user:
         log_event(f'Не удалось найти пользователя | user_id: \033[32m{user_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
@@ -44,8 +43,8 @@ async def get_user(user_id: Annotated[int, Query(alias='uid')], request: Request
 
 
 
-@router.post('/bulk_add')
-async def bulk_create_users(body: UserBulkCreateSchema, request: Request, db: PgSqlDep, arq: ArqDep, _: JWTCookieDep):
+@router.post('/bulk/add')
+async def bulk_create_users(body: UserBulkCreateSchema, request: Request, db: PgSqlDep, _: JWTCookieDep):
     """Bulk создание пользователей"""
     log_event(f'Bulk create пользователей | users_len: {len(body.users)}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
 
@@ -56,7 +55,7 @@ async def bulk_create_users(body: UserBulkCreateSchema, request: Request, db: Pg
     return {'success': True, 'message': f'Пользователи созданы!', 'users': created_users}
 
 
-@router.put('/bulk_update')
+@router.put('/bulk/update')
 async def bulk_update_users(body: UserBulkUpdateSchema, request: Request, db: PgSqlDep, arq: ArqDep, _: JWTCookieDep):
     """
     Bulk операции над пользователями:
@@ -78,7 +77,7 @@ async def bulk_update_users(body: UserBulkUpdateSchema, request: Request, db: Pg
     return {'success': True, 'message': f'Bulk Операция ({body.action}) выполнена', 'affected_count': len(affected_users), 'arq_job_id': job_id}
 
 
-@router.delete('/bulk_delete')
+@router.delete('/bulk/delete')
 async def bulk_delete_users(body: UserBulkDeleteSchema, request: Request, db: PgSqlDep, arq: ArqDep, _: JWTCookieDep):
     """
     Bulk удаление пользователей 
@@ -98,11 +97,11 @@ async def bulk_delete_users(body: UserBulkDeleteSchema, request: Request, db: Pg
     return {'success': True, 'message': f'Пользователи удалены!', 'deleted_count': len(deleted_users), 'arq_job_id': job_id}
 
 
-@router.put('/update')
-async def edit_user(body: UserUpdateSchema, request: Request, db: PgSqlDep, arq: ArqDep, _: JWTCookieDep):
-    await db.users.update(
-        user_id=body.user_id,
-        tg_username=...,
-        sub_plan_ids=...
-    )
+# @router.put('/update')
+# async def edit_user(body: UserUpdateSchema, request: Request, db: PgSqlDep, arq: ArqDep, _: JWTCookieDep):
+#     await db.users.update(
+#         user_id=body.user_id,
+#         tg_username=...,
+#         sub_plan_ids=...
+#     )
 

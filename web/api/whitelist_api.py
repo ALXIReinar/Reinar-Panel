@@ -25,7 +25,7 @@ async def get_base_whitelist_api(request: Request, db: PgSqlDep, redis: RedisDep
     return {'commands': commands}
 
 
-@router.put('/bulk_update')
+@router.put('/bulk/update')
 async def update_base_whitelist(
         body: WhitelistUpdateSchema, request: Request, db: PgSqlDep, redis: RedisDep, _: JWTCookieDep
 ):
@@ -43,7 +43,7 @@ async def update_base_whitelist(
     return {'success': True, 'message': 'Статусы команд обновлены', 'active_count': active_count, 'inactive_count': inactive_count}
 
 
-@router.post('/bulk_add')
+@router.post('/bulk/add')
 async def add_base_whitelist(body: WhitelistAddSchema, request: Request, db: PgSqlDep, redis: RedisDep, _: JWTCookieDep):
     """
     Bulk add базовых команд в whitelist, автоматически инвалидирует кэш Redis
@@ -63,7 +63,7 @@ async def add_base_whitelist(body: WhitelistAddSchema, request: Request, db: PgS
     return {'success': True, 'message': f'Команды добавлены!', 'white_cmd_ids': records}
 
 
-@router.delete('/bulk_delete')
+@router.delete('/bulk/delete')
 async def delete_base_whitelist(body: WhitelistDeleteSchema, request: Request, db: PgSqlDep, redis: RedisDep, _: JWTCookieDep):
     """
     Bulk delete базовых команд из whitelist, автоматически инвалидирует кэш Redis

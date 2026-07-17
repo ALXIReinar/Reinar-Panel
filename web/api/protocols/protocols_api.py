@@ -46,7 +46,7 @@ async def get_proto(proto_id: int, db: PgSqlDep, request: Request, _: JWTCookieD
     return {'proto_info': proto_info}
 
 
-@router.delete('/delete/{proto_id}', summary="Удалить протокол")
+@router.delete('/{proto_id}', summary="Удалить протокол")
 async def delete_proto(proto_id: int, db: PgSqlDep, request: Request, _: JWTCookieDep):
     status_code, msg = await db.protocols.delete_protocol(proto_id)
 

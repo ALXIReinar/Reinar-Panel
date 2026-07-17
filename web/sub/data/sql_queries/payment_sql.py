@@ -25,51 +25,51 @@ class PaymentQueries:
     async def activate_subscription(self, order_id: int, user_id: int, sub_plan_id: int, sub_days: int):
         query = """
         WITH updated_order AS (
-            -- 1. Обновляем статус заказа на "Оплачен" (допустим, status = 2)
-            UPDATE pay_orders SET status = $5 
-            WHERE id = $1 
-            RETURNING id, user_id
-        )
-        -- 2. Вставляем или обновляем состояние подписки (Upsert)
-        INSERT INTO user_subs (order_id, user_id, uuid, b64_id, sub_plan_id, is_active, expire_date, infinite_expire, infinite_traffic, traffic_limit_day, used_mb_limit)
-        SELECT inp.order_id, inp.user_id, inp.uuid, inp.b64_id, inp.sub_plan_id, inp.is_active, inp.exp_date, sp.infinite_expire, sp.infinite_traffic, sp.traffic_limit_day, sp.traffic_limit_total
-        FROM (
+            -- 1. Обновляем статус заказа
+            UPDATE pay_orders SET status = $7 WHERE id = $1 RETURNING id, user_id
+        ),
+        inp AS (
+            -- 2. Собираем наши входные переменные в "таблицу" из одной строки.
             SELECT 
-                $1 AS order_id,
-                $2 AS user_id, 
-                $3 AS uuid,
-                $4 AS b64_id,
-                $5 AS sub_plan_id,
-                true AS is_active,
+                $1::bigint AS order_id, 
+                $2::bigint AS user_id, 
+                $3::text AS uuid, 
+                $4::text AS b64_id, 
+                $5::int AS sub_plan_id, 
+                true AS is_active, 
                 (NOW() + $6::interval) AS exp_date
-        ) AS inp
+        )
+        -- 3. Вставляем или обновляем состояние подписки (Upsert)
+        INSERT INTO user_subs (
+            order_id, user_id, uuid, b64_id, sub_plan_id, 
+            is_active, expire_date, infinite_expire, 
+            infinite_traffic, traffic_limit_day, used_mb_limit
+        )
+        SELECT 
+            inp.order_id, inp.user_id, inp.uuid, inp.b64_id, inp.sub_plan_id, 
+            inp.is_active, inp.exp_date, sp.infinite_expire, 
+            sp.infinite_traffic, sp.traffic_limit_day, sp.traffic_limit_total
+        FROM inp
         JOIN sub_plans sp ON sp.id = inp.sub_plan_id 
         ON CONFLICT (user_id, sub_plan_id) 
         DO UPDATE SET 
-            -- Если подписка уже есть (живая или мертвая), обновляем:
-            order_id = EXCLUDED.order_id, -- Привязываем к новому платежу!
+            -- Обновляем привязку к новому заказу
+            order_id = EXCLUDED.order_id,
             is_active = true, 
             is_limited = false,
             expire_date = CASE 
-                -- Если она жива и еще не истекла -> плюсуем к остатку
                 WHEN user_subs.is_active = true AND user_subs.expire_date > NOW() 
                 THEN user_subs.expire_date + $6::interval
-                -- Если она истекла или выключена -> начинаем отсчет от сейчас
                 ELSE NOW() + $6::interval
             END
-        RETURNING id, inp.uuid
+        -- 4. Возвращаем uuid прямо из таблицы user_subs (если подписка продлевается - вернется старый, если покупка - новый)
+        RETURNING id, uuid
         """
         uuid = str(uuid4())
         b64_id = base64.urlsafe_b64encode(secrets.token_bytes(env.sub_link_bytes)).decode('utf-8').rstrip('=')
-        await self.conn.fetchrow(
+        return await self.conn.fetchrow(
             query, order_id, user_id, uuid, b64_id, sub_plan_id, timedelta(days=sub_days), PayStatuses.success
         )
-
-
-    async def get_user_info(self, user_id: int):
-        query = 'SELECT uuid, tg_username FROM users WHERE id = $1 AND is_deleted = false'
-        return await self.conn.fetchrow(query, user_id)
-
 
     async def get_stuck_actions(self):
         query = '''

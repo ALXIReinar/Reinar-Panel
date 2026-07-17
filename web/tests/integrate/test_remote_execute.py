@@ -41,7 +41,7 @@ class TestRemoteExecuteSuccess:
             )
         
         response = await client.post(
-            "/api/v1/cmd_center/remote_execute",
+            "/api/v1/private/cmd_center/remote_execute",
             json={
                 "node_proto_id": vnode_id,
                 "private_ip": str(node_data["private_ip"]),
@@ -100,7 +100,7 @@ class TestRemoteExecuteSuccess:
             )
         
         response = await client.post(
-            "/api/v1/cmd_center/remote_execute",
+            "/api/v1/private/cmd_center/remote_execute",
             json={
                 "node_proto_id": vnode_id,
                 "private_ip": str(node_data["private_ip"]),
@@ -145,7 +145,7 @@ class TestRemoteExecuteErrors:
             )
         
         response = await client.post(
-            "/api/v1/cmd_center/remote_execute",
+            "/api/v1/private/cmd_center/remote_execute",
             json={
                 "node_proto_id": vnode_id,
                 "private_ip": str(node_data["private_ip"]),
@@ -190,7 +190,7 @@ class TestRemoteExecuteErrors:
             )
         
         response = await client.post(
-            "/api/v1/cmd_center/remote_execute",
+            "/api/v1/private/cmd_center/remote_execute",
             json={
                 "node_proto_id": vnode_id,
                 "private_ip": str(node_data["private_ip"]),
@@ -241,7 +241,7 @@ class TestRemoteExecuteErrors:
             )
         
         response = await client.post(
-            "/api/v1/cmd_center/remote_execute",
+            "/api/v1/private/cmd_center/remote_execute",
             json={
                 "node_proto_id": vnode_id,
                 "private_ip": str(node_data["private_ip"]),
@@ -302,7 +302,7 @@ class TestRemoteExecuteHistoryUpdates:
             )
         
         response = await client.post(
-            "/api/v1/cmd_center/remote_execute",
+            "/api/v1/private/cmd_center/remote_execute",
             json={
                 "node_proto_id": vnode_id,
                 "private_ip": str(node_data["private_ip"]),
@@ -353,7 +353,7 @@ class TestRemoteExecuteHistoryUpdates:
             )
         
         response = await client.post(
-            "/api/v1/cmd_center/remote_execute",
+            "/api/v1/private/cmd_center/remote_execute",
             json={
                 "node_proto_id": vnode_id,
                 "private_ip": str(node_data["private_ip"]),

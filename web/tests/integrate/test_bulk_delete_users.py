@@ -1,5 +1,5 @@
 """
-Интеграционные тесты для DELETE /private/users/bulk_delete
+Интеграционные тесты для DELETE /private/users/bulk/delete
 Тестируют bulk удаление пользователей с подписками
 
 КРИТИЧНЫЕ ПРОВЕРКИ:
@@ -27,14 +27,12 @@ async def users_with_subs_for_delete(db_pool, virtual_node_seed, sub_plan_seed):
         for i in range(4):
             user_id = await conn.fetchval(
                 """
-                INSERT INTO users (tg_id, tg_username, uuid, traffic_used_day_mb)
-                VALUES ($1, $2, $3, $4)
+                INSERT INTO users (tg_id, tg_username)
+                VALUES ($1, $2)
                 RETURNING id
                 """,
                 4000000 + i,
-                f"delete_user_{i}",
-                f"uuid-del-{i:04d}-1111-2222-33333333",
-                0
+                f"delete_user_{i}"
             )
             user_ids.append(user_id)
         
@@ -47,48 +45,78 @@ async def users_with_subs_for_delete(db_pool, virtual_node_seed, sub_plan_seed):
         )
         
         # Создаём подписки
-        order_ids = []
+        user_sub_ids = []
         
         # Пользователи 0,1 - активные подписки, is_limited=false (должны попасть в outbox)
         for i in range(2):
-            order_id = await conn.fetchval(
+            # Создаём pay_order
+            pay_order_id = await conn.fetchval(
+                "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 2, NOW()) RETURNING id",
+                user_ids[i]
+            )
+            
+            # Создаём подписку
+            user_sub_id = await conn.fetchval(
                 """
-                INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, expire_date, status)
-                VALUES ($1, $2, true, false, NOW() + INTERVAL '30 days', 2)
+                INSERT INTO user_subs (
+                    user_id, order_id, sub_plan_id, is_active, is_limited, 
+                    expire_date, uuid, b64_id, infinite_traffic, infinite_expire
+                )
+                VALUES ($1, $2, $3, true, false, NOW() + INTERVAL '30 days', $4, $5, false, false)
                 RETURNING id
                 """,
-                user_ids[i], plan_id_1
+                user_ids[i], pay_order_id, plan_id_1,
+                f"uuid-del-{i:04d}-1111-2222-33333333",
+                f"b64_delete_user_{i}"
             )
-            order_ids.append(order_id)
+            user_sub_ids.append(user_sub_id)
         
         # Пользователь 2 - активная подписка, is_limited=true (НЕ должен попасть в outbox)
-        order_id_limited = await conn.fetchval(
+        pay_order_limited = await conn.fetchval(
+            "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 2, NOW()) RETURNING id",
+            user_ids[2]
+        )
+        user_sub_id_limited = await conn.fetchval(
             """
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, expire_date, status)
-            VALUES ($1, $2, true, true, NOW() + INTERVAL '30 days', 2)
+            INSERT INTO user_subs (
+                user_id, order_id, sub_plan_id, is_active, is_limited,
+                expire_date, uuid, b64_id, infinite_traffic, infinite_expire
+            )
+            VALUES ($1, $2, $3, true, true, NOW() + INTERVAL '30 days', $4, $5, false, false)
             RETURNING id
             """,
-            user_ids[2], plan_id_1
+            user_ids[2], pay_order_limited, plan_id_1,
+            f"uuid-del-{2:04d}-1111-2222-33333333",
+            f"b64_delete_user_2"
         )
-        order_ids.append(order_id_limited)
+        user_sub_ids.append(user_sub_id_limited)
         
         # Пользователь 3 - неактивная подписка (НЕ должен попасть в outbox)
-        order_id_inactive = await conn.fetchval(
+        pay_order_inactive = await conn.fetchval(
+            "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 3, NOW()) RETURNING id",
+            user_ids[3]
+        )
+        user_sub_id_inactive = await conn.fetchval(
             """
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, expire_date, status)
-            VALUES ($1, $2, false, false, NOW() + INTERVAL '30 days', 3)
+            INSERT INTO user_subs (
+                user_id, order_id, sub_plan_id, is_active, is_limited,
+                expire_date, uuid, b64_id, infinite_traffic, infinite_expire
+            )
+            VALUES ($1, $2, $3, false, false, NOW() + INTERVAL '30 days', $4, $5, false, false)
             RETURNING id
             """,
-            user_ids[3], plan_id_1
+            user_ids[3], pay_order_inactive, plan_id_1,
+            f"uuid-del-{3:04d}-1111-2222-33333333",
+            f"b64_delete_user_3"
         )
-        order_ids.append(order_id_inactive)
+        user_sub_ids.append(user_sub_id_inactive)
         
         return {
             "user_ids": user_ids,
             "active_unlim_user_ids": user_ids[:2],  # is_limited=false, is_active=true
             "limited_user_id": user_ids[2],  # is_limited=true
             "inactive_user_id": user_ids[3],  # is_active=false
-            "order_ids": order_ids,
+            "user_sub_ids": user_sub_ids,
             "sub_plan_id": plan_id_1,
             "vnode_id": vnode_id_1,
         }
@@ -104,7 +132,7 @@ class TestBulkDeleteSuccess:
         
         response = await client.request(
             "DELETE",
-            "/api/v1/private/users/bulk_delete",
+            "/api/v1/private/users/bulk/delete",
             json={"user_ids": user_ids}
         )
         
@@ -131,7 +159,7 @@ class TestBulkDeleteSuccess:
         # Проверяем что подписки активны ДО удаления
         async with db_pool.acquire() as conn:
             active_before = await conn.fetch(
-                "SELECT id, is_active FROM payed_subs WHERE user_id = ANY($1)",
+                "SELECT id, is_active FROM user_subs WHERE user_id = ANY($1)",
                 user_ids
             )
             assert len(active_before) == 2
@@ -140,7 +168,7 @@ class TestBulkDeleteSuccess:
         
         response = await client.request(
             "DELETE",
-            "/api/v1/private/users/bulk_delete",
+            "/api/v1/private/users/bulk/delete",
             json={"user_ids": user_ids}
         )
         
@@ -150,7 +178,7 @@ class TestBulkDeleteSuccess:
         # Подписки НЕ удаляются каскадно, а остаются в БД с is_active=false
         async with db_pool.acquire() as conn:
             subs_after = await conn.fetch(
-                "SELECT id, is_active FROM payed_subs WHERE user_id = ANY($1)",
+                "SELECT id, is_active FROM user_subs WHERE user_id = ANY($1)",
                 user_ids
             )
             assert len(subs_after) == 2
@@ -164,7 +192,7 @@ class TestBulkDeleteSuccess:
         
         response = await client.request(
             "DELETE",
-            "/api/v1/private/users/bulk_delete",
+            "/api/v1/private/users/bulk/delete",
             json={"user_ids": user_ids}
         )
         
@@ -184,7 +212,7 @@ class TestBulkDeleteOutboxAndArq:
         
         response = await client.request(
             "DELETE",
-            "/api/v1/private/users/bulk_delete",
+            "/api/v1/private/users/bulk/delete",
             json={"user_ids": user_ids}
         )
         
@@ -194,12 +222,12 @@ class TestBulkDeleteOutboxAndArq:
         async with db_pool.acquire() as conn:
             outbox = await conn.fetch(
                 """
-                SELECT o.order_id, o.operation
+                SELECT o.user_sub_id, o.operation
                 FROM sub_nodes_outbox o
-                WHERE o.order_id = ANY($1)
-                ORDER BY o.order_id
+                WHERE o.user_sub_id = ANY($1)
+                ORDER BY o.user_sub_id
                 """,
-                users_with_subs_for_delete["order_ids"][:2]
+                users_with_subs_for_delete["user_sub_ids"][:2]
             )
             assert len(outbox) == 2
             for record in outbox:
@@ -213,7 +241,7 @@ class TestBulkDeleteOutboxAndArq:
         
         response = await client.request(
             "DELETE",
-            "/api/v1/private/users/bulk_delete",
+            "/api/v1/private/users/bulk/delete",
             json={"user_ids": all_user_ids}
         )
         
@@ -229,9 +257,9 @@ class TestBulkDeleteOutboxAndArq:
             outbox_unlim = await conn.fetch(
                 """
                 SELECT COUNT(*) as cnt FROM sub_nodes_outbox
-                WHERE order_id = ANY($1)
+                WHERE user_sub_id = ANY($1)
                 """,
-                users_with_subs_for_delete["order_ids"][:2]
+                users_with_subs_for_delete["user_sub_ids"][:2]
             )
             assert outbox_unlim[0]["cnt"] == 2
             
@@ -239,9 +267,9 @@ class TestBulkDeleteOutboxAndArq:
             outbox_lim = await conn.fetch(
                 """
                 SELECT COUNT(*) as cnt FROM sub_nodes_outbox
-                WHERE order_id = $1
+                WHERE user_sub_id = $1
                 """,
-                users_with_subs_for_delete["order_ids"][2]
+                users_with_subs_for_delete["user_sub_ids"][2]
             )
             assert outbox_lim[0]["cnt"] == 0
             
@@ -249,9 +277,9 @@ class TestBulkDeleteOutboxAndArq:
             outbox_inactive = await conn.fetch(
                 """
                 SELECT COUNT(*) as cnt FROM sub_nodes_outbox
-                WHERE order_id = $1
+                WHERE user_sub_id = $1
                 """,
-                users_with_subs_for_delete["order_ids"][3]
+                users_with_subs_for_delete["user_sub_ids"][3]
             )
             assert outbox_inactive[0]["cnt"] == 0
     
@@ -262,7 +290,7 @@ class TestBulkDeleteOutboxAndArq:
         
         response = await client.request(
             "DELETE",
-            "/api/v1/private/users/bulk_delete",
+            "/api/v1/private/users/bulk/delete",
             json={"user_ids": user_ids}
         )
         
@@ -282,16 +310,16 @@ class TestBulkDeleteOutboxAndArq:
         
         # Проверяем структуру
         for user in users_for_arq:
-            assert "order_id" in user
+            assert "user_sub_id" in user
             assert "sub_plan_id" in user
-            assert "user_id" in user
+            assert "uuid" in user
     
     @pytest.mark.asyncio
     async def test_bulk_delete_empty_list_no_arq_call(self, client, mock_arq):
         """Пустой список user_ids не вызывает ARQ"""
         response = await client.request(
             "DELETE",
-            "/api/v1/private/users/bulk_delete",
+            "/api/v1/private/users/bulk/delete",
             json={"user_ids": []}
         )
         
@@ -311,7 +339,7 @@ class TestBulkDeleteEdgeCases:
         """Несуществующие user_ids не вызывают ошибку"""
         response = await client.request(
             "DELETE",
-            "/api/v1/private/users/bulk_delete",
+            "/api/v1/private/users/bulk/delete",
             json={"user_ids": [99999, 88888]}
         )
         
@@ -329,7 +357,7 @@ class TestBulkDeleteEdgeCases:
         
         response = await client.request(
             "DELETE",
-            "/api/v1/private/users/bulk_delete",
+            "/api/v1/private/users/bulk/delete",
             json={"user_ids": [inactive_user_id]}
         )
         
@@ -349,9 +377,9 @@ class TestBulkDeleteEdgeCases:
             outbox_count = await conn.fetchval(
                 """
                 SELECT COUNT(*) FROM sub_nodes_outbox
-                WHERE order_id = $1
+                WHERE user_sub_id = $1
                 """,
-                users_with_subs_for_delete["order_ids"][3]
+                users_with_subs_for_delete["user_sub_ids"][3]
             )
             assert outbox_count == 0
     
@@ -362,7 +390,7 @@ class TestBulkDeleteEdgeCases:
         
         response = await client.request(
             "DELETE",
-            "/api/v1/private/users/bulk_delete",
+            "/api/v1/private/users/bulk/delete",
             json={"user_ids": [limited_user_id]}
         )
         
@@ -382,9 +410,9 @@ class TestBulkDeleteEdgeCases:
             outbox_count = await conn.fetchval(
                 """
                 SELECT COUNT(*) FROM sub_nodes_outbox
-                WHERE order_id = $1
+                WHERE user_sub_id = $1
                 """,
-                users_with_subs_for_delete["order_ids"][2]
+                users_with_subs_for_delete["user_sub_ids"][2]
             )
             assert outbox_count == 0
     
@@ -407,8 +435,8 @@ class TestBulkDeleteEdgeCases:
             
             # Создаём пользователя
             user_id = await conn.fetchval(
-                "INSERT INTO users (tg_id, tg_username, uuid) VALUES ($1, $2, $3) RETURNING id",
-                4001000, "invisible_delete_user", "uuid-invis-del-0001-0002-00000003"
+                "INSERT INTO users (tg_id, tg_username) VALUES ($1, $2) RETURNING id",
+                4001000, "invisible_delete_user"
             )
             
             # Привязываем невидимую vnode к плану
@@ -418,20 +446,31 @@ class TestBulkDeleteEdgeCases:
                 invisible_vnode_id, plan_id
             )
             
+            # Создаём pay_order
+            pay_order_id = await conn.fetchval(
+                "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 2, NOW()) RETURNING id",
+                user_id
+            )
+            
             # Создаём активную подписку
-            order_id = await conn.fetchval(
+            user_sub_id = await conn.fetchval(
                 """
-                INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, expire_date, status)
-                VALUES ($1, $2, true, false, NOW() + INTERVAL '30 days', 2)
+                INSERT INTO user_subs (
+                    user_id, order_id, sub_plan_id, is_active, is_limited, 
+                    expire_date, uuid, b64_id, infinite_traffic, infinite_expire
+                )
+                VALUES ($1, $2, $3, true, false, NOW() + INTERVAL '30 days', $4, $5, false, false)
                 RETURNING id
                 """,
-                user_id, plan_id
+                user_id, pay_order_id, plan_id,
+                "uuid-invis-del-0001-0002-00000003",
+                "b64_invisible_delete_user"
             )
         
         # Удаляем пользователя
         response = await client.request(
             "DELETE",
-            "/api/v1/private/users/bulk_delete",
+            "/api/v1/private/users/bulk/delete",
             json={"user_ids": [user_id]}
         )
         
@@ -449,8 +488,8 @@ class TestBulkDeleteEdgeCases:
             
             # Проверяем что в outbox ничего нет
             outbox_count = await conn.fetchval(
-                "SELECT COUNT(*) FROM sub_nodes_outbox WHERE order_id = $1",
-                order_id
+                "SELECT COUNT(*) FROM sub_nodes_outbox WHERE user_sub_id = $1",
+                user_sub_id
             )
             assert outbox_count == 0
     
@@ -482,8 +521,8 @@ class TestBulkDeleteEdgeCases:
             
             # Создаём пользователя
             user_id = await conn.fetchval(
-                "INSERT INTO users (tg_id, tg_username, uuid) VALUES ($1, $2, $3) RETURNING id",
-                4002000, "inactive_node_delete_user", "uuid-inact-del-0001-0002-00000003"
+                "INSERT INTO users (tg_id, tg_username) VALUES ($1, $2) RETURNING id",
+                4002000, "inactive_node_delete_user"
             )
             
             # Привязываем vnode к плану
@@ -493,20 +532,31 @@ class TestBulkDeleteEdgeCases:
                 vnode_id, plan_id
             )
             
+            # Создаём pay_order
+            pay_order_id = await conn.fetchval(
+                "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 2, NOW()) RETURNING id",
+                user_id
+            )
+            
             # Создаём активную подписку
-            order_id = await conn.fetchval(
+            user_sub_id = await conn.fetchval(
                 """
-                INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, expire_date, status)
-                VALUES ($1, $2, true, false, NOW() + INTERVAL '30 days', 2)
+                INSERT INTO user_subs (
+                    user_id, order_id, sub_plan_id, is_active, is_limited,
+                    expire_date, uuid, b64_id, infinite_traffic, infinite_expire
+                )
+                VALUES ($1, $2, $3, true, false, NOW() + INTERVAL '30 days', $4, $5, false, false)
                 RETURNING id
                 """,
-                user_id, plan_id
+                user_id, pay_order_id, plan_id,
+                "uuid-inact-del-0001-0002-00000003",
+                "b64_inactive_node_delete_user"
             )
         
         # Удаляем пользователя
         response = await client.request(
             "DELETE",
-            "/api/v1/private/users/bulk_delete",
+            "/api/v1/private/users/bulk/delete",
             json={"user_ids": [user_id]}
         )
         
@@ -524,7 +574,8 @@ class TestBulkDeleteEdgeCases:
             
             # Проверяем что в outbox ничего нет
             outbox_count = await conn.fetchval(
-                "SELECT COUNT(*) FROM sub_nodes_outbox WHERE order_id = $1",
-                order_id
+                "SELECT COUNT(*) FROM sub_nodes_outbox WHERE user_sub_id = $1",
+                user_sub_id
             )
             assert outbox_count == 0
+

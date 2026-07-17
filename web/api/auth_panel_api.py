@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Response, Request
+from fastapi import APIRouter, Response, Request, HTTPException
 from starlette.responses import JSONResponse
 
 from web.data.postgres import PgSqlDep
@@ -19,7 +19,7 @@ async def registration_user(creds: AdminRegSchema, db: PgSqlDep, request: Reques
 
     if not insert_attempt:
         log_event(f"Пользователь с email: {hide_log_param(creds.login)} Уже существует", request=request, level='WARNING')
-        return JSONResponse(status_code=204, content={"success": False, "message": 'Такой пользователь уже существует'})
+        return JSONResponse(status_code=202, content={"success": False, "message": 'Такой пользователь уже существует'})
 
     log_event(f"Новый пользователь! email: {hide_log_param(creds.login)}", request=request)
     return {'success': True, 'message': 'Пользователь создан'}
@@ -67,9 +67,19 @@ async def show_seances(request: Request, db: PgSqlDep, _: JWTCookieDep):
     return {'seances': seances}
 
 
-@router.put('/server/admins/passw/set_new_passw')
+@router.put('/server/admins/passw/set_new_passw', description='Серверный эндпоинт. Используется скриптами. Не требует реализации на фронт части')
 async def reset_password(update_secrets: UpdatePasswSchema, db: PgSqlDep, request: Request):
     hashed_passw = encryption.hash(update_secrets.passw)
-    await db.admins.set_new_passw(update_secrets.admin_id, hashed_passw)
+    result = await db.admins.set_new_passw(update_secrets.admin_id, hashed_passw)
+    if not result:
+        log_event(f'Не удалось обновить пароль. Админ не найден | unput_admin_id: \033[32m{update_secrets.admin_id}\033[0m', request=request, level='WARNING')
+        raise HTTPException(status_code=404, detail={'success': False, 'message': 'Админ с таким id не найден'})
+
     log_event(f"Юзер сменил Пароль | admin_id: {update_secrets.admin_id}", request=request, level='CRITICAL')
     return {'success': True, 'message': 'Пароль обновлён!'}
+
+
+@router.get('/private/admins/profile')
+async def show_admin_profile(request: Request, db: PgSqlDep, _: JWTCookieDep):
+    db_admin = await db.admins.select_admin(request.state.admin_id)
+    return {'admin_info': db_admin}

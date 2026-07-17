@@ -199,7 +199,7 @@ class NodesProtocolsQueries:
             JOIN protocols p ON np.proto_id = p.id
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true
             JOIN proto_templates pt ON p.tmp_id = pt.id
-            WHERE us.id = $3 AND us.is_active = true
+            WHERE us.id = $2 AND us.is_active = true
         ),
         outbox_insert AS (
             INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)

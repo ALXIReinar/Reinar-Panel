@@ -11,7 +11,7 @@ from arq.connections import ArqRedis, RedisSettings
 from asyncpg import Connection
 from fastapi import Depends
 from passlib.context import CryptContext
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, IPvAnyAddress
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 from starlette.requests import Request
@@ -21,7 +21,7 @@ from web.config_dir.env_modes import AppMode, APP_MODE_CONFIG
 env_files = (
     os.getenv('ENV_FILE') or
     os.getenv('ENV_LOCAL_TEST_FILE') or
-    '.env.api.prod'
+    'web/.env.api.prod'
 )
 load_dotenv(env_files, override=True)
 logging.critical(f'\033[35m{env_files}\033[0m | app_mode: \033[32m{os.getenv('APP_MODE')}\033[0m')
@@ -95,10 +95,8 @@ class Settings(BaseSettings):
     uvicorn_port: int
     post_processing_responses: bool
     app_mode: AppMode
-    sub_link_bytes: int = Field(le=64, ge=16)
-    trusted_proxies: set[str] = {'127.0.0.1', '172.20.0.1'}
-    allowed_ips: set[str] = {'127.0.0.1', '172.20.0.1',}
-    model_config = SettingsConfigDict(extra='allow')
+    trusted_proxies:  set[str] | list[str] | str
+    allowed_ips: set[str] | list[str] | str
     domain: str
     
     # ARQ Settings
@@ -106,6 +104,15 @@ class Settings(BaseSettings):
     arq_max_jobs: int
     arq_job_timeout: int
     node_metrics_queue_limit: int = 10
+
+    @field_validator('allowed_ips', 'trusted_proxies', mode='before')
+    @classmethod
+    def allowed_ips_validator(cls, v):
+        raw_items = v.split(',') if isinstance(v, str) else v
+        return set(str(IPvAnyAddress(ip.strip())) for ip in raw_items)
+
+    model_config = SettingsConfigDict(extra='allow', env_file_encoding='utf-8')
+
 
 
 @lru_cache

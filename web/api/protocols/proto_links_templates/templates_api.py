@@ -47,9 +47,9 @@ async def get_all_templates(params: GetTmpSchema, request: Request, db: PgSqlDep
     return {'success': True, **templates}
 
 
-@router.get('/by_id')
+@router.get('/{tmp_id}')
 async def get_tmp_by_id(
-        tmp_id: Annotated[int, Query()], spec_only: Annotated[bool, Query(alias='so')], request: Request, db: PgSqlDep, _: JWTCookieDep
+        tmp_id: int, spec_only: Annotated[bool, Query(alias='so')], request: Request, db: PgSqlDep, _: JWTCookieDep
 ):
     """Получить шаблон по ID с привязанными spec параметрами"""
     result = await db.proto_templates.get_by_id(tmp_id, spec_only)
@@ -62,7 +62,7 @@ async def get_tmp_by_id(
     return {'success': True, 'template': result}
 
 
-@router.post('/add')
+@router.post('/create')
 async def add_template(body: AddTmpSchema, request: Request, db: PgSqlDep, _: JWTCookieDep):
     """Создать новый шаблон конфиг-ссылки"""
     log_event(f'Создание шаблона | title: \033[35m{body.title}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
@@ -77,12 +77,12 @@ async def add_template(body: AddTmpSchema, request: Request, db: PgSqlDep, _: JW
     return {'success': True, 'message': message, 'template_id': template_id}
 
 
-@router.put('/update')
-async def update_template(body: UpdateTmpSchema, request: Request, db: PgSqlDep, _: JWTCookieDep):
-    log_event(f'Обновление шаблона | tmp_id: \033[35m{body.tmp_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+@router.put('/{tmp_id}')
+async def update_template(tmp_id: int, body: UpdateTmpSchema, request: Request, db: PgSqlDep, _: JWTCookieDep):
+    log_event(f'Обновление шаблона | tmp_id: \033[35m{tmp_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     
     status_code, message = await db.proto_templates.update(
-        tmp_id=body.tmp_id,
+        tmp_id=tmp_id,
         title=body.title,
         url_tmp=body.url_tmp,
         reload_core_command=body.reload_core_command,
@@ -108,15 +108,15 @@ async def update_template(body: UpdateTmpSchema, request: Request, db: PgSqlDep,
     
     "Шаблон не найден"
     if status_code == 404:
-        log_event(f'Шаблон не найден | tmp_id: \033[31m{body.tmp_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
+        log_event(f'Шаблон не найден | tmp_id: \033[31m{tmp_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
         raise HTTPException(status_code=404, detail={'success': False, 'message': message})
 
-    log_event(f'Шаблон обновлён | tmp_id: \033[32m{body.tmp_id}\033[0m; body: \033[37m{repr(body)}\033[0m; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request)
+    log_event(f'Шаблон обновлён | tmp_id: \033[32m{tmp_id}\033[0m; body: \033[37m{repr(body)}\033[0m; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request)
     return {'success': True, 'message': message}
 
 
-@router.delete('/delete')
-async def delete_template(tmp_id: Annotated[int, Query()], request: Request, db: PgSqlDep, _: JWTCookieDep):
+@router.delete('/{tmp_id}')
+async def delete_template(tmp_id: int, request: Request, db: PgSqlDep, _: JWTCookieDep):
     """Удалить шаблон конфиг-ссылки"""
     log_event(f'Удаление шаблона | tmp_id: \033[35m{tmp_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     

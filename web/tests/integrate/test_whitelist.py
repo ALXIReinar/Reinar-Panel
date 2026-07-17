@@ -110,7 +110,7 @@ async def test_bulk_update_activate_commands_flushes_redis(client: AsyncClient, 
     
     # Активируем команды
     response = await client.put(
-        "/api/v1/private/whitelist/bulk_update",
+        "/api/v1/private/whitelist/bulk/update",
         json={
             "set_as_active": [cmd1_id, cmd2_id],
             "set_as_inactive": []
@@ -149,7 +149,7 @@ async def test_bulk_update_deactivate_commands_flushes_redis(client: AsyncClient
     
     # Деактивируем команды
     response = await client.put(
-        "/api/v1/private/whitelist/bulk_update",
+        "/api/v1/private/whitelist/bulk/update",
         json={
             "set_as_active": [],
             "set_as_inactive": [cmd1_id, cmd2_id]
@@ -185,7 +185,7 @@ async def test_bulk_update_combined_operations(client: AsyncClient, db_seed, flu
     
     # Меняем статусы местами
     response = await client.put(
-        "/api/v1/private/whitelist/bulk_update",
+        "/api/v1/private/whitelist/bulk/update",
         json={
             "set_as_active": [inactive_id],
             "set_as_inactive": [active_id]
@@ -217,7 +217,7 @@ async def test_bulk_update_deactivate_all_disables_whitelist_mode(client: AsyncC
     
     # Деактивируем единственную команду
     response = await client.put(
-        "/api/v1/private/whitelist/bulk_update",
+        "/api/v1/private/whitelist/bulk/update",
         json={
             "set_as_active": [],
             "set_as_inactive": [cmd_id]
@@ -239,10 +239,10 @@ async def test_bulk_update_deactivate_all_disables_whitelist_mode(client: AsyncC
     assert active_count == 0
 
 
-# ==================== POST /private/whitelist/bulk_add ====================
+# ==================== POST /private/whitelist/bulk/add ====================
 
 @pytest.mark.asyncio
-async def test_bulk_add_commands_flushes_redis(client: AsyncClient, db_seed, flush_redis):
+async def test_bulk_insert_commands_flushes_redis(client: AsyncClient, db_seed, flush_redis):
     """Успешное добавление команд + проверка сброса Redis кэша"""
     # Заполняем пустой кэш
     await client.get("/api/v1/private/whitelist/all")
@@ -252,7 +252,7 @@ async def test_bulk_add_commands_flushes_redis(client: AsyncClient, db_seed, flu
     
     # Добавляем команды
     response = await client.post(
-        "/api/v1/private/whitelist/bulk_add",
+        "/api/v1/private/whitelist/bulk/add",
         json={
             "commands": ["sed", "awk", "sort"]
         }
@@ -281,7 +281,7 @@ async def test_bulk_add_partial_with_duplicates(client: AsyncClient, db_seed, db
     
     # Пытаемся добавить дубликат + новые команды
     response = await client.post(
-        "/api/v1/private/whitelist/bulk_add",
+        "/api/v1/private/whitelist/bulk/add",
         json={
             "commands": ["head", "tail", "uniq"]  # head уже существует
         }
@@ -305,7 +305,7 @@ async def test_bulk_add_first_command_enables_whitelist_mode(client: AsyncClient
     
     # Добавляем первую команду
     response = await client.post(
-        "/api/v1/private/whitelist/bulk_add",
+        "/api/v1/private/whitelist/bulk/add",
         json={
             "commands": ["hostname"]
         }
@@ -327,7 +327,7 @@ async def test_bulk_add_first_command_enables_whitelist_mode(client: AsyncClient
     assert count > 0
 
 
-# ==================== DELETE /private/whitelist/bulk_delete ====================
+# ==================== DELETE /private/whitelist/bulk/delete ====================
 
 @pytest.mark.asyncio
 async def test_bulk_delete_commands_flushes_redis(client: AsyncClient, db_seed, flush_redis, db_pool):
@@ -351,7 +351,7 @@ async def test_bulk_delete_commands_flushes_redis(client: AsyncClient, db_seed, 
     # Удаляем команды
     response = await client.request(
         "DELETE",
-        "/api/v1/private/whitelist/bulk_delete",
+        "/api/v1/private/whitelist/bulk/delete",
         json={
             "ids": [cmd1_id, cmd2_id]
         }
@@ -387,7 +387,7 @@ async def test_bulk_delete_all_disables_whitelist_mode(client: AsyncClient, db_s
     # Удаляем все команды
     response = await client.request(
         "DELETE",
-        "/api/v1/private/whitelist/bulk_delete",
+        "/api/v1/private/whitelist/bulk/delete",
         json={
             "ids": [cmd1_id, cmd2_id]
         }
@@ -411,7 +411,7 @@ async def test_bulk_delete_nonexistent_ids_succeeds(client: AsyncClient, db_seed
     # Пытаемся удалить несуществующие ID
     response = await client.request(
         "DELETE",
-        "/api/v1/private/whitelist/bulk_delete",
+        "/api/v1/private/whitelist/bulk/delete",
         json={
             "ids": [99999, 88888]
         }

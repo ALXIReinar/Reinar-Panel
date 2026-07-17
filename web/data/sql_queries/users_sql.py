@@ -60,7 +60,7 @@ class UsersQueries:
             FROM (SELECT UNNEST($1::bigint[]) AS user_id) AS u2
             JOIN users u ON u.id = u2.user_id AND u.is_deleted = false
         ) AS input_users
-        WHERE user_subs.id = input_users.user_id
+        WHERE user_subs.user_id = input_users.user_id
         RETURNING id AS user_sub_id, sub_plan_id, uuid, is_limited
         """
 

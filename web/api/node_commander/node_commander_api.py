@@ -147,6 +147,9 @@ async def config_file_write(body: WriteConfigSchema, request: Request, db: PgSql
         log_event(f'Нода записала конфиг-файл | node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
         return {'success': True, 'message': 'Конфиг-файл ноды обновился, ссылка переопределена', "tip": "Перезагрузите ядро, чтобы изменения вступили в силу","sub_ready_link": sub_ready_link}
 
+    except HTTPException:
+        raise  # Пробрасываем HTTPException без изменений
+    
     except ClientError as e:
         log_event(f'Нода ответила, что-то пошло не так | response: \033[37m{repr(e)}\033[0m; node_proto_id: \033[31m{body.node_proto_id}\033[0m', request=request, level='ERROR')
         raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка исполнения на ноде', "err_message": str(repr(e))})
@@ -169,7 +172,7 @@ async def add_user(
     1. Поиск доступных пользователю нод по **единственной** подписке, Outbox запись
     2. Закидываем задачу в фон
     """
-    log_event(f'Операция над пользователем на ядрах протоколов | action: {body.action}; user_id: \033[36m{body.user_id}\033[0m; user_sub_id: \033[35m{body.user_sub_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    log_event(f'Операция над пользователем на ядрах протоколов | action: {body.action}; uuid: \033[36m{body.uuid}\033[0m; user_sub_id: \033[35m{body.user_sub_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
 
     "Все ноды по подписке. Запрос на добавление на каждую ноду"
     sub_nodes = await db.nodes_protocols.get_core_proto_deps_by_user_sub(
@@ -181,9 +184,9 @@ async def add_user(
     job = await arq.enqueue_job(
         'action_on_core_proto_by_sub_plan',
         body.uuid,
-        body.tg_username,
+        body.user_sub_id,
         sub_nodes_serializable,
         body.action,
     )
-    log_event(f'Пользователь в фоне добавляется/удаляется на ядрах виртуальных нод | job_id: \033[35m{job.job_id}\033[0m; action: {body.action}; user_id: {body.user_id}; user_sub_id: {body.user_sub_id}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    log_event(f'Пользователь в фоне добавляется/удаляется на ядрах виртуальных нод | job_id: \033[35m{job.job_id}\033[0m; action: {body.action}; user_uuid: {body.uuid}; user_sub_id: {body.uuid}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     return {'success': True, 'message': 'Пользователь обрабатывается в фоновой очереди', 'job_id': job.job_id}

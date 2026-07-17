@@ -11,6 +11,7 @@ from aiohttp import ClientSession
 from arq.connections import RedisSettings, ArqRedis
 from asyncpg import Connection
 from fastapi import Depends
+from pydantic import field_validator, IPvAnyAddress, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 from starlette.requests import Request
@@ -20,7 +21,7 @@ from web.sub.config_dir.env_modes import APP_MODE_CONFIG, AppMode, PayMode
 env_files = (
     os.getenv('ENV_FILE') or
     os.getenv('ENV_LOCAL_TEST_FILE') or
-    '.env.sub.prod'
+    'web/sub/.env.sub.prod'
 )
 load_dotenv(env_files, override=True)
 logging.critical(f'\033[35m{env_files}\033[0m | node_port: \033[32m{os.getenv("UVICORN_PORT")}\033[0m')
@@ -63,15 +64,22 @@ class Settings(BaseSettings):
 
     uvicorn_port: int
     uvicorn_workers: int
-    trusted_proxies: set[str] = {'127.0.0.1', '172.0.18.0'}
+    trusted_proxies: set[str] | str | list[str]
     action_on_core_proto_limit: int
 
     app_mode: AppMode
     pay_mode: PayMode
+    sub_link_bytes: int = Field(le=64, ge=16)
     subscription_update_interval: str
     post_processing_responses: bool
     tg_bot_link: str
-    model_config = SettingsConfigDict(extra='allow')
+    model_config = SettingsConfigDict(extra='allow', env_file_encoding='utf-8')
+
+    @field_validator('trusted_proxies', mode='before')
+    @classmethod
+    def allowed_ips_validator(cls, v):
+        raw_items = v.split(',') if isinstance(v, str) else v
+        return set(str(IPvAnyAddress(ip.strip())) for ip in raw_items)
 
 
 @lru_cache

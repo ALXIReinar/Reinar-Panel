@@ -98,7 +98,7 @@ class TestConfigFileWriteSuccess:
         '''
         
         response = await client.put(
-            "/api/v1/cmd_center/config_file/write",
+            "/api/v1/private/cmd_center/config_file/write",
             json={
                 "node_proto_id": vnode_id,
                 "file_content": config_content,
@@ -141,7 +141,7 @@ class TestConfigFileWriteSuccess:
             assert old_link is None or old_link == ""
         
         response = await client.put(
-            "/api/v1/cmd_center/config_file/write",
+            "/api/v1/private/cmd_center/config_file/write",
             json={
                 "node_proto_id": vnode_id,
                 "file_content": config_content,
@@ -189,7 +189,7 @@ class TestConfigFileWriteSuccess:
         '''
         
         response = await client.put(
-            "/api/v1/cmd_center/config_file/write",
+            "/api/v1/private/cmd_center/config_file/write",
             json={
                 "node_proto_id": vnode_id,
                 "file_content": config_content,
@@ -210,7 +210,7 @@ class TestConfigFileWriteErrors:
     async def test_write_config_vnode_not_found(self, client):
         """Виртуальная нода не существует (404)"""
         response = await client.put(
-            "/api/v1/cmd_center/config_file/write",
+            "/api/v1/private/cmd_center/config_file/write",
             json={
                 "node_proto_id": 99999,  # Несуществующая нода
                 "file_content": '{"test": "config"}',
@@ -236,7 +236,7 @@ class TestConfigFileWriteErrors:
             )
         
         response = await client.put(
-            "/api/v1/cmd_center/config_file/write",
+            "/api/v1/private/cmd_center/config_file/write",
             json={
                 "node_proto_id": vnode_id,
                 "file_content": '{"test": "config"}',
@@ -261,7 +261,7 @@ class TestConfigFileWriteErrors:
         )
         
         response = await client.put(
-            "/api/v1/cmd_center/config_file/write",
+            "/api/v1/private/cmd_center/config_file/write",
             json={
                 "node_proto_id": vnode_id,
                 "file_content": '{"test": "config"}',
@@ -283,7 +283,7 @@ class TestConfigFileWriteErrors:
         client.app.state.cmd_center_aiohttp = FakeAiohttpSession(raise_error=True)
         
         response = await client.put(
-            "/api/v1/cmd_center/config_file/write",
+            "/api/v1/private/cmd_center/config_file/write",
             json={
                 "node_proto_id": vnode_id,
                 "file_content": '{"test": "config"}',
@@ -311,7 +311,7 @@ class TestConfigFileWriteErrors:
             mock_generate.return_value = (False, "Spec key: missing_key указан в кастомных параметрах, но отсутствует в ссылке-шаблоне")
             
             response = await client.put(
-                "/api/v1/cmd_center/config_file/write",
+                "/api/v1/private/cmd_center/config_file/write",
                 json={
                     "node_proto_id": vnode_id,
                     "file_content": '{"inbounds": [{"port": 10085}, {"port": 443}]}',
@@ -321,9 +321,10 @@ class TestConfigFileWriteErrors:
         
         assert response.status_code == 409
         data = response.json()
-        assert data["success"] is False
-        assert "Исключение при генерации ссылки по шаблону" in data["message"]
-        assert "missing_key" in data["err_message"]
+        detail = data.get("detail", data)  # FastAPI оборачивает в "detail"
+        assert detail["success"] is False
+        assert "Исключение при генерации ссылки по шаблону" in detail["message"]
+        assert "missing_key" in detail["err_message"]
 
 
 class TestConfigFileWriteValidation:
@@ -333,7 +334,7 @@ class TestConfigFileWriteValidation:
     async def test_write_config_missing_node_proto_id(self, client):
         """Отсутствует обязательный параметр node_proto_id (422)"""
         response = await client.put(
-            "/api/v1/cmd_center/config_file/write",
+            "/api/v1/private/cmd_center/config_file/write",
             json={
                 "file_content": '{"test": "config"}'
                 # node_proto_id отсутствует
@@ -350,7 +351,7 @@ class TestConfigFileWriteValidation:
     async def test_write_config_missing_file_content(self, client):
         """Отсутствует обязательный параметр file_content (422)"""
         response = await client.put(
-            "/api/v1/cmd_center/config_file/write",
+            "/api/v1/private/cmd_center/config_file/write",
             json={
                 "node_proto_id": 1
                 # file_content отсутствует

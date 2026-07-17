@@ -25,8 +25,12 @@ class AdminsQueries:
         return res
 
     async def set_new_passw(self, admin_id: int, passw: str):
-        query = 'UPDATE admins SET passw = $1 WHERE id = $2'
-        await self.conn.execute(query, passw, admin_id)
+        query = 'UPDATE admins SET passw = $1 WHERE id = $2 RETURNING id'
+        return await self.conn.fetchval(query, passw, admin_id)
+
+    async def admin_info(self, admin_id: int):
+        query = 'SELECT login, date_register FROM admins WHERE id = $1'
+        return await self.conn.fetchrow(query, admin_id)
 
 
 

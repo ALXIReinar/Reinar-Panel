@@ -65,6 +65,8 @@ async def create_payment_give_link(body: CreateRoboPayLinkSchema, request: Reque
 async def processing_pay_result(form: Annotated[WebhookRoboPayload, Form()], request: Request, db: PgSqlDep, redis: RedisDep, arq: ArqDep):
     """Обработка вебхука после оплаты пользователем"""
 
+    log_event(repr(form), level='DEBUG')
+
     "1. Проверяем сигнатуру"
     payment_meta = {k: v for k,v in form.model_dump().items() if k.startswith('Shp_')}
     expected_signature = create_signature(env.robo_passw_2, form.OutSum, form.InvId, payment_meta4signature_string(payment_meta))
@@ -83,14 +85,12 @@ async def processing_pay_result(form: Annotated[WebhookRoboPayload, Form()], req
 
     "3.1. Активация подписку пользователя"
     user_sub = await db.users_subs.activate_subscription(form.InvId, form.Shp_user_id, form.Shp_sub_plan_id, form.Shp_sub_days)
-    log_event(f'Активировали подписку | user_id: \033[32m{form.Shp_user_id}\033[0m; order_id: \033[33m{form.InvId}\033[0m; user_sub_id: \033[35m{user_sub['id']}\033[0m', request=request)
+    log_event(f'Активировали подписку | user_id: \033[32m{form.Shp_user_id}\033[0m; order_id: \033[33m{form.InvId}\033[0m; user_sub_id: \033[34m{user_sub['id']}\033[0m', request=request)
 
     "3.2. Запускаем в фон таску на добавление пользователя в ядра нод, указанных в подписке"
 
     # Находим ноды по подписке, фиксируем попытку вставки пользователя в ядра протоколов
-    sub_nodes = await db.sub.get_core_proto_deps_by_user_id(
-        form.Shp_user_id, user_sub['uuid'], user_sub['id'], CoreProtoActions.add
-    )
+    sub_nodes = await db.sub.get_core_proto_deps_by_user_id( user_sub['uuid'], user_sub['id'], CoreProtoActions.add)
     # Преобразуем asyncpg.Record в dict для сериализации
     sub_nodes_serializable = [dict(node) for node in sub_nodes]
     
@@ -98,5 +98,5 @@ async def processing_pay_result(form: Annotated[WebhookRoboPayload, Form()], req
         'action_on_core_proto_by_sub_plan', user_sub['uuid'], user_sub['id'], sub_nodes_serializable, CoreProtoActions.word_add
     )
 
-    log_event(f'Кинули добавление пользователя на впн-ноды в Arq | job_id: \033[33m{job.job_id}\033[0m; user_id: \033[31m{form.Shp_user_id}\033[0m; user_uuid: \033[35m{user_sub['uuid']}\033[0m; order_id: \033[33m{form.InvId}\033[0m', request=request)
+    log_event(f'Кинули добавление пользователя на впн-ноды в Arq | job_id: \033[33m{job.job_id}\033[0m; user_id: \033[31m{form.Shp_user_id}\033[0m; user_sub_id: \033[34m{user_sub['id']}\033[0m; user_uuid: \033[35m{user_sub['uuid']}\033[0m; order_id: \033[33m{form.InvId}\033[0m', request=request)
     return f"OK{form.InvId}"
