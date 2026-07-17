@@ -5,7 +5,6 @@ from starlette.requests import Request
 "ВАЖНО: Устанавливаем переменную окружения ДО любых импортов из web/"
 os.environ['ENV_LOCAL_TEST_FILE'] = 'web/.env.api.test'
 
-from web.data.postgres import get_pg_pool
 import asyncpg
 import httpx
 import pytest
@@ -80,7 +79,8 @@ async def db_seed(db_pool):
                 vnodes_sub_plans,
                 sub_plans,
                 remote_execute_history,
-                payed_subs,
+                user_subs,
+                pay_orders,
                 sub_nodes_outbox,
                 sub_nodes_operations,
                 users,
@@ -119,16 +119,16 @@ async def db_seed(db_pool):
         # 4. Создаём софт-удалённых пользователей (константы для проверки фильтрации)
         # Гарантирует что все SQL запросы корректно игнорируют is_deleted = true
         deleted_user_1_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-            VALUES ($1, $2, $3, $4, true)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, true)
             RETURNING id
-        """, 9999001, "deleted_user_1", "uuid-deleted-0001-0001-000000000001", "deleted_b64_token_1")
+        """, 9999001, "deleted_user_1")
 
         deleted_user_2_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-            VALUES ($1, $2, $3, $4, true)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, true)
             RETURNING id
-        """, 9999002, "deleted_user_2", "uuid-deleted-0002-0002-000000000002", "deleted_b64_token_2")
+        """, 9999002, "deleted_user_2")
     
     return {
         "admin_id": admin_id,

@@ -36,7 +36,7 @@ class WebhookRoboPayload(BaseModel):
     Shp_user_id: int = Field(description="Кастомный параметр пользователя")
     Shp_csrf_token: str = Field(description='Токен для идемпотентной обработки платежа')
     Shp_sub_plan_id: int = Field(description='Приобретённый тарифный план')
-    Shp_expire_date: datetime = Field(description='Дата окончания действия подписки')
+    Shp_sub_days: int = Field(description='Срок действия подписки в днях')
 
     model_config = ConfigDict(extra='allow')
     # Эти поля Робокасса шлет опционально

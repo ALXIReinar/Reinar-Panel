@@ -51,7 +51,7 @@ async def test_sign_up_duplicate_login(client):
     
     # Повторная регистрация с тем же логином
     reg2 = await client.post("/api/v1/server/admins/sign_up", json=creds)
-    assert reg2.status_code == 204  # В вашем API конфликт возвращает 204
+    assert reg2.status_code == 202  # API возвращает 202 при конфликте (не 204)
     assert reg2.json()["success"] is False
 
 

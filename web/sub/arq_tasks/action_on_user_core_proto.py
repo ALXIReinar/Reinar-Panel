@@ -17,7 +17,7 @@ from web.sub.config_dir.arq_logger_config import log_event
 @pg_sql_dep
 async def action_on_core_proto_by_sub_plan(
         ctx: dict,
-        user_uuid: str, tg_username: str, sub_nodes: list[dict], operation: Literal['add', 'delete'], current_attempt: int = 1,
+        user_uuid: str, user_sub_id: int, sub_nodes: list[dict], operation: Literal['add', 'delete'], current_attempt: int = 1,
         db: PgSql = None,
         aio_http: ClientSession = None,
         arq: ArqRedis = None
@@ -40,7 +40,7 @@ async def action_on_core_proto_by_sub_plan(
                 required_user_obj = resolve_user_template(
                     template=node['required_user_data_obj'],
                     uuid=user_uuid,
-                    tg_username=tg_username,
+                    user_sub_id=user_sub_id,
                 )
                 final_user_obj = {
                     **required_user_obj,
@@ -89,8 +89,8 @@ async def action_on_core_proto_by_sub_plan(
             }
             # action_pack[operation][0] - json body;
             # action_pack[operation][1] - endpoint_uri
-            # url = f"http://localhost:8200{action_pack[operation][1]}"
-            url = f"http://{node['private_ip']}:{node['api_port']}{action_pack[operation][1]}"
+            url = f"http://localhost:8200{action_pack[operation][1]}"
+            # url = f"http://{node['private_ip']}:{node['api_port']}{action_pack[operation][1]}"
             json_body = action_pack[operation][0]
 
             "3. Отправляем запрос на ноду"
@@ -101,7 +101,7 @@ async def action_on_core_proto_by_sub_plan(
 
                 success_count += 1
                 log_event(f'\033[33m[ARQ]\033[0m Пользователь добавлен | node_proto_id: \033[36m{node["node_proto_id"]}\033[0m')
-                success_nodes.append(node['sub_node_id'])
+                success_nodes.append(node['node_proto_id'])
 
             except ClientResponseError as e:
                 "3.2.1. Шаблон некорректно настроен. Ошибки в параметрах для управления конфиг-файлом ядра"
@@ -165,7 +165,7 @@ async def action_on_core_proto_by_sub_plan(
             await arq.enqueue_job(
                 'action_on_core_proto_by_sub_plan',
                 user_uuid,
-                tg_username,
+                user_sub_id,
                 retry_sub_nodes,
                 operation,
                 current_attempt + 1,  # Инкрементируем попытку
@@ -191,31 +191,31 @@ async def action_on_core_proto_by_sub_plan(
 def resolve_user_template(
         template: dict,
         uuid: str,
-        tg_username: str | None = None
+        user_sub_id: int | None = None
 ) -> dict:
     """
     Подставляет значения в шаблон пользователя
 
     Поддерживаемые маркеры:
     - {USER_UUID} → uuid пользователя
-    - {USER_TG_USERNAME} → telegram username
+    - {USER_SUB_ID} → id подписки пользователя. В json объекте преобразуется в str
     - Обычное значение (без {}) → используется как есть
 
     Args:
         template: Шаблон из required_user_data_obj
         uuid: UUID пользователя (обязательно)
-        tg_username: Telegram username (опционально)
+        user_sub_id: Telegram username (опционально)
 
     Returns:
         dict: Разрешённый шаблон с подставленными значениями
 
     Raises:
-        ValueError: Если требуется tg_username, но он не передан
+        ValueError: Если требуется user_sub_id, но он не передан
 
     Examples:
-        >>> template = {"id": "{USER_UUID}", "email": "{USER_TG_USERNAME}"}
-        >>> resolve_user_template(template, "abc-123", "john_doe")
-        {"id": "abc-123", "email": "john_doe"}
+        >>> template = {"id": "{USER_UUID}", "email": "{USER_SUB_ID}"}
+        >>> resolve_user_template(template, "abc-123", 1)
+        {"id": "abc-123", "email": "1"}
 
         >>> template = {"password": "{USER_UUID}", "level": 5}
         >>> resolve_user_template(template, "abc-123")
@@ -223,13 +223,13 @@ def resolve_user_template(
     """
     markers_map = {
         '{USER_UUID}': uuid,
-        '{USER_TG_USERNAME}': tg_username,
+        '{USER_SUB_ID}': str(user_sub_id),
     }
     
-    # Проверяем что tg_username передан, если он требуется в шаблоне
-    if '{USER_TG_USERNAME}' in template.values() and tg_username is None:
+    # Проверяем что user_sub_id передан, если он требуется в шаблоне
+    if '{USER_SUB_ID}' in template.values() and user_sub_id is None:
         raise ValueError(
-            f"Одно из полей шаблона требует tg_username (плейсхолдер {{USER_TG_USERNAME}}), "
+            f"Одно из полей шаблона требует user_sub_id (плейсхолдер {{USER_SUB_ID}}), "
             f"но оно не передано"
         )
 

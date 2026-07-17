@@ -1,14 +1,12 @@
 from typing import Annotated
 
-from aiohttp import ClientResponseError, ClientTimeout, ClientError
+from aiohttp import ClientResponseError, ClientError
 from fastapi import APIRouter, HTTPException
 from fastapi.params import Query
 from starlette.requests import Request
-from starlette.responses import JSONResponse
 
 from web.api.protocols.proto_links_templates.handlers import generate_link_from_json
-from web.config_dir.config import NodeExecAiohttpDep, env, ArqDep
-from web.config_dir.env_modes import AppMode
+from web.config_dir.config import NodeExecAiohttpDep, ArqDep
 from web.data.postgres import PgSqlDep
 from web.data.redis_storage import RedisDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
@@ -17,7 +15,7 @@ from web.utils.anything import NodeUris, ExecHistoryStatuses
 from web.data.redis_storage import CommandWhitelistCache
 from web.utils.logger_config import log_event
 
-router = APIRouter(prefix='/cmd_center', tags=['Command Center Admin2Node'])
+router = APIRouter(prefix='/private/cmd_center', tags=['Command Center Admin2Node'])
 
 
 
@@ -139,7 +137,7 @@ async def config_file_write(body: WriteConfigSchema, request: Request, db: PgSql
         success_status, sub_ready_link = generate_link_from_json(config_link_tmp, body.file_content, spec_params, node_ip_or_domain, node_title)
         if not success_status:
             log_event(f'Генерация ссылок упала | error_reason: \033[34m{sub_ready_link}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
-            return JSONResponse(status_code=409, content={'success': False, 'message': 'Исключение при генерации ссылки по шаблону', 'err_message': sub_ready_link})
+            raise HTTPException(status_code=409, detail={'success': False, 'message': 'Исключение при генерации ссылки по шаблону', 'err_message': sub_ready_link})
 
         "2. Генерируем конфиг-ссылку для подписок"
         await db.nodes_protocols.update_config_link(body.node_proto_id, sub_ready_link)
@@ -149,6 +147,9 @@ async def config_file_write(body: WriteConfigSchema, request: Request, db: PgSql
         log_event(f'Нода записала конфиг-файл | node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
         return {'success': True, 'message': 'Конфиг-файл ноды обновился, ссылка переопределена', "tip": "Перезагрузите ядро, чтобы изменения вступили в силу","sub_ready_link": sub_ready_link}
 
+    except HTTPException:
+        raise  # Пробрасываем HTTPException без изменений
+    
     except ClientError as e:
         log_event(f'Нода ответила, что-то пошло не так | response: \033[37m{repr(e)}\033[0m; node_proto_id: \033[31m{body.node_proto_id}\033[0m', request=request, level='ERROR')
         raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка исполнения на ноде', "err_message": str(repr(e))})
@@ -171,23 +172,21 @@ async def add_user(
     1. Поиск доступных пользователю нод по **единственной** подписке, Outbox запись
     2. Закидываем задачу в фон
     """
-    log_event(f'Операция над пользователем на ядрах протоколов | action: {body.action}; user_id: \033[36m{body.user_id}\033[0m; order_id: \033[35m{body.order_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    log_event(f'Операция над пользователем на ядрах протоколов | action: {body.action}; uuid: \033[36m{body.uuid}\033[0m; user_sub_id: \033[35m{body.user_sub_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
 
     "Все ноды по подписке. Запрос на добавление на каждую ноду"
     sub_nodes = await db.nodes_protocols.get_core_proto_deps_by_user_sub(
-        user_id=body.user_id,
         user_uuid=body.uuid,
-        tg_username=body.tg_username,
-        order_id=body.order_id,
+        user_sub_id=body.user_sub_id,
         operation=body.action
     )
     sub_nodes_serializable = [dict(node) for node in sub_nodes]
     job = await arq.enqueue_job(
         'action_on_core_proto_by_sub_plan',
         body.uuid,
-        body.tg_username,
+        body.user_sub_id,
         sub_nodes_serializable,
         body.action,
     )
-    log_event(f'Пользователь в фоне добавляется/удаляется на ядрах виртуальных нод | job_id: \033[35m{job.job_id}\033[0m; action: {body.action}; user_id: {body.user_id}; order_id: {body.order_id}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    log_event(f'Пользователь в фоне добавляется/удаляется на ядрах виртуальных нод | job_id: \033[35m{job.job_id}\033[0m; action: {body.action}; user_uuid: {body.uuid}; user_sub_id: {body.uuid}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     return {'success': True, 'message': 'Пользователь обрабатывается в фоновой очереди', 'job_id': job.job_id}

@@ -19,6 +19,9 @@ class SubPlansQueries:
         ttl_days: int | None = None,
         cost: int | None = None,
         traffic_limit_day: int | None = None,
+        traffic_limit_total: int | None = None,
+        infinite_traffic: bool | None = None,
+        infinite_expire: bool | None = None,
         is_active: bool | None = None
     ):
         """Обновление группы подписок"""
@@ -54,6 +57,21 @@ class SubPlansQueries:
         if is_active is not None:
             updates.append(f"is_active = ${param_idx}")
             params.append(is_active)
+            param_idx += 1
+
+        if traffic_limit_total is not None:
+            updates.append(f"traffic_limit_total = ${param_idx}")
+            params.append(traffic_limit_total)
+            param_idx += 1
+
+        if infinite_traffic is not None:
+            updates.append(f"infinite_traffic = ${param_idx}")
+            params.append(infinite_traffic)
+            param_idx += 1
+
+        if infinite_expire is not None:
+            updates.append(f"infinite_expire = ${param_idx}")
+            params.append(infinite_expire)
             param_idx += 1
 
         if not updates:
@@ -111,7 +129,7 @@ class SubPlansQueries:
     async def all(self, limit: int):
         """Получить список всех групп подписок"""
         query = """
-        SELECT id, title, cost, ttl_days, traffic_limit_day, is_active
+        SELECT id, title, cost, ttl_days, traffic_limit_day, is_active, infinite_traffic, infinite_expire
         FROM sub_plans
         LIMIT $1
         """
@@ -119,7 +137,10 @@ class SubPlansQueries:
 
     async def get_by_id(self, plan_id: int):
         """Получить одну группу подписок с привязанными виртуальными нодами"""
-        query = "SELECT title, description, ttl_days, cost, traffic_limit_day, is_active FROM sub_plans WHERE id = $1"
+        query = """
+        SELECT title, description, ttl_days, cost, traffic_limit_day, traffic_limit_total, infinite_traffic, infinite_expire, is_active
+        FROM sub_plans WHERE id = $1
+        """
 
         plan = await self.conn.fetchrow(query, plan_id)
 

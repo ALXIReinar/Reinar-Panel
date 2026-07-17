@@ -29,7 +29,7 @@ class TestConfigFileReadSuccess:
         )
         
         response = await client.get(
-            "/api/v1/cmd_center/config_file/read",
+            "/api/v1/private/cmd_center/config_file/read",
             params={
                 "node_proto_id": vnode_id
             }
@@ -63,7 +63,7 @@ class TestConfigFileReadSuccess:
         )
         
         response = await client.get(
-            "/api/v1/cmd_center/config_file/read",
+            "/api/v1/private/cmd_center/config_file/read",
             params={
                 "node_proto_id": vnode_id,
                 "flatten_json_users_key": "inbounds.0.settings.clients"
@@ -85,7 +85,7 @@ class TestConfigFileReadErrors:
     async def test_read_config_vnode_not_found(self, client):
         """Виртуальная нода не существует (404)"""
         response = await client.get(
-            "/api/v1/cmd_center/config_file/read",
+            "/api/v1/private/cmd_center/config_file/read",
             params={
                 "node_proto_id": 99999  # Несуществующая нода
             }
@@ -109,7 +109,7 @@ class TestConfigFileReadErrors:
             )
         
         response = await client.get(
-            "/api/v1/cmd_center/config_file/read",
+            "/api/v1/private/cmd_center/config_file/read",
             params={
                 "node_proto_id": vnode_id
             }
@@ -139,7 +139,7 @@ class TestConfigFileReadErrors:
         )
         
         response = await client.get(
-            "/api/v1/cmd_center/config_file/read",
+            "/api/v1/private/cmd_center/config_file/read",
             params={
                 "node_proto_id": vnode_id
             }
@@ -166,7 +166,7 @@ class TestConfigFileReadErrors:
         client.app.state.cmd_center_aiohttp = FakeAiohttpSession(raise_error=True)
         
         response = await client.get(
-            "/api/v1/cmd_center/config_file/read",
+            "/api/v1/private/cmd_center/config_file/read",
             params={
                 "node_proto_id": vnode_id
             }
@@ -185,7 +185,7 @@ class TestConfigFileReadValidation:
     async def test_read_config_missing_node_proto_id(self, client):
         """Отсутствует обязательный параметр node_proto_id (422)"""
         response = await client.get(
-            "/api/v1/cmd_center/config_file/read",
+            "/api/v1/private/cmd_center/config_file/read",
             params={}
         )
         

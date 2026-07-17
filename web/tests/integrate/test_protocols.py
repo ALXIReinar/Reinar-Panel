@@ -273,7 +273,7 @@ async def test_delete_protocol_success(client: AsyncClient, db_seed, proto_templ
     proto_id = create_response.json()["proto_id"]
     
     # Удаляем протокол
-    response = await client.delete(f"/api/v1/private/protocols/delete/{proto_id}")
+    response = await client.delete(f"/api/v1/private/protocols/{proto_id}")
     
     assert response.status_code == 200
     data = response.json()
@@ -322,7 +322,7 @@ async def test_delete_protocol_with_nodes(client: AsyncClient, db_seed, proto_te
         )
     
     # Пытаемся удалить протокол, который используется
-    response = await client.delete(f"/api/v1/private/protocols/delete/{proto_id}")
+    response = await client.delete(f"/api/v1/private/protocols/{proto_id}")
     
     assert response.status_code == 409
     data = response.json()

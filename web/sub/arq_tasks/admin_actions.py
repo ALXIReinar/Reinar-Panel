@@ -12,7 +12,7 @@ from web.sub.data.postgres import PgSql
 
 @pg_sql_dep
 @arq_dep
-async def admin_request_bulk_action_users(ctx: dict, action: Literal['delete', 'add'] | CoreProtoActions, users: list[int], db: PgSql = None, arq: ArqRedis = None):
+async def admin_request_bulk_action_users(ctx: dict, action: Literal['delete', 'add'] | CoreProtoActions, users: list[dict], db: PgSql = None, arq: ArqRedis = None):
     sub_nodes = await db.sub.get_sub_nodes_for_bulk_action(users)
     
     sem = asyncio.Semaphore(env.action_on_core_proto_limit)

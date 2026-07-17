@@ -39,7 +39,6 @@ async def lifespan(web_app: FastAPI):
 
 
 app = FastAPI(
-    default_response_class=ORJSONResponse,
     lifespan=lifespan,
     response_model=env.post_processing_responses,
     response_model_exclude_unset=env.post_processing_responses

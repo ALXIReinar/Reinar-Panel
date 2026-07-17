@@ -62,9 +62,8 @@ class TestUpdateSubPlan:
         plan_id = sub_plan_seed["plan_id_1"]
         
         response = await client.put(
-            "/api/v1/private/subscriptions/plans/update",
+            f"/api/v1/private/subscriptions/plans/{plan_id}",
             json={
-                "id": plan_id,
                 "title": "Updated Basic Plan",
                 "description": "Updated description for basic plan",
                 "ttl_days": 60,
@@ -80,8 +79,9 @@ class TestUpdateSubPlan:
         assert data["message"] == "Группа подписок обновлена"
         
         # Проверяем что данные обновились в БД
-        get_response = await client.get(f"/api/v1/private/subscriptions/plans/get/{plan_id}")
-        updated_plan = get_response.json()["plan"]
+        get_response = await client.get(f"/api/v1/private/subscriptions/plans/{plan_id}")
+        get_data = get_response.json()
+        updated_plan = get_data["plan"]
         assert updated_plan["title"] == "Updated Basic Plan"
         assert updated_plan["description"] == "Updated description for basic plan"
         assert updated_plan["ttl_days"] == 60
@@ -95,9 +95,8 @@ class TestUpdateSubPlan:
         plan_id = sub_plan_seed["plan_id_2"]
         
         response = await client.put(
-            "/api/v1/private/subscriptions/plans/update",
+            f"/api/v1/private/subscriptions/plans/{plan_id}",
             json={
-                "id": plan_id,
                 "title": "Renamed Premium Plan"
             }
         )
@@ -107,8 +106,9 @@ class TestUpdateSubPlan:
         assert data["success"] is True
         
         # Проверяем что только title изменился, остальные поля остались прежними
-        get_response = await client.get(f"/api/v1/private/subscriptions/plans/get/{plan_id}")
-        updated_plan = get_response.json()["plan"]
+        get_response = await client.get(f"/api/v1/private/subscriptions/plans/{plan_id}")
+        get_data = get_response.json()
+        updated_plan = get_data["plan"]
         assert updated_plan["title"] == "Renamed Premium Plan"
         # Старые значения сохранились
         assert updated_plan["ttl_days"] == 90
@@ -124,9 +124,8 @@ class TestUpdateSubPlan:
         vnode_id_2 = virtual_node_seed["vnode_id_2"]
         
         response = await client.put(
-            "/api/v1/private/subscriptions/plans/update",
+            f"/api/v1/private/subscriptions/plans/{plan_id}",
             json={
-                "id": plan_id,
                 "add_node_proto_ids": [vnode_id_1, vnode_id_2]
             }
         )
@@ -138,8 +137,9 @@ class TestUpdateSubPlan:
         assert "2 нод" in data["attache_res"]["attached_msg"]
         
         # Проверяем что виртуальные ноды привязались
-        get_response = await client.get(f"/api/v1/private/subscriptions/plans/get/{plan_id}")
-        vnodes = get_response.json()["vnodes"]
+        get_response = await client.get(f"/api/v1/private/subscriptions/plans/{plan_id}")
+        get_data = get_response.json()
+        vnodes = get_data["vnodes"]
         assert len(vnodes) == 2
         vnode_ids = [vnode["node_proto_id"] for vnode in vnodes]
         assert vnode_id_1 in vnode_ids
@@ -161,9 +161,8 @@ class TestUpdateSubPlan:
         
         # Теперь отвязываем одну ноду
         response = await client.put(
-            "/api/v1/private/subscriptions/plans/update",
+            f"/api/v1/private/subscriptions/plans/{plan_id}",
             json={
-                "id": plan_id,
                 "remove_node_proto_ids": [vnode_id_1]
             }
         )
@@ -175,8 +174,9 @@ class TestUpdateSubPlan:
         assert "Успешно открепили" in data["detach_res"]["detach_message"]
         
         # Проверяем что осталась только одна нода
-        get_response = await client.get(f"/api/v1/private/subscriptions/plans/get/{plan_id}")
-        vnodes = get_response.json()["vnodes"]
+        get_response = await client.get(f"/api/v1/private/subscriptions/plans/{plan_id}")
+        get_data = get_response.json()
+        vnodes = get_data["vnodes"]
         assert len(vnodes) == 1
         assert vnodes[0]["node_proto_id"] == vnode_id_2
     
@@ -197,9 +197,8 @@ class TestUpdateSubPlan:
         
         # Отвязываем vnode_id_1 и привязываем vnode_id_2, vnode_id_3
         response = await client.put(
-            "/api/v1/private/subscriptions/plans/update",
+            f"/api/v1/private/subscriptions/plans/{plan_id}",
             json={
-                "id": plan_id,
                 "add_node_proto_ids": [vnode_id_2, vnode_id_3],
                 "remove_node_proto_ids": [vnode_id_1]
             }
@@ -212,8 +211,9 @@ class TestUpdateSubPlan:
         assert data["detach_res"]["status_code"] == 200
         
         # Проверяем результат
-        get_response = await client.get(f"/api/v1/private/subscriptions/plans/get/{plan_id}")
-        vnodes = get_response.json()["vnodes"]
+        get_response = await client.get(f"/api/v1/private/subscriptions/plans/{plan_id}")
+        get_data = get_response.json()
+        vnodes = get_data["vnodes"]
         assert len(vnodes) == 2
         vnode_ids = [vnode["node_proto_id"] for vnode in vnodes]
         assert vnode_id_1 not in vnode_ids
@@ -226,9 +226,8 @@ class TestUpdateSubPlan:
         plan_id = sub_plan_seed["plan_id_1"]
         
         response = await client.put(
-            "/api/v1/private/subscriptions/plans/update",
+            f"/api/v1/private/subscriptions/plans/{plan_id}",
             json={
-                "id": plan_id,
                 "add_node_proto_ids": [9999, 8888]  # Несуществующие ID
             }
         )
@@ -249,9 +248,8 @@ class TestUpdateSubPlan:
         
         # Пытаемся открепить ноды, которые не привязаны
         response = await client.put(
-            "/api/v1/private/subscriptions/plans/update",
+            f"/api/v1/private/subscriptions/plans/{plan_id}",
             json={
-                "id": plan_id,
                 "remove_node_proto_ids": [vnode_id_1, vnode_id_2]
             }
         )
@@ -267,17 +265,17 @@ class TestUpdateSubPlan:
     async def test_update_plan_not_found(self, client, db_seed):
         """План не найден (404)"""
         response = await client.put(
-            "/api/v1/private/subscriptions/plans/update",
+            "/api/v1/private/subscriptions/plans/9999",
             json={
-                "id": 9999,
                 "title": "Non-Existent Plan"
             }
         )
         
         assert response.status_code == 404
         data = response.json()
-        assert data["detail"]["success"] is False
-        assert "не найдена" in data["detail"]["message"]
+        detail = data.get("detail", data)  # FastAPI оборачивает в "detail"
+        assert detail["success"] is False
+        assert "не найдена" in detail["message"]
 
 
 class TestDeleteSubPlan:
@@ -288,10 +286,8 @@ class TestDeleteSubPlan:
         """Успешное удаление плана"""
         plan_id = sub_plan_seed["plan_id_2"]
         
-        response = await client.request(
-            "DELETE",
-            "/api/v1/private/subscriptions/plans/delete",
-            json={"id": plan_id}
+        response = await client.delete(
+            f"/api/v1/private/subscriptions/plans/{plan_id}"
         )
         
         assert response.status_code == 200
@@ -329,10 +325,8 @@ class TestDeleteSubPlan:
             assert link_exists_before is True
         
         # Удаляем план
-        response = await client.request(
-            "DELETE",
-            "/api/v1/private/subscriptions/plans/delete",
-            json={"id": plan_id}
+        response = await client.delete(
+            f"/api/v1/private/subscriptions/plans/{plan_id}"
         )
         assert response.status_code == 200
         
@@ -397,7 +391,7 @@ class TestGetSubPlanById:
                 plan_id, vnode_id_1, vnode_id_2
             )
         
-        response = await client.get(f"/api/v1/private/subscriptions/plans/get/{plan_id}")
+        response = await client.get(f"/api/v1/private/subscriptions/plans/{plan_id}")
         
         assert response.status_code == 200
         data = response.json()
@@ -432,7 +426,7 @@ class TestGetSubPlanById:
         """План без привязанных виртуальных нод"""
         plan_id = sub_plan_seed["plan_id_2"]
         
-        response = await client.get(f"/api/v1/private/subscriptions/plans/get/{plan_id}")
+        response = await client.get(f"/api/v1/private/subscriptions/plans/{plan_id}")
         
         assert response.status_code == 200
         data = response.json()
@@ -444,7 +438,7 @@ class TestGetSubPlanById:
     @pytest.mark.asyncio
     async def test_get_plan_not_found(self, client, db_seed):
         """План не найден (404)"""
-        response = await client.get("/api/v1/private/subscriptions/plans/get/9999")
+        response = await client.get("/api/v1/private/subscriptions/plans/9999")
         
         assert response.status_code == 404
         data = response.json()

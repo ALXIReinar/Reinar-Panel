@@ -210,8 +210,9 @@ class TestGetPhysicalNodeById:
         
         assert response.status_code == 404
         data = response.json()
-        assert data["success"] is False
-        assert "не найдена" in data["message"]
+        detail = data.get("detail", data)  # FastAPI оборачивает в "detail"
+        assert detail["success"] is False
+        assert "не найдена" in detail["message"]
 
 
 class TestUpdatePhysicalNode:

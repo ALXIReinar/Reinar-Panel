@@ -97,8 +97,8 @@ class TestGetNodeProtocols:
         # У node_id_1 пока нет виртуальных нод (virtual_node_seed не использована)
         node_id = physical_node_seed['node_id_1']
         response = await client.get(
-            f"/api/v1/private/nodes/protocols/by_node",
-            params={"node_id": node_id, "limit": 10, "offset": 0}
+            f"/api/v1/private/nodes/protocols/info/{node_id}",
+            params={"limit": 10, "offset": 0}
         )
         
         assert response.status_code == 200
@@ -111,8 +111,8 @@ class TestGetNodeProtocols:
         """Получение списка виртуальных нод на физической ноде"""
         node_id = virtual_node_seed['node_id_1']
         response = await client.get(
-            f"/api/v1/private/nodes/protocols/by_node",
-            params={"node_id": node_id, "limit": 10, "offset": 0}
+            f"/api/v1/private/nodes/protocols/info/{node_id}",
+            params={"limit": 10, "offset": 0}
         )
         
         assert response.status_code == 200
@@ -122,7 +122,7 @@ class TestGetNodeProtocols:
         
         # Проверяем структуру данных
         protocol = data["protocols"][0]
-        assert "node_id" in protocol
+        assert "node_proto_id" in protocol
         assert "proto_id" in protocol
         assert "proto_name" in protocol
         assert "title" in protocol
@@ -134,8 +134,8 @@ class TestGetNodeProtocols:
         node_id = virtual_node_seed['node_id_1']
         # Получаем первую виртуальную ноду
         response1 = await client.get(
-            f"/api/v1/private/nodes/protocols/by_node",
-            params={"node_id": node_id, "limit": 1, "offset": 0}
+            f"/api/v1/private/nodes/protocols/info/{node_id}",
+            params={"limit": 1, "offset": 0}
         )
         assert response1.status_code == 200
         data1 = response1.json()
@@ -143,8 +143,8 @@ class TestGetNodeProtocols:
         
         # Получаем вторую виртуальную ноду
         response2 = await client.get(
-            f"/api/v1/private/nodes/protocols/by_node",
-            params={"node_id": node_id, "limit": 1, "offset": 1}
+            f"/api/v1/private/nodes/protocols/info/{node_id}",
+            params={"limit": 1, "offset": 1}
         )
         assert response2.status_code == 200
         data2 = response2.json()
@@ -192,9 +192,8 @@ class TestUpdateVirtualNode:
         vnode_id = virtual_node_seed["vnode_id_2"]
         
         response = await client.put(
-            "/api/v1/private/nodes/protocols/update",
+            f"/api/v1/private/nodes/protocols/{vnode_id}",
             json={
-                "node_proto_id": vnode_id,
                 "config_path": "/etc/updated-proto/new-config.json",
                 "title": "Fully Updated Virtual Node",
                 "metrics_port": 9091,
@@ -223,9 +222,8 @@ class TestUpdateVirtualNode:
         vnode_id = virtual_node_seed["vnode_id_1"]
         
         response = await client.put(
-            "/api/v1/private/nodes/protocols/update",
+            f"/api/v1/private/nodes/protocols/{vnode_id}",
             json={
-                "node_proto_id": vnode_id,
                 "title": "Partially Updated Title",
                 "sub_node_address": "new-address.example.com"
             }
@@ -251,9 +249,8 @@ class TestUpdateVirtualNode:
         vnode_id = virtual_node_seed["vnode_id_1"]
         
         response = await client.put(
-            "/api/v1/private/nodes/protocols/update",
+            f"/api/v1/private/nodes/protocols/{vnode_id}",
             json={
-                "node_proto_id": vnode_id,
                 "config_path": "/etc/new-path/config.json"
             }
         )
@@ -273,9 +270,8 @@ class TestUpdateVirtualNode:
         vnode_id = virtual_node_seed["vnode_id_2"]  # У этой ноды нет портов
         
         response = await client.put(
-            "/api/v1/private/nodes/protocols/update",
+            f"/api/v1/private/nodes/protocols/{vnode_id}",
             json={
-                "node_proto_id": vnode_id,
                 "metrics_port": 9092
             }
         )
@@ -295,9 +291,8 @@ class TestUpdateVirtualNode:
         vnode_id = virtual_node_seed["vnode_id_2"]  # У этой ноды нет портов
         
         response = await client.put(
-            "/api/v1/private/nodes/protocols/update",
+            f"/api/v1/private/nodes/protocols/{vnode_id}",
             json={
-                "node_proto_id": vnode_id,
                 "proto_port": 8445
             }
         )
@@ -318,9 +313,8 @@ class TestUpdateVirtualNode:
         
         # Пытаемся установить metrics_port, который уже занят vnode_id_1
         response = await client.put(
-            "/api/v1/private/nodes/protocols/update",
+            f"/api/v1/private/nodes/protocols/{vnode_id}",
             json={
-                "node_proto_id": vnode_id,
                 "metrics_port": 9090  # Уже занят vnode1
             }
         )
@@ -337,9 +331,8 @@ class TestUpdateVirtualNode:
         
         # Пытаемся установить proto_port, который уже занят vnode_id_1
         response = await client.put(
-            "/api/v1/private/nodes/protocols/update",
+            f"/api/v1/private/nodes/protocols/{vnode_id}",
             json={
-                "node_proto_id": vnode_id,
                 "proto_port": 8443  # Уже занят vnode1
             }
         )
@@ -353,9 +346,8 @@ class TestUpdateVirtualNode:
     async def test_update_vnode_not_found(self, client, db_seed):
         """Обновление несуществующей виртуальной ноды (404)"""
         response = await client.put(
-            "/api/v1/private/nodes/protocols/update",
+            f"/api/v1/private/nodes/protocols/9919",
             json={
-                "node_proto_id": 9999,
                 "title": "Non-Existent Node"
             }
         )
@@ -371,9 +363,8 @@ class TestUpdateVirtualNode:
         vnode_id = virtual_node_seed["vnode_id_1"]
         
         response = await client.put(
-            "/api/v1/private/nodes/protocols/update",
+            f"/api/v1/private/nodes/protocols/{vnode_id}",
             json={
-                "node_proto_id": vnode_id
             }
         )
         

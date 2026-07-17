@@ -15,7 +15,6 @@ class AddTmpSchema(BaseModel):
 
 
 class UpdateTmpSchema(BaseModel):
-    tmp_id: int = Field(..., gt=0, description='ID шаблона')
     title: str | None = Field(None, min_length=1, max_length=32, description='Имя шаблона')
     url_tmp: str | None = Field(None, min_length=1, description='Шаблон URL конфиг-ссылки')
     reload_core_command: str | None = Field(None, min_length=2, max_length=256, description='Команда перезагрузки ядра')

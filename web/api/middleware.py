@@ -83,8 +83,13 @@ class AuthUXASGIMiddleware:
             await self.app(scope, receive, send)
             return
 
-        "Не нуждаются в авторизации, Если юрл в белом списке"
-        if any(url.startswith(prefix) for prefix in ('/api/v1/public', )):
+        "Служебный доступ(Например для скрипта создания админа)"
+        if client_ip == '127.0.0.1' and url.startswith('/api/v1/server/'):
+            await self.app(scope, receive, send)
+            return
+
+        "Публичные эндпоинты доступны без авторизации"
+        if url.startswith('/api/v1/public/'):
             await self.app(scope, receive, send)
             return
 

@@ -3,10 +3,8 @@ from typing import Annotated
 from aiohttp import ClientError
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.params import Query
-from starlette.responses import JSONResponse
 
-from web.config_dir.config import NodeExecAiohttpDep, env
-from web.config_dir.env_modes import AppMode
+from web.config_dir.config import NodeExecAiohttpDep
 from web.data.postgres import PgSqlDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
 from web.schemas.node_schema import NodeCreateSchema, NodeUpdateSchema, NodesGetSchema
@@ -61,7 +59,7 @@ async def get_node_api(node_id: int, request: Request, db: PgSqlDep, _: JWTCooki
     node = await db.nodes.get_node(node_id)
     if not node:
         log_event(f"Нода не найдена | node_id: \033[34m{node_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request, level='WARNING')
-        return JSONResponse(status_code=404, content={'success': False, 'message': 'Нода не найдена'})
+        raise HTTPException(status_code=404, detail={'success': False, 'message': 'Нода не найдена'})
 
     log_event(f'Отдали физическую ноду | node_id: \033[32m{node_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     return {'node': node}
