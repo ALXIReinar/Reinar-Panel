@@ -63,7 +63,6 @@ services:
       - env.api.prod
       - private_key.pem
       - public_key.pem
-    command: sh -c "python -m web.main || tail -f /dev/null"
 
 volumes:
   pgdata:
