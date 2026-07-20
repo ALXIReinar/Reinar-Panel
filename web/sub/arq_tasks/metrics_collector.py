@@ -71,7 +71,7 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[dict], aio_http: Client
             try:
                 "Запрашиваем метрики потребления с нод"
                 url = f"http://{node['private_ip']}:{node['api_port']}{NodeUris.get_metrics}"
-                # url = f"http://localhost:8000{NodeUris.get_metrics}"
+                # url = f"http://localhost:8100{NodeUris.get_metrics}"
                 json_body = {
                     'metrics_port': node['metrics_port'],
                     'command': node['metrics_command'],
@@ -102,7 +102,7 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[dict], aio_http: Client
                         tuple(user_dict.values()) for user_dict in parsed_data
                     ))
                     async with pool.acquire() as conn:
-                        log_event(f'\033[35m[ARQ Metrics Collector Metrics Collector]\033[0m Outbox операций по удалению пользователей с ядра | node_proto_id: \033[36m{node["id"]}\033[0m;')
+                        log_event(f'\033[35m[ARQ Metrics Collector]\033[0m Outbox операций по удалению пользователей с ядра | node_proto_id: \033[36m{node["id"]}\033[0m;')
                         outbox_event_ids = await PgSql(conn).sub.update_traffic(user_sub_ids, traffic_adds)
 
                     if outbox_event_ids:

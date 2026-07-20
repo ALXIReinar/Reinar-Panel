@@ -36,10 +36,10 @@ class TestBulkDeleteByTrafficLimit:
             outbox_ids = []
             for vnode_id in [arq_test_seed['vnode_id_10'], arq_test_seed['vnode_id_11']]:
                 outbox_id = await conn.fetchval("""
-                    INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
-                    VALUES ($1, $2, $3, 2, $4)
+                    INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+                    VALUES ($1, $2, 2, $3)
                     RETURNING id
-                """, user3['uuid'], user3['tg_username'], user3['order_active'], vnode_id)
+                """, user3['uuid'], user3['order_active'], vnode_id)
                 outbox_ids.append(outbox_id)
         
         # Mock для arq.enqueue_job
@@ -81,7 +81,7 @@ class TestBulkDeleteByTrafficLimit:
             users_list = job_data['args'][8]  # users параметр
             assert len(users_list) == 1, "Должен быть 1 пользователь на ноде"
             assert users_list[0]['uuid'] == user3['uuid']
-            assert users_list[0]['tg_username'] == user3['tg_username']
+            assert users_list[0]['user_sub_id'] == user3['order_active']
     
     
     async def test_bulk_delete_by_traffic_limit_multiple_nodes(self, mock_arq_ctx, arq_test_seed, db_pool):
@@ -102,18 +102,18 @@ class TestBulkDeleteByTrafficLimit:
             # User3 на обе ноды
             for vnode_id in [arq_test_seed['vnode_id_10'], arq_test_seed['vnode_id_11']]:
                 outbox_id = await conn.fetchval("""
-                    INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
-                    VALUES ($1, $2, $3, 2, $4)
+                    INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+                    VALUES ($1, $2, 2, $3)
                     RETURNING id
-                """, user3['uuid'], user3['tg_username'], user3['order_active'], vnode_id)
+                """, user3['uuid'], user3['order_active'], vnode_id)
                 outbox_ids.append(outbox_id)
             
             # User4 только на vnode_10
             outbox_id = await conn.fetchval("""
-                INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
-                VALUES ($1, $2, $3, 2, $4)
+                INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+                VALUES ($1, $2, 2, $3)
                 RETURNING id
-            """, user4['uuid'], user4['tg_username'], user4['order_active'], arq_test_seed['vnode_id_10'])
+            """, user4['uuid'], user4['order_active'], arq_test_seed['vnode_id_10'])
             outbox_ids.append(outbox_id)
         
         # Mock для arq.enqueue_job
@@ -173,7 +173,7 @@ class TestBulkDeleteByTrafficLimit:
             """, "Invisible Traffic Plan", "Plan for invisible node test", 30, 500, 10240, True)
             
             # Связываем план ТОЛЬКО с невидимой нодой
-            invisible_sub_node_id = await conn.fetchval("""
+            invisible_node_proto_id = await conn.fetchval("""
                 INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id)
                 VALUES ($1, $2)
                 RETURNING id
@@ -181,23 +181,32 @@ class TestBulkDeleteByTrafficLimit:
             
             # Создаём пользователя с подпиской на невидимую ноду
             user_invisible_id = await conn.fetchval("""
-                INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-                VALUES ($1, $2, $3, $4, false)
+                INSERT INTO users (tg_id, tg_username, is_deleted)
+                VALUES ($1, $2, false)
                 RETURNING id
-            """, 888888, "traffic_invisible_user", "uuid-traffic-invisible", "b64-traffic-invisible")
+            """, 888888, "traffic_invisible_user")
+            
+            pay_order_invisible = await conn.fetchval("""
+                INSERT INTO pay_orders (user_id, status)
+                VALUES ($1, 2)
+                RETURNING id
+            """, user_invisible_id)
             
             order_invisible = await conn.fetchval("""
-                INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-                VALUES ($1, $2, true, 2, now() + interval '30 days')
+                INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date,
+                                       uuid, b64_id, infinite_traffic, infinite_expire,
+                                       traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited)
+                VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
                 RETURNING id
-            """, user_invisible_id, invisible_plan_id)
+            """, user_invisible_id, invisible_plan_id, pay_order_invisible, 
+                 "uuid-traffic-invisible", "b64-traffic-invisible")
             
             # Создаём outbox запись на невидимую ноду
             outbox_id_invisible = await conn.fetchval("""
-                INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
-                VALUES ($1, $2, $3, 2, $4)
+                INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+                VALUES ($1, $2, 2, $3)
                 RETURNING id
-            """, "uuid-traffic-invisible", "traffic_invisible_user", order_invisible, invisible_sub_node_id)
+            """, "uuid-traffic-invisible", order_invisible, arq_test_seed['vnode_id_invisible'])
         
         # Mock для arq.enqueue_job
         enqueued_jobs = []

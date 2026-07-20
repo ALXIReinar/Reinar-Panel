@@ -35,7 +35,7 @@ async def retry_stuck_core_proto_actions(ctx: dict, db: PgSql = None, arq: ArqRe
                     sub_nodes_serializable,
                     CoreProtoActions.id2name[action_info['operation']],
                 )
-                log_event(f'\033[35m[ARQ Cron]\033[0m Ретрай операции в ядро протокола | order_id: \033[31m{action_info['order_id']}\033[0m; operation: \033[36m{action_info['operation']}\033[0m', job_id=job.job_id)
+                log_event(f'\033[35m[ARQ Cron]\033[0m Ретрай операции в ядро протокола | user_sub_id: \033[31m{action_info['user_sub_id']}\033[0m; operation: \033[36m{action_info['operation']}\033[0m', job_id=job.job_id)
 
     "Параллельный запуск"
     await asyncio.gather(*(worker(node, ctx['pg_pool']) for node in stuck_actions))

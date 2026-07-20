@@ -52,17 +52,15 @@ class TestResetDayUserTraffic:
         async with db_pool.acquire() as conn:
             # User A и User B должны быть разблокированы
             user_a_sub = await conn.fetchrow("""
-                SELECT ps.is_limited, u.traffic_used_day_mb
-                FROM payed_subs ps
-                JOIN users u ON u.id = ps.user_id
-                WHERE ps.id = $1
+                SELECT us.is_limited, us.traffic_used_day_mb
+                FROM user_subs us
+                WHERE us.id = $1
             """, seed['should_unlock']['user_a']['order_id'])
             
             user_b_sub = await conn.fetchrow("""
-                SELECT ps.is_limited, u.traffic_used_day_mb
-                FROM payed_subs ps
-                JOIN users u ON u.id = ps.user_id
-                WHERE ps.id = $1
+                SELECT us.is_limited, us.traffic_used_day_mb
+                FROM user_subs us
+                WHERE us.id = $1
             """, seed['should_unlock']['user_b']['order_id'])
             
             assert user_a_sub['is_limited'] is False
@@ -72,15 +70,15 @@ class TestResetDayUserTraffic:
             
             # User C (не был ограничен) тоже должен иметь обнулённый трафик
             user_c_data = await conn.fetchrow("""
-                SELECT traffic_used_day_mb FROM users WHERE id = $1
-            """, seed['should_not_unlock']['user_c']['user_id'])
+                SELECT us.traffic_used_day_mb FROM user_subs us WHERE us.id = $1
+            """, seed['should_not_unlock']['user_c']['order_id'])
             assert user_c_data['traffic_used_day_mb'] == 0
             
             # Проверяем что outbox заполнен для user_a и user_b
             outbox_records = await conn.fetch("""
-                SELECT order_id, user_uuid, operation 
+                SELECT user_sub_id, user_uuid, operation 
                 FROM sub_nodes_outbox 
-                WHERE order_id IN ($1, $2)
+                WHERE user_sub_id IN ($1, $2)
             """, seed['should_unlock']['user_a']['order_id'],
                  seed['should_unlock']['user_b']['order_id'])
             
@@ -135,10 +133,10 @@ class TestResetDayUserTraffic:
         async with db_pool.acquire() as conn:
             # Проверяем ТОЛЬКО user_a и user_b разблокированы
             all_subs = await conn.fetch("""
-                SELECT ps.id, ps.user_id, ps.is_limited, ps.is_active
-                FROM payed_subs ps
-                WHERE ps.user_id IN ($1, $2, $3, $4, $5)
-                ORDER BY ps.user_id
+                SELECT us.id, us.user_id, us.is_limited, us.is_active
+                FROM user_subs us
+                WHERE us.user_id IN ($1, $2, $3, $4, $5)
+                ORDER BY us.user_id
             """, seed['should_unlock']['user_a']['user_id'],
                  seed['should_unlock']['user_b']['user_id'],
                  seed['should_not_unlock']['user_c']['user_id'],
@@ -163,7 +161,7 @@ class TestResetDayUserTraffic:
             # User E не попал в результат (is_deleted=true фильтрует на уровне JOIN)
             # Проверяем что его нет в outbox
             user_e_outbox = await conn.fetchval("""
-                SELECT COUNT(*) FROM sub_nodes_outbox WHERE order_id = $1
+                SELECT COUNT(*) FROM sub_nodes_outbox WHERE user_sub_id = $1
             """, seed['should_not_unlock']['user_e']['order_id'])
             assert user_e_outbox == 0
     
@@ -184,8 +182,8 @@ class TestResetDayUserTraffic:
         # Запоминаем начальное состояние
         async with db_pool.acquire() as conn:
             initial_traffic = await conn.fetchval("""
-                SELECT traffic_used_day_mb FROM users WHERE id = $1
-            """, seed['should_unlock']['user_a']['user_id'])
+                SELECT traffic_used_day_mb FROM user_subs WHERE id = $1
+            """, seed['should_unlock']['user_a']['order_id'])
             assert initial_traffic > 0  # Должен быть трафик
         
         # Act
@@ -197,13 +195,13 @@ class TestResetDayUserTraffic:
         async with db_pool.acquire() as conn:
             # 1. Трафик обнулён
             traffic_after = await conn.fetchval("""
-                SELECT traffic_used_day_mb FROM users WHERE id = $1
-            """, seed['should_unlock']['user_a']['user_id'])
+                SELECT traffic_used_day_mb FROM user_subs WHERE id = $1
+            """, seed['should_unlock']['user_a']['order_id'])
             assert traffic_after == 0
             
             # 2. Подписки разблокированы
             unlocked_count = await conn.fetchval("""
-                SELECT COUNT(*) FROM payed_subs
+                SELECT COUNT(*) FROM user_subs
                 WHERE id IN ($1, $2) AND is_limited = false
             """, seed['should_unlock']['user_a']['order_id'],
                  seed['should_unlock']['user_b']['order_id'])
@@ -212,7 +210,7 @@ class TestResetDayUserTraffic:
             # 3. Outbox заполнен
             outbox_count = await conn.fetchval("""
                 SELECT COUNT(*) FROM sub_nodes_outbox
-                WHERE order_id IN ($1, $2) AND operation = 1
+                WHERE user_sub_id IN ($1, $2) AND operation = 1
             """, seed['should_unlock']['user_a']['order_id'],
                  seed['should_unlock']['user_b']['order_id'])
             assert outbox_count >= 2  # Минимум 2 (по 1 на ноду для каждого юзера)
@@ -270,12 +268,12 @@ class TestResetDayUserTraffic:
             # Считаем ноды с пользователями ПОСЛЕ фильтрации
             nodes_with_users = await conn.fetch("""
                 SELECT DISTINCT vsp.node_proto_id, COUNT(*) as users_count
-                FROM payed_subs ps
-                JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = ps.sub_plan_id
+                FROM user_subs us
+                JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = us.sub_plan_id
                 JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
                 JOIN nodes n ON np.node_id = n.id AND n.is_active = true
-                JOIN users u ON u.id = ps.user_id AND u.is_deleted = false
-                WHERE ps.is_active = true AND ps.is_limited = true
+                JOIN users u ON u.id = us.user_id AND u.is_deleted = false
+                WHERE us.is_active = true AND us.is_limited = true
                 GROUP BY vsp.node_proto_id
             """)
         

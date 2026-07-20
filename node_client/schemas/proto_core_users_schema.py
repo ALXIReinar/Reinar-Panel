@@ -16,11 +16,10 @@ class BaseUserCoreSchema(BaseModel):
     custom_params: dict | None = Field(description='Зависимости для скрипта, которые идут отдельно от объекта пользователя')
 
 class UserCoreDeleteSchema(BaseModel):
-    tg_username: str = Field(min_length=5, max_length=32)
     uuid: str = Field(max_length=36)
 
-    sub_node_id: int = Field(description='ID ноды в группе подписок. Служебное, не для нод-кдиента')
-    order_id: int = Field(description='ID купленной пользователем подписки. Служебное, не для нод-кдиента')
+    node_proto_id: int = Field(description='ID ноды в группе подписок. Служебное, не для нод-кдиента')
+    user_sub_id: int = Field(description='ID купленной пользователем подписки. Служебное, не для нод-кдиента')
 
 
 class AddUserCoreSchema(BaseUserCoreSchema):

@@ -214,7 +214,7 @@ async def bulk_add_user_into_core(body: BulkAddUserCoreSchema, request: Request,
     "1. Hot-reload через API (если есть скрипт)"
     if body.bulk_add_script and body.core_port:
         try:
-            log_event(f"\033[32m[Bulk Add\033[0m Попытка hot-reload добавления через {body.core_lib}", request=request)
+            log_event(f"\033[32m[Bulk Add]\033[0m Попытка hot-reload добавления через {body.core_lib}", request=request)
 
             hot_reload_success, hot_reload_result = await HotReloadExecutor.execute_action_script(
                 script=body.bulk_add_script,

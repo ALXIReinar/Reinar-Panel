@@ -1,7 +1,7 @@
 """
 Unit-тесты для функции resolve_user_template
 
-Проверяет подстановку маркеров {USER_UUID} и {USER_TG_USERNAME}
+Проверяет подстановку маркеров {USER_UUID} и {USER_SUB_ID}
 в шаблоны пользователей для конфигураций протоколов.
 """
 import pytest
@@ -23,29 +23,29 @@ class TestResolveUserTemplate:
         assert result == {"id": "abc-123"}
 
     def test_resolve_template_with_username(self):
-        """Подстановка UUID и username"""
-        template = {"email": "{USER_TG_USERNAME}"}
-        result = resolve_user_template(template, uuid="abc-123", tg_username="john_doe")
+        """Подстановка UUID и user_sub_id"""
+        template = {"email": "{USER_SUB_ID}"}
+        result = resolve_user_template(template, uuid="abc-123", user_sub_id=12345)
         
-        assert result == {"email": "john_doe"}
+        assert result == {"email": "12345"}  # user_sub_id преобразуется в строку
 
     def test_resolve_template_with_mixed_fields(self):
         """Подстановка смешанных типов: маркеры + числа + строки"""
         template = {
             "id": "{USER_UUID}",
-            "email": "{USER_TG_USERNAME}",
+            "email": "{USER_SUB_ID}",
             "level": 5,
             "alterId": 0
         }
         result = resolve_user_template(
             template, 
             uuid="test-uuid-456", 
-            tg_username="alice"
+            user_sub_id=999
         )
         
         assert result == {
             "id": "test-uuid-456",
-            "email": "alice",
+            "email": "999",  # user_sub_id преобразуется в строку
             "level": 5,
             "alterId": 0
         }
@@ -83,14 +83,14 @@ class TestResolveUserTemplate:
         }
 
     def test_resolve_template_missing_username_raises(self):
-        """ValueError если требуется username, но он не передан"""
-        template = {"email": "{USER_TG_USERNAME}"}
+        """ValueError если требуется user_sub_id, но он не передан"""
+        template = {"email": "{USER_SUB_ID}"}
         
         with pytest.raises(ValueError) as exc_info:
-            resolve_user_template(template, uuid="uuid-123", tg_username=None)
+            resolve_user_template(template, uuid="uuid-123", user_sub_id=None)
         
-        assert "tg_username" in str(exc_info.value)
-        assert "USER_TG_USERNAME" in str(exc_info.value)
+        assert "user_sub_id" in str(exc_info.value)
+        assert "USER_SUB_ID" in str(exc_info.value)
 
     def test_resolve_template_empty_template(self):
         """Пустой шаблон возвращает пустой словарь"""
@@ -163,7 +163,7 @@ class TestResolveUserTemplate:
         """Реальный пример: шаблон для VLESS протокола"""
         template = {
             "id": "{USER_UUID}",
-            "email": "{USER_TG_USERNAME}",
+            "email": "{USER_SUB_ID}",
             "level": 0,
             "alterId": 0,
             "flow": "xtls-rprx-vision"
@@ -171,12 +171,12 @@ class TestResolveUserTemplate:
         result = resolve_user_template(
             template,
             uuid="550e8400-e29b-41d4-a716-446655440000",
-            tg_username="vpn_user_123"
+            user_sub_id=123
         )
         
         assert result == {
             "id": "550e8400-e29b-41d4-a716-446655440000",
-            "email": "vpn_user_123",
+            "email": "123",  # user_sub_id преобразуется в строку
             "level": 0,
             "alterId": 0,
             "flow": "xtls-rprx-vision"

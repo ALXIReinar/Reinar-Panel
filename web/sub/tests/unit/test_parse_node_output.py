@@ -287,22 +287,22 @@ class TestParseNodeOutputRealParser:
         # Assert
         assert success is True
         assert data is not None
-        assert len(data) == 2  # alice + bob
+        assert len(data) == 2  # user_sub_id 100 + 200
         
-        # Проверяем alice: 100MB + 50MB = 150MB
-        alice = next(u for u in data if u['tg_username'] == 'alice@example.com')
-        assert alice['total_mb_used'] == 150
+        # Проверяем user_sub_id 100: 100MB + 50MB = 150MB
+        user_100 = next(u for u in data if u['user_sub_id'] == 100)
+        assert user_100['total_mb_used'] == 150
         
-        # Проверяем bob: 200MB + 100MB = 300MB
-        bob = next(u for u in data if u['tg_username'] == 'bob@example.com')
-        assert bob['total_mb_used'] == 300
+        # Проверяем user_sub_id 200: 200MB + 100MB = 300MB
+        user_200 = next(u for u in data if u['user_sub_id'] == 200)
+        assert user_200['total_mb_used'] == 300
     
     
     async def test_real_xray_parser_json_string_cli(self, db_pool, real_parser_scripts, sample_xray_outputs):
         """
         Реальный парсер обрабатывает JSON string от CLI команды.
         
-        Важно: первая запись mvpALXI имеет отсутствующее поле value (downlink),
+        Важно: первая запись user_sub_id=300 имеет отсутствующее поле value (downlink),
         но есть uplink с большим значением.
         """
         # Arrange
@@ -319,15 +319,15 @@ class TestParseNodeOutputRealParser:
         # Assert
         assert success is True
         assert data is not None
-        assert len(data) == 2  # mvpALXI + TestAddUser1
+        assert len(data) == 2  # user_sub_id 300 + 400
         
-        # Проверяем mvpALXI: downlink нет value (0), uplink = 3331331376938 bytes
-        mvp = next(u for u in data if u['tg_username'] == 'mvpALXI')
-        assert mvp['total_mb_used'] > 0  # ~3176 MB
+        # Проверяем user_sub_id=300: downlink нет value (0), uplink = 3331331376938 bytes
+        user_300 = next(u for u in data if u['user_sub_id'] == 300)
+        assert user_300['total_mb_used'] > 0  # ~3176 MB
         
-        # Проверяем TestAddUser1: downlink + uplink
-        test_user = next(u for u in data if u['tg_username'] == 'TestAddUser1')
-        assert test_user['total_mb_used'] > 0
+        # Проверяем user_sub_id=400: downlink + uplink
+        user_400 = next(u for u in data if u['user_sub_id'] == 400)
+        assert user_400['total_mb_used'] > 0
     
     
     async def test_real_xray_parser_with_troubles(self, db_pool, real_parser_scripts, sample_xray_outputs):
@@ -353,13 +353,13 @@ class TestParseNodeOutputRealParser:
         assert data is not None
         assert troubles is not None
         
-        # Валидные записи (включая another@example.com с value=0)
+        # Валидные записи (включая user_sub_id=600 с value=0)
         assert len(data) == 2
-        valid = next(u for u in data if u['tg_username'] == 'valid@example.com')
-        assert valid['total_mb_used'] == 100
+        user_500 = next(u for u in data if u['user_sub_id'] == 500)
+        assert user_500['total_mb_used'] == 100
         
-        another = next(u for u in data if u['tg_username'] == 'another@example.com')
-        assert another['total_mb_used'] == 0  # Нет value -> 0 bytes
+        user_600 = next(u for u in data if u['user_sub_id'] == 600)
+        assert user_600['total_mb_used'] == 0  # Нет value -> 0 bytes
         
         # Проблемные записи (только без "user>>>" префикса)
         assert len(troubles) == 1

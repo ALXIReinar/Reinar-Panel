@@ -133,10 +133,13 @@ class PaymentQueries:
         query = '''
         -- 1. Обнуляем дневной трафик всем активным подпискам
         WITH users_to_proto_cores AS (
-            UPDATE user_subs 
-            SET traffic_limit_day = 0, is_limited = false
-            WHERE is_active = true
-            RETURNING id AS user_sub_id, sub_plan_id, uuid
+            UPDATE user_subs us
+            SET traffic_used_day_mb = 0, is_limited = false
+            FROM users u
+            WHERE us.user_id = u.id
+              AND us.is_active = true
+              AND u.is_deleted = false
+            RETURNING us.id AS user_sub_id, us.sub_plan_id, us.uuid
         ),
         -- 3. Собираем информацию о нодах для этих подписок
         expired_nodes_info AS (
