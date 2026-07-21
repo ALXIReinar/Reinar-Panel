@@ -19,7 +19,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ../web/secrets/test_dumps:/docker-entrypoint-initdb.d:z
     ports:
-      - "127.0.0.1:${PG_PORT}:5432"
+      - "127.0.0.1:${PG_PORT:-5432}:5432"
 
 volumes:
   pgdata:
