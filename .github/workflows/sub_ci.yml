@@ -2,7 +2,7 @@ name: Sub Service CI
 
 on:
   push:
-    branches: ["main", "dev/sub", "dev/backend"]
+    branches: ["main", "dev/sub"]
   pull_request:
     branches: ["main", "dev/backend", "dev/master"]
 
@@ -114,9 +114,12 @@ jobs:
 
           ACTION_ON_CORE_PROTO_LIMIT=10
           SUBSCRIPTION_UPDATE_INTERVAL=12
+          SUB_LINK_BYTES=32
           TG_BOT_LINK=${{ vars.TG_BOT_LINK }}
 
           APP_MODE=docker
+          TRUSTED_PROXIES=127.0.0.1
+          PAY_MODE=test
           EOF
 
       - name: Log in to GitHub Container Registry
@@ -185,6 +188,7 @@ jobs:
           chmod +x ./web/sub/scripts/install.sh
           sudo -E ./web/sub/scripts/install.sh || {
             echo "❌ Ошибка установки Sub Service"
+            sudo docker logs web-service  2>&1 || true
             sudo docker logs sub-service 2>&1 || true
             exit 1
           }

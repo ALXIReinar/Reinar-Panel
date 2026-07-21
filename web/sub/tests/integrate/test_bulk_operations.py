@@ -36,9 +36,9 @@ class TestBulkAddUsersIntoSingleNode:
         user3 = arq_test_seed['user3_active_for_add']
         users = [{
             'uuid': user3['uuid'],
-            'tg_username': user3['tg_username'],
-            'order_id': user3['order_active'],
-            'sub_node_id': arq_test_seed['vnode_id_10']
+            'user_sub_id': user3['tg_username'],
+            'user_sub_id': user3['order_active'],
+            'node_proto_id': arq_test_seed['vnode_id_10']
         }]
         
         mock_arq_ctx['aio_http'].status = 200
@@ -48,7 +48,7 @@ class TestBulkAddUsersIntoSingleNode:
         async with db_pool.acquire() as conn:
             outbox_before = await conn.fetchval("""
                 SELECT COUNT(*) FROM sub_nodes_outbox
-                WHERE order_id = $1 AND operation = 1 AND sub_node_id = $2
+                WHERE user_sub_id = $1 AND operation = 1 AND node_proto_id = $2
             """, user3['order_active'], arq_test_seed['vnode_id_10'])
         
         assert outbox_before == 1, "Outbox должен содержать 1 запись до выполнения"
@@ -68,7 +68,7 @@ class TestBulkAddUsersIntoSingleNode:
             config_file_path="/etc/config.json",
             flatten_json_users_key="clients",
             flatten_user_identifier_key="email",
-            required_user_data_obj={"id": "{USER_UUID}", "email": "{USER_TG_USERNAME}"},
+            required_user_data_obj={"id": "{USER_UUID}", "email": "{USER_SUB_ID}"},
             constant_user_data_obj={"level": 0},
             current_attempt=1
         )
@@ -91,14 +91,14 @@ class TestBulkAddUsersIntoSingleNode:
         # Проверяем resolve_user_template
         user_data = json_body['users'][0]
         assert user_data['id'] == user3['uuid']  # {USER_UUID} подставлен
-        assert user_data['email'] == user3['tg_username']  # {USER_TG_USERNAME} подставлен
+        assert user_data['email'] == str(user3['order_active'])  # {USER_SUB_ID} подставлен (как строка)
         assert user_data['level'] == 0  # constant_user_data_obj добавлен
         
         # Проверяем outbox ПОСЛЕ выполнения (должен быть очищен)
         async with db_pool.acquire() as conn:
             outbox_after = await conn.fetchval("""
                 SELECT COUNT(*) FROM sub_nodes_outbox
-                WHERE order_id = $1 AND operation = 1 AND sub_node_id = $2
+                WHERE user_sub_id = $1 AND operation = 1 AND node_proto_id = $2
             """, user3['order_active'], arq_test_seed['vnode_id_10'])
         
         assert outbox_after == 0, "Outbox должен быть очищен после успеха"
@@ -117,9 +117,9 @@ class TestBulkAddUsersIntoSingleNode:
         user3 = arq_test_seed['user3_active_for_add']
         users = [{
             'uuid': user3['uuid'],
-            'tg_username': user3['tg_username'],
-            'order_id': user3['order_active'],
-            'sub_node_id': arq_test_seed['vnode_id_10']
+            'user_sub_id': user3['tg_username'],
+            'user_sub_id': user3['order_active'],
+            'node_proto_id': arq_test_seed['vnode_id_10']
         }]
         
         mock_arq_ctx['aio_http'].status = 422
@@ -156,7 +156,7 @@ class TestBulkAddUsersIntoSingleNode:
         async with db_pool.acquire() as conn:
             outbox_count = await conn.fetchval("""
                 SELECT COUNT(*) FROM sub_nodes_outbox
-                WHERE order_id = $1 AND operation = 1 AND sub_node_id = $2
+                WHERE user_sub_id = $1 AND operation = 1 AND node_proto_id = $2
             """, user3['order_active'], arq_test_seed['vnode_id_10'])
         
         assert outbox_count == 1, "Outbox не должен быть очищен при 422"
@@ -176,9 +176,9 @@ class TestBulkAddUsersIntoSingleNode:
         user3 = arq_test_seed['user3_active_for_add']
         users = [{
             'uuid': user3['uuid'],
-            'tg_username': user3['tg_username'],
-            'order_id': user3['order_active'],
-            'sub_node_id': arq_test_seed['vnode_id_10']
+            'user_sub_id': user3['tg_username'],
+            'user_sub_id': user3['order_active'],
+            'node_proto_id': arq_test_seed['vnode_id_10']
         }]
         
         mock_arq_ctx['aio_http'].status = 500
@@ -225,7 +225,7 @@ class TestBulkAddUsersIntoSingleNode:
         async with db_pool.acquire() as conn:
             outbox_count = await conn.fetchval("""
                 SELECT COUNT(*) FROM sub_nodes_outbox
-                WHERE order_id = $1 AND operation = 1
+                WHERE user_sub_id = $1 AND operation = 1
             """, user3['order_active'])
         
         assert outbox_count == 2, "Outbox не должен быть очищен при ошибке"
@@ -243,9 +243,9 @@ class TestBulkAddUsersIntoSingleNode:
         user3 = arq_test_seed['user3_active_for_add']
         users = [{
             'uuid': user3['uuid'],
-            'tg_username': user3['tg_username'],
-            'order_id': user3['order_active'],
-            'sub_node_id': arq_test_seed['vnode_id_10']
+            'user_sub_id': user3['tg_username'],
+            'user_sub_id': user3['order_active'],
+            'node_proto_id': arq_test_seed['vnode_id_10']
         }]
         
         mock_arq_ctx['aio_http'].raise_error = True
@@ -280,7 +280,7 @@ class TestBulkAddUsersIntoSingleNode:
         async with db_pool.acquire() as conn:
             outbox_count = await conn.fetchval("""
                 SELECT COUNT(*) FROM sub_nodes_outbox
-                WHERE order_id = $1 AND operation = 1
+                WHERE user_sub_id = $1 AND operation = 1
             """, user3['order_active'])
         
         assert outbox_count == 2, "Outbox не должен быть очищен при сетевой ошибке"
@@ -298,9 +298,9 @@ class TestBulkAddUsersIntoSingleNode:
         user3 = arq_test_seed['user3_active_for_add']
         users = [{
             'uuid': user3['uuid'],
-            'tg_username': user3['tg_username'],
-            'order_id': user3['order_active'],
-            'sub_node_id': arq_test_seed['vnode_id_10']
+            'user_sub_id': user3['tg_username'],
+            'user_sub_id': user3['order_active'],
+            'node_proto_id': arq_test_seed['vnode_id_10']
         }]
         
         mock_arq_ctx['aio_http'].status = 500
@@ -336,7 +336,7 @@ class TestBulkAddUsersIntoSingleNode:
         async with db_pool.acquire() as conn:
             outbox_count = await conn.fetchval("""
                 SELECT COUNT(*) FROM sub_nodes_outbox
-                WHERE order_id = $1 AND operation = 1
+                WHERE user_sub_id = $1 AND operation = 1
             """, user3['order_active'])
         
         assert outbox_count == 2, "Outbox не должен быть очищен после max retries"
@@ -357,9 +357,9 @@ class TestBulkDeleteUsersFromSingleNode:
         user4 = arq_test_seed['user4_active_for_delete']
         users = [{
             'uuid': user4['uuid'],
-            'tg_username': user4['tg_username'],
-            'order_id': user4['order_active'],
-            'sub_node_id': arq_test_seed['vnode_id_10']
+            'user_sub_id': user4['tg_username'],
+            'user_sub_id': user4['order_active'],
+            'node_proto_id': arq_test_seed['vnode_id_10']
         }]
         
         mock_arq_ctx['aio_http'].status = 200
@@ -369,7 +369,7 @@ class TestBulkDeleteUsersFromSingleNode:
         async with db_pool.acquire() as conn:
             outbox_before = await conn.fetchval("""
                 SELECT COUNT(*) FROM sub_nodes_outbox
-                WHERE order_id = $1 AND operation = 2 AND sub_node_id = $2
+                WHERE user_sub_id = $1 AND operation = 2 AND node_proto_id = $2
             """, user4['order_active'], arq_test_seed['vnode_id_10'])
         
         assert outbox_before == 1, "Outbox должен содержать 1 запись до выполнения"
@@ -412,7 +412,7 @@ class TestBulkDeleteUsersFromSingleNode:
         async with db_pool.acquire() as conn:
             outbox_after = await conn.fetchval("""
                 SELECT COUNT(*) FROM sub_nodes_outbox
-                WHERE order_id = $1 AND operation = 2 AND sub_node_id = $2
+                WHERE user_sub_id = $1 AND operation = 2 AND node_proto_id = $2
             """, user4['order_active'], arq_test_seed['vnode_id_10'])
         
         assert outbox_after == 0, "Outbox должен быть очищен после успеха"
@@ -431,9 +431,9 @@ class TestBulkDeleteUsersFromSingleNode:
         user4 = arq_test_seed['user4_active_for_delete']
         users = [{
             'uuid': user4['uuid'],
-            'tg_username': user4['tg_username'],
-            'order_id': user4['order_active'],
-            'sub_node_id': arq_test_seed['vnode_id_10']
+            'user_sub_id': user4['tg_username'],
+            'user_sub_id': user4['order_active'],
+            'node_proto_id': arq_test_seed['vnode_id_10']
         }]
         
         mock_arq_ctx['aio_http'].status = 422
@@ -464,7 +464,7 @@ class TestBulkDeleteUsersFromSingleNode:
         async with db_pool.acquire() as conn:
             outbox_count = await conn.fetchval("""
                 SELECT COUNT(*) FROM sub_nodes_outbox
-                WHERE order_id = $1 AND operation = 2
+                WHERE user_sub_id = $1 AND operation = 2
             """, user4['order_active'])
         
         assert outbox_count == 2, "Outbox не должен быть очищен при 422"
@@ -478,9 +478,9 @@ class TestBulkDeleteUsersFromSingleNode:
         user4 = arq_test_seed['user4_active_for_delete']
         users = [{
             'uuid': user4['uuid'],
-            'tg_username': user4['tg_username'],
-            'order_id': user4['order_active'],
-            'sub_node_id': arq_test_seed['vnode_id_10']
+            'user_sub_id': user4['tg_username'],
+            'user_sub_id': user4['order_active'],
+            'node_proto_id': arq_test_seed['vnode_id_10']
         }]
         
         mock_arq_ctx['aio_http'].status = 500
@@ -523,9 +523,9 @@ class TestBulkDeleteUsersFromSingleNode:
         user4 = arq_test_seed['user4_active_for_delete']
         users = [{
             'uuid': user4['uuid'],
-            'tg_username': user4['tg_username'],
-            'order_id': user4['order_active'],
-            'sub_node_id': arq_test_seed['vnode_id_10']
+            'user_sub_id': user4['tg_username'],
+            'user_sub_id': user4['order_active'],
+            'node_proto_id': arq_test_seed['vnode_id_10']
         }]
         
         mock_arq_ctx['aio_http'].raise_error = True
@@ -561,9 +561,9 @@ class TestBulkDeleteUsersFromSingleNode:
         user4 = arq_test_seed['user4_active_for_delete']
         users = [{
             'uuid': user4['uuid'],
-            'tg_username': user4['tg_username'],
-            'order_id': user4['order_active'],
-            'sub_node_id': arq_test_seed['vnode_id_10']
+            'user_sub_id': user4['tg_username'],
+            'user_sub_id': user4['order_active'],
+            'node_proto_id': arq_test_seed['vnode_id_10']
         }]
         
         mock_arq_ctx['aio_http'].status = 500
@@ -595,7 +595,7 @@ class TestBulkDeleteUsersFromSingleNode:
         async with db_pool.acquire() as conn:
             outbox_count = await conn.fetchval("""
                 SELECT COUNT(*) FROM sub_nodes_outbox
-                WHERE order_id = $1 AND operation = 2
+                WHERE user_sub_id = $1 AND operation = 2
             """, user4['order_active'])
         
         assert outbox_count == 2, "Outbox не должен быть очищен после max retries"

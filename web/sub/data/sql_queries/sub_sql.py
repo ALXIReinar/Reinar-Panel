@@ -105,10 +105,15 @@ class SubscriptionQueries:
         query = '''
         -- 1. Выключаем просроченные подписки и возвращаем их ID и данные юзеров(Не трогаем бессрочные подписки)
         WITH deactivated_subs AS (
-            UPDATE user_subs
+            UPDATE user_subs us
             SET is_active = false
-            WHERE is_active = true AND expire_date < now() AND infinite_expire = false
-            RETURNING id AS user_sub_id, sub_plan_id, uuid, order_id
+            FROM users u
+            WHERE us.user_id = u.id
+              AND us.is_active = true
+              AND u.is_deleted = false
+              AND ((us.expire_date < now() AND us.infinite_expire = false)
+                  OR (us.used_mb >= us.used_mb_limit AND us.infinite_traffic = false))
+            RETURNING us.id AS user_sub_id, us.sub_plan_id, us.uuid, us.order_id
         ),
         -- 2.Помечаем платёж в общей истории
         change_order_status AS (
@@ -162,7 +167,7 @@ class SubscriptionQueries:
         query = '''
         WITH users_to_proto_cores AS (
             SELECT user_sub_id, sub_plan_id, uuid 
-            FROM UNNEST($1::bigint[], $2::integer[], $3::bigint[]) AS t(user_sub_id, sub_plan_id, uuid)
+            FROM UNNEST($1::bigint[], $2::integer[], $3::varchar[]) AS t(user_sub_id, sub_plan_id, uuid)
         ),
         -- 2. Собираем информацию о нодах для этих подписок
         expired_nodes_info AS (
@@ -231,45 +236,52 @@ class SubscriptionQueries:
 
 
     async def update_traffic(self, user_sub_ids: list[str], traffic_add_mbs: list[int]):
-        query = """
-        -- 1. Атомарно увеличиваем общий и дневной трафик в подписках.
-        WITH updated_traffic AS (
+        """
+        Обновление трафика и блокировка подписок при превышении лимитов.
+        Использует два последовательных запроса в рамках одной транзакции (READ COMMITTED).
+        """
+        # Запрос 1: Обновляем трафик
+        query_update_traffic = """
+        UPDATE user_subs us
+        SET used_mb = us.used_mb + t.traffic_add,
+            traffic_used_day_mb = us.traffic_used_day_mb + t.traffic_add
+        FROM (
+            SELECT UNNEST($1::bigint[]) AS user_sub_id, UNNEST($2::bigint[]) AS traffic_add
+        ) AS t
+        WHERE us.id = t.user_sub_id AND us.is_active = true
+        """
+        
+        # Запрос 2: Блокируем превысившие лимиты и пишем в outbox
+        query_block_and_outbox = """
+        WITH subs_to_disable AS (
             UPDATE user_subs us
-            SET used_mb = us.used_mb + t.traffic_add,
-                traffic_used_day_mb = us.traffic_used_day_mb + t.traffic_add
-            FROM (
-                SELECT UNNEST($1::bigint[]) AS user_sub_id, UNNEST($2::bigint[]) AS traffic_add
-            ) AS t
-            WHERE us.id = t.user_sub_id AND us.is_active = true
-            -- Возвращаем актуальные данные для следующего шага(иначе из-за изоляции отобразятся старые данные, нужна передача)
-            RETURNING us.id, us.user_id, us.sub_plan_id, us.used_mb, us.used_mb_limit, us.traffic_used_day_mb, us.traffic_limit_day, us.infinite_traffic
-        ),
-         -- 2. Вычисляем подписки, которые превысили лимиты, и деактивируем их.
-         subs_to_disable AS (
-            UPDATE user_subs us_to_upd
-            SET is_limited = true -- блокируем подписку
-            FROM updated_traffic ut
-            WHERE us_to_upd.id = ut.id
-              AND us_to_upd.is_limited = false
+            SET is_limited = true
+            FROM users u
+            WHERE us.user_id = u.id
+              AND us.is_active = true
+              AND us.is_limited = false
+              AND u.is_deleted = false
+              AND us.id = ANY($1::bigint[])
               AND (
                   -- Проверка превышения общего лимита
-                  (ut.infinite_traffic AND ut.used_mb_limit IS NOT NULL AND ut.used_mb >= ut.used_mb_limit)
+                  (us.infinite_traffic = false AND us.used_mb_limit IS NOT NULL AND us.used_mb >= us.used_mb_limit)
                   OR
-                  -- Проверка превышения дневного лимита (если он включен)
-                  (ut.infinite_traffic AND ut.traffic_limit_day IS NOT NULL AND ut.traffic_used_day_mb >= ut.traffic_limit_day)
+                  -- Проверка превышения дневного лимита
+                  (us.infinite_traffic = false AND us.traffic_limit_day IS NOT NULL AND us.traffic_used_day_mb >= us.traffic_limit_day)
               )
-            -- Возвращаем заблокированные подписки для отправки в Outbox
-            RETURNING ut.id AS user_sub_id, us_to_upd.uuid, us_to_upd.sub_plan_id
+            RETURNING us.id AS user_sub_id, us.uuid, us.sub_plan_id
         )
-        -- 3. Пишем в outbox на удаление только для заблокированных подписок
         INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
-        SELECT std.uuid, std.user_sub_id, $3, vsp.node_proto_id
+        SELECT std.uuid, std.user_sub_id, $2, vsp.node_proto_id
         FROM subs_to_disable std
         JOIN vnodes_sub_plans vsp ON std.sub_plan_id = vsp.sub_plan_id
         JOIN nodes_protocols np ON vsp.node_proto_id = np.id AND np.user_visible = true
         RETURNING sub_nodes_outbox.id
         """
-        return await self.conn.fetch(query, user_sub_ids, traffic_add_mbs, CoreProtoActions.delete)
+        
+        # Выполняем оба запроса последовательно в одной транзакции
+        await self.conn.execute(query_update_traffic, user_sub_ids, traffic_add_mbs)
+        return await self.conn.fetch(query_block_and_outbox, user_sub_ids, CoreProtoActions.delete)
 
 
     async def get_vnodes_by_outbox_events(self, outbox_ids: list[int]):

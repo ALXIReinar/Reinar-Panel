@@ -195,20 +195,20 @@ class TestTrafficSyncScheduler:
                 INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, config_path, user_visible)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING id
-            """, node_id, proto_id, "VNode Multi 1", "multi1.test.com", 9090, "/etc/config.json", True)
+            """, node_id, proto_id, "VNode Multi 1", "multi1.test.com", 9090, "/etc/config1.json", True)
             
             vnode2 = await conn.fetchval("""
                 INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, config_path, user_visible)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING id
-            """, node_id, proto_id, "VNode Multi 2", "multi2.test.com", 9091, "/etc/config.json", True)
+            """, node_id, proto_id, "VNode Multi 2", "multi2.test.com", 9091, "/etc/config2.json", True)
             
             # Третья нода БЕЗ metrics_port (должна быть отфильтрована)
             vnode3_no_port = await conn.fetchval("""
                 INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, config_path, user_visible)
                 VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING id
-            """, node_id, proto_id, "VNode Multi 3 No Port", "multi3.test.com", "/etc/config.json", True)
+            """, node_id, proto_id, "VNode Multi 3 No Port", "multi3.test.com", "/etc/config3.json", True)
         
         # Act
         result = await traffic_sync_scheduler(arq_ctx)

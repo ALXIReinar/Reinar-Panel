@@ -21,7 +21,7 @@ async def lifespan(web_app: FastAPI):
        await web_app.state.core_buffer.stop()
 
 
-app = FastAPI(default_response_class=ORJSONResponse, lifespan=lifespan)
+app = FastAPI(lifespan=lifespan)
 
 app.include_router(main_router)
 app.add_middleware(OnlyAdminAccessMiddleware)

@@ -61,7 +61,8 @@ async def db_seed(db_pool):
                 vnodes_sub_plans,
                 sub_plans,
                 remote_execute_history,
-                payed_subs,
+                user_subs,
+                pay_orders,
                 sub_nodes_outbox,
                 sub_nodes_operations,
                 users,
@@ -343,15 +344,18 @@ async def sub_plan_seed(db_pool):
     async with db_pool.acquire() as conn:
         plan_id_1 = await conn.fetchval(
             """
-            INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, is_active)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, traffic_limit_total, infinite_traffic, infinite_expire, is_active)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id
             """,
             "Basic Plan",
             "Basic subscription plan for testing",
             30,
             500,
-            10240,
+            10240,       # traffic_limit_day
+            None,        # traffic_limit_total
+            False,       # infinite_traffic
+            False,       # infinite_expire
             True
         )
         
@@ -364,19 +368,16 @@ async def user_seed(db_pool):
     async with db_pool.acquire() as conn:
         user_id = await conn.fetchval(
             """
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-            VALUES ($1, $2, $3, $4, false)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
             """,
             123456,
-            "test_user",
-            "uuid-test-user-0001",
-            "test_b64_token"
+            "test_user"
         )
         
         return {
             "user_id": user_id,
-            "uuid": "uuid-test-user-0001",
             "tg_username": "test_user"
         }
 
@@ -427,12 +428,24 @@ async def arq_test_seed(db_pool, db_seed):
     - Outbox записи для тестирования bulk операций
     """
     async with db_pool.acquire() as conn:
-        # 1. Создаём план подписки
+        # 1. Создаём планы подписок (несколько разных для разных подписок)
         plan_id = await conn.fetchval("""
-            INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, is_active)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, traffic_limit_total, infinite_traffic, infinite_expire, is_active)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id
-        """, "ARQ Test Plan", "Plan for testing", 30, 500, 10240, True)
+        """, "ARQ Test Plan 1", "Plan for testing", 30, 500, 10240, None, False, False, True)
+        
+        plan_id_2 = await conn.fetchval("""
+            INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, traffic_limit_total, infinite_traffic, infinite_expire, is_active)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id
+        """, "ARQ Test Plan 2", "Plan for testing", 30, 500, 10240, None, False, False, True)
+        
+        plan_id_3 = await conn.fetchval("""
+            INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, traffic_limit_total, infinite_traffic, infinite_expire, is_active)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id
+        """, "ARQ Test Plan 3", "Plan for testing", 30, 500, 10240, None, False, False, True)
         
         # 2. Создаём физические ноды
         # 2.1. Активная физическая нода
@@ -484,123 +497,200 @@ async def arq_test_seed(db_pool, db_seed):
             INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, config_path, user_visible)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
-        """, node_id_active, proto_id, "VNode 10 Active", "vnode10.test.com", 9090, "/etc/config.json", True)
+        """, node_id_active, proto_id, "VNode 10 Active", "vnode10.test.com", 9090, "/etc/config10.json", True)
         
         # 5.2. Вторая активная виртуальная нода на активной физической ноде
         vnode_id_11 = await conn.fetchval("""
             INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, config_path, user_visible)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
-        """, node_id_active, proto_id, "VNode 11 Active", "vnode11.test.com", 9091, "/etc/config.json", True)
+        """, node_id_active, proto_id, "VNode 11 Active", "vnode11.test.com", 9091, "/etc/config11.json", True)
         
         # 5.3. Невидимая виртуальная нода на активной физической ноде (user_visible=false)
         vnode_id_invisible = await conn.fetchval("""
             INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, config_path, user_visible)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
-        """, node_id_active, proto_id, "VNode Invisible", "vnode-invisible.test.com", 9092, "/etc/config.json", False)
+        """, node_id_active, proto_id, "VNode Invisible", "vnode-invisible.test.com", 9092, "/etc/config-invisible.json", False)
         
         # 5.4. Активная виртуальная нода на неактивной физической ноде
         vnode_id_on_inactive = await conn.fetchval("""
             INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, config_path, user_visible)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
-        """, node_id_inactive, proto_id, "VNode On Inactive Node", "vnode-inactive.test.com", 9093, "/etc/config.json", True)
+        """, node_id_inactive, proto_id, "VNode On Inactive Node", "vnode-inactive.test.com", 9093, "/etc/config-on-inactive.json", True)
         
-        # 6. Связываем подписку ТОЛЬКО с активными видимыми виртуальными нодами
+        # 6. Связываем подписки с виртуальными нодами (для всех планов)
         await conn.execute("""
             INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id)
-            VALUES ($1, $2), ($3, $2), ($4, $2), ($5, $2)
-        """, vnode_id_10, plan_id, vnode_id_11, vnode_id_invisible, vnode_id_on_inactive)
+            VALUES 
+                ($1, $2), ($3, $2), ($4, $2), ($5, $2),
+                ($1, $6), ($3, $6), ($4, $6), ($5, $6),
+                ($1, $7), ($3, $7), ($4, $7), ($5, $7)
+        """, vnode_id_10, plan_id, vnode_id_11, vnode_id_invisible, vnode_id_on_inactive, plan_id_2, plan_id_3)
         
         # ========== ПОЛЬЗОВАТЕЛИ И ПОДПИСКИ ==========
         
         # User 1: Soft-deleted с неактивными подписками
         user1_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-            VALUES ($1, $2, $3, $4, true)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, true)
             RETURNING id
-        """, 100001, "deleted_user", "uuid-deleted-user", "b64-deleted")
+        """, 100001, "deleted_user")
+        
+        # Создаём платежи для User 1
+        pay_order1_1 = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 3)
+            RETURNING id
+        """, user1_id)
+        
+        pay_order1_2 = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 3)
+            RETURNING id
+        """, user1_id)
         
         user1_order1 = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, false, 3, now() - interval '10 days')
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, false, now() - interval '10 days', $4, $5, false, false, 10240, $6, 0, 0, false)
             RETURNING id
-        """, user1_id, plan_id)
+        """, user1_id, plan_id, pay_order1_1, "uuid-deleted-user-sub1", "b64-deleted-sub1", None)
         
         user1_order2 = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, false, 3, now() - interval '5 days')
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, false, now() - interval '5 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
             RETURNING id
-        """, user1_id, plan_id)
+        """, user1_id, plan_id_2, pay_order1_2, "uuid-deleted-user-sub2", "b64-deleted-sub2")
         
         # User 2: Живой без активной подписки (3 неактивных)
         user2_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-            VALUES ($1, $2, $3, $4, false)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 100002, "inactive_subs_user", "uuid-inactive-user", "b64-inactive")
+        """, 100002, "inactive_subs_user")
         
         user2_orders = []
+        plans_for_user2 = [plan_id, plan_id_2, plan_id_3]
         for i in range(3):
-            order_id = await conn.fetchval("""
-                INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-                VALUES ($1, $2, false, 3, now() - interval '1 days' * $3)
+            pay_order = await conn.fetchval("""
+                INSERT INTO pay_orders (user_id, status)
+                VALUES ($1, 3)
                 RETURNING id
-            """, user2_id, plan_id, (i + 1) * 10)
+            """, user2_id)
+            
+            order_id = await conn.fetchval("""
+                INSERT INTO user_subs (
+                    user_id, sub_plan_id, order_id, is_active, expire_date,
+                    uuid, b64_id, infinite_traffic, infinite_expire,
+                    traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+                )
+                VALUES ($1, $2, $3, false, now() - interval '1 days' * $4, $5, $6, false, false, 10240, NULL, 0, 0, false)
+                RETURNING id
+            """, user2_id, plans_for_user2[i], pay_order, (i + 1) * 10, f"uuid-inactive-user-sub{i+1}", f"b64-inactive-sub{i+1}")
             user2_orders.append(order_id)
         
         # User 3: Живой с 2 неактивными + 1 активной подпиской (для ADD операции)
         user3_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-            VALUES ($1, $2, $3, $4, false)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 100003, "active_add_user", "uuid-active-add-user", "b64-active-add")
+        """, 100003, "active_add_user")
+        
+        # Неактивные подписки User 3
+        pay_order3_1 = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 3)
+            RETURNING id
+        """, user3_id)
         
         user3_order1 = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, false, 3, now() - interval '20 days')
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, false, now() - interval '20 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
             RETURNING id
-        """, user3_id, plan_id)
+        """, user3_id, plan_id_2, pay_order3_1, "uuid-active-add-user-sub1", "b64-active-add-sub1")
+        
+        pay_order3_2 = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 3)
+            RETURNING id
+        """, user3_id)
         
         user3_order2 = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, false, 3, now() - interval '15 days')
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, false, now() - interval '15 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
             RETURNING id
-        """, user3_id, plan_id)
+        """, user3_id, plan_id_3, pay_order3_2, "uuid-active-add-user-sub2", "b64-active-add-sub2")
+        
+        # Активная подписка User 3
+        pay_order3_active = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user3_id)
         
         user3_order_active = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, true, 2, now() + interval '30 days')
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
             RETURNING id
-        """, user3_id, plan_id)
+        """, user3_id, plan_id, pay_order3_active, "uuid-active-add-user", "b64-active-add")
         
         # User 4: Живой с 1 активной подпиской (для DELETE операции)
         user4_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-            VALUES ($1, $2, $3, $4, false)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 100004, "active_delete_user", "uuid-active-delete-user", "b64-active-delete")
+        """, 100004, "active_delete_user")
+        
+        pay_order4_active = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user4_id)
         
         user4_order_active = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, true, 2, now() + interval '30 days')
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
             RETURNING id
-        """, user4_id, plan_id)
+        """, user4_id, plan_id, pay_order4_active, "uuid-active-delete-user", "b64-active-delete")
         
         # ========== OUTBOX ЗАПИСИ ==========
         
         # Для User 3: ADD операции на обе активные ноды
         await conn.execute("""
-            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
-            VALUES ($1, $2, $3, 1, $4), ($1, $2, $3, 1, $5)
-        """, "uuid-active-add-user", "active_add_user", user3_order_active, vnode_id_10, vnode_id_11)
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+            VALUES ($1, $2, 1, $3), ($1, $2, 1, $4)
+        """, "uuid-active-add-user", user3_order_active, vnode_id_10, vnode_id_11)
         
         # Для User 4: DELETE операции на обе активные ноды
         await conn.execute("""
-            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
-            VALUES ($1, $2, $3, 2, $4), ($1, $2, $3, 2, $5)
-        """, "uuid-active-delete-user", "active_delete_user", user4_order_active, vnode_id_10, vnode_id_11)
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+            VALUES ($1, $2, 2, $3), ($1, $2, 2, $4)
+        """, "uuid-active-delete-user", user4_order_active, vnode_id_10, vnode_id_11)
         
         return {
             # План подписки
@@ -622,7 +712,7 @@ async def arq_test_seed(db_pool, db_seed):
             # User 1: Soft-deleted
             "user1_deleted": {
                 "user_id": user1_id,
-                "uuid": "uuid-deleted-user",
+                "uuid": "uuid-deleted-user-sub1",  # Берём uuid из первой подписки
                 "tg_username": "deleted_user",
                 "orders": [user1_order1, user1_order2]
             },
@@ -630,7 +720,7 @@ async def arq_test_seed(db_pool, db_seed):
             # User 2: Живой без активных подписок
             "user2_inactive_subs": {
                 "user_id": user2_id,
-                "uuid": "uuid-inactive-user",
+                "uuid": "uuid-inactive-user-sub1",  # Берём uuid из первой подписки
                 "tg_username": "inactive_subs_user",
                 "orders": user2_orders
             },
@@ -693,7 +783,7 @@ async def real_parser_scripts(db_pool):
                     traffic_map[username] += int(numbers[-1])
         
         return [
-            {'tg_username': u, 'total_mb_used': mb}
+            {'user_sub_id': int(u), 'total_mb_used': mb}
             for u, mb in traffic_map.items()
         ], []
     
@@ -723,14 +813,14 @@ async def real_parser_scripts(db_pool):
             troubles.append(user)
             continue
         
-        tg_username = parts[1]
+        user_sub_id = int(parts[1])
         traffic_bytes = int(user.get('value', 0))
         traffic_mb = traffic_bytes // 1024 // 1024
         
-        traffic_map[tg_username] += traffic_mb
+        traffic_map[user_sub_id] += traffic_mb
     
     users_traffics = [
-        {'tg_username': username, 'total_mb_used': used_mb} 
+        {'user_sub_id': username, 'total_mb_used': used_mb} 
         for username, used_mb in traffic_map.items()
     ]
     
@@ -780,10 +870,10 @@ def sample_xray_outputs():
         # Формат 1: JSON dict от xtlsapi (чистый случай)
         'json_dict_clean': {
             'stat': [
-                {'name': 'user>>>alice@example.com>>>traffic>>>downlink', 'value': 104857600},  # 100MB
-                {'name': 'user>>>alice@example.com>>>traffic>>>uplink', 'value': 52428800},     # 50MB
-                {'name': 'user>>>bob@example.com>>>traffic>>>downlink', 'value': 209715200},    # 200MB
-                {'name': 'user>>>bob@example.com>>>traffic>>>uplink', 'value': 104857600},      # 100MB
+                {'name': 'user>>>100>>>traffic>>>downlink', 'value': 104857600},  # 100MB
+                {'name': 'user>>>100>>>traffic>>>uplink', 'value': 52428800},     # 50MB
+                {'name': 'user>>>200>>>traffic>>>downlink', 'value': 209715200},    # 200MB
+                {'name': 'user>>>200>>>traffic>>>uplink', 'value': 104857600},      # 100MB
             ]
         },
         
@@ -791,18 +881,18 @@ def sample_xray_outputs():
         'json_string_from_cli': '''{
     "stat": [
         {
-            "name": "user>>>mvpALXI>>>traffic>>>downlink"
+            "name": "user>>>300>>>traffic>>>downlink"
         },
         {
-            "name": "user>>>mvpALXI>>>traffic>>>uplink",
+            "name": "user>>>300>>>traffic>>>uplink",
             "value": 3331331376938
         },
         {
-            "name": "user>>>TestAddUser1>>>traffic>>>downlink",
+            "name": "user>>>400>>>traffic>>>downlink",
             "value": 31331376938
         },
         {
-            "name": "user>>>TestAddUser1>>>traffic>>>uplink",
+            "name": "user>>>400>>>traffic>>>uplink",
             "value": 31331376938
         }
     ]
@@ -811,9 +901,9 @@ def sample_xray_outputs():
         # С troubles: отсутствует user>>>, неправильный формат
         'with_troubles': {
             'stat': [
-                {'name': 'user>>>valid@example.com>>>traffic>>>downlink', 'value': 104857600},
+                {'name': 'user>>>500>>>traffic>>>downlink', 'value': 104857600},
                 {'name': 'invalid_format_no_user_prefix', 'value': 999999},  # troubles - нет "user>>>"
-                {'name': 'user>>>another@example.com>>>traffic>>>uplink'},  # troubles - нет value
+                {'name': 'user>>>600>>>traffic>>>uplink'},  # value отсутствует (0)
             ]
         },
         
@@ -850,81 +940,141 @@ async def traffic_reset_seed(db_pool, arq_test_seed):
         
         # User A: ДОЛЖЕН разблокироваться (is_limited=true, is_active=true, is_deleted=false)
         user_a_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, false, 500)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 400001, "user_a_limited", "uuid-reset-user-a", "b64-reset-a")
+        """, 400001, "user_a_limited")
+        
+        pay_order_a = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_a_id)
         
         order_a = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, status, expire_date)
-            VALUES ($1, $2, true, true, 2, now() + interval '30 days')
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb
+            )
+            VALUES ($1, $2, $3, true, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 500)
             RETURNING id
-        """, user_a_id, plan_id)
+        """, user_a_id, plan_id, pay_order_a, "uuid-reset-user-a", "b64-reset-a")
         
         # User B: ДОЛЖЕН разблокироваться (is_limited=true, is_active=true, is_deleted=false)
         user_b_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, false, 800)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 400002, "user_b_limited", "uuid-reset-user-b", "b64-reset-b")
+        """, 400002, "user_b_limited")
+        
+        pay_order_b = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_b_id)
         
         order_b = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, status, expire_date)
-            VALUES ($1, $2, true, true, 2, now() + interval '30 days')
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb
+            )
+            VALUES ($1, $2, $3, true, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 800)
             RETURNING id
-        """, user_b_id, plan_id)
+        """, user_b_id, plan_id, pay_order_b, "uuid-reset-user-b", "b64-reset-b")
         
         # User C: НЕ должен попасть (is_limited=false - уже разблокирован)
         user_c_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, false, 300)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 400003, "user_c_not_limited", "uuid-reset-user-c", "b64-reset-c")
+        """, 400003, "user_c_not_limited")
+        
+        pay_order_c = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_c_id)
         
         order_c = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, status, expire_date)
-            VALUES ($1, $2, true, false, 2, now() + interval '30 days')
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb
+            )
+            VALUES ($1, $2, $3, true, false, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 300)
             RETURNING id
-        """, user_c_id, plan_id)
+        """, user_c_id, plan_id, pay_order_c, "uuid-reset-user-c", "b64-reset-c")
         
         # User D: НЕ должен попасть (is_active=false - неактивная подписка)
         user_d_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, false, 600)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 400004, "user_d_inactive_sub", "uuid-reset-user-d", "b64-reset-d")
+        """, 400004, "user_d_inactive_sub")
+        
+        pay_order_d = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 3)
+            RETURNING id
+        """, user_d_id)
         
         order_d = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, status, expire_date)
-            VALUES ($1, $2, false, true, 3, now() - interval '5 days')
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb
+            )
+            VALUES ($1, $2, $3, false, true, now() - interval '5 days', $4, $5, false, false, 10240, NULL, 0, 600)
             RETURNING id
-        """, user_d_id, plan_id)
+        """, user_d_id, plan_id, pay_order_d, "uuid-reset-user-d", "b64-reset-d")
         
         # User E: НЕ должен попасть (is_deleted=true - пользователь удалён)
         user_e_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, true, 700)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, true)
             RETURNING id
-        """, 400005, "user_e_deleted", "uuid-reset-user-e", "b64-reset-e")
+        """, 400005, "user_e_deleted")
+        
+        pay_order_e = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_e_id)
         
         order_e = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, status, expire_date)
-            VALUES ($1, $2, true, true, 2, now() + interval '30 days')
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb
+            )
+            VALUES ($1, $2, $3, true, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 700)
             RETURNING id
-        """, user_e_id, plan_id)
+        """, user_e_id, plan_id, pay_order_e, "uuid-reset-user-e", "b64-reset-e")
         
         # User F: ДОЛЖЕН разблокироваться, но НЕ на невидимой ноде (для теста фильтра user_visible)
         user_f_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, false, 900)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 400006, "user_f_invisible_node", "uuid-reset-user-f", "b64-reset-f")
+        """, 400006, "user_f_invisible_node")
+        
+        pay_order_f = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_f_id)
         
         order_f = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, status, expire_date)
-            VALUES ($1, $2, true, true, 2, now() + interval '30 days')
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb
+            )
+            VALUES ($1, $2, $3, true, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 900)
             RETURNING id
-        """, user_f_id, plan_id)
+        """, user_f_id, plan_id, pay_order_f, "uuid-reset-user-f", "b64-reset-f")
         
         return {
             # Инфраструктура из arq_test_seed
@@ -976,103 +1126,153 @@ async def outbox_cleaner_seed(db_pool, arq_test_seed):
         
         # User A: ДОЛЖЕН ретраиться (is_retried=false, created_at старая)
         user_a_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-            VALUES ($1, $2, $3, $4, false)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 500001, "user_a_stuck", "uuid-stuck-user-a", "b64-stuck-a")
+        """, 500001, "user_a_stuck")
+        
+        pay_order_a = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_a_id)
         
         order_a = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, true, 2, now() + interval '30 days')
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
             RETURNING id
-        """, user_a_id, plan_id)
+        """, user_a_id, plan_id, pay_order_a, "uuid-stuck-user-a", "b64-stuck-a")
         
         # Создаём старую outbox запись для User A (2 часа назад, is_retried=false)
         outbox_a = await conn.fetchval("""
-            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id, is_retried, created_at)
-            VALUES ($1, $2, $3, 1, $4, false, now() - interval '2 hours')
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id, is_retried, created_at)
+            VALUES ($1, $2, 1, $3, false, now() - interval '2 hours')
             RETURNING id
-        """, "uuid-stuck-user-a", "user_a_stuck", order_a, vnode_id_10)
+        """, "uuid-stuck-user-a", order_a, vnode_id_10)
         
         # User B: ДОЛЖЕН ретраиться (is_retried=false, created_at старая)
         user_b_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-            VALUES ($1, $2, $3, $4, false)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 500002, "user_b_stuck", "uuid-stuck-user-b", "b64-stuck-b")
+        """, 500002, "user_b_stuck")
+        
+        pay_order_b = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_b_id)
         
         order_b = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, true, 2, now() + interval '30 days')
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
             RETURNING id
-        """, user_b_id, plan_id)
+        """, user_b_id, plan_id, pay_order_b, "uuid-stuck-user-b", "b64-stuck-b")
         
         # Создаём старую outbox запись для User B (3 часа назад, is_retried=false)
         outbox_b = await conn.fetchval("""
-            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id, is_retried, created_at)
-            VALUES ($1, $2, $3, 2, $4, false, now() - interval '3 hours')
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id, is_retried, created_at)
+            VALUES ($1, $2, 2, $3, false, now() - interval '3 hours')
             RETURNING id
-        """, "uuid-stuck-user-b", "user_b_stuck", order_b, vnode_id_11)
+        """, "uuid-stuck-user-b", order_b, vnode_id_11)
         
         # User C: НЕ должен ретраиться (created_at свежая - 30 минут)
         user_c_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-            VALUES ($1, $2, $3, $4, false)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 500003, "user_c_fresh", "uuid-stuck-user-c", "b64-stuck-c")
+        """, 500003, "user_c_fresh")
+        
+        pay_order_c = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_c_id)
         
         order_c = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, true, 2, now() + interval '30 days')
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
             RETURNING id
-        """, user_c_id, plan_id)
+        """, user_c_id, plan_id, pay_order_c, "uuid-stuck-user-c", "b64-stuck-c")
         
         # Создаём свежую outbox запись для User C (30 минут назад - меньше 1 часа)
         outbox_c = await conn.fetchval("""
-            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id, is_retried, created_at)
-            VALUES ($1, $2, $3, 1, $4, false, now() - interval '30 minutes')
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id, is_retried, created_at)
+            VALUES ($1, $2, 1, $3, false, now() - interval '30 minutes')
             RETURNING id
-        """, "uuid-stuck-user-c", "user_c_fresh", order_c, vnode_id_10)
+        """, "uuid-stuck-user-c", order_c, vnode_id_10)
         
         # User D: НЕ должен ретраиться (is_retried=true - уже ретраился)
         user_d_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-            VALUES ($1, $2, $3, $4, false)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 500004, "user_d_already_retried", "uuid-stuck-user-d", "b64-stuck-d")
+        """, 500004, "user_d_already_retried")
+        
+        pay_order_d = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_d_id)
         
         order_d = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, true, 2, now() + interval '30 days')
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
             RETURNING id
-        """, user_d_id, plan_id)
+        """, user_d_id, plan_id, pay_order_d, "uuid-stuck-user-d", "b64-stuck-d")
         
         # Создаём старую outbox запись для User D (2 часа назад, но is_retried=true)
         outbox_d = await conn.fetchval("""
-            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id, is_retried, created_at)
-            VALUES ($1, $2, $3, 1, $4, true, now() - interval '2 hours')
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id, is_retried, created_at)
+            VALUES ($1, $2, 1, $3, true, now() - interval '2 hours')
             RETURNING id
-        """, "uuid-stuck-user-d", "user_d_already_retried", order_d, vnode_id_10)
+        """, "uuid-stuck-user-d", order_d, vnode_id_10)
         
         # User E: ДОЛЖЕН попасть в выборку, но НЕ получит задачу (подписка неактивна - len(sub_nodes)=0)
         user_e_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-            VALUES ($1, $2, $3, $4, false)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 500005, "user_e_no_nodes", "uuid-stuck-user-e", "b64-stuck-e")
+        """, 500005, "user_e_no_nodes")
+        
+        pay_order_e = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 3)
+            RETURNING id
+        """, user_e_id)
         
         # Создаём неактивную подписку для User E (get_nodes_to_core_proto_action вернёт [])
         order_e = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, false, 3, now() - interval '5 days')
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, false, now() - interval '5 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
             RETURNING id
-        """, user_e_id, plan_id)
+        """, user_e_id, plan_id, pay_order_e, "uuid-stuck-user-e", "b64-stuck-e")
         
         outbox_e = await conn.fetchval("""
-            INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id, is_retried, created_at)
-            VALUES ($1, $2, $3, 1, $4, false, now() - interval '2 hours')
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id, is_retried, created_at)
+            VALUES ($1, $2, 1, $3, false, now() - interval '2 hours')
             RETURNING id
-        """, "uuid-stuck-user-e", "user_e_no_nodes", order_e, vnode_id_10)
+        """, "uuid-stuck-user-e", order_e, vnode_id_10)
         
         return {
             # Инфраструктура из arq_test_seed
@@ -1105,10 +1305,10 @@ async def sub_api_seed(db_pool, arq_test_seed):
     Создаёт ОТДЕЛЬНЫХ пользователей с tg_id 600001-600005 для изоляции.
     
     Критические SQL фильтры в get_sub_links():
-    - ps.is_active = true (только активные подписки)
+    - us.is_active = true (только активные подписки)
     - u.is_deleted = false (только неудалённые пользователи)
-    - u.traffic_used_day_mb < sp.traffic_limit_day (в пределах лимита)
-    - ps.expire_date > now() (не истёкшие)
+    - us.traffic_used_day_mb < us.traffic_limit_day (в пределах лимита)
+    - us.expire_date > now() (не истёкшие)
     - np.user_visible = true (только видимые ноды)
     """
     async with db_pool.acquire() as conn:
@@ -1152,68 +1352,108 @@ def prepare_sub(user_uuid, config_link):
         
         # User A: Активная подписка (ДОЛЖЕН получить ссылки)
         user_a_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, false, 500)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 600001, "user_a_active", "uuid-sub-user-a", "b64-sub-active-a-valid-16chars")
+        """, 600001, "user_a_active")
+        
+        pay_order_a = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_a_id)
         
         order_a = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, true, 2, now() + interval '30 days')
+            INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id, 
+                                   infinite_traffic, infinite_expire, traffic_limit_day, used_mb_limit, 
+                                   used_mb, traffic_used_day_mb, is_limited)
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 500, false)
             RETURNING id
-        """, user_a_id, plan_id)
+        """, user_a_id, plan_id, pay_order_a, "uuid-sub-user-a", "b64-sub-active-a-valid-16chars")
         
         # User B: Превышен лимит трафика (НЕ должен получить ссылки)
         user_b_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, false, 15000)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 600002, "user_b_limit_exceeded", "uuid-sub-user-b", "b64-sub-limit-b-valid-16chars")
+        """, 600002, "user_b_limit_exceeded")
+        
+        pay_order_b = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_b_id)
         
         order_b = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, true, 2, now() + interval '30 days')
+            INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
+                                   infinite_traffic, infinite_expire, traffic_limit_day, used_mb_limit,
+                                   used_mb, traffic_used_day_mb, is_limited)
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 15000, false)
             RETURNING id
-        """, user_b_id, plan_id)
+        """, user_b_id, plan_id, pay_order_b, "uuid-sub-user-b", "b64-sub-limit-b-valid-16chars")
         
         # User C: Подписка истекла (НЕ должен получить ссылки)
         user_c_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, false, 300)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 600003, "user_c_expired", "uuid-sub-user-c", "b64-sub-expired-c-valid-16chars")
+        """, 600003, "user_c_expired")
+        
+        pay_order_c = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 3)
+            RETURNING id
+        """, user_c_id)
         
         order_c = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, true, 2, now() - interval '5 days')
+            INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
+                                   infinite_traffic, infinite_expire, traffic_limit_day, used_mb_limit,
+                                   used_mb, traffic_used_day_mb, is_limited)
+            VALUES ($1, $2, $3, true, now() - interval '5 days', $4, $5, false, false, 10240, NULL, 0, 300, false)
             RETURNING id
-        """, user_c_id, plan_id)
+        """, user_c_id, plan_id, pay_order_c, "uuid-sub-user-c", "b64-sub-expired-c-valid-16chars")
         
         # User D: Подписка неактивна (НЕ должен получить ссылки)
         user_d_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, false, 200)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 600004, "user_d_inactive", "uuid-sub-user-d", "b64-sub-inactive-d-valid-16chars")
+        """, 600004, "user_d_inactive")
+        
+        pay_order_d = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 3)
+            RETURNING id
+        """, user_d_id)
         
         order_d = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, false, 3, now() + interval '30 days')
+            INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
+                                   infinite_traffic, infinite_expire, traffic_limit_day, used_mb_limit,
+                                   used_mb, traffic_used_day_mb, is_limited)
+            VALUES ($1, $2, $3, false, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 200, false)
             RETURNING id
-        """, user_d_id, plan_id)
+        """, user_d_id, plan_id, pay_order_d, "uuid-sub-user-d", "b64-sub-inactive-d-valid-16chars")
         
         # User E: Пользователь удалён (НЕ должен получить ссылки)
         user_e_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, true, 100)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, true)
             RETURNING id
-        """, 600005, "user_e_deleted", "uuid-sub-user-e", "b64-sub-deleted-e-valid-16chars")
+        """, 600005, "user_e_deleted")
+        
+        pay_order_e = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_e_id)
         
         order_e = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, true, 2, now() + interval '30 days')
+            INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
+                                   infinite_traffic, infinite_expire, traffic_limit_day, used_mb_limit,
+                                   used_mb, traffic_used_day_mb, is_limited)
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 100, false)
             RETURNING id
-        """, user_e_id, plan_id)
+        """, user_e_id, plan_id, pay_order_e, "uuid-sub-user-e", "b64-sub-deleted-e-valid-16chars")
         
         return {
             # Инфраструктура из arq_test_seed
@@ -1269,19 +1509,29 @@ async def metrics_collector_seed(db_pool, arq_test_seed, real_parser_scripts):
     async with db_pool.acquire() as conn:
         # 0. Сброс изменяемых полей для изоляции между тестами
         await conn.execute("""
-            UPDATE users 
-            SET traffic_used_day_mb = CASE tg_id
-                WHEN 200001 THEN 500
-                WHEN 200002 THEN 800
+            UPDATE user_subs 
+            SET traffic_used_day_mb = CASE 
+                WHEN id IN (
+                    SELECT us.id FROM user_subs us
+                    JOIN users u ON u.id = us.user_id
+                    WHERE u.tg_id = 200001
+                ) THEN 500
+                WHEN id IN (
+                    SELECT us.id FROM user_subs us
+                    JOIN users u ON u.id = us.user_id
+                    WHERE u.tg_id = 200002
+                ) THEN 800
                 ELSE 500
             END
-            WHERE tg_id BETWEEN 200001 AND 200007;
-            
-            UPDATE payed_subs SET is_limited = false WHERE user_id IN (
+            WHERE user_id IN (
                 SELECT id FROM users WHERE tg_id BETWEEN 200001 AND 200007
             );
-            DELETE FROM sub_nodes_outbox WHERE order_id IN (
-                SELECT id FROM payed_subs WHERE user_id IN (
+            
+            UPDATE user_subs SET is_limited = false WHERE user_id IN (
+                SELECT id FROM users WHERE tg_id BETWEEN 200001 AND 200007
+            );
+            DELETE FROM sub_nodes_outbox WHERE user_sub_id IN (
+                SELECT id FROM user_subs WHERE user_id IN (
                     SELECT id FROM users WHERE tg_id BETWEEN 200001 AND 200007
                 )
             );
@@ -1310,8 +1560,8 @@ async def metrics_collector_seed(db_pool, arq_test_seed, real_parser_scripts):
         
         # 3. Создаём НОВЫЙ план подписки с лимитом 1000 MB для metrics тестов
         metrics_plan_id = await conn.fetchval("""
-            INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, is_active)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, traffic_limit_total, infinite_traffic, infinite_expire, is_active)
+            VALUES ($1, $2, $3, $4, $5, NULL, false, false, $6)
             RETURNING id
         """, "Metrics Traffic Test Plan", "Plan for traffic limit testing", 30, 500, 1000, True)
         
@@ -1328,94 +1578,150 @@ async def metrics_collector_seed(db_pool, arq_test_seed, real_parser_scripts):
         
         # User A: ДОЛЖЕН блокироваться (превысил лимит, активная подписка, не удалён, не ограничен)
         user_a_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, false, 500)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 200001, "user_a_should_block", "uuid-metrics-user-a", "b64-metrics-a")
+        """, 200001, "user_a_should_block")
+        
+        pay_order_a = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_a_id)
         
         order_a = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, status, expire_date)
-            VALUES ($1, $2, true, false, 2, now() + interval '30 days')
+            INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, is_limited, expire_date, 
+                                   uuid, b64_id, infinite_traffic, infinite_expire, traffic_limit_day, 
+                                   used_mb_limit, used_mb, traffic_used_day_mb)
+            VALUES ($1, $2, $3, true, false, now() + interval '30 days', $4, $5, false, false, 1000, NULL, 0, 500)
             RETURNING id
-        """, user_a_id, metrics_plan_id)
+        """, user_a_id, metrics_plan_id, pay_order_a, "uuid-metrics-user-a", "b64-metrics-a")
         
         # User B: ДОЛЖЕН блокироваться (превысил лимит, активная подписка, не удалён, не ограничен)
         user_b_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, false, 800)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 200002, "user_b_should_block", "uuid-metrics-user-b", "b64-metrics-b")
+        """, 200002, "user_b_should_block")
+        
+        pay_order_b = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_b_id)
         
         order_b = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, status, expire_date)
-            VALUES ($1, $2, true, false, 2, now() + interval '30 days')
+            INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
+                                   uuid, b64_id, infinite_traffic, infinite_expire, traffic_limit_day,
+                                   used_mb_limit, used_mb, traffic_used_day_mb)
+            VALUES ($1, $2, $3, true, false, now() + interval '30 days', $4, $5, false, false, 1000, NULL, 0, 800)
             RETURNING id
-        """, user_b_id, metrics_plan_id)
+        """, user_b_id, metrics_plan_id, pay_order_b, "uuid-metrics-user-b", "b64-metrics-b")
         
         # User C: НЕ должен блокироваться (превысил лимит, но подписка неактивна)
         user_c_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, false, 500)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 200003, "user_c_inactive_sub", "uuid-metrics-user-c", "b64-metrics-c")
+        """, 200003, "user_c_inactive_sub")
+        
+        pay_order_c = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 3)
+            RETURNING id
+        """, user_c_id)
         
         order_c = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, status, expire_date)
-            VALUES ($1, $2, false, false, 3, now() - interval '5 days')
+            INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
+                                   uuid, b64_id, infinite_traffic, infinite_expire, traffic_limit_day,
+                                   used_mb_limit, used_mb, traffic_used_day_mb)
+            VALUES ($1, $2, $3, false, false, now() - interval '5 days', $4, $5, false, false, 1000, NULL, 0, 500)
             RETURNING id
-        """, user_c_id, metrics_plan_id)
+        """, user_c_id, metrics_plan_id, pay_order_c, "uuid-metrics-user-c", "b64-metrics-c")
         
         # User D: НЕ должен блокироваться (превысил лимит, но пользователь удалён)
         user_d_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, true, 500)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, true)
             RETURNING id
-        """, 200004, "user_d_deleted", "uuid-metrics-user-d", "b64-metrics-d")
+        """, 200004, "user_d_deleted")
+        
+        pay_order_d = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_d_id)
         
         order_d = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, status, expire_date)
-            VALUES ($1, $2, true, false, 2, now() + interval '30 days')
+            INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
+                                   uuid, b64_id, infinite_traffic, infinite_expire, traffic_limit_day,
+                                   used_mb_limit, used_mb, traffic_used_day_mb)
+            VALUES ($1, $2, $3, true, false, now() + interval '30 days', $4, $5, false, false, 1000, NULL, 0, 500)
             RETURNING id
-        """, user_d_id, metrics_plan_id)
+        """, user_d_id, metrics_plan_id, pay_order_d, "uuid-metrics-user-d", "b64-metrics-d")
         
         # User E: НЕ должен блокироваться (превысил лимит, но уже ограничен)
         user_e_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, false, 500)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 200005, "user_e_already_limited", "uuid-metrics-user-e", "b64-metrics-e")
+        """, 200005, "user_e_already_limited")
+        
+        pay_order_e = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_e_id)
         
         order_e = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, status, expire_date)
-            VALUES ($1, $2, true, true, 2, now() + interval '30 days')
+            INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
+                                   uuid, b64_id, infinite_traffic, infinite_expire, traffic_limit_day,
+                                   used_mb_limit, used_mb, traffic_used_day_mb)
+            VALUES ($1, $2, $3, true, true, now() + interval '30 days', $4, $5, false, false, 1000, NULL, 0, 500)
             RETURNING id
-        """, user_e_id, metrics_plan_id)
+        """, user_e_id, metrics_plan_id, pay_order_e, "uuid-metrics-user-e", "b64-metrics-e")
         
         # User F: НЕ должен блокироваться (НЕ превысил лимит)
         user_f_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, false, 500)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 200006, "user_f_within_limit", "uuid-metrics-user-f", "b64-metrics-f")
+        """, 200006, "user_f_within_limit")
+        
+        pay_order_f = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_f_id)
         
         order_f = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, status, expire_date)
-            VALUES ($1, $2, true, false, 2, now() + interval '30 days')
+            INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
+                                   uuid, b64_id, infinite_traffic, infinite_expire, traffic_limit_day,
+                                   used_mb_limit, used_mb, traffic_used_day_mb)
+            VALUES ($1, $2, $3, true, false, now() + interval '30 days', $4, $5, false, false, 1000, NULL, 0, 500)
             RETURNING id
-        """, user_f_id, metrics_plan_id)
+        """, user_f_id, metrics_plan_id, pay_order_f, "uuid-metrics-user-f", "b64-metrics-f")
         
         # User G: НЕ должен блокироваться (превысил лимит, но подписка истекла и выключена кроной sub_revocator)
         user_g_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, false, 500)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 200007, "user_g_expired_sub", "uuid-metrics-user-g", "b64-metrics-g")
+        """, 200007, "user_g_expired_sub")
+        
+        pay_order_g = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 3)
+            RETURNING id
+        """, user_g_id)
         
         order_g = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, is_limited, status, expire_date)
-            VALUES ($1, $2, false, false, 3, now() - interval '1 days')
+            INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
+                                   uuid, b64_id, infinite_traffic, infinite_expire, traffic_limit_day,
+                                   used_mb_limit, used_mb, traffic_used_day_mb)
+            VALUES ($1, $2, $3, false, false, now() - interval '1 days', $4, $5, false, false, 1000, NULL, 0, 500)
             RETURNING id
-        """, user_g_id, metrics_plan_id)
+        """, user_g_id, metrics_plan_id, pay_order_g, "uuid-metrics-user-g", "b64-metrics-g")
         
         return {
             # Переиспользуем инфраструктуру из arq_test_seed
@@ -1467,68 +1773,108 @@ async def revoke_seed(db_pool, arq_test_seed):
         
         # User A: ДОЛЖЕН удаляться (is_active=true, expire_date < now(), is_deleted=false)
         user_a_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-            VALUES ($1, $2, $3, $4, false)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 300001, "user_a_should_revoke", "uuid-revoke-user-a", "b64-revoke-a")
+        """, 300001, "user_a_should_revoke")
+        
+        pay_order_a = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_a_id)
         
         order_a = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, true, 2, now() - interval '1 days')
+            INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
+                                   infinite_traffic, infinite_expire, traffic_limit_day, used_mb_limit,
+                                   used_mb, traffic_used_day_mb, is_limited)
+            VALUES ($1, $2, $3, true, now() - interval '1 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
             RETURNING id
-        """, user_a_id, plan_id)
+        """, user_a_id, plan_id, pay_order_a, "uuid-revoke-user-a", "b64-revoke-a")
         
         # User B: ДОЛЖЕН удаляться (is_active=true, expire_date < now(), is_deleted=false)
         user_b_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-            VALUES ($1, $2, $3, $4, false)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 300002, "user_b_should_revoke", "uuid-revoke-user-b", "b64-revoke-b")
+        """, 300002, "user_b_should_revoke")
+        
+        pay_order_b = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_b_id)
         
         order_b = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, true, 2, now() - interval '5 days')
+            INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
+                                   infinite_traffic, infinite_expire, traffic_limit_day, used_mb_limit,
+                                   used_mb, traffic_used_day_mb, is_limited)
+            VALUES ($1, $2, $3, true, now() - interval '5 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
             RETURNING id
-        """, user_b_id, plan_id)
+        """, user_b_id, plan_id, pay_order_b, "uuid-revoke-user-b", "b64-revoke-b")
         
         # User C: НЕ должен удаляться (is_active=false - уже выключена)
         user_c_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-            VALUES ($1, $2, $3, $4, false)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 300003, "user_c_already_inactive", "uuid-revoke-user-c", "b64-revoke-c")
+        """, 300003, "user_c_already_inactive")
+        
+        pay_order_c = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 3)
+            RETURNING id
+        """, user_c_id)
         
         order_c = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, false, 3, now() - interval '10 days')
+            INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
+                                   infinite_traffic, infinite_expire, traffic_limit_day, used_mb_limit,
+                                   used_mb, traffic_used_day_mb, is_limited)
+            VALUES ($1, $2, $3, false, now() - interval '10 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
             RETURNING id
-        """, user_c_id, plan_id)
+        """, user_c_id, plan_id, pay_order_c, "uuid-revoke-user-c", "b64-revoke-c")
         
         # User D: НЕ должен удаляться (expire_date > now() - ещё активна)
         user_d_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-            VALUES ($1, $2, $3, $4, false)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 300004, "user_d_not_expired", "uuid-revoke-user-d", "b64-revoke-d")
+        """, 300004, "user_d_not_expired")
+        
+        pay_order_d = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_d_id)
         
         order_d = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, true, 2, now() + interval '30 days')
+            INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
+                                   infinite_traffic, infinite_expire, traffic_limit_day, used_mb_limit,
+                                   used_mb, traffic_used_day_mb, is_limited)
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
             RETURNING id
-        """, user_d_id, plan_id)
+        """, user_d_id, plan_id, pay_order_d, "uuid-revoke-user-d", "b64-revoke-d")
         
         # User E: НЕ должен удаляться (is_deleted=true - пользователь удалён)
         user_e_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-            VALUES ($1, $2, $3, $4, true)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, true)
             RETURNING id
-        """, 300005, "user_e_deleted", "uuid-revoke-user-e", "b64-revoke-e")
+        """, 300005, "user_e_deleted")
+        
+        pay_order_e = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_e_id)
         
         order_e = await conn.fetchval("""
-            INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-            VALUES ($1, $2, true, 2, now() - interval '2 days')
+            INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
+                                   infinite_traffic, infinite_expire, traffic_limit_day, used_mb_limit,
+                                   used_mb, traffic_used_day_mb, is_limited)
+            VALUES ($1, $2, $3, true, now() - interval '2 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
             RETURNING id
-        """, user_e_id, plan_id)
+        """, user_e_id, plan_id, pay_order_e, "uuid-revoke-user-e", "b64-revoke-e")
         
         return {
             # Инфраструктура из arq_test_seed
@@ -1591,10 +1937,10 @@ async def payment_seed(db_pool, db_seed, arq_test_seed):
         
         # Создаём отдельного пользователя для платёжных тестов
         user_id = await conn.fetchval("""
-            INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted, traffic_used_day_mb)
-            VALUES ($1, $2, $3, $4, false, 100)
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
             RETURNING id
-        """, 700001, "payment_test_user", "uuid-payment-user-700001", "b64-payment-user-700001-valid")
+        """, 700001, "payment_test_user")
         
         return {
             # Инфраструктура из arq_test_seed
@@ -1604,6 +1950,136 @@ async def payment_seed(db_pool, db_seed, arq_test_seed):
             
             # Пользователь для платёжных тестов
             "user_id": user_id,
-            "uuid": "uuid-payment-user-700001",
             "tg_username": "payment_test_user",
+        }
+
+
+@pytest.fixture
+async def infinite_flags_test_seed(db_pool, arq_test_seed):
+    """
+    Создаёт тестовые подписки с разными комбинациями infinite_traffic и infinite_expire.
+    
+    Включает 4 сценария:
+    1. infinite_traffic=true, infinite_expire=false - истёк срок (должна деактивироваться по дате)
+    2. infinite_traffic=false, infinite_expire=true - превышен лимит (должна деактивироваться по трафику)
+    3. infinite_traffic=true, infinite_expire=true - полностью безлимитная (НЕ деактивируется)
+    4. infinite_traffic=false, infinite_expire=false - с лимитами, истёк срок (деактивируется)
+    """
+    async with db_pool.acquire() as conn:
+        plan_id = arq_test_seed['plan_id']
+        
+        # === Сценарий 1: Безлимитный трафик, но истёк срок ===
+        user_inf_traffic_id = await conn.fetchval("""
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
+            RETURNING id
+        """, 400001, "user_inf_traffic_expired")
+        
+        pay_order_inf_traffic = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_inf_traffic_id)
+        
+        sub_inf_traffic = await conn.fetchval("""
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() - interval '1 day', $4, $5, true, false, 5120, 10240, 5000, 1000, false)
+            RETURNING id
+        """, user_inf_traffic_id, plan_id, pay_order_inf_traffic, 
+            "uuid-inf-traffic-expired", "b64-inf-traffic-exp")
+        
+        # === Сценарий 2: Бессрочная, но превышен лимит трафика ===
+        user_inf_expire_id = await conn.fetchval("""
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
+            RETURNING id
+        """, 400002, "user_inf_expire_overlimit")
+        
+        pay_order_inf_expire = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_inf_expire_id)
+        
+        sub_inf_expire = await conn.fetchval("""
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, true, 5120, 10240, 15000, 8000, false)
+            RETURNING id
+        """, user_inf_expire_id, plan_id, pay_order_inf_expire, 
+            "uuid-inf-expire-overlimit", "b64-inf-exp-overlim")
+        
+        # === Сценарий 3: Полностью безлимитная (НЕ должна деактивироваться) ===
+        user_fully_unlimited_id = await conn.fetchval("""
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
+            RETURNING id
+        """, 400003, "user_fully_unlimited")
+        
+        pay_order_unlimited = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_fully_unlimited_id)
+        
+        sub_fully_unlimited = await conn.fetchval("""
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() - interval '10 days', $4, $5, true, true, 5120, 10240, 99999, 99999, false)
+            RETURNING id
+        """, user_fully_unlimited_id, plan_id, pay_order_unlimited, 
+            "uuid-fully-unlimited", "b64-full-unlim")
+        
+        # === Сценарий 4: С лимитами, истёк срок (должна деактивироваться) ===
+        user_limited_expired_id = await conn.fetchval("""
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
+            RETURNING id
+        """, 400004, "user_limited_expired")
+        
+        pay_order_limited = await conn.fetchval("""
+            INSERT INTO pay_orders (user_id, status)
+            VALUES ($1, 2)
+            RETURNING id
+        """, user_limited_expired_id)
+        
+        sub_limited_expired = await conn.fetchval("""
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() - interval '5 days', $4, $5, false, false, 5120, 10240, 5000, 2000, false)
+            RETURNING id
+        """, user_limited_expired_id, plan_id, pay_order_limited, 
+            "uuid-limited-expired", "b64-lim-expired")
+        
+        return {
+            **arq_test_seed,
+            # Сценарий 1: Безлимитный трафик, истёк срок
+            "user_inf_traffic_id": user_inf_traffic_id,
+            "sub_inf_traffic_id": sub_inf_traffic,
+            "uuid_inf_traffic": "uuid-inf-traffic-expired",
+            # Сценарий 2: Бессрочная, превышен лимит
+            "user_inf_expire_id": user_inf_expire_id,
+            "sub_inf_expire_id": sub_inf_expire,
+            "uuid_inf_expire": "uuid-inf-expire-overlimit",
+            # Сценарий 3: Полностью безлимитная
+            "user_fully_unlimited_id": user_fully_unlimited_id,
+            "sub_fully_unlimited_id": sub_fully_unlimited,
+            "uuid_fully_unlimited": "uuid-fully-unlimited",
+            # Сценарий 4: С лимитами, истёк срок
+            "user_limited_expired_id": user_limited_expired_id,
+            "sub_limited_expired_id": sub_limited_expired,
+            "uuid_limited_expired": "uuid-limited-expired",
         }

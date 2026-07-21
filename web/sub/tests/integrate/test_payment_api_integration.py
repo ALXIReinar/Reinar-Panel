@@ -65,22 +65,19 @@ async def test_payment_client(test_payment_app, db_pool, redis_pool, arq_pool, p
                 delattr(test_payment_app.state, attr)
 
 
-def create_valid_webhook_payload_dict(order_id: int, user_id: int, sub_plan_id: int, csrf_token: str, amount: str = "500.00"):
+def create_valid_webhook_payload_dict(order_id: int, user_id: int, sub_plan_id: int, csrf_token: str, amount: str = "500.00", sub_days: int = 30):
     """
     Генерирует валидный webhook payload с правильной сигнатурой.
     
     Использует те же алгоритмы что и продакшн код для генерации валидной подписи.
     Возвращает dict для form data (не Pydantic модель).
     
-    ВАЖНО: Shp_expire_date должен быть datetime объектом для payment_meta4signature_string,
-    но ISO строкой в form data (FastAPI/Pydantic автоматически парсит обратно в datetime).
+    ВАЖНО: Shp_sub_days - обязательное поле в схеме WebhookRoboPayload.
     """
-    expire_date = datetime.now() + timedelta(days=30)
-    
-    # Формируем payment_meta для подписи (с datetime объектом)
+    # Формируем payment_meta для подписи
     payment_meta_for_signature = {
         'Shp_csrf_token': csrf_token,
-        'Shp_expire_date': expire_date,  # datetime объект
+        'Shp_sub_days': sub_days,
         'Shp_sub_plan_id': sub_plan_id,
         'Shp_user_id': user_id,
     }
@@ -90,7 +87,7 @@ def create_valid_webhook_payload_dict(order_id: int, user_id: int, sub_plan_id: 
     signature_string = create_signature(env.robo_passw_2, amount, order_id, meta_str, merchant_login='')
     signature_hash = crypt_strategy[env.robo_crypt_algorithm](signature_string.encode('utf-8')).hexdigest()
     
-    # Возвращаем dict для form data (Shp_expire_date как ISO строка)
+    # Возвращаем dict для form data
     return {
         'OutSum': amount,
         'InvId': order_id,
@@ -98,7 +95,7 @@ def create_valid_webhook_payload_dict(order_id: int, user_id: int, sub_plan_id: 
         'Shp_user_id': user_id,
         'Shp_csrf_token': csrf_token,
         'Shp_sub_plan_id': sub_plan_id,
-        'Shp_expire_date': expire_date.isoformat(),  # ISO строка для form data
+        'Shp_sub_days': sub_days,
     }
 
 
@@ -185,7 +182,8 @@ class TestCreatePaymentLink:
     
     async def test_create_pay_link_invalid_plan(self, test_payment_client, payment_seed):
         """
-        Несуществующий sub_plan_id → 404.
+        Несуществующий sub_plan_id принимается при создании ссылки (проверка происходит в webhook).
+        API не валидирует существование плана при создании ссылки, только при активации подписки.
         """
         # Arrange
         payload = {
@@ -199,8 +197,11 @@ class TestCreatePaymentLink:
         # Act
         response = await test_payment_client.post('/api/v1/robokassa/get_pay_link', json=payload)
         
-        # Assert
-        assert response.status_code == 404
+        # Assert - ссылка создаётся успешно (валидация будет в webhook)
+        assert response.status_code == 200
+        data = response.json()
+        assert data['success'] is True
+        assert 'payment_url' in data
     
     
     async def test_create_pay_link_signature_valid(self, test_payment_client, payment_seed):
@@ -247,7 +248,8 @@ class TestCreatePaymentLink:
     
     async def test_create_pay_link_creates_order_in_db(self, test_payment_client, payment_seed, db_pool):
         """
-        Проверяем что создаётся запись в payed_subs со статусом pending.
+        Проверяем что создаётся запись в pay_orders со статусом pending.
+        user_subs создаётся только при обработке webhook, а не при создании ссылки.
         """
         # Arrange
         payload = {
@@ -267,19 +269,17 @@ class TestCreatePaymentLink:
         query_params = parse_qs(parsed_url.query)
         order_id = int(query_params['InvId'][0])
         
-        # Проверяем запись в БД
+        # Проверяем запись в БД (только pay_orders, user_subs ещё нет)
         async with db_pool.acquire() as conn:
             order = await conn.fetchrow("""
-                SELECT id, user_id, sub_plan_id, is_active, status
-                FROM payed_subs
-                WHERE id = $1
+                SELECT po.id, po.user_id, po.status
+                FROM pay_orders po
+                WHERE po.id = $1
             """, order_id)
         
         assert order is not None
         assert order['user_id'] == payment_seed['user_id']
-        assert order['sub_plan_id'] == payment_seed['plan_id']
-        assert order['is_active'] is False  # Ещё не активна
-        assert order['status'] == 1  # pending
+        assert order['status'] == 1  # PayStatuses.pending
 
 
 class TestWebhookProcessing:
@@ -334,9 +334,10 @@ class TestWebhookProcessing:
         # Проверяем что подписка активирована
         async with db_pool.acquire() as conn:
             order = await conn.fetchrow("""
-                SELECT is_active, status, expire_date
-                FROM payed_subs
-                WHERE id = $1
+                SELECT us.is_active, us.expire_date, po.status
+                FROM user_subs us
+                JOIN pay_orders po ON po.id = us.order_id
+                WHERE us.order_id = $1
             """, order_id)
         
         assert order['is_active'] is True
@@ -361,7 +362,7 @@ class TestWebhookProcessing:
             'Shp_user_id': payment_seed['user_id'],
             'Shp_csrf_token': 'fake_token',
             'Shp_sub_plan_id': payment_seed['plan_id'],
-            'Shp_expire_date': datetime.now().isoformat(),
+            'Shp_sub_days': 30,
         }
         
         # Act
@@ -430,15 +431,25 @@ class TestWebhookProcessing:
     
     async def test_webhook_deactivates_old_subscription(self, test_payment_client, payment_seed, db_pool):
         """
-        При активации новой подписки старая деактивируется.
+        При активации новой подписки с тем же планом старая ОБНОВЛЯЕТСЯ (продлевается) через UPSERT.
+        CONSTRAINT: (user_id, sub_plan_id) UNIQUE - у пользователя может быть только одна подписка на план.
         """
         # Arrange - создаём старую активную подписку
         async with db_pool.acquire() as conn:
-            old_order_id = await conn.fetchval("""
-                INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-                VALUES ($1, $2, true, 2, now() + interval '10 days')
+            old_pay_order = await conn.fetchval("""
+                INSERT INTO pay_orders (user_id, status)
+                VALUES ($1, 2)
                 RETURNING id
-            """, payment_seed['user_id'], payment_seed['plan_id'])
+            """, payment_seed['user_id'])
+            
+            old_order_id = await conn.fetchval("""
+                INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, 
+                                       uuid, b64_id, infinite_traffic, infinite_expire, 
+                                       traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited)
+                VALUES ($1, $2, $3, true, now() + interval '10 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
+                RETURNING id
+            """, payment_seed['user_id'], payment_seed['plan_id'], old_pay_order, 
+                 'uuid-old-sub', 'b64-old-sub')
         
         # Создаём новый order через API
         create_link_payload = {
@@ -467,18 +478,17 @@ class TestWebhookProcessing:
         # Act
         await test_payment_client.post('/api/v1/robokassa/webhook', data=webhook_data)
         
-        # Assert - старая подписка деактивирована
+        # Assert - старая подписка ОБНОВЛЕНА (не создана новая запись)
         async with db_pool.acquire() as conn:
-            old_order = await conn.fetchrow("""
-                SELECT is_active FROM payed_subs WHERE id = $1
+            updated_sub = await conn.fetchrow("""
+                SELECT id, is_active, order_id FROM user_subs WHERE id = $1
             """, old_order_id)
-            
-            new_order = await conn.fetchrow("""
-                SELECT is_active FROM payed_subs WHERE id = $1
-            """, new_order_id)
         
-        assert old_order['is_active'] is False
-        assert new_order['is_active'] is True
+        # Подписка осталась с тем же ID, но обновлён order_id и is_active=true
+        assert updated_sub is not None
+        assert updated_sub['id'] == old_order_id
+        assert updated_sub['is_active'] is True
+        assert updated_sub['order_id'] == new_order_id  # Обновлён на новый заказ
     
     
     async def test_webhook_enqueues_arq_job(self, test_payment_client, payment_seed, arq_pool):
