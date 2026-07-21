@@ -371,9 +371,9 @@ async def test_bulk_delete_users_success(client, mock_buffer, mock_hot_reload):
     payload = {
         "node_proto_id": 1,
         "users": [
-            {"uuid": "user1@test.com", "tg_username": "user1_tg", "sub_node_id": 1, "order_id": 1},
-            {"uuid": "user2@test.com", "tg_username": "user2_tg", "sub_node_id": 1, "order_id": 2},
-            {"uuid": "user3@test.com", "tg_username": "user3_tg", "sub_node_id": 1, "order_id": 3}
+            {"uuid": "user1@test.com", "node_proto_id": 1, "user_sub_id": 1},
+            {"uuid": "user2@test.com", "node_proto_id": 1, "user_sub_id": 2},
+            {"uuid": "user3@test.com", "node_proto_id": 1, "user_sub_id": 3}
         ],
         "config_file_path": "/path/to/config.json",
         "flatten_json_users_key": "inbounds___0___settings___clients",

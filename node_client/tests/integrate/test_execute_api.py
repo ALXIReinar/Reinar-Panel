@@ -9,6 +9,7 @@ Integration тесты для эндпоинта выполнения коман
 - Тестируем Windows-специфичные команды (echo, dir, where)
 - Мокируем только для timeout тестов
 """
+import platform
 import subprocess
 from unittest.mock import patch, MagicMock
 
@@ -34,12 +35,17 @@ async def test_execute_simple_command(client):
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip('Работает только на винде. Нужна логика запуска только на винде')
 async def test_execute_command_with_exit_code_0(client):
     """Команда с exit_code=0 считается успешной"""
-    # Windows команда: cd (без аргументов выводит текущую директорию)
+    # Windows: cd (выводит текущую директорию)
+    # Linux: pwd (выводит текущую директорию)
+    if platform.system() == "Windows":
+        command = "cd"
+    else:
+        command = "pwd"
+    
     response = await client.post("/api/v1/server/node/execute", json={
-        "command": "cd"
+        "command": command
     })
     
     assert response.status_code == 200
@@ -153,7 +159,7 @@ async def test_execute_windows_dir_command(client):
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip('Работает только на винде. Нужна логика запуска только на винде и скип на линуксе')
+@pytest.mark.skipif(platform.system() != "Windows", reason="PowerShell доступен только на Windows")
 async def test_execute_powershell_command(client):
     """PowerShell команда через cmd"""
     # Простая PowerShell команда через cmd
@@ -222,12 +228,17 @@ async def test_execute_command_preserves_command_string(client):
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip('Работает только на винде. Нужна логика запуска только на винде и скип на линуксе')
 async def test_execute_empty_stdout(client):
     """Команда без вывода возвращает пустой stdout"""
-    # Команда которая ничего не выводит (создание пустого файла потом удаление)
+    # Windows: echo. > nul (ничего не выводит)
+    # Linux: true (команда без вывода)
+    if platform.system() == "Windows":
+        command = "echo. > nul"
+    else:
+        command = "true"
+    
     response = await client.post("/api/v1/server/node/execute", json={
-        "command": "echo. > nul"
+        "command": command
     })
     
     assert response.status_code == 200

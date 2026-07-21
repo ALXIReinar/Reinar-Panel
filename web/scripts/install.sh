@@ -260,7 +260,6 @@ else
     if ! grep -q "^SUB_LINK_BYTES=" "$ENV_API_FILE"; then
         echo "" >> "$ENV_API_FILE"
         echo "# Subscription settings" >> "$ENV_API_FILE"
-        echo "SUB_LINK_BYTES=32" >> "$ENV_API_FILE"
         echo "NODE_METRICS_QUEUE_LIMIT=8" >> "$ENV_API_FILE"
     fi
     
