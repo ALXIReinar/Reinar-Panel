@@ -196,6 +196,8 @@ REDIS_PASSWORD=R'F&scBdorS8@0A-1!
 PG_DB=reinar_db
 PG_ADMIN=postgres
 PG_ADMIN_PASSWORD=(AD^9cya97tCA*9ouhCAksb!
+REDIS_PORT=6379
+PG_PORT=5432
 ENVEOF
 
 echo -e "${GREEN}✓${NC} Конфигурация Docker Compose создана: $ENV_FILE"
