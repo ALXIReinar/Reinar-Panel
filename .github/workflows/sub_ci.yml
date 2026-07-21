@@ -188,6 +188,7 @@ jobs:
           chmod +x ./web/sub/scripts/install.sh
           sudo -E ./web/sub/scripts/install.sh || {
             echo "❌ Ошибка установки Sub Service"
+            sudo docker logs web-service  2>&1 || true
             sudo docker logs sub-service 2>&1 || true
             exit 1
           }
