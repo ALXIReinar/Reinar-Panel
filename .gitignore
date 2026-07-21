@@ -169,3 +169,8 @@ calculate_logs_size.py
 *.tar.gz
 *.tar
 *.b64
+# .graphifyignore
+vendor/
+node_modules/
+*.generated.py
+graphify-out/

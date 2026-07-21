@@ -50,23 +50,26 @@ class TestRevokeSubPlanByExpire:
         async with db_pool.acquire() as conn:
             # User A и User B должны быть выключены
             user_a_sub = await conn.fetchrow("""
-                SELECT is_active, status FROM payed_subs WHERE id = $1
+                SELECT is_active, order_id FROM user_subs WHERE id = $1
             """, seed['should_revoke']['user_a']['order_id'])
             
             user_b_sub = await conn.fetchrow("""
-                SELECT is_active, status FROM payed_subs WHERE id = $1
+                SELECT is_active, order_id FROM user_subs WHERE id = $1
             """, seed['should_revoke']['user_b']['order_id'])
             
             assert user_a_sub['is_active'] is False
-            assert user_a_sub['status'] == 3  # expired
+            # Проверяем статус платежа
+            order_a_status = await conn.fetchval("SELECT status FROM pay_orders WHERE id = $1", user_a_sub['order_id'])
+            assert order_a_status == 3  # expired
             assert user_b_sub['is_active'] is False
-            assert user_b_sub['status'] == 3
+            order_b_status = await conn.fetchval("SELECT status FROM pay_orders WHERE id = $1", user_b_sub['order_id'])
+            assert order_b_status == 3
             
             # Проверяем что outbox заполнен для user_a и user_b
             outbox_records = await conn.fetch("""
-                SELECT order_id, user_uuid, operation 
+                SELECT user_sub_id, user_uuid, operation 
                 FROM sub_nodes_outbox 
-                WHERE order_id IN ($1, $2)
+                WHERE user_sub_id IN ($1, $2)
             """, seed['should_revoke']['user_a']['order_id'],
                  seed['should_revoke']['user_b']['order_id'])
             
@@ -123,10 +126,10 @@ class TestRevokeSubPlanByExpire:
         async with db_pool.acquire() as conn:
             # Проверяем ТОЛЬКО user_a и user_b выключены
             deactivated_subs = await conn.fetch("""
-                SELECT id, user_id, is_active, status
-                FROM payed_subs
-                WHERE user_id IN ($1, $2, $3, $4, $5)
-                ORDER BY user_id
+                SELECT us.id, us.user_id, us.is_active, us.order_id
+                FROM user_subs us
+                WHERE us.user_id IN ($1, $2, $3, $4, $5)
+                ORDER BY us.user_id
             """, seed['should_revoke']['user_a']['user_id'],
                  seed['should_revoke']['user_b']['user_id'],
                  seed['should_not_revoke']['user_c']['user_id'],
@@ -137,24 +140,28 @@ class TestRevokeSubPlanByExpire:
             user_a_sub = next(s for s in deactivated_subs if s['user_id'] == seed['should_revoke']['user_a']['user_id'])
             user_b_sub = next(s for s in deactivated_subs if s['user_id'] == seed['should_revoke']['user_b']['user_id'])
             assert user_a_sub['is_active'] is False
-            assert user_a_sub['status'] == 3
+            order_a_status = await conn.fetchval("SELECT status FROM pay_orders WHERE id = $1", user_a_sub['order_id'])
+            assert order_a_status == 3
             assert user_b_sub['is_active'] is False
-            assert user_b_sub['status'] == 3
+            order_b_status = await conn.fetchval("SELECT status FROM pay_orders WHERE id = $1", user_b_sub['order_id'])
+            assert order_b_status == 3
             
             # User C уже был неактивен (не изменился)
             user_c_sub = next(s for s in deactivated_subs if s['user_id'] == seed['should_not_revoke']['user_c']['user_id'])
             assert user_c_sub['is_active'] is False
-            assert user_c_sub['status'] == 3
+            order_c_status = await conn.fetchval("SELECT status FROM pay_orders WHERE id = $1", user_c_sub['order_id'])
+            assert order_c_status == 3
             
             # User D всё ещё активен (не истёк)
             user_d_sub = next(s for s in deactivated_subs if s['user_id'] == seed['should_not_revoke']['user_d']['user_id'])
             assert user_d_sub['is_active'] is True
-            assert user_d_sub['status'] == 2  # success
+            order_d_status = await conn.fetchval("SELECT status FROM pay_orders WHERE id = $1", user_d_sub['order_id'])
+            assert order_d_status == 2  # success
             
             # User E не попал в результат (is_deleted=true фильтрует на уровне JOIN)
             # Проверяем что его нет в outbox
             user_e_outbox = await conn.fetchval("""
-                SELECT COUNT(*) FROM sub_nodes_outbox WHERE order_id = $1
+                SELECT COUNT(*) FROM sub_nodes_outbox WHERE user_sub_id = $1
             """, seed['should_not_revoke']['user_e']['order_id'])
             assert user_e_outbox == 0
     
@@ -183,8 +190,9 @@ class TestRevokeSubPlanByExpire:
         async with db_pool.acquire() as conn:
             # 1. Подписки выключены
             inactive_count = await conn.fetchval("""
-                SELECT COUNT(*) FROM payed_subs
-                WHERE id IN ($1, $2) AND is_active = false AND status = 3
+                SELECT COUNT(*) FROM user_subs us
+                JOIN pay_orders po ON po.id = us.order_id
+                WHERE us.id IN ($1, $2) AND us.is_active = false AND po.status = 3
             """, seed['should_revoke']['user_a']['order_id'],
                  seed['should_revoke']['user_b']['order_id'])
             assert inactive_count == 2
@@ -192,7 +200,7 @@ class TestRevokeSubPlanByExpire:
             # 2. Outbox заполнен
             outbox_count = await conn.fetchval("""
                 SELECT COUNT(*) FROM sub_nodes_outbox
-                WHERE order_id IN ($1, $2) AND operation = 2
+                WHERE user_sub_id IN ($1, $2) AND operation = 2
             """, seed['should_revoke']['user_a']['order_id'],
                  seed['should_revoke']['user_b']['order_id'])
             assert outbox_count >= 2  # Минимум 2 (по 1 на ноду для каждого юзера)
@@ -201,7 +209,7 @@ class TestRevokeSubPlanByExpire:
             for user_key in ['user_a', 'user_b']:
                 order_id = seed['should_revoke'][user_key]['order_id']
                 outbox_for_order = await conn.fetchval("""
-                    SELECT COUNT(*) FROM sub_nodes_outbox WHERE order_id = $1
+                    SELECT COUNT(*) FROM sub_nodes_outbox WHERE user_sub_id = $1
                 """, order_id)
                 assert outbox_for_order >= 1  # Минимум 1 нода
     
@@ -261,21 +269,21 @@ class TestRevokeSubPlanByExpire:
         async with db_pool.acquire() as conn:
             # Получаем записи outbox сгруппированные по нодам
             grouped = await conn.fetch("""
-                SELECT sub_node_id, COUNT(*) as users_count, 
-                       array_agg(order_id) as order_ids
+                SELECT node_proto_id, COUNT(*) as users_count, 
+                       array_agg(user_sub_id) as user_sub_ids
                 FROM sub_nodes_outbox
                 WHERE operation = 2
-                GROUP BY sub_node_id
-                ORDER BY sub_node_id
+                GROUP BY node_proto_id
+                ORDER BY node_proto_id
             """)
             
             # Проверяем что есть записи
             assert len(grouped) >= 1
             
             # Проверяем что user_a и user_b присутствуют
-            all_order_ids = []
+            all_user_sub_ids = []
             for group in grouped:
-                all_order_ids.extend(group['order_ids'])
+                all_user_sub_ids.extend(group['user_sub_ids'])
             
-            assert seed['should_revoke']['user_a']['order_id'] in all_order_ids
-            assert seed['should_revoke']['user_b']['order_id'] in all_order_ids
+            assert seed['should_revoke']['user_a']['order_id'] in all_user_sub_ids
+            assert seed['should_revoke']['user_b']['order_id'] in all_user_sub_ids

@@ -196,6 +196,8 @@ REDIS_PASSWORD=R'F&scBdorS8@0A-1!
 PG_DB=reinar_db
 PG_ADMIN=postgres
 PG_ADMIN_PASSWORD=(AD^9cya97tCA*9ouhCAksb!
+REDIS_PORT=6379
+PG_PORT=5432
 ENVEOF
 
 echo -e "${GREEN}✓${NC} Конфигурация Docker Compose создана: $ENV_FILE"
@@ -233,7 +235,7 @@ POST_PROCESSING_RESPONSES=1
 UVICORN_WORKERS=1
 UVICORN_PORT=${ADMIN_PORT}
 DOMAIN=http://localhost:${ADMIN_PORT}
-ALLOWED_IPS=10.0.0.1
+ALLOWED_IPS=127.0.0.1
 TRUSTED_PROXIES=127.0.0.1,10.0.0.1
 APIENVEOF
     echo -e "${GREEN}✓${NC} Конфигурация приложения создана: $ENV_API_FILE"
@@ -260,7 +262,6 @@ else
     if ! grep -q "^SUB_LINK_BYTES=" "$ENV_API_FILE"; then
         echo "" >> "$ENV_API_FILE"
         echo "# Subscription settings" >> "$ENV_API_FILE"
-        echo "SUB_LINK_BYTES=32" >> "$ENV_API_FILE"
         echo "NODE_METRICS_QUEUE_LIMIT=8" >> "$ENV_API_FILE"
     fi
     

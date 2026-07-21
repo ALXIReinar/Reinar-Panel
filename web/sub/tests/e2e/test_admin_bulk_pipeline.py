@@ -33,9 +33,9 @@ class TestAdminBulkPipeline:
         # Arrange: подготовка данных пользователя
         user3 = arq_test_seed['user3_active_for_add']
         users_input = [{
-            'order_id': user3['order_active'],
+            'user_sub_id': user3['order_active'],
             'sub_plan_id': arq_test_seed['plan_id'],
-            'user_id': user3['user_id']
+            'uuid': user3['uuid']
         }]
         
         # Outbox уже создан в arq_test_seed (operation=1 для ADD)
@@ -44,8 +44,8 @@ class TestAdminBulkPipeline:
         async with db_pool.acquire() as conn:
             outbox_before = await conn.fetch("""
                 SELECT * FROM sub_nodes_outbox
-                WHERE order_id = $1 AND operation = 1
-                ORDER BY sub_node_id
+                WHERE user_sub_id = $1 AND operation = 1
+                ORDER BY node_proto_id
             """, user3['order_active'])
         
         assert len(outbox_before) == 2, "Должно быть 2 записи в outbox (на 2 ноды)"
@@ -100,7 +100,7 @@ class TestAdminBulkPipeline:
                 config_file_path=args[10],   # config_file_path
                 flatten_json_users_key=args[11], # flatten_json_users_key
                 flatten_user_identifier_key=args[12], # flatten_user_identifier_key
-                required_user_data_obj={"id": "{USER_UUID}", "email": "{USER_TG_USERNAME}"},
+                required_user_data_obj={"id": "{USER_UUID}", "email": "{USER_SUB_ID}"},
                 constant_user_data_obj={"level": 0},
                 current_attempt=1
             )
@@ -114,7 +114,7 @@ class TestAdminBulkPipeline:
         async with db_pool.acquire() as conn:
             outbox_after = await conn.fetch("""
                 SELECT * FROM sub_nodes_outbox
-                WHERE order_id = $1 AND operation = 1
+                WHERE user_sub_id = $1 AND operation = 1
             """, user3['order_active'])
         
         assert len(outbox_after) == 0, "Outbox должен быть очищен после успешного выполнения"
@@ -127,9 +127,9 @@ class TestAdminBulkPipeline:
         # Arrange
         user4 = arq_test_seed['user4_active_for_delete']
         users_input = [{
-            'order_id': user4['order_active'],
+            'user_sub_id': user4['order_active'],
             'sub_plan_id': arq_test_seed['plan_id'],
-            'user_id': user4['user_id']
+            'uuid': user4['uuid']
         }]
         
         # Outbox уже создан в arq_test_seed (operation=2 для DELETE)
@@ -138,8 +138,8 @@ class TestAdminBulkPipeline:
         async with db_pool.acquire() as conn:
             outbox_before = await conn.fetch("""
                 SELECT * FROM sub_nodes_outbox
-                WHERE order_id = $1 AND operation = 2
-                ORDER BY sub_node_id
+                WHERE user_sub_id = $1 AND operation = 2
+                ORDER BY node_proto_id
             """, user4['order_active'])
         
         assert len(outbox_before) == 2, "Должно быть 2 записи в outbox (на 2 ноды)"
@@ -204,7 +204,7 @@ class TestAdminBulkPipeline:
         async with db_pool.acquire() as conn:
             outbox_after = await conn.fetch("""
                 SELECT * FROM sub_nodes_outbox
-                WHERE order_id = $1 AND operation = 2
+                WHERE user_sub_id = $1 AND operation = 2
             """, user4['order_active'])
         
         assert len(outbox_after) == 0, "Outbox должен быть очищен после успешного выполнения"
@@ -222,9 +222,9 @@ class TestAdminBulkPipeline:
         # Arrange: используем user3 который привязан к 2 нодам
         user3 = arq_test_seed['user3_active_for_add']
         users_input = [{
-            'order_id': user3['order_active'],
+            'user_sub_id': user3['order_active'],
             'sub_plan_id': arq_test_seed['plan_id'],
-            'user_id': user3['user_id']
+            'uuid': user3['uuid']
         }]
         
         # Mock для arq.enqueue_job
@@ -263,7 +263,7 @@ class TestAdminBulkPipeline:
             users_list = job_data['args'][8]  # users параметр
             assert len(users_list) == 1
             assert users_list[0]['uuid'] == user3['uuid']
-            assert users_list[0]['tg_username'] == user3['tg_username']
+            assert users_list[0]['user_sub_id'] == user3['order_active']
         
         # Act 2: Выполняем bulk операции для обеих нод
         for job_data in enqueued_jobs:
@@ -292,7 +292,7 @@ class TestAdminBulkPipeline:
         async with db_pool.acquire() as conn:
             outbox_remaining = await conn.fetch("""
                 SELECT * FROM sub_nodes_outbox
-                WHERE order_id = $1 AND operation = 1
+                WHERE user_sub_id = $1 AND operation = 1
             """, user3['order_active'])
         
         assert len(outbox_remaining) == 0, "Outbox должен быть очищен для всех нод"
@@ -324,29 +324,39 @@ class TestAdminBulkPipeline:
             
             # Создаём пользователя
             user_invisible_id = await conn.fetchval("""
-                INSERT INTO users (tg_id, tg_username, uuid, b64_id, is_deleted)
-                VALUES ($1, $2, $3, $4, false)
+                INSERT INTO users (tg_id, tg_username, is_deleted)
+                VALUES ($1, $2, false)
                 RETURNING id
-            """, 999999, "invisible_node_user", "uuid-invisible-test", "b64-invisible-test")
+            """, 999999, "invisible_node_user")
+            
+            # Создаём платёж
+            pay_order_invisible = await conn.fetchval("""
+                INSERT INTO pay_orders (user_id, status)
+                VALUES ($1, 2)
+                RETURNING id
+            """, user_invisible_id)
             
             # Создаём подписку на новый план
             order_invisible = await conn.fetchval("""
-                INSERT INTO payed_subs (user_id, sub_plan_id, is_active, status, expire_date)
-                VALUES ($1, $2, true, 2, now() + interval '30 days')
+                INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date,
+                                       uuid, b64_id, infinite_traffic, infinite_expire,
+                                       traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited)
+                VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
                 RETURNING id
-            """, user_invisible_id, invisible_plan_id)
+            """, user_invisible_id, invisible_plan_id, pay_order_invisible,
+                 "uuid-invisible-test", "b64-invisible-test")
             
             # Создаём outbox для невидимой ноды (должен быть проигнорирован)
             await conn.execute("""
-                INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
-                VALUES ($1, $2, $3, 1, $4)
-            """, "uuid-invisible-test", "invisible_node_user", order_invisible, 
+                INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+                VALUES ($1, $2, 1, $3)
+            """, "uuid-invisible-test", order_invisible, 
                 arq_test_seed['vnode_id_invisible'])
         
         users_input = [{
-            'order_id': order_invisible,
+            'user_sub_id': order_invisible,
             'sub_plan_id': invisible_plan_id,  # Используем новый plan_id
-            'user_id': user_invisible_id
+            'uuid': "uuid-invisible-test"
         }]
         
         # Mock для arq.enqueue_job
@@ -374,7 +384,7 @@ class TestAdminBulkPipeline:
         async with db_pool.acquire() as conn:
             outbox_count = await conn.fetchval("""
                 SELECT COUNT(*) FROM sub_nodes_outbox
-                WHERE order_id = $1 AND operation = 1
+                WHERE user_sub_id = $1 AND operation = 1
             """, order_invisible)
         
         assert outbox_count == 1, "Outbox не должен быть тронут для невидимых нод"

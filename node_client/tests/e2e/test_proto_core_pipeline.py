@@ -42,7 +42,7 @@ class MockXrayClient:
         """Мок для получения метрик"""
         self.calls.append(('stats_query', kwargs))
         # Возвращаем фейковые метрики в формате Xray
-        return '{"stat": [{"name": "user>>>test@test.com>>>traffic>>>uplink", "value": 1024}]}'
+        return '{"stat": [{"name": "user>>>1>>>traffic>>>uplink", "value": 1024}]}'
 
 
 class MockXtlsapiModule:
@@ -550,10 +550,9 @@ async def test_bulk_delete_users_without_api_script(
     
     users_to_delete = [
         {
-            "tg_username": f"bulk_del_{i}",
             "uuid": f"bulk_del_{i}@test.com",  # Используем email как uuid для удаления
-            "sub_node_id": 1,
-            "order_id": 1
+            "node_proto_id": 1,
+            "user_sub_id": 1
         }
         for i in range(5)
     ]
@@ -942,10 +941,9 @@ async def test_e2e_bulk_operations_with_verification(
     # 3. Bulk delete 3 пользователей
     users_to_delete = [
         {
-            "tg_username": f"bulk_verify_{i}",
             "uuid": f"bulk_verify_{i}@test.com",  # Используем email как uuid
-            "sub_node_id": 1,
-            "order_id": 1
+            "node_proto_id": 1,
+            "user_sub_id": 1
         }
         for i in range(3)
     ]

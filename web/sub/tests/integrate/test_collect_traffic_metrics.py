@@ -35,10 +35,14 @@ class TestCollectTrafficMetrics:
         seed = metrics_collector_seed
         
         # Fake aiohttp возвращает метрики с небольшим трафиком (не превышает лимит)
+        # Используем user_sub_id вместо tg_username
+        user_a_sub_id = seed['should_block']['user_a']['order_id']
+        user_b_sub_id = seed['should_block']['user_b']['order_id']
+        
         fake_stdout = {
             'stat': [
-                {'name': 'user>>>user_a_should_block>>>traffic>>>downlink', 'value': 52428800},  # 50MB
-                {'name': 'user>>>user_b_should_block>>>traffic>>>downlink', 'value': 31457280},  # 30MB
+                {'name': f'user>>>{user_a_sub_id}>>>traffic>>>downlink', 'value': 52428800},  # 50MB
+                {'name': f'user>>>{user_b_sub_id}>>>traffic>>>downlink', 'value': 31457280},  # 30MB
             ]
         }
         
@@ -68,21 +72,31 @@ class TestCollectTrafficMetrics:
         
         # Проверяем что трафик обновился
         async with db_pool.acquire() as conn:
-            user_a = await conn.fetchrow("SELECT traffic_used_day_mb FROM users WHERE tg_username = $1", "user_a_should_block")
-            user_b = await conn.fetchrow("SELECT traffic_used_day_mb FROM users WHERE tg_username = $1", "user_b_should_block")
+            user_a_sub = await conn.fetchrow("""
+                SELECT us.traffic_used_day_mb 
+                FROM user_subs us 
+                JOIN users u ON u.id = us.user_id 
+                WHERE u.tg_username = $1
+            """, "user_a_should_block")
+            user_b_sub = await conn.fetchrow("""
+                SELECT us.traffic_used_day_mb 
+                FROM user_subs us 
+                JOIN users u ON u.id = us.user_id 
+                WHERE u.tg_username = $1
+            """, "user_b_should_block")
             
             # 500 (начальный) + 50 (добавленный) = 550MB
-            assert user_a['traffic_used_day_mb'] == 550
+            assert user_a_sub['traffic_used_day_mb'] == 550
             # 800 (начальный) + 30 (добавленный) = 830MB
-            assert user_b['traffic_used_day_mb'] == 830
+            assert user_b_sub['traffic_used_day_mb'] == 830
             
             # Проверяем что user_a и user_b НЕ были ограничены (все в пределах лимита 1000MB)
             user_a_limited = await conn.fetchval(
-                "SELECT is_limited FROM payed_subs WHERE id = $1", 
+                "SELECT is_limited FROM user_subs WHERE id = $1", 
                 seed['should_block']['user_a']['order_id']
             )
             user_b_limited = await conn.fetchval(
-                "SELECT is_limited FROM payed_subs WHERE id = $1",
+                "SELECT is_limited FROM user_subs WHERE id = $1",
                 seed['should_block']['user_b']['order_id']
             )
             assert user_a_limited is False
@@ -104,23 +118,32 @@ class TestCollectTrafficMetrics:
         seed = metrics_collector_seed
         arq_ctx['arq_redis'] = arq_pool
         
+        # Получаем user_sub_id для каждого пользователя
+        user_a_sub_id = seed['should_block']['user_a']['order_id']
+        user_b_sub_id = seed['should_block']['user_b']['order_id']
+        user_c_sub_id = seed['should_not_block']['user_c']['order_id']
+        user_d_sub_id = seed['should_not_block']['user_d']['order_id']
+        user_e_sub_id = seed['should_not_block']['user_e']['order_id']
+        user_f_sub_id = seed['should_not_block']['user_f']['order_id']
+        user_g_sub_id = seed['should_not_block']['user_g']['order_id']
+        
         # Fake aiohttp возвращает большой трафик (все превышают лимит 1000MB)
         fake_stdout = {
             'stat': [
                 # User A: 500 + 600 = 1100MB (превышает лимит) → ДОЛЖЕН блокироваться
-                {'name': 'user>>>user_a_should_block>>>traffic>>>downlink', 'value': 629145600},  # 600MB
+                {'name': f'user>>>{user_a_sub_id}>>>traffic>>>downlink', 'value': 629145600},  # 600MB
                 # User B: 800 + 300 = 1100MB (превышает лимит) → ДОЛЖЕН блокироваться
-                {'name': 'user>>>user_b_should_block>>>traffic>>>downlink', 'value': 314572800},  # 300MB
+                {'name': f'user>>>{user_b_sub_id}>>>traffic>>>downlink', 'value': 314572800},  # 300MB
                 # User C: 500 + 600 = 1100MB, но подписка неактивна → НЕ блокируется
-                {'name': 'user>>>user_c_inactive_sub>>>traffic>>>downlink', 'value': 629145600},  # 600MB
+                {'name': f'user>>>{user_c_sub_id}>>>traffic>>>downlink', 'value': 629145600},  # 600MB
                 # User D: 500 + 600 = 1100MB, но пользователь удалён → НЕ блокируется
-                {'name': 'user>>>user_d_deleted>>>traffic>>>downlink', 'value': 629145600},  # 600MB
+                {'name': f'user>>>{user_d_sub_id}>>>traffic>>>downlink', 'value': 629145600},  # 600MB
                 # User E: 500 + 600 = 1100MB, но уже ограничен → НЕ блокируется
-                {'name': 'user>>>user_e_already_limited>>>traffic>>>downlink', 'value': 629145600},  # 600MB
+                {'name': f'user>>>{user_e_sub_id}>>>traffic>>>downlink', 'value': 629145600},  # 600MB
                 # User F: 500 + 400 = 900MB (НЕ превышает лимит) → НЕ блокируется
-                {'name': 'user>>>user_f_within_limit>>>traffic>>>downlink', 'value': 419430400},  # 400MB
+                {'name': f'user>>>{user_f_sub_id}>>>traffic>>>downlink', 'value': 419430400},  # 400MB
                 # User G: 500 + 600 = 1100MB, но подписка истекла → НЕ блокируется
-                {'name': 'user>>>user_g_expired_sub>>>traffic>>>downlink', 'value': 629145600},  # 600MB
+                {'name': f'user>>>{user_g_sub_id}>>>traffic>>>downlink', 'value': 629145600},  # 600MB
             ]
         }
         
@@ -150,15 +173,15 @@ class TestCollectTrafficMetrics:
         # КРИТИЧЕСКАЯ ПРОВЕРКА: В outbox должны быть ТОЛЬКО user_a и user_b
         async with db_pool.acquire() as conn:
             outbox_records = await conn.fetch("""
-                SELECT order_id, user_uuid, tg_username 
+                SELECT user_sub_id, user_uuid 
                 FROM sub_nodes_outbox 
                 WHERE operation = 2
-                ORDER BY tg_username
+                ORDER BY user_uuid
             """)
             
             assert len(outbox_records) == 2, f"Expected 2 records in outbox, got {len(outbox_records)}"
             
-            outbox_order_ids = {r['order_id'] for r in outbox_records}
+            outbox_order_ids = {r['user_sub_id'] for r in outbox_records}
             expected_order_ids = {
                 seed['should_block']['user_a']['order_id'],
                 seed['should_block']['user_b']['order_id'],
@@ -168,7 +191,7 @@ class TestCollectTrafficMetrics:
             # Проверяем что is_limited установлен для user_a и user_b
             # (user_e уже был limited, поэтому его не учитываем в expected)
             limited_subs = await conn.fetch("""
-                SELECT id FROM payed_subs 
+                SELECT id FROM user_subs 
                 WHERE is_limited = true 
                   AND user_id IN (SELECT id FROM users WHERE tg_id BETWEEN 200001 AND 200002)
             """)
@@ -176,9 +199,24 @@ class TestCollectTrafficMetrics:
             assert limited_ids == expected_order_ids, f"is_limited mismatch: {limited_ids} != {expected_order_ids}"
             
             # Проверяем что трафик обновился для ВСЕХ пользователей
-            user_a = await conn.fetchrow("SELECT traffic_used_day_mb FROM users WHERE tg_username = $1", "user_a_should_block")
-            user_b = await conn.fetchrow("SELECT traffic_used_day_mb FROM users WHERE tg_username = $1", "user_b_should_block")
-            user_f = await conn.fetchrow("SELECT traffic_used_day_mb FROM users WHERE tg_username = $1", "user_f_within_limit")
+            user_a = await conn.fetchrow("""
+                SELECT us.traffic_used_day_mb 
+                FROM user_subs us 
+                JOIN users u ON u.id = us.user_id 
+                WHERE u.tg_username = $1
+            """, "user_a_should_block")
+            user_b = await conn.fetchrow("""
+                SELECT us.traffic_used_day_mb 
+                FROM user_subs us 
+                JOIN users u ON u.id = us.user_id 
+                WHERE u.tg_username = $1
+            """, "user_b_should_block")
+            user_f = await conn.fetchrow("""
+                SELECT us.traffic_used_day_mb 
+                FROM user_subs us 
+                JOIN users u ON u.id = us.user_id 
+                WHERE u.tg_username = $1
+            """, "user_f_within_limit")
             
             assert user_a['traffic_used_day_mb'] == 1100  # 500 + 600
             assert user_b['traffic_used_day_mb'] == 1100  # 800 + 300
@@ -202,13 +240,19 @@ class TestCollectTrafficMetrics:
         # Arrange
         seed = metrics_collector_seed
         
+        # Получаем user_sub_id
+        user_a_sub_id = seed['should_block']['user_a']['order_id']
+        user_c_sub_id = seed['should_not_block']['user_c']['order_id']
+        user_d_sub_id = seed['should_not_block']['user_d']['order_id']
+        user_e_sub_id = seed['should_not_block']['user_e']['order_id']
+        
         # Добавляем трафик так, чтобы ВСЕ превысили лимит
         fake_stdout = {
             'stat': [
-                {'name': f'user>>>user_a_should_block>>>traffic>>>downlink', 'value': 629145600},  # +600MB
-                {'name': f'user>>>user_c_inactive_sub>>>traffic>>>downlink', 'value': 629145600},
-                {'name': f'user>>>user_d_deleted>>>traffic>>>downlink', 'value': 629145600},
-                {'name': f'user>>>user_e_already_limited>>>traffic>>>downlink', 'value': 629145600},
+                {'name': f'user>>>{user_a_sub_id}>>>traffic>>>downlink', 'value': 629145600},  # +600MB
+                {'name': f'user>>>{user_c_sub_id}>>>traffic>>>downlink', 'value': 629145600},
+                {'name': f'user>>>{user_d_sub_id}>>>traffic>>>downlink', 'value': 629145600},
+                {'name': f'user>>>{user_e_sub_id}>>>traffic>>>downlink', 'value': 629145600},
             ]
         }
         
@@ -234,21 +278,21 @@ class TestCollectTrafficMetrics:
         async with db_pool.acquire() as conn:
             # 1. Фильтр is_deleted = false
             user_d_limited = await conn.fetchval(
-                "SELECT is_limited FROM payed_subs WHERE id = $1",
+                "SELECT is_limited FROM user_subs WHERE id = $1",
                 seed['should_not_block']['user_d']['order_id']
             )
             assert user_d_limited is False, "User D (deleted) should NOT be limited"
             
             # 2. Фильтр is_active = true
             user_c_limited = await conn.fetchval(
-                "SELECT is_limited FROM payed_subs WHERE id = $1",
+                "SELECT is_limited FROM user_subs WHERE id = $1",
                 seed['should_not_block']['user_c']['order_id']
             )
             assert user_c_limited is False, "User C (inactive sub) should NOT be limited"
             
             # 3. Фильтр is_limited = false
             user_e_outbox = await conn.fetchval(
-                "SELECT COUNT(*) FROM sub_nodes_outbox WHERE order_id = $1",
+                "SELECT COUNT(*) FROM sub_nodes_outbox WHERE user_sub_id = $1",
                 seed['should_not_block']['user_e']['order_id']
             )
             assert user_e_outbox == 0, "User E (already limited) should NOT be in outbox"
@@ -289,7 +333,12 @@ class TestCollectTrafficMetrics:
         
         # Трафик НЕ обновился
         async with db_pool.acquire() as conn:
-            user_a = await conn.fetchrow("SELECT traffic_used_day_mb FROM users WHERE tg_username = $1", "user_a_should_block")
+            user_a = await conn.fetchrow("""
+                SELECT us.traffic_used_day_mb 
+                FROM user_subs us 
+                JOIN users u ON u.id = us.user_id 
+                WHERE u.tg_username = $1
+            """, "user_a_should_block")
             assert user_a['traffic_used_day_mb'] == 500  # Начальное значение не изменилось
     
     
@@ -324,7 +373,12 @@ class TestCollectTrafficMetrics:
         
         # Трафик НЕ обновился (нет данных)
         async with db_pool.acquire() as conn:
-            user_a = await conn.fetchrow("SELECT traffic_used_day_mb FROM users WHERE tg_username = $1", "user_a_should_block")
+            user_a = await conn.fetchrow("""
+                SELECT us.traffic_used_day_mb 
+                FROM user_subs us 
+                JOIN users u ON u.id = us.user_id 
+                WHERE u.tg_username = $1
+            """, "user_a_should_block")
             assert user_a['traffic_used_day_mb'] == 500
     
     

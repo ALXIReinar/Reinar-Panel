@@ -67,19 +67,18 @@ class WorkerSettings:
     cron_jobs = [
         # Истёкшие подписки
         cron(revoke_sub_plan_by_expire, hour={0}, minute={0}, unique=True),
-        # cron(revoke_sub_plan_by_expire, minute=set(i for i in range(61) if i % 2 == 0), unique=True),
+        # cron(revoke_sub_plan_by_expire, minute=set(i for i in range(61) if i % 2 != 0), unique=True),
 
         # Обнуляем трафик, возвращаем пользователей в ядра
         cron(reset_day_user_traffic, hour={0}, minute={8}, unique=True),
-        # cron(reset_day_user_traffic, minute=set(i for i in range(61) if i % 2 != 0), unique=True),
+        # cron(reset_day_user_traffic, minute=set(i for i in range(61) if i % 2 == 0), unique=True),
 
         # Ретраим Outbox залипшие операции
         cron(retry_stuck_core_proto_actions, hour={3}, minute={0}, unique=True),
         # cron(retry_stuck_core_proto_actions, minute=set(i for i in range(61) if i % 2 != 0), unique=True),
 
         # Сбор трафика, удаление из ядер протоколов
-        # cron(traffic_sync_scheduler, minute={0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55}, unique=True),
-
+        cron(traffic_sync_scheduler, minute={0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55}, unique=True),
     ]
     
     # Lifecycle hooks

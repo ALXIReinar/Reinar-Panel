@@ -25,8 +25,7 @@ class TestActionOnCoreProtoBySubPlan:
             
             for i, node_proto_id in enumerate(node_proto_ids):
                 nodes.append({
-                    'node_proto_id': node_proto_id,
-                    'sub_node_id': vnode_ids[i] if i < len(vnode_ids) else vnode_ids[0],
+                    'node_proto_id': vnode_ids[i] if i < len(vnode_ids) else vnode_ids[0],
                     'private_ip': ips[i] if i < len(ips) else ips[0],
                     'api_port': ports[i] if i < len(ports) else ports[0],
                     'metrics_port': 9090 + i,
@@ -38,8 +37,8 @@ class TestActionOnCoreProtoBySubPlan:
                     'flatten_json_users_key': 'inbounds.0.settings.clients',
                     'flatten_user_identifier_key': 'email',
                     'required_user_data_obj': {
-                        'id': '{USER_UUID}',
-                        'email': '{USER_TG_USERNAME}'
+                        'id': '{USER_UUID}',  # id = subscription UUID
+                        'email': '{USER_SUB_ID}'  # email = user_sub_id (используется в xray)
                     },
                     'constant_user_data_obj': {
                         'level': 0,
@@ -62,7 +61,7 @@ class TestActionOnCoreProtoBySubPlan:
         """
         # Arrange
         user_uuid = "uuid-test-123"
-        tg_username = "test_user"
+        user_sub_id = arq_test_seed['order_id']  # Это ID активной подписки User 3
         mock_arq_ctx['aio_http'].status = 200
         mock_arq_ctx['aio_http'].json_data = {'success': True}
         
@@ -71,16 +70,16 @@ class TestActionOnCoreProtoBySubPlan:
         # Вставляем записи в outbox
         async with db_pool.acquire() as conn:
             await conn.execute("""
-                INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
-                VALUES ($1, $2, $3, $4, $5), ($1, $2, $3, $4, $6)
-            """, user_uuid, tg_username, arq_test_seed['order_id'], 1, 
+                INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+                VALUES ($1, $2, $3, $4), ($1, $2, $3, $5)
+            """, user_uuid, user_sub_id, 1, 
                 arq_test_seed['vnode_id_10'], arq_test_seed['vnode_id_11'])
         
         # Act
         result = await action_on_core_proto_by_sub_plan(
             mock_arq_ctx,
             user_uuid,
-            tg_username,
+            user_sub_id,
             sample_sub_nodes,
             operation='add'
         )
@@ -94,15 +93,15 @@ class TestActionOnCoreProtoBySubPlan:
         # Проверяем HTTP вызовы
         assert len(mock_arq_ctx['aio_http'].post_calls) == 2
         
-        # Проверяем URL первой ноды
+        # Проверяем что HTTP POST был вызван с правильным endpoint
         first_call = mock_arq_ctx['aio_http'].post_calls[0]
-        assert f"http://10.0.0.100:8100{NodeUris.proto_core_add_user}" in first_call['url']
+        assert NodeUris.proto_core_add_user in first_call['url']
         
         # Проверяем body
         first_body = first_call['kwargs']['json']
         assert first_body['node_proto_id'] == 1
-        assert first_body['user_obj']['id'] == user_uuid
-        assert first_body['user_obj']['email'] == tg_username
+        assert first_body['user_obj']['id'] == user_uuid  # id = subscription UUID
+        assert first_body['user_obj']['email'] == str(user_sub_id)  # email = user_sub_id (в виде строки)
         assert first_body['user_obj']['level'] == 0  # Из constant_user_data_obj
         
         # Проверяем что outbox очищен
@@ -121,7 +120,7 @@ class TestActionOnCoreProtoBySubPlan:
         """
         # Arrange
         user_uuid = "uuid-delete-456"
-        tg_username = "delete_user"
+        user_sub_id = arq_test_seed['order_id']
         mock_arq_ctx['aio_http'].status = 200
         
         sample_sub_nodes = build_sub_nodes()
@@ -129,16 +128,16 @@ class TestActionOnCoreProtoBySubPlan:
         # Вставляем записи в outbox
         async with db_pool.acquire() as conn:
             await conn.execute("""
-                INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
-                VALUES ($1, $2, $3, $4, $5), ($1, $2, $3, $4, $6)
-            """, user_uuid, tg_username, arq_test_seed['order_id'], 2,
+                INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+                VALUES ($1, $2, $3, $4), ($1, $2, $3, $5)
+            """, user_uuid, user_sub_id, 2,
                 arq_test_seed['vnode_id_10'], arq_test_seed['vnode_id_11'])
         
         # Act
         result = await action_on_core_proto_by_sub_plan(
             mock_arq_ctx,
             user_uuid,
-            tg_username,
+            user_sub_id,
             sample_sub_nodes,
             operation='delete'
         )
@@ -149,7 +148,7 @@ class TestActionOnCoreProtoBySubPlan:
         
         # Проверяем что используется DELETE endpoint
         first_call = mock_arq_ctx['aio_http'].post_calls[0]
-        assert f"http://10.0.0.100:8100{NodeUris.proto_core_delete_user}" in first_call['url']
+        assert NodeUris.proto_core_delete_user in first_call['url']
         
         # Проверяем body содержит delete_script
         first_body = first_call['kwargs']['json']
@@ -167,7 +166,7 @@ class TestActionOnCoreProtoBySubPlan:
         """
         # Arrange
         user_uuid = "uuid-partial-789"
-        tg_username = "partial_user"
+        user_sub_id = arq_test_seed['order_id']
         
         sample_sub_nodes = build_sub_nodes()
         
@@ -191,16 +190,16 @@ class TestActionOnCoreProtoBySubPlan:
         # Вставляем записи в outbox
         async with db_pool.acquire() as conn:
             await conn.execute("""
-                INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
-                VALUES ($1, $2, $3, $4, $5), ($1, $2, $3, $4, $6)
-            """, user_uuid, tg_username, arq_test_seed['order_id'], 1,
+                INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+                VALUES ($1, $2, $3, $4), ($1, $2, $3, $5)
+            """, user_uuid, user_sub_id, 1,
                 arq_test_seed['vnode_id_10'], arq_test_seed['vnode_id_11'])
         
         # Act
         result = await action_on_core_proto_by_sub_plan(
             mock_arq_ctx,
             user_uuid,
-            tg_username,
+            user_sub_id,
             sample_sub_nodes,
             operation='add'
         )
@@ -216,16 +215,15 @@ class TestActionOnCoreProtoBySubPlan:
         mock_arq_ctx['arq_redis'].enqueue_job.assert_called_once()
         call_args = mock_arq_ctx['arq_redis'].enqueue_job.call_args
         assert call_args[0][0] == 'action_on_core_proto_by_sub_plan'
-        # Позиционные аргументы: func_name, uuid, tg_username, sub_nodes, operation, current_attempt
-        # current_attempt находится на позиции 5 (индекс 4 после имени функции)
-        # Но мы проверяем что это список нод для retry (sub_nodes)
+        # Позиционные аргументы: func_name, uuid, user_sub_id, sub_nodes, operation, current_attempt
+        # Проверяем что это список нод для retry (sub_nodes на позиции 3)
         assert len(call_args[0][3]) == 1  # Только одна упавшая нода в retry
         # Первый retry: current_attempt=1 → 2, delay = 60 * (2 ** 1) = 120
         assert call_args[1]['_defer_by'] == 120
 
     async def test_action_template_validation_error(self, mock_arq_ctx, build_sub_nodes, arq_test_seed, db_pool):
         """
-        Ошибка валидации шаблона: требуется tg_username, но он None.
+        Ошибка валидации шаблона: требуется user_sub_id, но он None.
         
         Проверяем:
         - HTTP запрос НЕ выполнен
@@ -234,22 +232,22 @@ class TestActionOnCoreProtoBySubPlan:
         """
         # Arrange
         user_uuid = "uuid-validation-error"
-        tg_username = None  # Отсутствует, но требуется в шаблоне
+        user_sub_id = None  # Отсутствует, но требуется в шаблоне
         
         sample_sub_nodes = build_sub_nodes([1])  # Только одна нода
         
-        # Вставляем записи в outbox
+        # Вставляем записи в outbox (используем реальный user_sub_id для FK constraint)
         async with db_pool.acquire() as conn:
             await conn.execute("""
-                INSERT INTO sub_nodes_outbox (user_uuid, tg_username, order_id, operation, sub_node_id)
-                VALUES ($1, $2, $3, $4, $5)
-            """, user_uuid, 'null_username', arq_test_seed['order_id'], 1, arq_test_seed['vnode_id_10'])
+                INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+                VALUES ($1, $2, $3, $4)
+            """, user_uuid, arq_test_seed['order_id'], 1, arq_test_seed['vnode_id_10'])
         
         # Act
         result = await action_on_core_proto_by_sub_plan(
             mock_arq_ctx,
             user_uuid,
-            tg_username,
+            user_sub_id,
             sample_sub_nodes,
             operation='add'
         )
@@ -281,7 +279,7 @@ class TestActionOnCoreProtoBySubPlan:
         """
         # Arrange
         user_uuid = "uuid-422-error"
-        tg_username = "user_422"
+        user_sub_id = 100
         mock_arq_ctx['aio_http'].status = 422
         mock_arq_ctx['aio_http'].json_data = {'detail': 'Validation failed'}
         
@@ -291,7 +289,7 @@ class TestActionOnCoreProtoBySubPlan:
         result = await action_on_core_proto_by_sub_plan(
             mock_arq_ctx,
             user_uuid,
-            tg_username,
+            user_sub_id,
             sample_sub_nodes,
             operation='add'
         )
@@ -318,7 +316,7 @@ class TestActionOnCoreProtoBySubPlan:
         await action_on_core_proto_by_sub_plan(
             mock_arq_ctx,
             "uuid-retry",
-            "retry_user",
+            200,
             sample_sub_nodes,
             operation='add',
             current_attempt=1
@@ -335,7 +333,7 @@ class TestActionOnCoreProtoBySubPlan:
         await action_on_core_proto_by_sub_plan(
             mock_arq_ctx,
             "uuid-retry",
-            "retry_user",
+            200,
             sample_sub_nodes,
             operation='add',
             current_attempt=2
@@ -362,7 +360,7 @@ class TestActionOnCoreProtoBySubPlan:
         result = await action_on_core_proto_by_sub_plan(
             mock_arq_ctx,
             "uuid-max-retry",
-            "max_retry_user",
+            300,
             sample_sub_nodes,
             operation='add',
             current_attempt=3
@@ -386,7 +384,7 @@ class TestActionOnCoreProtoBySubPlan:
         result = await action_on_core_proto_by_sub_plan(
             mock_arq_ctx,
             "uuid-empty",
-            "empty_user",
+            400,
             [],  # Пустой список
             operation='add'
         )
