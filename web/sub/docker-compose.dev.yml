@@ -9,11 +9,6 @@ services:
     container_name: sub-service
     image: reinar_panel/sub_service
     command: python -m web.sub.main
-    depends_on:
-      pg_db:
-        condition: service_healthy
-      web-service:
-        condition: service_healthy
     healthcheck:
       test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${SUB_PORT}/api/v1/healthcheck')\"" ]
       interval: 30s
@@ -36,8 +31,6 @@ services:
     image: reinar_panel/sub_service
     command: python -m arq web.sub.config_dir.arq_config.WorkerSettings
     depends_on:
-      pg_db:
-        condition: service_healthy
       sub-service:
         condition: service_healthy
     #    restart: always
