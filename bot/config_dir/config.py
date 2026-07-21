@@ -10,7 +10,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
 
-from bot.env_modes import AppMode, APP_MODE_CONFIG
+from bot.config_dir.env_modes import AppMode, APP_MODE_CONFIG
+from bot.config_dir.msg_templates import MessageTemplates
 
 env_files = (
     os.getenv('ENV_FILE') or
@@ -28,23 +29,19 @@ LOG_DIR.mkdir(exist_ok=True, parents=True)
 
 
 class Settings(BaseSettings):
-    inference_feedback_emoji: list = ['🔝', '🎯', '💯', '🫶', '👍', '✌️', '👀', '🤦‍', '♂', '️🔥', '⚡️', '🌟', '🧩']
+    message_templates: MessageTemplates = MessageTemplates()
     redis_password: str
     redis_max_connections: int
     redis_host: str
     redis_port: int
-    redis_port_docker: int
-    redis_host_docker: str
 
     bot_token: str
     api_server_url: str
-    api_server_url_docker: str
     admin_id: int
 
     app_mode: AppMode
     user_req_limit: int
     user_req_window_seconds: int
-    domain: str
 
     model_config = SettingsConfigDict(extra='allow')
 

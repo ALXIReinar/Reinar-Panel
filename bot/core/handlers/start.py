@@ -1,12 +1,12 @@
 from aiogram.types import ReplyKeyboardRemove, Message
 from redis.asyncio import Redis
 
-from bot.config import bot, env
+from bot.config_dir.config import bot, env
 from bot.core.handlers.commands import set_commands
-from bot.core.utils.aio_http2api_server import ApiServerConn
+from bot.core.api.aiohttp_conn import ApiServerConn
 from bot.core.utils.anything import MessageTemplates
 from bot.core.utils.rate_limiter import rate_limit
-from bot.logger_config import log_event
+from bot.config_dir.logger_config import log_event
 
 
 async def on_startup():
@@ -17,11 +17,13 @@ async def on_startup():
 @rate_limit(env.user_req_limit, env.user_req_window_seconds)
 async def start_handler(message: Message, redis: Redis, aio_http: ApiServerConn):
     """Запрос на сохранение пользователя + Приветствие"""
-    f_name = message.from_user.first_name
+    # Сохраняем пользователя
+    user_data = await aio_http.users.save_user(message.from_user.id, message.from_user.username, return_data=True)
 
-    await aio_http.save_user(message.from_user.id, message.from_user.first_name, message.from_user.last_name)
-
-    await message.answer(MessageTemplates.start_msg.format(f_name))
+    # Рендерим сообщение с автоматической подстановкой плейсхолдеров
+    text = env.message_templates.render('message_start', message, user_api_sub_count=user_data['sub_count'])
+    
+    await message.answer(text)
     await set_commands(bot)
 
 

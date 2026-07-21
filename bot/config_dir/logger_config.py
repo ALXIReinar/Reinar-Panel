@@ -8,7 +8,7 @@ from logging.config import dictConfig
 
 from typing import Literal, Any
 
-from bot.config import env, LOG_DIR
+from bot.config_dir.config import env, LOG_DIR
 
 
 

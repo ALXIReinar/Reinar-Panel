@@ -2,7 +2,7 @@ import random
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from bot.config import env
+from bot.config_dir.config import env
 
 
 def inference_feedback(img_id: int):
