@@ -4,14 +4,25 @@ from aiogram.types import Message
 from pydantic import BaseModel, Field, ConfigDict
 
 from bot.core.utils.placeholders import PlaceholderResolver
+from bot.core.utils.schemas import UserSubSchema
 
 
 class MessageTemplates(BaseModel):
     message_start: str = Field(description='Ответ бота на команду /start')
+    message_user_subscription_extent: str
+    message_sub_plan_offers: str
+    message_pay_window: str
+    message_subscriptions_intro: str
 
     model_config = ConfigDict(str_max_length=4096)
 
-    def render(self, template_name: str, message: Message = None, **custom: Any) -> str:
+    def render(
+            self,
+            template_name: str,
+            message: Message = None,
+            user_sub: UserSubSchema = None,
+            **custom: Any
+    ) -> str:
         """
         Рендерит шаблон с подстановкой плейсхолдеров.
         Автоматически извлекает данные из Message (USER_TG_ID, USER_TG_FIRST_NAME и т.д.)
@@ -38,7 +49,10 @@ class MessageTemplates(BaseModel):
         
         if message:
             resolver.add_message(message)
-        
+
+        if user_sub:
+            resolver.add_user_sub(user_sub)
+
         if custom:
             resolver.add_custom(**custom)
         

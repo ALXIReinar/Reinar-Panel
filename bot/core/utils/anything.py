@@ -9,20 +9,6 @@ class RedisKeys:
     def rate_limit(tg_id: str | int) -> str:
         return f'{env.app_mode}:{env.service_name}:rate_limit:user:tg_id={tg_id}:v1'
 
-
 @dataclass
-class MessageTemplates:
-    start_msg: str = '''
-    Добро пожаловать, {}!
-    
-    Этот бот может распознавать текст с картинок!
-    Отправьте боту фото, выберите на каком языке изображён текст и дождитесь обработки изображения
-    
-    /profile - Покажет статистику и статус подписки
-    /help - Помощь
-    /history - Выдаст меню с историей изображений
-    '''
-
-    help_msg: str = '''
-    Помощь.ехе
-    '''
+class SubServiceUris:
+    get_payment_link: str = '/api/v1/robokassa/get_pay_link'

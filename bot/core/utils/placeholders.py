@@ -1,6 +1,8 @@
 from typing import Any
 from aiogram.types import Message
 
+from bot.core.utils.schemas import UserSubSchema
+
 
 class PlaceholderResolver:
     """
@@ -51,6 +53,38 @@ class PlaceholderResolver:
             })
         return self
 
+    def add_user_sub(self, user_sub: UserSubSchema):
+        """
+        Автоматически извлекает данные из UserSubSchema.
+
+        Доступные плейсхолдеры:
+        - USER_SUB_ID - ID подписки пользователя
+        - USER_SUB_PLAN_ID - ID тарифного плана
+        - USER_SUB_TITLE/SUB_TITLE - название подписки, которое отображается в впн-клиенте пользователя
+        - USER_SUB_STATUS - В зависимости от is_active, is_limited может быть: "🟢 Активна", "🔴 Приостановлена", "🟠 Ограничена"
+        - USER_SUB_LINK - Ссылка на подписку, формируется из env:SUB_SERVICE_URL + /sub/{b64_id}
+        - USER_SUB_B64 - b64_id подписки
+        - USER_SUB_TRAFFIC_USED_DAY - Использовано трафика "сегодня"
+        - USER_SUB_TRAFFIC_LIMIT_DAY - Лимит на ежедневный трафик. Если не включен, отображается _. Если безлимит - ♾️
+        - USER_SUB_TRAFFIC_USED - всего использовано трафика подпиской
+        - USER_SUB_TRAFFIC_LIMIT - Выделенная квота трафика на подписку. Если безлимит - ♾️
+        - USER_SUB_EXPIRE - Дата истечения срока действия подписки. ♾️ если срок неограничен
+        """
+        self.context.update({
+            'USER_SUB_ID': user_sub.id,
+            'USER_SUB_PLAN_ID': user_sub.plan_id,
+            'USER_SUB_TITLE': user_sub.title,
+            'SUB_TITLE': user_sub.title,
+            'USER_SUB_STATUS': user_sub.status,
+            'USER_SUB_LINK': user_sub.sub_link,
+            'USER_SUB_B64': user_sub.b64_id,
+            'USER_SUB_TRAFFIC_USED_DAY': user_sub.traffic_used_day,
+            'USER_SUB_TRAFFIC_LIMIT_DAY': user_sub.traffic_limit_day,
+            'USER_SUB_TRAFFIC_USED': user_sub.traffic_used,
+            'USER_SUB_TRAFFIC_LIMIT': user_sub.traffic_limit,
+            'USER_SUB_EXPIRE': user_sub.expire,
+        })
+        return self
 
     def add_custom(self, **kwargs: Any) -> 'PlaceholderResolver':
         """

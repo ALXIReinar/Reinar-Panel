@@ -7,7 +7,7 @@ from redis.asyncio import Redis
 
 from bot.config_dir.config import bot, api_base_url, redis_settings
 from bot.core.handlers.callback_center import callback_factory
-from bot.core.api.aiohttp_conn import ApiServerConn
+from bot.core.api.aiohttp_conn import SubServiceConn
 
 from bot.core.handlers.start import helping, on_startup, start_handler
 
@@ -39,7 +39,7 @@ async def main():
         await dp.start_polling(
             bot,
             allowed_updates=dp.resolve_used_update_types(),
-            aio_http=ApiServerConn(aio_http_session),
+            aio_http=SubServiceConn(aio_http_session),
             redis=redis_conn
         )
     finally:

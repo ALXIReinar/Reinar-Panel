@@ -11,7 +11,7 @@ class UsersAioHttp:
         """
         Обращение на Api Server
 
-        **return_data** - отдаёт данные о пользователе. Ответ идентичен методу get_user_info(..., preview=True)
+        **return_data** - отдаёт данные о пользователе. Ответ идентичен методу get_user_info()
         """
         async with self.session.post(
                 '/api/v1/telegram/users/add',
@@ -26,5 +26,5 @@ class UsersAioHttp:
             return resp_data
 
 
-    async def get_user_info(self, tg_id: int, tg_username: str, preview: bool):
+    async def get_user_info(self, tg_id: int, tg_username: str):
         ...

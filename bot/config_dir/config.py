@@ -6,6 +6,7 @@ from pathlib import Path
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
@@ -30,14 +31,16 @@ LOG_DIR.mkdir(exist_ok=True, parents=True)
 
 class Settings(BaseSettings):
     message_templates: MessageTemplates = MessageTemplates()
+    emoji_period_offers: list[str] = ['📀', '📡', '🛡', '📨', '📎', '📶']
     redis_password: str
     redis_max_connections: int
     redis_host: str
     redis_port: int
 
     bot_token: str
-    api_server_url: str
-    admin_id: int
+    admin_tg_id: int
+    admin_panel_ip: str
+    sub_service_url: str = Field(max_length=255)
 
     app_mode: AppMode
     user_req_limit: int
