@@ -11,6 +11,7 @@ from fastapi.responses import ORJSONResponse
 from redis.asyncio import Redis
 
 from web.sub.api import main_router
+from web.sub.api.tg_routing import tg_router
 from web.sub.config_dir.config import redis_settings, pool_settings, env, get_arq_redis_settings, \
     get_arq_worker_settings
 
@@ -45,6 +46,7 @@ app = FastAPI(
 )
 
 app.include_router(main_router)
+app.include_router(tg_router)
 
 
 if __name__ == '__main__':

@@ -1,4 +1,10 @@
 from dataclasses import dataclass
+from typing import Annotated
+
+from fastapi import HTTPException, Depends
+from starlette.requests import Request
+
+from web.sub.config_dir.config import env
 
 
 @dataclass
@@ -59,3 +65,14 @@ class UserStatuses:
     not_connect: int = 1
     offline: int = 2
     online: int = 3
+
+
+def tg_routing_is_tg_bot_access(request: Request):
+    """
+    Обработка X-Forwarded-For не нужна, т.к. микросервисы состоят в приватно сети WireGuard
+    """
+    ip = request.client.host
+    if ip not in env.tg_bot_service_private_ip:
+        raise HTTPException(status_code=403, detail='Forbidden')
+
+TgRoutingAccessDep = Annotated[None, Depends(tg_routing_is_tg_bot_access)]

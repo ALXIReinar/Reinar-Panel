@@ -31,7 +31,6 @@ LOG_DIR.mkdir(exist_ok=True, parents=True)
 
 class Settings(BaseSettings):
     message_templates: MessageTemplates = MessageTemplates()
-    emoji_period_offers: list[str] = ['📀', '📡', '🛡', '📨', '📎', '📶']
     redis_password: str
     redis_max_connections: int
     redis_host: str

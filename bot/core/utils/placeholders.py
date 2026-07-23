@@ -1,7 +1,7 @@
 from typing import Any
 from aiogram.types import Message
 
-from bot.core.utils.schemas import UserSubSchema
+from bot.core.utils.schemas import UserSubSchema, ShopSubSchema, SubOfferSchema
 
 
 class PlaceholderResolver:
@@ -69,6 +69,7 @@ class PlaceholderResolver:
         - USER_SUB_TRAFFIC_USED - всего использовано трафика подпиской
         - USER_SUB_TRAFFIC_LIMIT - Выделенная квота трафика на подписку. Если безлимит - ♾️
         - USER_SUB_EXPIRE - Дата истечения срока действия подписки. ♾️ если срок неограничен
+        - USER_SUB_CREATED_AT - Дата истечения срока действия подписки. ♾️ если срок неограничен
         """
         self.context.update({
             'USER_SUB_ID': user_sub.id,
@@ -83,6 +84,42 @@ class PlaceholderResolver:
             'USER_SUB_TRAFFIC_USED': user_sub.traffic_used,
             'USER_SUB_TRAFFIC_LIMIT': user_sub.traffic_limit,
             'USER_SUB_EXPIRE': user_sub.expire,
+            'USER_SUB_CREATED_AT': user_sub.created_at.strftime("%d-%m-%Y %H:%M"),
+        })
+        return self
+
+    def add_shop_plan(self, shop_sub: ShopSubSchema):
+        """
+        Автоматически извлекает данные из ShopSubSchema.
+
+        Доступные плейсхолдеры:
+        - SUB_ID - sub_plan_id
+        - USER_SUB_TITLE/SUB_TITLE - название подписки, которое отображается в впн-клиенте пользователя
+        - SUB_DESCRIPTION - Описание тарифа. В нём можно подробнее описать тариф("Доступен безлимит, если купить подписку за 1000р" и т.п.)
+        """
+        self.context.update({
+            'SUB_ID': shop_sub.id,
+            'SUB_TITLE': shop_sub.title,
+            'USER_SUB_TITLE': shop_sub.title,
+            'SUB_DESCRIPTION': shop_sub.description,
+        })
+        return self
+
+    def add_price_offer(self, offer: SubOfferSchema):
+        """
+        Автоматически извлекает данные из SubOfferSchema.
+
+        Доступные плейсхолдеры:
+        - SUB_COST - sub_plan_id
+        - SUB_TTL_DAYS - Длительность подписки в днях после покупки/продления(прибавится к существующей подписке). ♾️ - если infinite_expire = true
+        - SUB_TRAFFIC_LIMIT_DAY - лимит ГБ в день. Если None, то - (прочерк). Если infinite_traffic = true, то ♾️ НЕЗАВИСИМО от указанного значения.
+        - SUB_TRAFFIC_LIMIT - Общий лимит ГБ. Если None, то - (прочерк). Если infinite_traffic = true, то ♾️ НЕЗАВИСИМО от указанного значения.
+        """
+        self.context.update({
+            "SUB_COST": offer.cost,
+            "SUB_TTL_DAYS": offer.ttl_days,
+            "SUB_TRAFFIC_LIMIT_DAY": offer.traffic_limit_day,
+            "SUB_TRAFFIC_LIMIT": offer.traffic_limit,
         })
         return self
 

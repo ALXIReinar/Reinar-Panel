@@ -40,18 +40,24 @@ class UserSubSchema(BaseModel):
 
         if info.data['infinite_traffic']:
             return '♾️'
+
         # Если None, ограничение не включено
+        if isinstance(v, int):
+            return v // 1024
         # Но может быть общий лимит, так что _; не ♾️
-        return v or '_'
+        return '-'
 
     @field_validator('traffic_limit', mode='after')
     @classmethod
     def validate_traffic_limit(cls, v: datetime, info: ValidationInfo):
         if info.data['infinite_traffic']:
             return '♾️'
+
         # Если None, ограничение не включено
-        # При этом может быть ежедневный лимит, так что _; не ♾️
-        return v or '_'
+        if isinstance(v, int):
+            return v // 1024
+        # Но может быть общий лимит, так что _; не ♾️
+        return '-'
 
 
     @field_validator('sub_link', mode='after')
@@ -81,13 +87,92 @@ class UserSubSchema(BaseModel):
             "title": us["title"],
             "is_active": us["is_active"],
             "is_limited": us["is_limited"],
-            "traffic_used_day": us["traffic_day_used"],
-            "traffic_limit_day": us["traffic_day_limit"],
-            "traffic_used": us["traffic_used"],
-            "traffic_limit": us["traffic_limit"],
+            "traffic_used_day": us["traffic_used_day_mb"],
+            "traffic_limit_day": us["traffic_limit_day"],
+            "traffic_used": us["used_mb"],
+            "traffic_limit": us["used_mb_limit"],
             "infinite_expire": us["infinite_expire"],
             "infinite_traffic": us["infinite_traffic"],
             "expire_date": us["expire_date"],
             "created_at": us["created_at"],
+        }
+        return cls.model_validate(mapped_data)
+
+
+class ShopSubSchema(BaseModel):
+    id: int
+    title: str
+    description: str
+
+    @classmethod
+    def fast_create(cls, us: dict) -> "ShopSubSchema":
+        """Преобразует сырой словарь БД в формат схемы и валидирует его."""
+        mapped_data = {
+            "id": us["id"],
+            "title": us["title"],
+            "description": us["description"],
+        }
+        return cls.model_validate(mapped_data)
+
+
+class SubOfferSchema(BaseModel):
+    id: int
+    cost: int
+    ttl_days: int
+    traffic_limit_day: int | str | None
+    traffic_limit: int | str | None
+    infinite_traffic: bool
+    infinite_expire: bool
+
+    field_validator('cost', mode='after')
+    @classmethod
+    def transform_cost(cls, v):
+        return f'{v / 100: .2f}'
+
+    @field_validator('ttl_days', mode='after')
+    @classmethod
+    def validate_expire_date(cls, v, info: ValidationInfo):
+        if info.data['infinite_expire']:
+            return '♾️'
+        return v
+
+    @field_validator('traffic_limit_day', mode='after')
+    @classmethod
+    def validate_traffic_limit_day(cls, v: datetime, info: ValidationInfo):
+
+        if info.data['infinite_traffic']:
+            return '♾️'
+
+        # Если None, ограничение не включено
+        if isinstance(v, int):
+            return v // 1024
+        # Но может быть общий лимит, так что _; не ♾️
+        return '-'
+
+    @field_validator('traffic_limit', mode='after')
+    @classmethod
+    def validate_traffic_limit(cls, v: datetime, info: ValidationInfo):
+        if info.data['infinite_traffic']:
+            return '♾️'
+
+        # Если None, ограничение не включено
+        if isinstance(v, int):
+            return v // 1024
+        # Но может быть общий лимит, так что _; не ♾️
+        return '-'
+
+    @classmethod
+    def fast_create(cls, so: dict) -> "SubOfferSchema":
+        """
+        so - json объект из столбца "offer_price" sql-запроса на пользовательские подписки
+        """
+        mapped_data = {
+            "id": so["offer_id"],
+            "cost": so["cost"],
+            "ttl_days": so["ttl_days"],
+            "traffic_limit_day": so["traffic_day_limit"],
+            "traffic_limit": so["traffic_limit"],
+            "infinite_expire": so["infinite_expire"],
+            "infinite_traffic": so["infinite_traffic"],
         }
         return cls.model_validate(mapped_data)

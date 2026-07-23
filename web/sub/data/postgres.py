@@ -15,6 +15,8 @@ class PgSql:
         self.sub = SubscriptionQueries(conn)
         self.users_subs = PaymentQueries(conn)
 
+        self.tg_routing = TgRoutingQueries(conn)
+
 async def get_pg_pool(request: Request):
     async with request.app.state.pg_pool.acquire() as conn:
         yield conn

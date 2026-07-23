@@ -4,15 +4,21 @@ from aiogram.types import Message
 from pydantic import BaseModel, Field, ConfigDict
 
 from bot.core.utils.placeholders import PlaceholderResolver
-from bot.core.utils.schemas import UserSubSchema
+from bot.core.utils.schemas import UserSubSchema, SubOfferSchema, ShopSubSchema
 
 
 class MessageTemplates(BaseModel):
     message_start: str = Field(description='Ответ бота на команду /start')
-    message_user_subscription_extent: str
-    message_sub_plan_offers: str
+    message_shop_subscriptions_intro: str
+    message_shop_subscriptions_extent: str
+
+    message_user_profile_subs_intro: str
+    message_subscriptions_user_extent: str
+
+    message_subscriptions_offers_intro: str
+    message_subscriptions_offers_extent: str
+
     message_pay_window: str
-    message_subscriptions_intro: str
 
     model_config = ConfigDict(str_max_length=4096)
 
@@ -21,6 +27,8 @@ class MessageTemplates(BaseModel):
             template_name: str,
             message: Message = None,
             user_sub: UserSubSchema = None,
+            shop_plan: ShopSubSchema = None,
+            sub_plan_offer: SubOfferSchema = None,
             **custom: Any
     ) -> str:
         """
@@ -52,6 +60,12 @@ class MessageTemplates(BaseModel):
 
         if user_sub:
             resolver.add_user_sub(user_sub)
+
+        if shop_plan:
+            resolver.add_shop_plan(shop_plan)
+
+        if sub_plan_offer:
+            resolver.add_price_offer(sub_plan_offer)
 
         if custom:
             resolver.add_custom(**custom)

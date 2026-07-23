@@ -4,7 +4,6 @@ from redis.asyncio import Redis
 from bot.config_dir.config import bot, env
 from bot.core.handlers.commands import set_commands
 from bot.core.api.aiohttp_conn import SubServiceConn
-from bot.core.utils.anything import MessageTemplates
 from bot.core.utils.keyboards import main_kb
 from bot.core.utils.rate_limiter import rate_limit
 from bot.config_dir.logger_config import log_event
@@ -19,10 +18,10 @@ async def on_startup():
 async def start_handler(message: Message, redis: Redis, aio_http: SubServiceConn):
     """Запрос на сохранение пользователя + Приветствие"""
     # Сохраняем пользователя
-    user_data = await aio_http.users.save_user(message.from_user.id, message.from_user.username, return_data=True)
+    ok, user_data = await aio_http.users.save_user(message.from_user.id, message.from_user.username, return_data=True)
 
     # Рендерим сообщение с автоматической подстановкой плейсхолдеров
-    text = env.message_templates.render('message_start', message, user_api_sub_count=user_data['sub_count'])
+    text = env.message_templates.render('message_start', message, user_api_sub_count=user_data.get('sub_count', 0))
     
     await message.answer(text, reply_markup=main_kb())
     await set_commands(bot)

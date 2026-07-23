@@ -1,23 +1,19 @@
-from aiohttp import ClientSession, ClientError
+from aiohttp import ClientSession
 
+from bot.core.api.aiohttp_conn import BaseAioHTTPClient
 from bot.core.utils.anything import SubServiceUris
 
 
-class UserSubsAioHttp:
+class UserSubsAioHttp(BaseAioHTTPClient):
     def __init__(self, session: ClientSession):
-        self.session = session
+        super().__init__(session)
 
-    async def get_payment_link(self, tg_id, sub_plan_id, cost, ttl_days: int):
-        cost = f'{cost // 100}.00'
-        try:
-            async with self.session.post(
-                    SubServiceUris.get_payment_link,
-                    json={'tg_id': tg_id, 'sub_plan_id': sub_plan_id, 'cost': cost, 'ttl_days': ttl_days}
-            ) as resp:
-                resp.raise_for_status()
-                resp_json = await resp.json()
+    async def all(self, tg_id: int):
+        ok, data = await self._request(
+            'GET',
+            SubServiceUris.get_user_subs_all, params={'tg_id': tg_id}
+        )
+        if not ok:
+            return False, []
 
-                return True, resp_json['payment_url']
-
-        except ClientError as e:
-            return False, repr(e)
+        return True, data['user_subs']

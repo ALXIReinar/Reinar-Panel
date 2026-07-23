@@ -73,9 +73,10 @@ class Settings(BaseSettings):
     subscription_update_interval: str
     post_processing_responses: bool
     tg_bot_link: str
+    tg_bot_service_private_ip: str | set[str] | list[str] # коллекция для удобства разработки и проверки в сваггере
     model_config = SettingsConfigDict(extra='allow', env_file_encoding='utf-8')
 
-    @field_validator('trusted_proxies', mode='before')
+    @field_validator('trusted_proxies', 'tg_bot_service_private_ip', mode='before')
     @classmethod
     def allowed_ips_validator(cls, v):
         raw_items = v.split(',') if isinstance(v, str) else v
