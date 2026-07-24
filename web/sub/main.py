@@ -7,7 +7,6 @@ from aiohttp import ClientSession
 from asyncpg import create_pool
 from arq import create_pool as create_arq_pool
 from fastapi import FastAPI
-from fastapi.responses import ORJSONResponse
 from redis.asyncio import Redis
 
 from web.sub.api import main_router

@@ -18,7 +18,7 @@ from starlette.requests import Request
 from web.sub.config_dir.logger_config import log_event
 from web.sub.config_dir.config import env
 from web.sub.data.postgres import PgSqlDep
-from web.sub.schemas import SubUrlSchema
+from web.sub.schemas.sub_robo_schema import SubUrlSchema
 
 router = APIRouter(tags=['Subscriptions Service'])
 

@@ -15,11 +15,11 @@ class SubPlansAioHttp(BaseAioHTTPClient):
             return False, data
         return True, data['sub_plans']
 
-    async def api_get_payment_link(self, tg_id: int, sub_plan_id: int, offer_id: int):
+    async def api_get_payment_link(self, tg_id: int, sub_plan_id: int, offer_id: int, description: str):
         ok, data = await self._request(
             "POST",
             SubServiceUris.get_payment_link,
-            json={'tg_id': tg_id, 'sub_plan_id': sub_plan_id, 'offer_id': offer_id}
+            json={'tg_id': tg_id, 'sub_plan_id': sub_plan_id, 'offer_id': offer_id, 'description': description}
         )
         if not ok:
             return False, data

@@ -86,7 +86,8 @@ class UserSubscriptions:
         order_success, payment_link = await aio_http.sub_plans.api_get_payment_link(
             message.from_user.id,
             selected_sub.sub_plan_id,
-            price_offer['offer_id']
+            price_offer['offer_id'],
+            selected_sub.title
         )
         "Если ошибка на саб сервисе"
         if not order_success:
@@ -153,7 +154,8 @@ class ShopSubscriptions:
         order_success, payment_link = await aio_http.sub_plans.api_get_payment_link(
             message.from_user.id,
             selected_sub.id,
-            price_offer['offer_id']
+            price_offer['offer_id'],
+            selected_sub.title
         )
         "Если ошибка на саб сервисе"
         if not order_success:

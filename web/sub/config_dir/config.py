@@ -67,13 +67,16 @@ class Settings(BaseSettings):
     trusted_proxies: set[str] | str | list[str]
     action_on_core_proto_limit: int
 
+    tg_bot_token: str | None = os.getenv('TG_BOT_TOKEN')
+    tg_bot_link: str
+    tg_bot_service_private_ip: str | set[str] | list[str] # коллекция для удобства разработки и проверки в сваггере
+
     app_mode: AppMode
     pay_mode: PayMode
     sub_link_bytes: int = Field(le=64, ge=16)
     subscription_update_interval: str
     post_processing_responses: bool
-    tg_bot_link: str
-    tg_bot_service_private_ip: str | set[str] | list[str] # коллекция для удобства разработки и проверки в сваггере
+
     model_config = SettingsConfigDict(extra='allow', env_file_encoding='utf-8')
 
     @field_validator('trusted_proxies', 'tg_bot_service_private_ip', mode='before')

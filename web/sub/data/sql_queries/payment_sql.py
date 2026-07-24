@@ -1,6 +1,5 @@
 import base64
 import secrets
-from datetime import datetime, timedelta
 from uuid import uuid4
 
 from asyncpg import Connection, ForeignKeyViolationError
@@ -14,19 +13,33 @@ class PaymentQueries:
         self.conn = conn
 
 
-    async def order_subscription(self, user_id: int):
-        query = 'INSERT INTO pay_orders (user_id, status) VALUES ($1, $2) RETURNING id'
+    async def order_subscription(self, user_id: int, tg_id: int, sub_plan_id: int, offer_id: int):
+        query_tg_id2user_id = 'SELECT id FROM users WHERE tg_id = $1 AND is_deleted = false'
+        query = '''
+        WITH pay_meta AS (
+            SELECT infinite_expire, infinite_traffic, traffic_limit_mb, traffic_limit_day_mb, ttl_days, cost
+            FROM sub_plan_offers
+            WHERE sub_plan_id = $2 AND id = $3
+        )
+        INSERT INTO pay_orders (user_id, status, infinite_expire, infinite_traffic, traffic_limit_mb, traffic_limit_day_mb, ttl_days, cost) 
+        SELECT $1, $4, infinite_expire, infinite_traffic, traffic_limit_mb, traffic_limit_day_mb, ttl_days, cost
+        FROM pay_meta
+        RETURNING id, cost, user_id
+        '''
         try:
-            return await self.conn.fetchval(query, user_id, PayStatuses.pending)
+            if not user_id:
+                user_id = await self.conn.fetchval(query_tg_id2user_id, tg_id)
+
+            return await self.conn.fetchrow(query, user_id, sub_plan_id, offer_id, PayStatuses.pending)
         except ForeignKeyViolationError:
             return None
 
 
-    async def activate_subscription(self, order_id: int, user_id: int, sub_plan_id: int, sub_days: int):
+    async def activate_subscription(self, order_id: int, user_id: int, sub_plan_id: int, offer_id: int):
         query = """
         WITH updated_order AS (
             -- 1. Обновляем статус заказа
-            UPDATE pay_orders SET status = $7 WHERE id = $1 RETURNING id, user_id
+            UPDATE pay_orders SET status = $7 WHERE id = $1
         ),
         inp AS (
             -- 2. Собираем наши входные переменные в "таблицу" из одной строки.
@@ -36,21 +49,20 @@ class PaymentQueries:
                 $3::text AS uuid, 
                 $4::text AS b64_id, 
                 $5::int AS sub_plan_id, 
-                true AS is_active, 
-                (NOW() + $6::interval) AS exp_date
+                true AS is_active
         )
         -- 3. Вставляем или обновляем состояние подписки (Upsert)
         INSERT INTO user_subs (
-            order_id, user_id, uuid, b64_id, sub_plan_id, 
-            is_active, expire_date, infinite_expire, 
-            infinite_traffic, traffic_limit_day, used_mb_limit
+            order_id, user_id, uuid, b64_id, sub_plan_id, is_active, 
+            expire_date, 
+            infinite_expire, infinite_traffic, traffic_limit_day, used_mb_limit
         )
         SELECT 
-            inp.order_id, inp.user_id, inp.uuid, inp.b64_id, inp.sub_plan_id, 
-            inp.is_active, inp.exp_date, sp.infinite_expire, 
-            sp.infinite_traffic, sp.traffic_limit_day, sp.traffic_limit_total
+            inp.order_id, inp.user_id, inp.uuid, inp.b64_id, inp.sub_plan_id, inp.is_active,
+            NOW() + (spo.ttl_days * INTERVAL '1 day'),
+            spo.infinite_expire, spo.infinite_traffic, spo.traffic_limit_day_mb, spo.traffic_limit_mb
         FROM inp
-        JOIN sub_plans sp ON sp.id = inp.sub_plan_id 
+        JOIN sub_plan_offers spo ON spo.sub_plan_id = inp.sub_plan_id AND spo.sub_plan_id = $5 AND spo.id = $6
         ON CONFLICT (user_id, sub_plan_id) 
         DO UPDATE SET 
             -- Обновляем привязку к новому заказу
@@ -58,9 +70,9 @@ class PaymentQueries:
             is_active = true, 
             is_limited = false,
             expire_date = CASE 
-                WHEN user_subs.is_active = true AND user_subs.expire_date > NOW() 
-                THEN user_subs.expire_date + $6::interval
-                ELSE NOW() + $6::interval
+                        WHEN user_subs.is_active = true AND user_subs.expire_date > NOW() 
+                        THEN user_subs.expire_date + (EXCLUDED.expire_date - NOW())
+                        ELSE EXCLUDED.expire_date
             END
         -- 4. Возвращаем uuid прямо из таблицы user_subs (если подписка продлевается - вернется старый, если покупка - новый)
         RETURNING id, uuid
@@ -68,7 +80,7 @@ class PaymentQueries:
         uuid = str(uuid4())
         b64_id = base64.urlsafe_b64encode(secrets.token_bytes(env.sub_link_bytes)).decode('utf-8').rstrip('=')
         return await self.conn.fetchrow(
-            query, order_id, user_id, uuid, b64_id, sub_plan_id, timedelta(days=sub_days), PayStatuses.success
+            query, order_id, user_id, uuid, b64_id, sub_plan_id, offer_id, PayStatuses.success
         )
 
     async def get_stuck_actions(self):

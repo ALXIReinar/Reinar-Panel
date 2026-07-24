@@ -394,43 +394,89 @@ async def sub_plan_seed(db_pool, db_seed):
     """
     Создаёт тестовые планы подписок для теста.
     
+    Архитектура: sub_plans хранит метаданные (title, position), 
+                 sub_plan_offers хранит настройки (cost, ttl_days, лимиты)
+    
     Возвращает:
-        dict: {"plan_id_1": int, "plan_id_2": int}
+        dict: {
+            "plan_id_1": int, 
+            "plan_id_2": int,
+            "offer_id_1": int,  # offer для plan_id_1
+            "offer_id_2": int   # offer для plan_id_2
+        }
     """
     async with db_pool.acquire() as conn:
         # Создаём первый план подписки (активный)
         plan_id_1 = await conn.fetchval(
             """
-            INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, is_active)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO sub_plans (title, description, position, is_active)
+            VALUES ($1, $2, $3, $4)
             RETURNING id
             """,
             "Basic Plan",
             "Basic subscription plan for testing",
-            30,  # 30 дней
-            500,  # 5.00 руб (в копейках)
-            10240,  # 10 GB в МБ
-            True
+            1,    # position
+            True  # is_active
+        )
+        
+        # Создаём offer для первого плана
+        offer_id_1 = await conn.fetchval(
+            """
+            INSERT INTO sub_plan_offers (
+                sub_plan_id, ttl_days, cost, traffic_limit_day_mb, 
+                traffic_limit_mb, infinite_traffic, infinite_expire, is_active
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id
+            """,
+            plan_id_1,
+            30,     # ttl_days - 30 дней
+            500,    # cost - 5.00 руб (в копейках)
+            10240,  # traffic_limit_day_mb - 10 GB в МБ
+            None,   # traffic_limit_mb - не используется
+            False,  # infinite_traffic
+            False,  # infinite_expire
+            True    # is_active
         )
         
         # Создаём второй план (неактивный, безлимитный трафик)
         plan_id_2 = await conn.fetchval(
             """
-            INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, is_active)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO sub_plans (title, description, position, is_active)
+            VALUES ($1, $2, $3, $4)
             RETURNING id
             """,
             "Premium Plan",
             "Premium unlimited plan",
-            90,  # 90 дней
-            2000,  # 20.00 руб
-            -1,  # Безлимит
-            False
+            2,     # position
+            False  # is_active
+        )
+        
+        # Создаём offer для второго плана (безлимитный)
+        offer_id_2 = await conn.fetchval(
+            """
+            INSERT INTO sub_plan_offers (
+                sub_plan_id, ttl_days, cost, traffic_limit_day_mb, 
+                traffic_limit_mb, infinite_traffic, infinite_expire, is_active
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id
+            """,
+            plan_id_2,
+            90,    # ttl_days - 90 дней
+            2000,  # cost - 20.00 руб
+            None,  # traffic_limit_day_mb - безлимит
+            None,  # traffic_limit_mb - безлимит
+            True,  # infinite_traffic - безлимит трафика
+            False, # infinite_expire
+            False  # is_active
         )
         
         return {
             "plan_id_1": plan_id_1,
-            "plan_id_2": plan_id_2
+            "plan_id_2": plan_id_2,
+            "offer_id_1": offer_id_1,
+            "offer_id_2": offer_id_2
         }
 
 

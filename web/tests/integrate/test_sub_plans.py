@@ -60,16 +60,26 @@ class TestUpdateSubPlan:
     async def test_update_plan_full(self, client, sub_plan_seed):
         """Полное обновление всех полей плана"""
         plan_id = sub_plan_seed["plan_id_1"]
+        offer_id = sub_plan_seed["offer_id_1"]
         
         response = await client.put(
             f"/api/v1/private/subscriptions/plans/{plan_id}",
             json={
                 "title": "Updated Basic Plan",
                 "description": "Updated description for basic plan",
-                "ttl_days": 60,
-                "cost": 1000,
-                "traffic_limit_day": 20480,
-                "is_active": False
+                "is_active": False,
+                "offers": [
+                    {
+                        "id": offer_id,
+                        "ttl_days": 60,
+                        "cost": 1000,
+                        "traffic_limit_day": 20480,
+                        "traffic_limit_total": None,
+                        "infinite_traffic": False,
+                        "infinite_expire": False,
+                        "is_active": False
+                    }
+                ]
             }
         )
         
@@ -77,6 +87,7 @@ class TestUpdateSubPlan:
         data = response.json()
         assert data["success"] is True
         assert data["message"] == "Группа подписок обновлена"
+        assert data["offer_update_count"] == 1
         
         # Проверяем что данные обновились в БД
         get_response = await client.get(f"/api/v1/private/subscriptions/plans/{plan_id}")
@@ -84,20 +95,28 @@ class TestUpdateSubPlan:
         updated_plan = get_data["plan"]
         assert updated_plan["title"] == "Updated Basic Plan"
         assert updated_plan["description"] == "Updated description for basic plan"
-        assert updated_plan["ttl_days"] == 60
-        assert updated_plan["cost"] == 1000
-        assert updated_plan["traffic_limit_day"] == 20480
         assert updated_plan["is_active"] is False
+        
+        # Проверяем offer
+        offers = get_data["offers"]
+        assert len(offers) == 1
+        offer = offers[0]
+        assert offer["ttl_days"] == 60
+        assert offer["cost"] == 1000
+        assert offer["traffic_day_limit"] == 20480
+        assert offer["is_active"] is False
     
     @pytest.mark.asyncio
     async def test_update_plan_partial(self, client, sub_plan_seed):
         """Частичное обновление (только title)"""
         plan_id = sub_plan_seed["plan_id_2"]
+        offer_id = sub_plan_seed["offer_id_2"]
         
         response = await client.put(
             f"/api/v1/private/subscriptions/plans/{plan_id}",
             json={
-                "title": "Renamed Premium Plan"
+                "title": "Renamed Premium Plan",
+                "offers": []  # Пустой массив - ничего не обновляем в offers
             }
         )
         
@@ -110,11 +129,15 @@ class TestUpdateSubPlan:
         get_data = get_response.json()
         updated_plan = get_data["plan"]
         assert updated_plan["title"] == "Renamed Premium Plan"
-        # Старые значения сохранились
-        assert updated_plan["ttl_days"] == 90
-        assert updated_plan["cost"] == 2000
-        assert updated_plan["traffic_limit_day"] == -1
-        assert updated_plan["is_active"] is False
+        
+        # Старые значения в offer сохранились
+        offers = get_data["offers"]
+        assert len(offers) == 1
+        offer = offers[0]
+        assert offer["ttl_days"] == 90
+        assert offer["cost"] == 2000
+        assert offer["infinite_traffic"] is True
+        assert offer["is_active"] is False
     
     @pytest.mark.asyncio
     async def test_update_plan_attach_vnodes(self, client, sub_plan_seed, virtual_node_seed):
@@ -126,7 +149,8 @@ class TestUpdateSubPlan:
         response = await client.put(
             f"/api/v1/private/subscriptions/plans/{plan_id}",
             json={
-                "add_node_proto_ids": [vnode_id_1, vnode_id_2]
+                "add_node_proto_ids": [vnode_id_1, vnode_id_2],
+                "offers": []
             }
         )
         
@@ -163,7 +187,8 @@ class TestUpdateSubPlan:
         response = await client.put(
             f"/api/v1/private/subscriptions/plans/{plan_id}",
             json={
-                "remove_node_proto_ids": [vnode_id_1]
+                "remove_node_proto_ids": [vnode_id_1],
+                "offers": []
             }
         )
         
@@ -200,7 +225,8 @@ class TestUpdateSubPlan:
             f"/api/v1/private/subscriptions/plans/{plan_id}",
             json={
                 "add_node_proto_ids": [vnode_id_2, vnode_id_3],
-                "remove_node_proto_ids": [vnode_id_1]
+                "remove_node_proto_ids": [vnode_id_1],
+                "offers": []
             }
         )
         
@@ -228,7 +254,8 @@ class TestUpdateSubPlan:
         response = await client.put(
             f"/api/v1/private/subscriptions/plans/{plan_id}",
             json={
-                "add_node_proto_ids": [9999, 8888]  # Несуществующие ID
+                "add_node_proto_ids": [9999, 8888],  # Несуществующие ID
+                "offers": []
             }
         )
         
@@ -250,7 +277,8 @@ class TestUpdateSubPlan:
         response = await client.put(
             f"/api/v1/private/subscriptions/plans/{plan_id}",
             json={
-                "remove_node_proto_ids": [vnode_id_1, vnode_id_2]
+                "remove_node_proto_ids": [vnode_id_1, vnode_id_2],
+                "offers": []
             }
         )
         
@@ -267,7 +295,8 @@ class TestUpdateSubPlan:
         response = await client.put(
             "/api/v1/private/subscriptions/plans/9999",
             json={
-                "title": "Non-Existent Plan"
+                "title": "Non-Existent Plan",
+                "offers": []
             }
         )
         
@@ -368,10 +397,9 @@ class TestGetAllSubPlans:
         plan = data["plans"][0]
         assert "id" in plan
         assert "title" in plan
-        assert "cost" in plan
-        assert "ttl_days" in plan
-        assert "traffic_limit_day" in plan
         assert "is_active" in plan
+        assert "sub_nodes_count" in plan
+        assert "offers_count" in plan
 
 
 class TestGetSubPlanById:
@@ -398,12 +426,20 @@ class TestGetSubPlanById:
         assert data["success"] is True
         assert "plan" in data
         assert "vnodes" in data
+        assert "offers" in data
         
         # Проверяем данные плана
         plan = data["plan"]
         assert plan["title"] == "Basic Plan"
-        assert plan["ttl_days"] == 30
-        assert plan["cost"] == 500
+        assert plan["is_active"] is True
+        
+        # Проверяем offers
+        offers = data["offers"]
+        assert len(offers) == 1
+        offer = offers[0]
+        assert offer["ttl_days"] == 30
+        assert offer["cost"] == 500
+        assert offer["traffic_day_limit"] == 10240
         
         # Проверяем виртуальные ноды
         vnodes = data["vnodes"]
@@ -433,7 +469,16 @@ class TestGetSubPlanById:
         assert data["success"] is True
         assert "plan" in data
         assert "vnodes" in data
+        assert "offers" in data
         assert len(data["vnodes"]) == 0
+        
+        # Проверяем offers
+        offers = data["offers"]
+        assert len(offers) == 1
+        offer = offers[0]
+        assert offer["ttl_days"] == 90
+        assert offer["cost"] == 2000
+        assert offer["infinite_traffic"] is True
     
     @pytest.mark.asyncio
     async def test_get_plan_not_found(self, client, db_seed):

@@ -309,12 +309,23 @@ class TestAdminBulkPipeline:
         """
         # Arrange: создаём отдельный план подписки только для невидимой ноды
         async with db_pool.acquire() as conn:
-            # Создаём отдельный план подписки
+            # Создаём отдельный план подписки (теперь без ttl_days, cost и т.д.)
             invisible_plan_id = await conn.fetchval("""
-                INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, is_active)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                INSERT INTO sub_plans (title, description, is_active, position)
+                VALUES ($1, $2, $3, $4)
                 RETURNING id
-            """, "Invisible Plan", "Plan for invisible node test", 30, 500, 10240, True)
+            """, "Invisible Plan", "Plan for invisible node test", True, 99)
+            
+            # Создаём оффер для плана
+            invisible_offer_id = await conn.fetchval("""
+                INSERT INTO sub_plan_offers (
+                    sub_plan_id, ttl_days, cost,
+                    traffic_limit_day_mb, traffic_limit_mb,
+                    infinite_traffic, infinite_expire, is_active, position
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                RETURNING id
+            """, invisible_plan_id, 30, 500, 10240, None, False, False, True, 1)
             
             # Связываем план ТОЛЬКО с невидимой нодой
             await conn.execute("""
@@ -329,12 +340,22 @@ class TestAdminBulkPipeline:
                 RETURNING id
             """, 999999, "invisible_node_user")
             
-            # Создаём платёж
+            # Создаём платёж (копируем данные из оффера)
             pay_order_invisible = await conn.fetchval("""
-                INSERT INTO pay_orders (user_id, status)
-                VALUES ($1, 2)
+                INSERT INTO pay_orders (
+                    user_id, status,
+                    infinite_expire, infinite_traffic,
+                    traffic_limit_mb, traffic_limit_day_mb,
+                    ttl_days, cost
+                )
+                SELECT $1, 2,
+                    infinite_expire, infinite_traffic,
+                    traffic_limit_mb, traffic_limit_day_mb,
+                    ttl_days, cost
+                FROM sub_plan_offers
+                WHERE id = $2
                 RETURNING id
-            """, user_invisible_id)
+            """, user_invisible_id, invisible_offer_id)
             
             # Создаём подписку на новый план
             order_invisible = await conn.fetchval("""

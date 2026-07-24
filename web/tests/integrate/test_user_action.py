@@ -81,7 +81,11 @@ async def subscription_data(db_pool, virtual_node_seed, sub_plan_seed):
         # Создаём АКТИВНУЮ подписку для пользователя (plan_id_1)
         # Сначала pay_order
         pay_order_active = await conn.fetchval(
-            "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 2, NOW()) RETURNING id",
+            """
+            INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) 
+            VALUES ($1, 2, NOW(), false, false, 0) 
+            RETURNING id
+            """,
             user_id
         )
         
@@ -101,7 +105,11 @@ async def subscription_data(db_pool, virtual_node_seed, sub_plan_seed):
         
         # Создаём НЕАКТИВНУЮ подписку для тестов фильтрации (plan_id_2)
         pay_order_inactive = await conn.fetchval(
-            "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 3, NOW()) RETURNING id",
+            """
+            INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) 
+            VALUES ($1, 3, NOW(), false, false, 0) 
+            RETURNING id
+            """,
             user_id
         )
         

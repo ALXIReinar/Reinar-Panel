@@ -1,15 +1,15 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 from starlette.requests import Request
 from starlette.responses import Response
 
-from web.sub.anything import TgRoutingAccessDep
+from web.sub.anything import tg_routing_is_tg_bot_access
 from web.sub.config_dir.logger_config import log_event
 from web.sub.data.postgres import PgSqlDep
 from web.sub.schemas.tg_routing_schema import UserAddSchema
 
-router = APIRouter(dependencies=[TgRoutingAccessDep])
+router = APIRouter(dependencies=[Depends(tg_routing_is_tg_bot_access)])
 
 @router.post('/users/add')
 async def add_tg_user(body: UserAddSchema, request: Request, db: PgSqlDep):

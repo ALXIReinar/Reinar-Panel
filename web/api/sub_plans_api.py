@@ -37,20 +37,16 @@ async def update_sub_plan(plan_id: int, body: SubPlanUpdateSchema, request: Requ
     log_event(f'Обновление группы подписок | plan_id: \033[35m{plan_id}\033[0m; body: \033[37m{repr(body)}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
 
     # Обновляем основные поля группы
-    plan = await db.sub_plans.update(
+    plan_updated, offers_upd_count = await db.sub_plans.update(
         plan_id=plan_id,
         title=body.title,
         description=body.description,
-        ttl_days=body.ttl_days,
-        cost=body.cost,
-        traffic_limit_day=body.traffic_limit_day,
-        traffic_limit_total=body.traffic_limit_total,
-        infinite_traffic=body.infinite_traffic,
-        infinite_expire=body.infinite_expire,
-        is_active=body.is_active
+        position=body.position,
+        is_active=body.is_active,
+        offers=body.offers,
     )
 
-    if not plan and (not body.add_node_proto_ids and not body.remove_node_proto_ids):
+    if not plan_updated and (not body.add_node_proto_ids and not body.remove_node_proto_ids):
         log_event(f'Группа подписок не найдена | plan_id: \033[33m{plan_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
         raise HTTPException(status_code=404, detail={'success': False, 'message': 'Группа подписок не найдена'})
 
@@ -67,7 +63,9 @@ async def update_sub_plan(plan_id: int, body: SubPlanUpdateSchema, request: Requ
 
     log_event(f'Группа подписок обновлена | plan_id: \033[32m{plan_id}\033[0m; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request)
     return {
-        'success': True, 'message': 'Группа подписок обновлена',
+        'success': True, 
+        'message': 'Группа подписок обновлена', 
+        "offer_update_count": offers_upd_count,
         "attache_res": {"status_code": attache_status_code, "attached_msg": attache_msg},
         "detach_res": {"status_code": detach_status_code, 'detach_message': detach_msg},
     }
@@ -85,13 +83,13 @@ async def delete_sub_plan(plan_id: int, request: Request, db: PgSqlDep, _: JWTCo
 
 
 @router.get('/all')
-async def get_all_sub_plans(request: Request, db: PgSqlDep, _: JWTCookieDep, limit: int = 20):
+async def get_all_sub_plans(request: Request, db: PgSqlDep, _: JWTCookieDep, limit: int = 20, offset: int = 0):
     """
     Получить список всех групп подписок
 
     !Добавить флаг-возможность скрывать настройки конфига от пользователя!
     """
-    plans = await db.sub_plans.all(limit)
+    plans = await db.sub_plans.all(limit, offset)
     log_event(f'Отдали список групп подписок | plans_len: \033[32m{len(plans)}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     return {'success': True, 'plans': plans}
 
@@ -99,11 +97,11 @@ async def get_all_sub_plans(request: Request, db: PgSqlDep, _: JWTCookieDep, lim
 @router.get('/{plan_id}')
 async def get_sub_plan(plan_id: int, request: Request, db: PgSqlDep, _: JWTCookieDep):
     """Получить одну группу подписок с привязанными виртуальными нодами"""
-    result = await db.sub_plans.get_by_id(plan_id)
+    plan = await db.sub_plans.get_by_id(plan_id)
 
-    if not result:
+    if not plan:
         log_event(f"Не нашли группу подписок | plan_id: \033[31m{plan_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request, level='WARNING')
         raise HTTPException(status_code=404, detail='Группа подписок не найдена')
 
-    log_event(f'Отдали группу подписок | plan_id: \033[32m{plan_id}\033[0m; vnodes_count: {len(result["vnodes"])}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
-    return {'success': True, **result}
+    log_event(f'Отдали группу подписок | plan_id: \033[32m{plan_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    return {'success': True, 'plan': dict(plan), 'vnodes': plan['vnodes'], 'offers': plan['offers']}

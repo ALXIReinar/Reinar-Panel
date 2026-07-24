@@ -1,6 +1,6 @@
-from datetime import datetime
+from typing import Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 
 class SubUrlSchema(BaseModel):
@@ -8,11 +8,22 @@ class SubUrlSchema(BaseModel):
 
 
 class CreateRoboPayLinkSchema(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None
+    tg_id: Optional[int] = None
     sub_plan_id: int
-    ttl_days: int
-    amount: str = Field(description='Стоимость подписки в рублях')
+    offer_id: int
     description: str = Field(description='Описание для окна платежа. Например, тарифный план подписки')
+
+    @model_validator(mode="after")
+    def validate_user_or_tg_id(self):
+        # Логика: только одно из двух полей должно быть заполнено
+        has_user_id = self.user_id is not None
+        has_tg_id = self.tg_id is not None
+
+        if not (has_user_id ^ has_tg_id):  # Оператор XOR (исключающее ИЛИ)
+            raise ValueError("Необходимо указать строго одно из полей: 'user_id' или 'tg_id'.")
+
+        return self
 
 
 class WebhookRoboPayload(BaseModel):
@@ -36,7 +47,7 @@ class WebhookRoboPayload(BaseModel):
     Shp_user_id: int = Field(description="Кастомный параметр пользователя")
     Shp_csrf_token: str = Field(description='Токен для идемпотентной обработки платежа')
     Shp_sub_plan_id: int = Field(description='Приобретённый тарифный план')
-    Shp_sub_days: int = Field(description='Срок действия подписки в днях')
+    Shp_offer_id: int = Field(description='ID предложения по подписке')
 
     model_config = ConfigDict(extra='allow')
     # Эти поля Робокасса шлет опционально

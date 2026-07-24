@@ -59,6 +59,7 @@ async def db_seed(db_pool):
                 protocols_commands,
                 whitelist_commands,
                 vnodes_sub_plans,
+                sub_plan_offers,
                 sub_plans,
                 remote_execute_history,
                 user_subs,
@@ -340,26 +341,47 @@ async def proto_template_seed(db_pool):
 
 @pytest.fixture
 async def sub_plan_seed(db_pool):
-    """Создаёт тестовые планы подписок"""
+    """Создаёт тестовые планы подписок с офферами"""
     async with db_pool.acquire() as conn:
+        # Создаём план
         plan_id_1 = await conn.fetchval(
             """
-            INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, traffic_limit_total, infinite_traffic, infinite_expire, is_active)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO sub_plans (title, description, is_active, position)
+            VALUES ($1, $2, $3, $4)
             RETURNING id
             """,
             "Basic Plan",
             "Basic subscription plan for testing",
-            30,
-            500,
-            10240,       # traffic_limit_day
-            None,        # traffic_limit_total
-            False,       # infinite_traffic
-            False,       # infinite_expire
-            True
+            True,
+            1
         )
         
-        return {"plan_id_1": plan_id_1}
+        # Создаём оффер для плана
+        offer_id_1 = await conn.fetchval(
+            """
+            INSERT INTO sub_plan_offers (
+                sub_plan_id, ttl_days, cost, 
+                traffic_limit_day_mb, traffic_limit_mb,
+                infinite_traffic, infinite_expire, is_active, position
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id
+            """,
+            plan_id_1,
+            30,          # ttl_days
+            500,         # cost
+            10240,       # traffic_limit_day_mb
+            None,        # traffic_limit_mb (общий лимит)
+            False,       # infinite_traffic
+            False,       # infinite_expire
+            True,        # is_active
+            1            # position
+        )
+        
+        return {
+            "plan_id_1": plan_id_1,
+            "offer_id_1": offer_id_1,
+        }
 
 
 @pytest.fixture
@@ -430,22 +452,55 @@ async def arq_test_seed(db_pool, db_seed):
     async with db_pool.acquire() as conn:
         # 1. Создаём планы подписок (несколько разных для разных подписок)
         plan_id = await conn.fetchval("""
-            INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, traffic_limit_total, infinite_traffic, infinite_expire, is_active)
+            INSERT INTO sub_plans (title, description, is_active, position)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id
+        """, "ARQ Test Plan 1", "Plan for testing", True, 1)
+        
+        # Создаём оффер для плана 1
+        offer_id = await conn.fetchval("""
+            INSERT INTO sub_plan_offers (
+                sub_plan_id, ttl_days, cost,
+                traffic_limit_day_mb, traffic_limit_mb,
+                infinite_traffic, infinite_expire, is_active, position
+            )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id
-        """, "ARQ Test Plan 1", "Plan for testing", 30, 500, 10240, None, False, False, True)
+        """, plan_id, 30, 500, 10240, None, False, False, True, 1)
         
         plan_id_2 = await conn.fetchval("""
-            INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, traffic_limit_total, infinite_traffic, infinite_expire, is_active)
+            INSERT INTO sub_plans (title, description, is_active, position)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id
+        """, "ARQ Test Plan 2", "Plan for testing", True, 2)
+        
+        # Создаём оффер для плана 2
+        offer_id_2 = await conn.fetchval("""
+            INSERT INTO sub_plan_offers (
+                sub_plan_id, ttl_days, cost,
+                traffic_limit_day_mb, traffic_limit_mb,
+                infinite_traffic, infinite_expire, is_active, position
+            )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id
-        """, "ARQ Test Plan 2", "Plan for testing", 30, 500, 10240, None, False, False, True)
+        """, plan_id_2, 30, 500, 10240, None, False, False, True, 1)
         
         plan_id_3 = await conn.fetchval("""
-            INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, traffic_limit_total, infinite_traffic, infinite_expire, is_active)
+            INSERT INTO sub_plans (title, description, is_active, position)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id
+        """, "ARQ Test Plan 3", "Plan for testing", True, 3)
+        
+        # Создаём оффер для плана 3
+        offer_id_3 = await conn.fetchval("""
+            INSERT INTO sub_plan_offers (
+                sub_plan_id, ttl_days, cost,
+                traffic_limit_day_mb, traffic_limit_mb,
+                infinite_traffic, infinite_expire, is_active, position
+            )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id
-        """, "ARQ Test Plan 3", "Plan for testing", 30, 500, 10240, None, False, False, True)
+        """, plan_id_3, 30, 500, 10240, None, False, False, True, 1)
         
         # 2. Создаём физические ноды
         # 2.1. Активная физическая нода
@@ -540,16 +595,36 @@ async def arq_test_seed(db_pool, db_seed):
         
         # Создаём платежи для User 1
         pay_order1_1 = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 3)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 3, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user1_id)
+        """, user1_id, offer_id)
         
         pay_order1_2 = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 3)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 3, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user1_id)
+        """, user1_id, offer_id_2)
         
         user1_order1 = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -580,12 +655,23 @@ async def arq_test_seed(db_pool, db_seed):
         
         user2_orders = []
         plans_for_user2 = [plan_id, plan_id_2, plan_id_3]
+        offers_for_user2 = [offer_id, offer_id_2, offer_id_3]
         for i in range(3):
             pay_order = await conn.fetchval("""
-                INSERT INTO pay_orders (user_id, status)
-                VALUES ($1, 3)
+                INSERT INTO pay_orders (
+                    user_id, status, 
+                    infinite_expire, infinite_traffic, 
+                    traffic_limit_mb, traffic_limit_day_mb, 
+                    ttl_days, cost
+                )
+                SELECT $1, 3, 
+                    infinite_expire, infinite_traffic,
+                    traffic_limit_mb, traffic_limit_day_mb,
+                    ttl_days, cost
+                FROM sub_plan_offers 
+                WHERE id = $2
                 RETURNING id
-            """, user2_id)
+            """, user2_id, offers_for_user2[i])
             
             order_id = await conn.fetchval("""
                 INSERT INTO user_subs (
@@ -607,10 +693,20 @@ async def arq_test_seed(db_pool, db_seed):
         
         # Неактивные подписки User 3
         pay_order3_1 = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 3)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 3, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user3_id)
+        """, user3_id, offer_id_2)
         
         user3_order1 = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -623,10 +719,20 @@ async def arq_test_seed(db_pool, db_seed):
         """, user3_id, plan_id_2, pay_order3_1, "uuid-active-add-user-sub1", "b64-active-add-sub1")
         
         pay_order3_2 = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 3)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 3, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user3_id)
+        """, user3_id, offer_id_3)
         
         user3_order2 = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -640,10 +746,20 @@ async def arq_test_seed(db_pool, db_seed):
         
         # Активная подписка User 3
         pay_order3_active = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user3_id)
+        """, user3_id, offer_id)
         
         user3_order_active = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -663,10 +779,20 @@ async def arq_test_seed(db_pool, db_seed):
         """, 100004, "active_delete_user")
         
         pay_order4_active = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user4_id)
+        """, user4_id, offer_id)
         
         user4_order_active = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -695,6 +821,11 @@ async def arq_test_seed(db_pool, db_seed):
         return {
             # План подписки
             "plan_id": plan_id,
+            "offer_id": offer_id,
+            "plan_id_2": plan_id_2,
+            "offer_id_2": offer_id_2,
+            "plan_id_3": plan_id_3,
+            "offer_id_3": offer_id_3,
             
             # Физические ноды
             "node_id_active": node_id_active,
@@ -946,10 +1077,20 @@ async def traffic_reset_seed(db_pool, arq_test_seed):
         """, 400001, "user_a_limited")
         
         pay_order_a = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_a_id)
+        """, user_a_id, arq_test_seed['offer_id'])
         
         order_a = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -969,10 +1110,20 @@ async def traffic_reset_seed(db_pool, arq_test_seed):
         """, 400002, "user_b_limited")
         
         pay_order_b = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_b_id)
+        """, user_b_id, arq_test_seed['offer_id'])
         
         order_b = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -992,10 +1143,20 @@ async def traffic_reset_seed(db_pool, arq_test_seed):
         """, 400003, "user_c_not_limited")
         
         pay_order_c = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_c_id)
+        """, user_c_id, arq_test_seed['offer_id'])
         
         order_c = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -1015,10 +1176,20 @@ async def traffic_reset_seed(db_pool, arq_test_seed):
         """, 400004, "user_d_inactive_sub")
         
         pay_order_d = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 3)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 3, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_d_id)
+        """, user_d_id, arq_test_seed['offer_id'])
         
         order_d = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -1038,10 +1209,20 @@ async def traffic_reset_seed(db_pool, arq_test_seed):
         """, 400005, "user_e_deleted")
         
         pay_order_e = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_e_id)
+        """, user_e_id, arq_test_seed['offer_id'])
         
         order_e = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -1061,10 +1242,20 @@ async def traffic_reset_seed(db_pool, arq_test_seed):
         """, 400006, "user_f_invisible_node")
         
         pay_order_f = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_f_id)
+        """, user_f_id, arq_test_seed['offer_id'])
         
         order_f = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -1132,10 +1323,20 @@ async def outbox_cleaner_seed(db_pool, arq_test_seed):
         """, 500001, "user_a_stuck")
         
         pay_order_a = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_a_id)
+        """, user_a_id, arq_test_seed['offer_id'])
         
         order_a = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -1162,10 +1363,20 @@ async def outbox_cleaner_seed(db_pool, arq_test_seed):
         """, 500002, "user_b_stuck")
         
         pay_order_b = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_b_id)
+        """, user_b_id, arq_test_seed['offer_id'])
         
         order_b = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -1192,10 +1403,20 @@ async def outbox_cleaner_seed(db_pool, arq_test_seed):
         """, 500003, "user_c_fresh")
         
         pay_order_c = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_c_id)
+        """, user_c_id, arq_test_seed['offer_id'])
         
         order_c = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -1222,10 +1443,20 @@ async def outbox_cleaner_seed(db_pool, arq_test_seed):
         """, 500004, "user_d_already_retried")
         
         pay_order_d = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_d_id)
+        """, user_d_id, arq_test_seed['offer_id'])
         
         order_d = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -1252,10 +1483,20 @@ async def outbox_cleaner_seed(db_pool, arq_test_seed):
         """, 500005, "user_e_no_nodes")
         
         pay_order_e = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 3)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 3, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_e_id)
+        """, user_e_id, arq_test_seed['offer_id'])
         
         # Создаём неактивную подписку для User E (get_nodes_to_core_proto_action вернёт [])
         order_e = await conn.fetchval("""
@@ -1358,10 +1599,20 @@ def prepare_sub(user_uuid, config_link):
         """, 600001, "user_a_active")
         
         pay_order_a = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_a_id)
+        """, user_a_id, arq_test_seed['offer_id'])
         
         order_a = await conn.fetchval("""
             INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id, 
@@ -1379,10 +1630,20 @@ def prepare_sub(user_uuid, config_link):
         """, 600002, "user_b_limit_exceeded")
         
         pay_order_b = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_b_id)
+        """, user_b_id, arq_test_seed['offer_id'])
         
         order_b = await conn.fetchval("""
             INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
@@ -1400,10 +1661,20 @@ def prepare_sub(user_uuid, config_link):
         """, 600003, "user_c_expired")
         
         pay_order_c = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 3)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 3, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_c_id)
+        """, user_c_id, arq_test_seed['offer_id'])
         
         order_c = await conn.fetchval("""
             INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
@@ -1421,10 +1692,20 @@ def prepare_sub(user_uuid, config_link):
         """, 600004, "user_d_inactive")
         
         pay_order_d = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 3)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 3, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_d_id)
+        """, user_d_id, arq_test_seed['offer_id'])
         
         order_d = await conn.fetchval("""
             INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
@@ -1442,10 +1723,20 @@ def prepare_sub(user_uuid, config_link):
         """, 600005, "user_e_deleted")
         
         pay_order_e = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_e_id)
+        """, user_e_id, arq_test_seed['offer_id'])
         
         order_e = await conn.fetchval("""
             INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
@@ -1560,10 +1851,21 @@ async def metrics_collector_seed(db_pool, arq_test_seed, real_parser_scripts):
         
         # 3. Создаём НОВЫЙ план подписки с лимитом 1000 MB для metrics тестов
         metrics_plan_id = await conn.fetchval("""
-            INSERT INTO sub_plans (title, description, ttl_days, cost, traffic_limit_day, traffic_limit_total, infinite_traffic, infinite_expire, is_active)
-            VALUES ($1, $2, $3, $4, $5, NULL, false, false, $6)
+            INSERT INTO sub_plans (title, description, is_active, position)
+            VALUES ($1, $2, $3, $4)
             RETURNING id
-        """, "Metrics Traffic Test Plan", "Plan for traffic limit testing", 30, 500, 1000, True)
+        """, "Metrics Traffic Test Plan", "Plan for traffic limit testing", True, 98)
+        
+        # Создаём оффер для metrics плана
+        metrics_offer_id = await conn.fetchval("""
+            INSERT INTO sub_plan_offers (
+                sub_plan_id, ttl_days, cost,
+                traffic_limit_day_mb, traffic_limit_mb,
+                infinite_traffic, infinite_expire, is_active, position
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id
+        """, metrics_plan_id, 30, 500, 1000, None, False, False, True, 1)
         
         # 4. Связываем metrics план с существующей виртуальной нодой
         await conn.execute("""
@@ -1584,10 +1886,20 @@ async def metrics_collector_seed(db_pool, arq_test_seed, real_parser_scripts):
         """, 200001, "user_a_should_block")
         
         pay_order_a = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_a_id)
+        """, user_a_id, metrics_offer_id)
         
         order_a = await conn.fetchval("""
             INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, is_limited, expire_date, 
@@ -1605,10 +1917,20 @@ async def metrics_collector_seed(db_pool, arq_test_seed, real_parser_scripts):
         """, 200002, "user_b_should_block")
         
         pay_order_b = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_b_id)
+        """, user_b_id, metrics_offer_id)
         
         order_b = await conn.fetchval("""
             INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
@@ -1626,10 +1948,20 @@ async def metrics_collector_seed(db_pool, arq_test_seed, real_parser_scripts):
         """, 200003, "user_c_inactive_sub")
         
         pay_order_c = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 3)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 3, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_c_id)
+        """, user_c_id, metrics_offer_id)
         
         order_c = await conn.fetchval("""
             INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
@@ -1647,10 +1979,20 @@ async def metrics_collector_seed(db_pool, arq_test_seed, real_parser_scripts):
         """, 200004, "user_d_deleted")
         
         pay_order_d = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_d_id)
+        """, user_d_id, metrics_offer_id)
         
         order_d = await conn.fetchval("""
             INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
@@ -1668,10 +2010,20 @@ async def metrics_collector_seed(db_pool, arq_test_seed, real_parser_scripts):
         """, 200005, "user_e_already_limited")
         
         pay_order_e = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_e_id)
+        """, user_e_id, metrics_offer_id)
         
         order_e = await conn.fetchval("""
             INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
@@ -1689,10 +2041,20 @@ async def metrics_collector_seed(db_pool, arq_test_seed, real_parser_scripts):
         """, 200006, "user_f_within_limit")
         
         pay_order_f = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_f_id)
+        """, user_f_id, metrics_offer_id)
         
         order_f = await conn.fetchval("""
             INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
@@ -1710,10 +2072,20 @@ async def metrics_collector_seed(db_pool, arq_test_seed, real_parser_scripts):
         """, 200007, "user_g_expired_sub")
         
         pay_order_g = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 3)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 3, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_g_id)
+        """, user_g_id, metrics_offer_id)
         
         order_g = await conn.fetchval("""
             INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, is_limited, expire_date,
@@ -1779,10 +2151,20 @@ async def revoke_seed(db_pool, arq_test_seed):
         """, 300001, "user_a_should_revoke")
         
         pay_order_a = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_a_id)
+        """, user_a_id, arq_test_seed['offer_id'])
         
         order_a = await conn.fetchval("""
             INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
@@ -1800,10 +2182,20 @@ async def revoke_seed(db_pool, arq_test_seed):
         """, 300002, "user_b_should_revoke")
         
         pay_order_b = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_b_id)
+        """, user_b_id, arq_test_seed['offer_id'])
         
         order_b = await conn.fetchval("""
             INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
@@ -1821,10 +2213,20 @@ async def revoke_seed(db_pool, arq_test_seed):
         """, 300003, "user_c_already_inactive")
         
         pay_order_c = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 3)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 3, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_c_id)
+        """, user_c_id, arq_test_seed['offer_id'])
         
         order_c = await conn.fetchval("""
             INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
@@ -1842,10 +2244,20 @@ async def revoke_seed(db_pool, arq_test_seed):
         """, 300004, "user_d_not_expired")
         
         pay_order_d = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_d_id)
+        """, user_d_id, arq_test_seed['offer_id'])
         
         order_d = await conn.fetchval("""
             INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
@@ -1863,10 +2275,20 @@ async def revoke_seed(db_pool, arq_test_seed):
         """, 300005, "user_e_deleted")
         
         pay_order_e = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_e_id)
+        """, user_e_id, arq_test_seed['offer_id'])
         
         order_e = await conn.fetchval("""
             INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, uuid, b64_id,
@@ -1919,19 +2341,21 @@ async def payment_seed(db_pool, db_seed, arq_test_seed):
     """
     Создаёт тестовые данные для проверки платёжных эндпоинтов Robokassa.
     
-    ПЕРЕИСПОЛЬЗУЕТ инфраструктуру из arq_test_seed (ноды, протоколы, план).
+    ПЕРЕИСПОЛЬЗУЕТ инфраструктуру из arq_test_seed (ноды, протоколы, план, оффер).
     Создаёт ОТДЕЛЬНОГО пользователя с tg_id 700001 для изоляции.
     
     Возвращает:
     - user_id: ID пользователя
     - plan_id: ID тарифного плана
+    - offer_id: ID оффера для плана
     - uuid: UUID пользователя
     - tg_username: Telegram username пользователя
     - vnode_id_10, vnode_id_11: ID активных виртуальных нод
     """
     async with db_pool.acquire() as conn:
-        # Получаем plan_id из arq_test_seed
+        # Получаем plan_id и offer_id из arq_test_seed
         plan_id = arq_test_seed['plan_id']
+        offer_id = arq_test_seed['offer_id']
         vnode_id_10 = arq_test_seed['vnode_id_10']
         vnode_id_11 = arq_test_seed['vnode_id_11']
         
@@ -1945,6 +2369,7 @@ async def payment_seed(db_pool, db_seed, arq_test_seed):
         return {
             # Инфраструктура из arq_test_seed
             "plan_id": plan_id,
+            "offer_id": offer_id,
             "vnode_id_10": vnode_id_10,
             "vnode_id_11": vnode_id_11,
             
@@ -1967,6 +2392,7 @@ async def infinite_flags_test_seed(db_pool, arq_test_seed):
     """
     async with db_pool.acquire() as conn:
         plan_id = arq_test_seed['plan_id']
+        offer_id = arq_test_seed['offer_id']
         
         # === Сценарий 1: Безлимитный трафик, но истёк срок ===
         user_inf_traffic_id = await conn.fetchval("""
@@ -1976,10 +2402,20 @@ async def infinite_flags_test_seed(db_pool, arq_test_seed):
         """, 400001, "user_inf_traffic_expired")
         
         pay_order_inf_traffic = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_inf_traffic_id)
+        """, user_inf_traffic_id, offer_id)
         
         sub_inf_traffic = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -2000,10 +2436,20 @@ async def infinite_flags_test_seed(db_pool, arq_test_seed):
         """, 400002, "user_inf_expire_overlimit")
         
         pay_order_inf_expire = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_inf_expire_id)
+        """, user_inf_expire_id, offer_id)
         
         sub_inf_expire = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -2024,10 +2470,20 @@ async def infinite_flags_test_seed(db_pool, arq_test_seed):
         """, 400003, "user_fully_unlimited")
         
         pay_order_unlimited = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_fully_unlimited_id)
+        """, user_fully_unlimited_id, offer_id)
         
         sub_fully_unlimited = await conn.fetchval("""
             INSERT INTO user_subs (
@@ -2048,10 +2504,20 @@ async def infinite_flags_test_seed(db_pool, arq_test_seed):
         """, 400004, "user_limited_expired")
         
         pay_order_limited = await conn.fetchval("""
-            INSERT INTO pay_orders (user_id, status)
-            VALUES ($1, 2)
+            INSERT INTO pay_orders (
+                user_id, status, 
+                infinite_expire, infinite_traffic, 
+                traffic_limit_mb, traffic_limit_day_mb, 
+                ttl_days, cost
+            )
+            SELECT $1, 2, 
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers 
+            WHERE id = $2
             RETURNING id
-        """, user_limited_expired_id)
+        """, user_limited_expired_id, offer_id)
         
         sub_limited_expired = await conn.fetchval("""
             INSERT INTO user_subs (
