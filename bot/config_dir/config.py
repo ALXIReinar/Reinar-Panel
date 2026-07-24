@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     app_mode: AppMode
     user_req_limit: int
     user_req_window_seconds: int
+    shop_sub_plans_ttl: int
 
     model_config = SettingsConfigDict(extra='allow')
 

@@ -1,5 +1,3 @@
-import random
-
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -19,14 +17,14 @@ def main_kb():
 def subs_intro_kb():
     kb = InlineKeyboardBuilder()
     kb.button(text='🔄 Продлить', callback_data='subs-upd-intro')
-    kb.button(text='➕ Купить новую', callback_data=f'subs-shop')
+    kb.button(text='➕ Купить новую', callback_data=f'subs-shop-intro')
     kb.button(text='⬅️ Назад', callback_data=f'back')
     return kb.as_markup()
 
 
 def fallback_user_subs():
     kb = InlineKeyboardBuilder()
-    kb.button(text='➕ Купить подписку', callback_data='subs-shop')
+    kb.button(text='➕ Купить подписку', callback_data='subs-shop-intro')
     return kb.as_markup()
 
 
@@ -38,19 +36,27 @@ def user_subs_slider(cur_user_sub_idx: int, total_subs: int):
     kb.button(text='<', callback_data=f'subs-user-pagen_{prev_idx}')
     kb.button(text=f'{cur_user_sub_idx + 1}/{total_subs}', callback_data=f'None')
     kb.button(text='>', callback_data=f'subs-user-pagen_{next_idx}')
-    kb.button(text='🔄 Продлить', callback_data=f'subs-user-upd_{cur_user_sub_idx}')
+    kb.button(text='🔄 Продлить', callback_data=f'subs-user-upd_{cur_user_sub_idx}', style='primary')
     kb.adjust(3, 1)
     return kb.as_markup()
 
-def shop_subs_slider(cur_sub_plan_idx: int, total_subs: int):
+def shop_subs_slider(cur_sub_plan_idx: int, total_subs: int, offer_prices):
     prev_idx = cur_sub_plan_idx - 1 if cur_sub_plan_idx != 0 else total_subs - 1
     next_idx = cur_sub_plan_idx + 1 if cur_sub_plan_idx < total_subs - 1 else 0
 
     kb = InlineKeyboardBuilder()
+
+    "Перемещение по слайдеру"
     kb.button(text='<', callback_data=f'subs-shop-pagen_{prev_idx}')
     kb.button(text=f'{cur_sub_plan_idx + 1}/{total_subs}', callback_data=f'None')
     kb.button(text='>', callback_data=f'subs-shop-pagen_{next_idx}')
-    kb.button(text='➕ Купить', callback_data=f'subs-shop-upd_{cur_sub_plan_idx}')
+
+    "Тарифные предложения по стоимости/длительности и т.д."
+    for offer_idx, item in enumerate(offer_prices):
+        offer = SubOfferSchema.fast_create(item)
+        text = env.message_templates.render('message_subscriptions_offers_extent', offer)
+        kb.button(text=text.strip(), callback_data=f'subs-shop-offer_{cur_sub_plan_idx}_{offer_idx}')
+
     kb.adjust(3, 1)
     return kb.as_markup()
 
@@ -70,23 +76,24 @@ def user_sub_plan_offers(user_sub_idx, costs_days_list):
     kb.button(text='⬅️ Назад', callback_data=f'subs-user-pagen_{user_sub_idx}')
     return kb.as_markup()
 
-def shop_sub_plan_offers(sub_plan_idx, costs_days_list):
-    """
-    Копия user_sub_plan_offers. НО важное отличие - **call_data** ключи
-    """
-    kb = InlineKeyboardBuilder()
-
-    for offer_idx, item in enumerate(costs_days_list):
-        offer = SubOfferSchema.fast_create(item)
-        text = env.message_templates.render('message_subscriptions_offers_extent', offer)
-        kb.button(text=text.strip(), callback_data=f'subs-shop-offer_{sub_plan_idx}_{offer_idx}')
-
-    kb.button(text='⬅️ Назад', callback_data=f'subs-shop-pagen_{sub_plan_idx}')
-    return kb.as_markup()
-
 
 def payment_kb(pay_link: str):
     kb = InlineKeyboardBuilder()
-    kb.button(text='🌐 Оплатить', url=pay_link)
+    kb.button(text='🌐 Оплатить', url=pay_link, style='primary')
     kb.button(text='🏘 Главное меню', callback_data='back')
+    return kb.as_markup()
+
+
+def profile_kb():
+    kb = InlineKeyboardBuilder()
+
+    kb.button(text='🔐 Мои подписки', callback_data='subs-upd-intro', style='success')
+    kb.button(text='💎 Тарифы', callback_data='subs-shop-intro', style='primary')
+    kb.button(text='⬅️ Назад', callback_data='back')
+    return kb.as_markup()
+
+
+def about_kb():
+    kb = InlineKeyboardBuilder()
+    kb.button(text='⬅️ Назад', callback_data='back')
     return kb.as_markup()

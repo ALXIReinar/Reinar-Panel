@@ -70,6 +70,7 @@ class PlaceholderResolver:
         - USER_SUB_TRAFFIC_LIMIT - Выделенная квота трафика на подписку. Если безлимит - ♾️
         - USER_SUB_EXPIRE - Дата истечения срока действия подписки. ♾️ если срок неограничен
         - USER_SUB_CREATED_AT - Дата истечения срока действия подписки. ♾️ если срок неограничен
+        - SUB_NODES_COUNT/USER_SUB_NODES_COUNT - Количество локаций по подписке
         """
         self.context.update({
             'USER_SUB_ID': user_sub.id,
@@ -85,6 +86,8 @@ class PlaceholderResolver:
             'USER_SUB_TRAFFIC_LIMIT': user_sub.traffic_limit,
             'USER_SUB_EXPIRE': user_sub.expire,
             'USER_SUB_CREATED_AT': user_sub.created_at.strftime("%d-%m-%Y %H:%M"),
+            'USER_SUB_NODES_COUNT': user_sub.sub_nodes_count,
+            'SUB_SUB_NODES_COUNT': user_sub.sub_nodes_count,
         })
         return self
 
@@ -102,6 +105,8 @@ class PlaceholderResolver:
             'SUB_TITLE': shop_sub.title,
             'USER_SUB_TITLE': shop_sub.title,
             'SUB_DESCRIPTION': shop_sub.description,
+            'SUB_NODES_COUNT': shop_sub.sub_nodes_count,
+            'USER_SUB_NODES_COUNT': shop_sub.sub_nodes_count,
         })
         return self
 

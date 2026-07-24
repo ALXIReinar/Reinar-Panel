@@ -9,6 +9,9 @@ from bot.core.utils.schemas import UserSubSchema, SubOfferSchema, ShopSubSchema
 
 class MessageTemplates(BaseModel):
     message_start: str = Field(description='Ответ бота на команду /start')
+    message_profile: str
+    message_about: str
+
     message_shop_subscriptions_intro: str
     message_shop_subscriptions_extent: str
 

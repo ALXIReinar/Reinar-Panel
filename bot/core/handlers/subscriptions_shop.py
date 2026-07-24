@@ -1,13 +1,17 @@
 from decimal import Decimal
 
+import orjson
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
+from redis.asyncio import Redis
 
 from bot.config_dir.config import env
 from bot.core.api.aiohttp_conn import SubServiceConn
+from bot.core.utils.anything import RedisKeys
 from bot.core.utils.keyboards import subs_intro_kb, fallback_user_subs, user_subs_slider, user_sub_plan_offers, \
-    payment_kb, shop_subs_slider, shop_sub_plan_offers
-from bot.core.utils.schemas import UserSubSchema, SubOfferSchema, ShopSubSchema
+    payment_kb, shop_subs_slider
+from bot.core.utils.rate_limiter import rate_limit
+from bot.core.utils.schemas import UserSubSchema, ShopSubSchema
 
 
 async def subscriptions_introduction(message: Message):
@@ -16,7 +20,9 @@ async def subscriptions_introduction(message: Message):
 
 
 class UserSubscriptions:
+
     @staticmethod
+    @rate_limit(env.user_req_limit, env.user_req_window_seconds)
     async def user_subscriptions_slider(message: Message, state: FSMContext, aio_http: SubServiceConn):
         user_subs = await aio_http.user_subs.all(message.from_user.id)
 
@@ -30,6 +36,7 @@ class UserSubscriptions:
 
         text, kb = await UserSubscriptions.build_user_subs_slider_msg(0, message, state)
         await message.answer(text, reply_markup=kb)
+
 
     @staticmethod
     async def build_user_subs_slider_msg(slider_idx: int, message: Message, state: FSMContext) -> tuple:
@@ -47,6 +54,7 @@ class UserSubscriptions:
         kb = user_subs_slider(slider_idx, len(user_subs))
         return text, kb
 
+
     @staticmethod
     async def show_price_offers(user_sub_idx: int, message: Message, state: FSMContext, aio_http: SubServiceConn):
         user_subs = (await state.get_data()).get('user_subs')
@@ -54,14 +62,16 @@ class UserSubscriptions:
             await UserSubscriptions.user_subscriptions_slider(message, state, aio_http)
             return None, None
 
-        costs_days = user_subs[user_sub_idx]['offer_prices']
         us_preview = UserSubSchema.fast_create(user_subs[user_sub_idx])
+        offer_prices = us_preview.offer_prices
 
         text = env.message_templates.render('message_subscriptions_offers_intro', message, us_preview)
-        kb = user_sub_plan_offers(user_sub_idx, costs_days)
+        kb = user_sub_plan_offers(user_sub_idx, offer_prices)
         return text, kb
 
+
     @staticmethod
+    @rate_limit(env.user_req_limit, env.user_req_window_seconds)
     async def give_issued_payment(user_sub_idx: int, offer_idx: int, message: Message, state: FSMContext, aio_http: SubServiceConn):
         user_subs = (await state.get_data()).get('user_subs')
         if not user_subs:
@@ -70,14 +80,13 @@ class UserSubscriptions:
 
         "Запрос на формирование заказа, получим ссылку для оплаты"
         selected_sub = UserSubSchema.fast_create(user_subs[user_sub_idx])
-        price_offer = selected_sub['offer_prices'][offer_idx]
+        price_offer = selected_sub.offer_prices[offer_idx]
 
         cost = Decimal(price_offer['cost']) / Decimal('100')
         order_success, payment_link = await aio_http.sub_plans.api_get_payment_link(
             message.from_user.id,
             selected_sub.sub_plan_id,
-            str(cost),
-            price_offer['ttl_days']
+            price_offer['offer_id']
         )
         "Если ошибка на саб сервисе"
         if not order_success:
@@ -92,8 +101,10 @@ class UserSubscriptions:
 
 
 class ShopSubscriptions:
+
     @staticmethod
-    async def shop_subscriptions_slider(message: Message, state: FSMContext, aio_http: SubServiceConn):
+    @rate_limit(env.user_req_limit, env.user_req_window_seconds)
+    async def shop_subscriptions_slider(message: Message, redis: Redis, aio_http: SubServiceConn):
         shop_plans = await aio_http.sub_plans.all()
 
         "Фоллбек. Нет подписок - не можем отобразить слайдер"
@@ -102,51 +113,41 @@ class ShopSubscriptions:
             return
 
         "Сохраняем подписки, отображаем слайдер"
-        await state.update_data(shop_plans=shop_plans)
+        shop_plans_json = orjson.dumps(shop_plans)
+        await redis.set(RedisKeys.shop_sub_plans, shop_plans_json, ex=env.shop_sub_plans_ttl)
 
-        text, kb = await ShopSubscriptions.build_shop_plans_slider_msg(0, message, state)
+        text, kb = await ShopSubscriptions.build_shop_plans_slider_msg(0, message, redis)
         await message.answer(text, reply_markup=kb)
 
+
     @staticmethod
-    async def build_shop_plans_slider_msg(slider_idx: int, message: Message, state: FSMContext) -> tuple:
+    async def build_shop_plans_slider_msg(slider_idx: int, message: Message, redis: Redis) -> tuple:
         """"""
         "Получаем подписки"
-        shop_plans = (await state.get_data()).get('shop_plans')
+        shop_plans = orjson.loads(await redis.get(RedisKeys.shop_sub_plans))
         if not shop_plans:
             return None, None
 
-        "Отображаем слайдер"
-        us = shop_plans[slider_idx]
-        us_preview = UserSubSchema.fast_create(us)
+        "Отображаем слайдер с offer_prices"
+        ss = shop_plans[slider_idx]
+        ss_preview = ShopSubSchema.fast_create(ss)
 
-        text = env.message_templates.render('message_subscriptions_shop_extent', message, us_preview)
-        kb = shop_subs_slider(slider_idx, len(shop_plans))
+        text = env.message_templates.render('message_subscriptions_shop_extent', message, ss_preview)
+        kb = shop_subs_slider(slider_idx, len(shop_plans), ss_preview.offer_prices)
         return text, kb
 
-    @staticmethod
-    async def show_price_offers(sub_plan_idx: int, message: Message, state: FSMContext, aio_http: SubServiceConn):
-        shop_plans = (await state.get_data()).get('shop_plans')
-        if not shop_plans:
-            await ShopSubscriptions.shop_subscriptions_slider(message, state, aio_http)
-            return None, None
-
-        price_offers = shop_plans[sub_plan_idx]['offer_prices']
-        ss_preview = ShopSubSchema.fast_create(shop_plans[sub_plan_idx])
-
-        text = env.message_templates.render('message_subscriptions_offers_intro', message, ss_preview)
-        kb = shop_sub_plan_offers(sub_plan_idx, price_offers)
-        return text, kb
 
     @staticmethod
-    async def give_issued_payment(sub_plan_idx: int, offer_idx: int, message: Message, state: FSMContext, aio_http: SubServiceConn):
-        shop_plans = (await state.get_data()).get('shop_plans')
+    @rate_limit(env.user_req_limit, env.user_req_window_seconds)
+    async def give_issued_payment(sub_plan_idx: int, offer_idx: int, message: Message, redis: Redis, aio_http: SubServiceConn):
+        shop_plans = orjson.loads(await redis.get(RedisKeys.shop_sub_plans))
         if not shop_plans:
-            await ShopSubscriptions.shop_subscriptions_slider(message, state, aio_http)
+            await ShopSubscriptions.shop_subscriptions_slider(message, redis, aio_http)
             return None, None
 
         "Запрос на формирование заказа, получим ссылку для оплаты"
         selected_sub = ShopSubSchema.fast_create(shop_plans[sub_plan_idx])
-        price_offer = selected_sub['offer_prices'][offer_idx]
+        price_offer = selected_sub.offer_prices[offer_idx]
 
 
         order_success, payment_link = await aio_http.sub_plans.api_get_payment_link(

@@ -14,10 +14,16 @@ router = APIRouter(dependencies=[TgRoutingAccessDep])
 @router.post('/users/add')
 async def add_tg_user(body: UserAddSchema, request: Request, db: PgSqlDep):
     insert_success, user_info = await db.tg_routing.add_tg_user(body.tg_id, body.tg_username, body.return_data)
-    log_event(f'Попытка создать пользователя | insert_res: {insert_success}; user_id: \033[33m{user_info.get("user_id")}\033[0m', request=request)
+    log_event(f'\033[36m[Tg Routing]\033[0m Попытка создать пользователя | insert_res: {insert_success}; user_id: \033[33m{user_info.get("user_id")}\033[0m', request=request)
     if body.return_data:
         return {'insert_success': insert_success, **user_info}
     return Response(status_code=204)
+
+@router.get('/users/get')
+async def get_tg_user(tg_id: Annotated[int, Query()], request: Request, db: PgSqlDep):
+    user_info = await db.tg_routing.tg_user_profile(tg_id)
+    log_event(f'\033[36m[Tg Routing]\033[0m Отдали профиль инфо | user_id: {user_info['id']}')
+    return user_info
 
 @router.get('/users/subs/all')
 async def get_tg_user_subs(tg_id: Annotated[int, Query()], request: Request, db: PgSqlDep):

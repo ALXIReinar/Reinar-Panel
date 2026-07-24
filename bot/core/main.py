@@ -6,10 +6,13 @@ from aiohttp import ClientSession
 from redis.asyncio import Redis
 
 from bot.config_dir.config import bot, api_base_url, redis_settings
+from bot.core.handlers.about_handler import show_about
 from bot.core.handlers.callback_center import callback_factory
 from bot.core.api.aiohttp_conn import SubServiceConn
 
 from bot.core.handlers.start import helping, on_startup, start_handler
+from bot.core.handlers.subscriptions_shop import subscriptions_introduction
+from bot.core.handlers.user_profile_handler import show_user_profile
 
 dp = Dispatcher()
 
@@ -28,8 +31,9 @@ async def main():
     dp.message.register(start_handler, Command('start'))
     dp.message.register(helping, Command('help'))
 
-    # dp.message.register(catch_imgs, F.photo)
-    # dp.message.register(catch_imgs, F.document) # не регистрируется через один .register(F.photo, F.document)
+    dp.message.register(subscriptions_introduction, F.text == '💎 Купить/Продлить')
+    dp.message.register(show_user_profile, F.text == '👤 Личный кабинет')
+    dp.message.register(show_about, F.text == '🔗 Наши ссылки')
 
     "Коллбэки"
     dp.callback_query.register(callback_factory)

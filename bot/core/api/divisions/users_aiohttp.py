@@ -29,5 +29,9 @@ class UsersAioHttp(BaseAioHTTPClient):
 
 
 
-    async def get_user_info(self, tg_id: int, tg_username: str):
-        ...
+    async def get_user_info(self, tg_id: int):
+        ok, data = await self._request('GET', SubServiceUris.get_user_profile, params={'tg_id': tg_id})
+        if not ok:
+            return False, {}
+
+        return True, data

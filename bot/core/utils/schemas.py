@@ -23,6 +23,8 @@ class UserSubSchema(BaseModel):
     traffic_limit_day: int | None |str
     traffic_used: int
     traffic_limit: int | None | str
+    sub_nodes_count: int = 0
+    offer_prices: list[dict]
 
     sub_link: str = None
     status: str = None
@@ -95,6 +97,8 @@ class UserSubSchema(BaseModel):
             "infinite_traffic": us["infinite_traffic"],
             "expire_date": us["expire_date"],
             "created_at": us["created_at"],
+            "sub_nodes_count": us["sub_nodes_count"],
+            "offer_prices": us["offer_prices"],
         }
         return cls.model_validate(mapped_data)
 
@@ -103,6 +107,9 @@ class ShopSubSchema(BaseModel):
     id: int
     title: str
     description: str
+    offer_prices: list[dict]
+    sub_nodes_count: int = 0
+
 
     @classmethod
     def fast_create(cls, us: dict) -> "ShopSubSchema":
@@ -111,6 +118,8 @@ class ShopSubSchema(BaseModel):
             "id": us["id"],
             "title": us["title"],
             "description": us["description"],
+            "sub_nodes_count": us["sub_nodes_count"],
+            "offer_prices": us["offer_prices"],
         }
         return cls.model_validate(mapped_data)
 

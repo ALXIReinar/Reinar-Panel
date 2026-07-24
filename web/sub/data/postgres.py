@@ -6,6 +6,7 @@ from starlette.requests import Request
 
 from web.sub.data.sql_queries.payment_sql import PaymentQueries
 from web.sub.data.sql_queries.sub_sql import SubscriptionQueries
+from web.sub.data.sql_queries.tg_routing_sql import TgRoutingQueries
 
 
 class PgSql:

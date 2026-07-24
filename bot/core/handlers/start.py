@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from aiogram.types import ReplyKeyboardRemove, Message
 from redis.asyncio import Redis
 
@@ -21,7 +23,10 @@ async def start_handler(message: Message, redis: Redis, aio_http: SubServiceConn
     ok, user_data = await aio_http.users.save_user(message.from_user.id, message.from_user.username, return_data=True)
 
     # Рендерим сообщение с автоматической подстановкой плейсхолдеров
-    text = env.message_templates.render('message_start', message, user_api_sub_count=user_data.get('sub_count', 0))
+    text = env.message_templates.render('message_start', message,
+        user_sub_count=user_data.get('sub_count', 0),
+        user_registered_date=user_data.get('registered_at', datetime.now()).strftime('%d-%m-%Y %H:%M'),
+    )
     
     await message.answer(text, reply_markup=main_kb())
     await set_commands(bot)

@@ -9,10 +9,13 @@ class RedisKeys:
     def rate_limit(tg_id: str | int) -> str:
         return f'{env.app_mode}:{env.service_name}:rate_limit:user:tg_id={tg_id}:v1'
 
+    shop_sub_plans: str = f'{env.app_mode}:{env.service_name}:shop_sub_plans:v1'
+
 @dataclass
 class SubServiceUris:
     # users division
     add_tg_user: str = '/api/v1/tg-bot/users/add'
+    get_user_profile: str = '/api/v1/tg-bot/users/get'
 
     # user_subs division
     get_user_subs_all: str = '/api/v1/tg-bot/users/subs/all'

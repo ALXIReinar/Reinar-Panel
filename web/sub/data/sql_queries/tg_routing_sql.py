@@ -33,9 +33,10 @@ class TgRoutingQueries:
 
     async def tg_user_profile(self, tg_id: int):
         query = """
-        SELECT COUNT(us.id) AS sub_count FROM users u
+        SELECT u.id, u.registered_at, COUNT(us.id) AS sub_count FROM users u
         JOIN user_subs us ON us.user_id = u.id
         WHERE u.tg_id = $1
+        GROUP BY u.id
         """
         return await self.conn.fetchrow(query, tg_id)
 
@@ -45,6 +46,7 @@ class TgRoutingQueries:
         SELECT us.id AS user_sub_id, us.sub_plan_id, us.is_active, us.is_limited, us.expire_date, 
                us.traffic_used_day_mb, us.infinite_traffic, us.b64_id, us.infinite_expire,
                us.traffic_limit_day, us.used_mb, us.used_mb_limit, us.created_at, sp.title,
+               COUNT(vsp.id) AS sub_nodes_count,
                COALESCE(
                    json_agg(
                        json_build_object(
@@ -62,6 +64,8 @@ class TgRoutingQueries:
         FROM user_subs us
         JOIN sub_plans sp ON sp.id = us.sub_plan_id
         JOIN users u ON us.user_id = u.id
+        LEFT JOIN vnodes_sub_plans vsp ON sp.id = vsp.sub_plan_id
+        JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
         LEFT JOIN sub_plan_offers spo ON spo.sub_plan_id = us.sub_plan_id AND spo.is_active = true
         WHERE u.tg_id = $1 AND u.is_deleted = false
         GROUP BY us.id, sp.title
@@ -71,7 +75,7 @@ class TgRoutingQueries:
 
     async def get_shop_sub_plans(self):
         query = '''
-        SELECT sp.id, sp.title, sp.description,
+        SELECT sp.id, sp.title, sp.description, COUNT(vsp.id) AS sub_nodes_count,
                COALESCE(
                    json_agg(
                        json_build_object(
@@ -87,6 +91,8 @@ class TgRoutingQueries:
                    '[]'::json
                ) AS offer_prices
         FROM sub_plans sp
+        LEFT JOIN vnodes_sub_plans vsp ON sp.id = vsp.sub_plan_id
+        JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
         LEFT JOIN sub_plan_offers spo ON spo.sub_plan_id = sp.id AND spo.is_active = true
         WHERE sp.is_active = true
         GROUP BY sp.id, sp.position
