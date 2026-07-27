@@ -21,9 +21,9 @@ services:
     ports:
       - "127.0.0.1:${PG_PORT}:5432"
 
-  redis:
+  redis-main:
     image: redis:7.2-alpine
-    container_name: redis
+    container_name: redis-main
     command:
       - redis-server
       - --requirepass

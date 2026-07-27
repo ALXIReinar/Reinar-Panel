@@ -1,9 +1,10 @@
-from datetime import datetime
+import os
+from datetime import datetime, UTC
+from typing import Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, ConfigDict
 from pydantic_core.core_schema import ValidationInfo
 
-from bot.config_dir.config import env
 
 
 class UserSubSchema(BaseModel):
@@ -26,15 +27,15 @@ class UserSubSchema(BaseModel):
     sub_nodes_count: int = 0
     offer_prices: list[dict]
 
-    sub_link: str = None
-    status: str = None
+    sub_link: Optional[str] = None
+    status: Optional[str] = None
 
     @field_validator('expire_date', mode='after')
     @classmethod
-    def validate_expire_date(cls, v: datetime, info: ValidationInfo):
+    def validate_expire_date(cls, v: str, info: ValidationInfo):
         if info.data['infinite_expire']:
             return '♾️'
-        return v.strftime('%d-%m-Y %H:%M')
+        return datetime.strptime(v, '%Y-%m-%dT%H:%M:%S.%f%z')
 
     @field_validator('traffic_limit_day', mode='after')
     @classmethod
@@ -65,7 +66,9 @@ class UserSubSchema(BaseModel):
     @field_validator('sub_link', mode='after')
     @classmethod
     def validate_b64_id(cls, v, info: ValidationInfo):
-        return f'{env.sub_service_url}/sub/{info.data['b64_id']}'
+        # return f'{env.sub_service_url}/sub/{info.data['b64_id']}' # circular import
+
+        return f'{os.getenv('SUB_SERVICE_URL', 'http://127.0.0.1')}/sub/{info.data['b64_id']}'
 
     @field_validator('status', mode='after')
     @classmethod
@@ -99,6 +102,8 @@ class UserSubSchema(BaseModel):
             "created_at": us["created_at"],
             "sub_nodes_count": us["sub_nodes_count"],
             "offer_prices": us["offer_prices"],
+            "sub_link": None,
+            "status": None,
         }
         return cls.model_validate(mapped_data)
 
@@ -127,11 +132,11 @@ class ShopSubSchema(BaseModel):
 class SubOfferSchema(BaseModel):
     id: int
     cost: int
+    infinite_traffic: bool
+    infinite_expire: bool
     ttl_days: int
     traffic_limit_day: int | str | None
     traffic_limit: int | str | None
-    infinite_traffic: bool
-    infinite_expire: bool
 
     field_validator('cost', mode='after')
     @classmethod
@@ -183,5 +188,20 @@ class SubOfferSchema(BaseModel):
             "traffic_limit": so["traffic_limit"],
             "infinite_expire": so["infinite_expire"],
             "infinite_traffic": so["infinite_traffic"],
+        }
+        return cls.model_validate(mapped_data)
+
+
+class UserSchema(BaseModel):
+    sub_count: int
+    registered_date: datetime
+
+    model_config = ConfigDict(extra='allow')
+
+    @classmethod
+    def fast_create(cls, u: dict) -> "UserSchema":
+        mapped_data = {
+            "sub_count": u.get("sub_count", 0),
+            "registered_date": u.get("registered_at", datetime.now(UTC)),
         }
         return cls.model_validate(mapped_data)

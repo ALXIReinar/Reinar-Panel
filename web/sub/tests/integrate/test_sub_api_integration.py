@@ -82,7 +82,7 @@ class TestGetSubEndpoint:
         user_uuid = sub_api_seed['active_user']['uuid']
         
         # Act
-        response = await test_client.get(f"/sub/{b64_id}")
+        response = await test_client.get(f"/api/v1/public/sub/{b64_id}")
         
         # Assert
         assert response.status_code == 200
@@ -122,7 +122,7 @@ class TestGetSubEndpoint:
         b64_id = sub_api_seed['invalid_users']['limit_exceeded']['b64_id']
         
         # Act
-        response = await test_client.get(f"/sub/{b64_id}")
+        response = await test_client.get(f"/api/v1/public/sub/{b64_id}")
         
         # Assert
         assert response.status_code == 200
@@ -147,7 +147,7 @@ class TestGetSubEndpoint:
         b64_id = sub_api_seed['invalid_users']['expired']['b64_id']
         
         # Act
-        response = await test_client.get(f"/sub/{b64_id}")
+        response = await test_client.get(f"/api/v1/public/sub/{b64_id}")
         
         # Assert
         assert response.status_code == 200
@@ -172,28 +172,28 @@ class TestGetSubEndpoint:
         # Act & Assert для каждого пользователя
         
         # User A - активный (должен получить ссылки)
-        resp_a = await test_client.get(f"/sub/{sub_api_seed['active_user']['b64_id']}")
+        resp_a = await test_client.get(f"/api/v1/public/sub/{sub_api_seed['active_user']['b64_id']}")
         decoded_a = base64.b64decode(resp_a.content).decode()
         assert sub_api_seed['active_user']['uuid'] in decoded_a
         assert "00000000-0000-0000-0000-000000000000" not in decoded_a  # НЕ error message
         
         # User B - превышен лимит (НЕ должен получить ссылки)
-        resp_b = await test_client.get(f"/sub/{sub_api_seed['invalid_users']['limit_exceeded']['b64_id']}")
+        resp_b = await test_client.get(f"/api/v1/public/sub/{sub_api_seed['invalid_users']['limit_exceeded']['b64_id']}")
         decoded_b = base64.b64decode(resp_b.content).decode()
         assert "00000000-0000-0000-0000-000000000000" in decoded_b  # Error message
         
         # User C - истёкшая подписка (НЕ должен получить ссылки)
-        resp_c = await test_client.get(f"/sub/{sub_api_seed['invalid_users']['expired']['b64_id']}")
+        resp_c = await test_client.get(f"/api/v1/public/sub/{sub_api_seed['invalid_users']['expired']['b64_id']}")
         decoded_c = base64.b64decode(resp_c.content).decode()
         assert "00000000-0000-0000-0000-000000000000" in decoded_c
         
         # User D - неактивная подписка (НЕ должен получить ссылки)
-        resp_d = await test_client.get(f"/sub/{sub_api_seed['invalid_users']['inactive']['b64_id']}")
+        resp_d = await test_client.get(f"/api/v1/public/sub/{sub_api_seed['invalid_users']['inactive']['b64_id']}")
         decoded_d = base64.b64decode(resp_d.content).decode()
         assert "00000000-0000-0000-0000-000000000000" in decoded_d
         
         # User E - удалённый пользователь (НЕ должен получить ссылки)
-        resp_e = await test_client.get(f"/sub/{sub_api_seed['invalid_users']['deleted']['b64_id']}")
+        resp_e = await test_client.get(f"/api/v1/public/sub/{sub_api_seed['invalid_users']['deleted']['b64_id']}")
         decoded_e = base64.b64decode(resp_e.content).decode()
         assert "00000000-0000-0000-0000-000000000000" in decoded_e
     
@@ -213,7 +213,7 @@ class TestGetSubEndpoint:
         b64_id = sub_api_seed['active_user']['b64_id']
         
         # Act
-        response = await test_client.get(f"/sub/{b64_id}")
+        response = await test_client.get(f"/api/v1/public/sub/{b64_id}")
         
         # Assert
         headers = response.headers
@@ -272,7 +272,7 @@ class TestGetSubEndpoint:
             """, sub_api_seed['plan_id'])
         
         # Act
-        response = await test_client.get(f"/sub/{b64_id}")
+        response = await test_client.get(f"/api/v1/public/sub/{b64_id}")
         
         # Assert
         decoded = base64.b64decode(response.content).decode()
@@ -289,7 +289,7 @@ class TestGetSubEndpoint:
         fake_b64_id = "nonexistent-fake-id-12345"
         
         # Act
-        response = await test_client.get(f"/sub/{fake_b64_id}")
+        response = await test_client.get(f"/api/v1/public/sub/{fake_b64_id}")
         
         # Assert
         assert response.status_code == 200

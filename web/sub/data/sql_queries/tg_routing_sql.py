@@ -1,4 +1,4 @@
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, UTC
 
 from asyncpg import Connection
 
@@ -13,14 +13,14 @@ class TgRoutingQueries:
         query = """
         INSERT INTO users (tg_id, tg_username) VALUES ($1, $2)
         ON CONFLICT (tg_id) WHERE is_deleted = false
-        DO UPDATE SET tg_username = EXCLUDED.$2
+        DO UPDATE SET tg_username = $2
         RETURNING id, registered_at
         """
         insert_res = await self.conn.fetchrow(query, tg_id, tg_username)
 
         "Зарегался только что, значит подписок ещё нет => у него ещё нет подписок"
-        if insert_res['registered_at'] + timedelta(minutes=10) < datetime.now():
-            return True, {'sub_count': 0, 'user_id': insert_res['id']}
+        if insert_res['registered_at'] + timedelta(minutes=1) > datetime.now(UTC):
+            return True, {'sub_count': 0, 'user_id': insert_res['id'], 'registered_at': datetime.now()}
 
         "Если нужны данные"
         if return_data:
@@ -43,59 +43,75 @@ class TgRoutingQueries:
 
     async def get_tg_user_subs(self, tg_id: int):
         query = '''
-        SELECT us.id AS user_sub_id, us.sub_plan_id, us.is_active, us.is_limited, us.expire_date, 
-               us.traffic_used_day_mb, us.infinite_traffic, us.b64_id, us.infinite_expire,
-               us.traffic_limit_day, us.used_mb, us.used_mb_limit, us.created_at, sp.title,
-               COUNT(vsp.id) AS sub_nodes_count,
-               COALESCE(
-                   json_agg(
-                       json_build_object(
-                           'offer_id', spo.id,
-                           'cost', spo.cost,
-                           'ttl_days', spo.ttl_days,
-                           'traffic_day_limit', spo.traffic_limit_day_mb,
-                           'traffic_limit', spo.traffic_limit_mb,
-                           'infinite_expire', spo.infinite_expire,
-                           'infinite_traffic', spo.infinite_traffic
-                       ) ORDER BY spo.cost
-                   ),
-                   '[]'::json
-               ) AS offer_prices
-        FROM user_subs us
-        JOIN sub_plans sp ON sp.id = us.sub_plan_id
+        WITH vnode_counts AS (
+            SELECT vsp.sub_plan_id, COUNT(DISTINCT vsp.id) AS sub_nodes_count
+            FROM vnodes_sub_plans vsp
+            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
+            GROUP BY vsp.sub_plan_id
+        )
+        SELECT 
+            sp.id, 
+            sp.title, 
+            sp.description, 
+            COALESCE(vc.sub_nodes_count, 0) AS sub_nodes_count,
+            COALESCE(
+                json_agg(
+                    json_build_object(
+                        'offer_id', spo.id,
+                        'cost', spo.cost,
+                        'ttl_days', spo.ttl_days,
+                        'traffic_day_limit', spo.traffic_limit_day_mb,
+                        'traffic_limit', spo.traffic_limit_mb,
+                        'infinite_expire', spo.infinite_expire,
+                        'infinite_traffic', spo.infinite_traffic
+                    ) ORDER BY spo.position
+                ) FILTER (WHERE spo.id IS NOT NULL),
+                '[]'::json
+            ) AS offer_prices
+        FROM sub_plans sp
+        LEFT JOIN vnode_counts vc ON vc.sub_plan_id = sp.id
+        LEFT JOIN sub_plan_offers spo ON spo.sub_plan_id = sp.id AND spo.is_active = true
+        JOIN user_subs us ON us.sub_plan_id = sp.id
         JOIN users u ON us.user_id = u.id
-        LEFT JOIN vnodes_sub_plans vsp ON sp.id = vsp.sub_plan_id
-        JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
-        LEFT JOIN sub_plan_offers spo ON spo.sub_plan_id = us.sub_plan_id AND spo.is_active = true
         WHERE u.tg_id = $1 AND u.is_deleted = false
-        GROUP BY us.id, sp.title
-        ORDER BY us.id
+        GROUP BY sp.id, sp.position, vc.sub_nodes_count
+        ORDER BY sp.position
         '''
         return await self.conn.fetch(query, tg_id)
 
     async def get_shop_sub_plans(self):
+        """Получить активные планы подписок для магазина с их офферами и количеством локаций"""
         query = '''
-        SELECT sp.id, sp.title, sp.description, COUNT(vsp.id) AS sub_nodes_count,
-               COALESCE(
-                   json_agg(
-                       json_build_object(
-                           'offer_id', spo.id,
-                           'cost', spo.cost,
-                           'ttl_days', spo.ttl_days,
-                           'traffic_day_limit', spo.traffic_limit_day_mb,
-                           'traffic_limit', spo.traffic_limit_mb,
-                           'infinite_expire', spo.infinite_expire,
-                           'infinite_traffic', spo.infinite_traffic
-                       ) ORDER BY spo.position
-                   ),
-                   '[]'::json
-               ) AS offer_prices
+        WITH vnode_counts AS (
+            SELECT vsp.sub_plan_id, COUNT(DISTINCT vsp.id) AS sub_nodes_count
+            FROM vnodes_sub_plans vsp
+            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
+            GROUP BY vsp.sub_plan_id
+        )
+        SELECT 
+            sp.id, 
+            sp.title, 
+            sp.description, 
+            COALESCE(vc.sub_nodes_count, 0) AS sub_nodes_count,
+            COALESCE(
+                json_agg(
+                    json_build_object(
+                        'offer_id', spo.id,
+                        'cost', spo.cost,
+                        'ttl_days', spo.ttl_days,
+                        'traffic_day_limit', spo.traffic_limit_day_mb,
+                        'traffic_limit', spo.traffic_limit_mb,
+                        'infinite_expire', spo.infinite_expire,
+                        'infinite_traffic', spo.infinite_traffic
+                    ) ORDER BY spo.position
+                ) FILTER (WHERE spo.id IS NOT NULL),
+                '[]'::json
+            ) AS offer_prices
         FROM sub_plans sp
-        LEFT JOIN vnodes_sub_plans vsp ON sp.id = vsp.sub_plan_id
-        JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
+        LEFT JOIN vnode_counts vc ON vc.sub_plan_id = sp.id
         LEFT JOIN sub_plan_offers spo ON spo.sub_plan_id = sp.id AND spo.is_active = true
         WHERE sp.is_active = true
-        GROUP BY sp.id, sp.position
+        GROUP BY sp.id, sp.position, vc.sub_nodes_count
         ORDER BY sp.position
         '''
         return await self.conn.fetch(query)

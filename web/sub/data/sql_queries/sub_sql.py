@@ -9,6 +9,15 @@ class SubscriptionQueries:
     def __init__(self, conn: Connection):
         self.conn = conn
 
+    async def get_user_tg_notify(self, user_id: int, user_sub_id: int):
+        query = '''
+        SELECT u.tg_id, us.b64_id FROM users u
+        JOIN user_subs us ON us.user_id = u.id
+        WHERE u.id = $1 AND us.id = $2
+        '''
+        return await self.conn.fetchrow(query, user_id, user_sub_id)
+
+
     async def get_sub_links(self, b64_string: str):
         query_sub_meta = '''
         SELECT 

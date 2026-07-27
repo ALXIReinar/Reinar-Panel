@@ -5,7 +5,7 @@ from aiogram.filters import Command
 from aiohttp import ClientSession
 from redis.asyncio import Redis
 
-from bot.config_dir.config import bot, api_base_url, redis_settings
+from bot.config_dir.config import bot, redis_settings, env
 from bot.core.handlers.about_handler import show_about
 from bot.core.handlers.callback_center import callback_factory
 from bot.core.api.aiohttp_conn import SubServiceConn
@@ -21,7 +21,7 @@ async def main():
     """"""
     "AioHttp"
     aio_http_session = ClientSession(
-        base_url=api_base_url,
+        base_url=env.sub_service_url,
     )
     
     "Redis"

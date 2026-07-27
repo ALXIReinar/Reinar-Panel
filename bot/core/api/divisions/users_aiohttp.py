@@ -1,7 +1,7 @@
 from aiohttp import ClientSession
 
 from bot.config_dir.logger_config import log_event
-from bot.core.api.aiohttp_conn import BaseAioHTTPClient
+from bot.core.api.base_aio_http_client import BaseAioHTTPClient
 from bot.core.utils.anything import SubServiceUris
 
 
@@ -19,13 +19,10 @@ class UsersAioHttp(BaseAioHTTPClient):
         ok, data = await self._request(
             'POST',
             SubServiceUris.add_tg_user,
-            release_request=return_data,
+            release_request=not return_data,
             json={'tg_id': tg_id, 'tg_username': tg_username, 'return_data': return_data}
         )
-
-        if not ok:
-            data = {}
-        return ok, data
+        return ok, data or {}
 
 
 

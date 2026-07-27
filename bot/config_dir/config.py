@@ -17,7 +17,7 @@ from bot.config_dir.msg_templates import MessageTemplates
 env_files = (
     os.getenv('ENV_FILE') or
     os.getenv('ENV_LOCAL_TEST_FILE') or
-    '.env.bot.prod'
+    'bot/.env.bot.prod'
 )
 load_dotenv(env_files, override=True)
 logging.critical(f'\033[35m{env_files}\033[0m | app_mode: \033[33m{os.getenv('APP_MODE')}\033[0m')
@@ -30,7 +30,18 @@ LOG_DIR.mkdir(exist_ok=True, parents=True)
 
 
 class Settings(BaseSettings):
-    message_templates: MessageTemplates = MessageTemplates()
+    # Message templates (загружаются из ENV напрямую)
+    message_start: str = Field(description='Ответ бота на команду /start')
+    message_profile: str
+    message_about: str
+    message_subscriptions_shop_intro: str
+    message_subscriptions_shop_extent: str
+    message_user_profile_subs_intro: str
+    message_subscriptions_user_extent: str
+    message_subscriptions_offers_intro: str
+    message_subscriptions_offers_extent: str
+    message_pay_window: str
+    
     redis_password: str
     redis_max_connections: int
     redis_host: str
@@ -38,23 +49,36 @@ class Settings(BaseSettings):
 
     bot_token: str
     admin_tg_id: int
-    admin_panel_ip: str
     sub_service_url: str = Field(max_length=255)
 
     app_mode: AppMode
+    service_name: str = 'tg-bot-service'
     user_req_limit: int
     user_req_window_seconds: int
     shop_sub_plans_ttl: int
 
     model_config = SettingsConfigDict(extra='allow')
+    
+    @property
+    def message_templates(self) -> MessageTemplates:
+        """Геттер для обратной совместимости с env.message_templates"""
+        return MessageTemplates(
+            message_start=self.message_start,
+            message_profile=self.message_profile,
+            message_about=self.message_about,
+            message_subscriptions_shop_intro=self.message_subscriptions_shop_intro,
+            message_subscriptions_shop_extent=self.message_subscriptions_shop_extent,
+            message_user_profile_subs_intro=self.message_user_profile_subs_intro,
+            message_subscriptions_user_extent=self.message_subscriptions_user_extent,
+            message_subscriptions_offers_intro=self.message_subscriptions_offers_intro,
+            message_subscriptions_offers_extent=self.message_subscriptions_offers_extent,
+            message_pay_window=self.message_pay_window,
+        )
 
 @lru_cache
 def get_env_vars():
     return Settings()
 env = get_env_vars()
-
-
-api_base_url = getattr(env, APP_MODE_CONFIG[env.app_mode]['api_server_url'])
 
 
 "Bot"

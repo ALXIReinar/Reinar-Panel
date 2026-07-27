@@ -34,6 +34,12 @@ class NodeUris:
     proto_core_bulk_add_users: str = '/api/v1/server/proto_core/user/bulk/add'
     get_metrics: str = '/api/v1/server/node/metrics'
 
+
+@dataclass
+class TgBotApi:
+    send_message: str = 'https://api.telegram.org/bot{}/sendMessage'
+
+
 @dataclass
 class DeleteReasons:
     sub_revoke: str = 'sub_revoke'

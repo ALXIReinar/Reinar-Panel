@@ -1,8 +1,6 @@
-from typing import Any
-
 from aiohttp import ClientSession
 
-from bot.core.api.aiohttp_conn import BaseAioHTTPClient
+from bot.core.api.base_aio_http_client import BaseAioHTTPClient
 from bot.core.utils.anything import SubServiceUris
 
 class SubPlansAioHttp(BaseAioHTTPClient):

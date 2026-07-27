@@ -73,6 +73,7 @@ class Settings(BaseSettings):
 
     app_mode: AppMode
     pay_mode: PayMode
+    domain: str = Field(max_length=255)
     sub_link_bytes: int = Field(le=64, ge=16)
     subscription_update_interval: str
     post_processing_responses: bool

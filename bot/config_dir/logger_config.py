@@ -12,16 +12,13 @@ from bot.config_dir.config import env, LOG_DIR
 
 
 
-
-
-
 class JSONFormatter(logging.Formatter):
     def format(self, record):
         log_entry = {
             "@timestamp": datetime.now(UTC).isoformat() + "Z",
             "level": record.levelname,
             "message": record.getMessage(),
-            "service": "tg-bot",
+            "service": env.service_name,
             "environment": env.app_mode,
             "func": record.__dict__.get('func', 'unknown_function'),
             "location": record.__dict__.get('location', 'unknown_location'),
@@ -34,7 +31,7 @@ class JSONFormatter(logging.Formatter):
                 "@timestamp": datetime.now(UTC).isoformat() + "Z",
                 "level": record.levelname,
                 "message": str(record.getMessage()),
-                "service": "tg-bot",
+                "service": env.service_name,
                 "error": f"JSON serialization failed: {str(e)}"
             }
             return json.dumps(fallback_entry, ensure_ascii=False)
