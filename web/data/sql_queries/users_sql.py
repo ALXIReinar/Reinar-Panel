@@ -1,8 +1,10 @@
+from datetime import datetime
 from typing import Literal
 from asyncpg import Connection
 import secrets
 import base64
 
+from web.schemas.user_schema import UserSubItem
 from web.utils.anything import CoreProtoActions
 from web.config_dir.config import env
 
@@ -198,10 +200,60 @@ class UsersQueries:
         return user, user_subs
 
 
-    async def update(self, user_id, tg_username, sub_plan_ids):
-        """
-        TODO: недостающий эндпоинт для редактирования пользователя
+    async def update(
+            self,
+            user_id: int,
+            tg_username: str | None = None,
+            tg_id: int | None = None,
+            registered_at: datetime | None = None
+    ):
+        params, updates, param_idx = [], [], 2
 
-        sub_plan_ids: По аналогии с sub_vnodes. Состояние подписок, которые у пользователя есть. Благодаря ON CONFLICT это список текущего состояния подписок
-            Подписки пользователя **требуют генерации uuid4 и b64_id**
-        """
+        if tg_id is not None:
+            updates.append(f'tg_id = ${param_idx}')
+            params.append(tg_id)
+            param_idx += 1
+
+        if registered_at is not None:
+            updates.append(f'registered_at = ${param_idx}')
+            params.append(registered_at)
+            param_idx += 1
+
+        if tg_username is not None:
+            updates.append(f'tg_username = ${param_idx}')
+            params.append(tg_username)
+            param_idx += 1
+
+
+        query = f'UPDATE users SET {','.join(updates)} WHERE id = $1 AND is_deleted = false'
+        return await self.conn.fetchrow(query, user_id, *params)
+
+
+    async def edit_user_subs(
+            self,
+            user_id: int,
+            subs_upd_ids: list[UserSubItem],
+            subs_del_ids: list[int],
+            subs_add_ids: list[UserSubItem],
+    ):
+        del_sub_ids, add_sub_ids, upd_sub_ids = None, None, None
+
+        add_query = '''
+        -- 1. Вставка в user_subs
+        -- 2. Поиск нод по подписке, вставка в оутбокс
+        -- 3. Возврат саб_айди для арка
+        
+        -- *. Если не указано ничего кроме саб плана, то перетягиваем поля из sub_plan_offers
+        '''
+
+        del_query = '''
+        -- 1. Деактивация(не удаление) подписки
+        -- 2. Оутбокс по нодам подписки
+        -- 3. Возврат саб_айди для арка
+        '''
+
+        upd_query = '''
+        -- 1. Не принимаем на апдейт саб_план_айди - слишком мучительно. Удали подписку просто и добавь новую
+        -- 2. Типикал if поле is not None...
+        ---- 2.1. А как с траффик-полями быть... Что-то другое нужно туда класть
+        '''

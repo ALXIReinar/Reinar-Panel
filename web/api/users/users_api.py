@@ -10,7 +10,7 @@ from web.schemas.cookie_settings_schema import JWTCookieDep
 from web.schemas.user_schema import (
     UserBulkCreateSchema,
     UserBulkUpdateSchema,
-    UserBulkDeleteSchema
+    UserBulkDeleteSchema, UserSubsUpdateSchema, UserUpdateSchema
 )
 from web.utils.anything import CoreProtoActions
 from web.utils.logger_config import log_event
@@ -97,11 +97,35 @@ async def bulk_delete_users(body: UserBulkDeleteSchema, request: Request, db: Pg
     return {'success': True, 'message': f'Пользователи удалены!', 'deleted_count': len(deleted_users), 'arq_job_id': job_id}
 
 
-# @router.put('/update')
-# async def edit_user(body: UserUpdateSchema, request: Request, db: PgSqlDep, arq: ArqDep, _: JWTCookieDep):
-#     await db.users.update(
-#         user_id=body.user_id,
-#         tg_username=...,
-#         sub_plan_ids=...
-#     )
+@router.put('/{user_id}/user_meta')
+async def edit_user(user_id: int, body: UserUpdateSchema, request: Request, db: PgSqlDep, arq: ArqDep, _: JWTCookieDep):
+    upd = await db.users.update(
+        user_id=user_id,
+        tg_username=body.tg_username,
+        tg_id=body.tg_id,
+        registered_at=body.registered_at,
+    )
+    if not upd:
+        log_event(f'Не удалось обновить пользователя, не существует | upd_body: \033[34m{repr(body)}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+        raise HTTPException(status_code=404, detail={'success': False, 'message': 'Пользователь не существует'})
 
+    return {'success': True, 'message': 'Пользователь обновлён'}
+
+
+@router.get('/{user_id}/user_subs')
+async def edit_user_sub(user_id: int, body: UserSubsUpdateSchema, request: Request, db: PgSqlDep, arq: ArqDep, _: JWTCookieDep):
+    user_sub_ids_del, users_sub_ids_add, users_sub_ids_upd = await db.users.update_subs(
+        user_id=user_id,
+        subs_upd_ids=body.user_subs_to_update,
+        subs_del_ids=body.user_subs_to_delete,
+        subs_add_ids=body.user_subs_to_add,
+    )
+
+    # TODO: нужна фоновая в арке, чтобы впн-пользователей на ноды кидать. Может, она уже есть(глянуть action_on_core_proto)
+    # put_to_arq_bg всех впн-пользователей юзера захватывает - так настроена
+    # Нужен именно готовый метод, чтобы здесь одной строчкой обойтись под условием
+    if user_sub_ids_del:
+        ...
+
+    if users_sub_ids_add:
+        ...
