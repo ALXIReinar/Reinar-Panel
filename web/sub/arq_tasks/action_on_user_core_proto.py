@@ -140,7 +140,7 @@ async def action_on_core_proto_by_sub_plan(
     failed = len(trouble_nodes) + len(retry_nodes)
     level = 'INFO' if failed == 0 else 'WARNING'
     
-    log_event(f'\033[33m[ARQ]\033[0m Добавление пользователя завершено | operation: \033[36m{operation}\033[0m; success: \033[32m{success_count}\033[0m; trouble: \033[31m{len(trouble_nodes)}\033[0m; retry: \033[33m{len(retry_nodes)}\033[0m',
+    log_event(f'\033[33m[ARQ]\033[0m Операция над впн-пользователем завершена | operation: \033[36m{operation}\033[0m; success: \033[32m{success_count}\033[0m; trouble: \033[31m{len(trouble_nodes)}\033[0m; retry: \033[33m{len(retry_nodes)}\033[0m',
         level=level,
         success_count=success_count,
         error_count=failed

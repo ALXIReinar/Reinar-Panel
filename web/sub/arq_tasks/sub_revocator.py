@@ -19,7 +19,7 @@ async def revoke_sub_plan_by_expire(ctx: dict, db: PgSql = None, arq: ArqRedis =
         log_event('\033[31m[ARQ Sub Revoke]\033[0m Нет истёкших подписок. Idle')
         return {'success': True, 'message': 'Нет просроченных подписок'}
 
-    users_to_delete = sum(len(vnode['users']) for vnode in  expired_users_by_node)
+    users_to_delete = sum(len(vnode['users']) for vnode in expired_users_by_node)
     log_event(f'\033[31m[ARQ Sub Revoke]\033[0m Крона по удалению пользователей из ядер протоколов | total_deletes: \033[31m{users_to_delete}\033[0m')
 
     sem = asyncio.Semaphore(env.action_on_core_proto_limit)

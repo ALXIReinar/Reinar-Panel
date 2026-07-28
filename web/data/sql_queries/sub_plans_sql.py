@@ -233,3 +233,12 @@ class SubPlansQueries:
         WHERE sp.id = $1
         """
         return await self.conn.fetchrow(query, plan_id)
+
+
+    async def edit_vnodes_set(self, sub_plan_id: int, add_vnodes, remove_vnodes):
+        """
+        Сначала обновление связей, затем оутбокс для удаления
+        """
+        query = """
+        
+        """

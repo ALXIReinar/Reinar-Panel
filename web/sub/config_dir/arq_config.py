@@ -6,6 +6,7 @@ from web.sub.arq_tasks.admin_actions import admin_request_bulk_action_users
 from web.sub.arq_tasks.metrics_collector import traffic_sync_scheduler, collect_traffic_metrics, \
     bulk_delete_by_traffic_limit
 from web.sub.arq_tasks.outbox_cleaner import retry_stuck_core_proto_actions
+from web.sub.arq_tasks.pounted_bulk.pointed_bulk_actions import pointed_bulk_action
 from web.sub.arq_tasks.sub_revocator import bulk_delete_users_from_single_node, revoke_sub_plan_by_expire
 from web.sub.arq_tasks.tg_sub_sender import send_sub_link_tg_user
 from web.sub.arq_tasks.traffic_reset import reset_day_user_traffic, bulk_add_users_into_single_node
@@ -63,6 +64,7 @@ class WorkerSettings:
 
         admin_request_bulk_action_users,
         send_sub_link_tg_user,
+        pointed_bulk_action,
     ]
     
     # Cron задачи

@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from starlette.requests import Request
 
+from web.config_dir.config import ArqDep
 from web.data.postgres import PgSqlDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
-from web.schemas.sub_plan_schema import SubPlanCreateSchema, SubPlanUpdateSchema
+from web.schemas.sub_plan_schema import SubPlanCreateSchema, SubPlanUpdateSchema, SubPlanVnodesSetSchema
 
 from web.utils.logger_config import log_event
 
@@ -50,24 +51,11 @@ async def update_sub_plan(plan_id: int, body: SubPlanUpdateSchema, request: Requ
         log_event(f'Группа подписок не найдена | plan_id: \033[33m{plan_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
         raise HTTPException(status_code=404, detail={'success': False, 'message': 'Группа подписок не найдена'})
 
-    # Редачим связки локаций(виртуальные ноды-протоколы) с группой подписок
-    attache_status_code, attache_msg = 202, "Без изменений"
-    if body.add_node_proto_ids:
-        attache_status_code, attache_msg = await db.sub_plans.attach_vnodes(plan_id, body.add_node_proto_ids)
-        log_event(f"Попробовали прикрепить ноды к подписке | attache_res: \033[32m{attache_status_code}: {attache_msg}\033[0m; attache_list: {body.add_node_proto_ids}; plan_id: \033[33m{plan_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request)
-
-    detach_status_code, detach_msg = 202, "Без изменений"
-    if body.remove_node_proto_ids:
-        detach_status_code, detach_msg = await db.sub_plans.detach_vnodes(plan_id, body.remove_node_proto_ids)
-        log_event(f'Попробовали открепить ноды от подписки | detach_res: \033[31m{detach_status_code}: {detach_msg}\033[0m; detache_list: {body.remove_node_proto_ids}; plan_id: \033[33m{plan_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
-
     log_event(f'Группа подписок обновлена | plan_id: \033[32m{plan_id}\033[0m; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request)
     return {
         'success': True, 
         'message': 'Группа подписок обновлена', 
         "offer_update_count": offers_upd_count,
-        "attache_res": {"status_code": attache_status_code, "attached_msg": attache_msg},
-        "detach_res": {"status_code": detach_status_code, 'detach_message': detach_msg},
     }
 
 
@@ -105,3 +93,32 @@ async def get_sub_plan(plan_id: int, request: Request, db: PgSqlDep, _: JWTCooki
 
     log_event(f'Отдали группу подписок | plan_id: \033[32m{plan_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
     return {'success': True, 'plan': dict(plan), 'vnodes': plan['vnodes'], 'offers': plan['offers']}
+
+
+
+@router.put('/{plan_id}/locations')
+async def edit_vnodes_loadout(plan_id: int, body: SubPlanVnodesSetSchema, request: Request, db: PgSqlDep, _: JWTCookieDep, arq: ArqDep):
+    """
+    Работаем от оутбокс айди.
+    1. В эндпоинте выбираются все пользователи тарифного плана, фиксируются.
+    2. В фон летят айди-метки
+    3. В фоне всё распихивается как надо
+    """
+    attached, detached = await db.sub_plans.edit_vnodes_set(plan_id, body.add_vnodes, body.remove_vnodes)
+
+    # Редачим связки локаций(виртуальные ноды-протоколы) с группой подписок
+    attache_status_code, attache_msg = 202, "Без изменений"
+    if body.add_node_proto_ids:
+        attache_status_code, attache_msg = await db.sub_plans.attach_vnodes(plan_id, body.add_node_proto_ids)
+        log_event(f"Попробовали прикрепить ноды к подписке | attache_res: \033[32m{attache_status_code}: {attache_msg}\033[0m; attache_list: {body.add_node_proto_ids}; plan_id: \033[33m{plan_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request)
+
+    detach_status_code, detach_msg = 202, "Без изменений"
+    if body.remove_node_proto_ids:
+        detach_status_code, detach_msg = await db.sub_plans.detach_vnodes(plan_id, body.remove_node_proto_ids)
+        log_event(f'Попробовали открепить ноды от подписки | detach_res: \033[31m{detach_status_code}: {detach_msg}\033[0m; detache_list: {body.remove_node_proto_ids}; plan_id: \033[33m{plan_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
+
+    return {
+        "success": True,
+        "attache_res": {"status_code": attache_status_code, "attached_msg": attache_msg},
+        "detach_res": {"status_code": detach_status_code, 'detach_message': detach_msg},
+    }

@@ -33,19 +33,44 @@ class UserUpdateSchema(BaseModel):
     registered_at: datetime | None = None
 
 
-class UserSubItem(BaseModel):
+class UserSubUpdItem(BaseModel):
+    """
+    Такие поля как ... Не принимаются т.к.
+    - sub_plan_id -
+        смена sub_plan_id означает одновременное удаление и вставку новой подписки,
+        но с тем же user_sub_id. По факту это миграция впн пользователей с одних нод на другие
+        Слишком сложно и неприятно. Куда надёжнее и проще будет удалить и добавить подписку с другим sub_plan_id
+        через add,delete функционал. Требует возни с arq - не задумано для операции обновления
+    - uuid - его изменение в созданной подписке - потеря связи с впн-ядрами. Они не разберут, кто это. Это primary_key для впн-ядер
+    - is_active, is_limited - та же ерунда. Возня с арком, функционал для изменения этих флагов есть
+    """
     user_sub_id: int
-    order_id: Optional[int]
-    sub_plan_id: Optional[int]
+    b64_id: Optional[str] = Field(max_length=90, min_length=10)
+    order_id: int | None = Field(0, ge=0)
     traffic_used_day_mb: Optional[int]
-    traffic_limit_day_mb: Optional[int]
+    traffic_limit_day_mb: int | None = Field(0, ge=0)
+    traffic_used_mb: Optional[int]
+    traffic_limit_mb: int | None = Field(0, ge=0)
     infinite_traffic: Optional[bool]
     expire_date: Optional[datetime]
     infinite_expire: Optional[bool]
+
+class UserSubAddItem(BaseModel):
+    b64_id: str = Field(max_length=90, min_length=10)
+    uuid: str = Field(max_length=36)
+    order_id: Optional[int]
+    sub_plan_id: int
+    traffic_used_day_mb: Optional[int]
+    traffic_limit_day_mb: Optional[int]
+    traffic_used_mb: Optional[int]
+    traffic_limit_mb: Optional[int]
+    infinite_traffic: bool
+    expire_date: Optional[datetime]
+    infinite_expire: bool
     is_active: Optional[bool]
     is_limited: Optional[bool]
 
 class UserSubsUpdateSchema(BaseModel):
-    user_subs_to_delete: list[int]
-    user_subs_to_add: list[UserSubItem]
-    user_subs_to_update: list[UserSubItem]
+    user_subs_to_delete: Optional[list[int]] = Field([])
+    user_subs_to_add: Optional[list[UserSubAddItem]] = Field([])
+    user_subs_to_update: Optional[list[UserSubUpdItem]] = Field([])

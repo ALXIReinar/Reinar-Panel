@@ -180,7 +180,7 @@ class SubscriptionQueries:
         ),
         -- 2. Собираем информацию о нодах для этих подписок
         expired_nodes_info AS (
-            SELECT upc.uuid, upc.user_sub_id, vsp.id AS sub_node_id,
+            SELECT upc.uuid, upc.user_sub_id,
                    vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, 
                    pt.proto_python_lib,
                    pt.flatten_json_users_key, 
@@ -326,3 +326,31 @@ class SubscriptionQueries:
                  flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, bulk_delete_script_custom_params
         '''
         return await self.conn.fetch(query, outbox_ids)
+
+
+    async def get_users_by_sub_plan(self, outbox_event_ids: list[int], action: Literal['add', 'delete']):
+        query = '''
+        WITH outbox_plan AS (
+            SELECT sno.node_proto_id, sno.user_sub_id, sno.user_uuid AS uuid
+            FROM sub_nodes_outbox sno 
+            JOIN (
+                SELECT event_id FROM UNNEST($1::bigint[]) AS t(event_id)
+            ) AS inp_outbox ON sno.id = inp_outbox.event_id
+            JOIN user_subs us ON us.id = sno.user_sub_id
+            JOIN users u ON u.id = us.user_id AND u.is_deleted = false
+            WHERE sno.operation = $2
+        )
+        SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, 
+               pt.proto_python_lib, pt.flatten_json_users_key, pt.flatten_user_identifier_key, 
+               pt.reload_core_command, np.config_path, pt.constant_user_data_obj, pt.required_user_data_obj,
+               pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, pt.api_bulk_delete_user_script, 
+               pt.bulk_delete_script_custom_params, op.uuid, op.user_sub_id
+        FROM nodes_protocols np
+        JOIN outbox_plan op ON op.node_proto_id = np.id
+        JOIN nodes n ON np.node_id = n.id AND n.is_active = true
+        JOIN protocols p ON np.proto_id = p.id 
+        JOIN proto_templates pt ON pt.id = p.tmp_id 
+        WHERE np.user_visible = true
+        )
+        '''
+        return await self.conn.fetch(query, outbox_event_ids, CoreProtoActions.name2id[action])

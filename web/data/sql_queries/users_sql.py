@@ -1,12 +1,13 @@
 from datetime import datetime
 from typing import Literal
-from asyncpg import Connection
+from asyncpg import Connection, UniqueViolationError
 import secrets
 import base64
 
-from web.schemas.user_schema import UserSubItem
+from web.schemas.user_schema import UserSubUpdItem, UserSubAddItem
 from web.utils.anything import CoreProtoActions
 from web.config_dir.config import env
+from web.utils.logger_config import log_event
 
 
 class UsersQueries:
@@ -181,8 +182,9 @@ class UsersQueries:
         WHERE id = $1 AND is_deleted = false
         '''
         query_subs = '''
-        SELECT us.id AS user_sub_id, us.order_id, us.b64_id, us.uuid, us.traffic_used_day_mb, us.traffic_limit_day, us.infinite_traffic,
-               us.expire_date, us.infinite_expire, us.is_active, us.is_limited, po.timestamp AS sub_bought_at,
+        SELECT us.id AS user_sub_id, us.order_id, us.b64_id, us.uuid, us.traffic_used_day_mb, us.traffic_limit_day AS traffic_limit_day_mb, 
+               us.used_mb AS traffic_used_mb, us.used_mb_limit AS traffic_limit_mb,
+               us.infinite_traffic, us.expire_date, us.infinite_expire, us.is_active, us.is_limited, po.timestamp AS sub_bought_at,
                us.sub_plan_id, sp.title AS sub_plan_title, sp.is_active AS sub_plan_active
         FROM user_subs us
         JOIN sub_plans sp ON sp.id = us.sub_plan_id
@@ -225,35 +227,185 @@ class UsersQueries:
             param_idx += 1
 
 
-        query = f'UPDATE users SET {','.join(updates)} WHERE id = $1 AND is_deleted = false'
-        return await self.conn.fetchrow(query, user_id, *params)
+        query = f'UPDATE users SET {','.join(updates)} WHERE id = $1 AND is_deleted = false RETURNING id'
+        try:
+            return 200, await self.conn.fetchval(query, user_id, *params)
+        except UniqueViolationError as e:
+            return 409, repr(e)
 
 
     async def edit_user_subs(
             self,
             user_id: int,
-            subs_upd_ids: list[UserSubItem],
-            subs_del_ids: list[int],
-            subs_add_ids: list[UserSubItem],
+            upd_subs: list[UserSubUpdItem],
+            del_sub_ids: list[int],
+            add_subs: list[UserSubAddItem],
     ):
-        del_sub_ids, add_sub_ids, upd_sub_ids = None, None, None
+        deleted_subs, add_sub_ids, upd_sub_ids = [], [], []
 
+        query = '''
+        -- 1. Вставка с возвратом. Может по уникальным индексам упасть => только часть операций в ноды пойдёт
+        WITH sub_changes AS (
+            {edit_query}
+            -- Обязательные поля для возврата ins/del запросов
+            RETURNING id AS user_sub_id, uuid, sub_plan_id 
+        ),
+        -- 2. Ноды для вставки пользователя (подписки, впн-пользователя)
+        nodes_info AS (
+            SELECT 
+                sc.user_sub_id, 
+                sc.uuid,
+                sc.sub_plan_id,  -- Берём прямо из RETURNING
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'node_proto_id', np.id,
+                            'private_ip', n.private_ip,
+                            'api_port', n.api_port,
+                            'metrics_port', np.metrics_port,
+                            'proto_python_lib', pt.proto_python_lib,
+                            'api_add_user_script', pt.api_add_user_script,
+                            'api_delete_user_script', pt.api_delete_user_script,
+                            'reload_core_command', pt.reload_core_command,
+                            'config_path', np.config_path,
+                            'flatten_json_users_key', pt.flatten_json_users_key,
+                            'required_user_data_obj', pt.required_user_data_obj,
+                            'constant_user_data_obj', pt.constant_user_data_obj,
+                            'flatten_user_identifier_key', pt.flatten_user_identifier_key,
+                            'add_script_custom_params', pt.add_script_custom_params,
+                            'delete_script_custom_params', pt.delete_script_custom_params
+                        )
+                    ),
+                    '[]'::json
+                ) AS nodes
+            FROM sub_changes sc
+            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = sc.sub_plan_id
+            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
+            JOIN protocols p ON np.proto_id = p.id
+            JOIN nodes n ON np.node_id = n.id AND n.is_active = true
+            JOIN proto_templates pt ON p.tmp_id = pt.id
+            GROUP BY sc.user_sub_id, sc.uuid, sc.sub_plan_id
+        ),
+        -- 3. Оутбокс (денормализованный - по записи на каждую ноду)
+        insert_outbox AS (
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+            SELECT 
+                sc.uuid, 
+                sc.user_sub_id, 
+                $1,  -- operation
+                np.id  -- node_proto_id
+            FROM sub_changes sc
+            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = sc.sub_plan_id
+            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
+        )
+        -- 4. Берём всё 
+        SELECT * FROM nodes_info
+        '''
         add_query = '''
-        -- 1. Вставка в user_subs
-        -- 2. Поиск нод по подписке, вставка в оутбокс
-        -- 3. Возврат саб_айди для арка
-        
-        -- *. Если не указано ничего кроме саб плана, то перетягиваем поля из sub_plan_offers
+        INSERT INTO user_subs (
+            order_id, user_id, sub_plan_id, is_active, is_limited, expire_date,
+            traffic_used_day_mb, infinite_traffic, uuid, b64_id, infinite_expire,
+            traffic_limit_day, used_mb, used_mb_limit
+        ) 
+        SELECT order_id, $15 AS user_id, sub_plan_id, is_active, is_limited, expire_date,
+            traffic_used_day_mb, infinite_traffic, uuid, b64_id, infinite_expire,
+            traffic_limit_day, used_mb, used_mb_limit
+        FROM UNNEST(
+            $2::bigint[], $3::integer[], $4::boolean[], $5::boolean[], $6::timestamptz[],
+            $7::bigint[], $8::boolean[], $9::varchar[], $10::varchar[], $11::boolean[],
+            $12::bigint[], $13::bigint[], $14::bigint[]
+        ) AS t(
+            order_id, sub_plan_id, is_active, is_limited, expire_date,
+            traffic_used_day_mb, infinite_traffic, b64_id, uuid, infinite_expire,
+            traffic_limit_day, used_mb, used_mb_limit
+        )
+        ON CONFLICT DO NOTHING
         '''
 
         del_query = '''
-        -- 1. Деактивация(не удаление) подписки
-        -- 2. Оутбокс по нодам подписки
-        -- 3. Возврат саб_айди для арка
+        DELETE FROM user_subs WHERE user_id = $2 AND id = ANY($3)
         '''
 
-        upd_query = '''
-        -- 1. Не принимаем на апдейт саб_план_айди - слишком мучительно. Удали подписку просто и добавь новую
-        -- 2. Типикал if поле is not None...
-        ---- 2.1. А как с траффик-полями быть... Что-то другое нужно туда класть
-        '''
+        "Обновление"
+        if upd_subs:
+            for item in upd_subs:
+                updates, params, param_idx = [], [], 3
+
+                if item.b64_id is not None:
+                    updates.append(f'b64_id = ${param_idx}')
+                    params.append(item.b64_id)
+                    param_idx += 1
+
+                if item.traffic_used_mb is not None:
+                    updates.append(f'used_mb = ${param_idx}')
+                    params.append(item.traffic_used_mb)
+                    param_idx += 1
+
+                if item.traffic_used_day_mb is not None:
+                    updates.append(f'traffic_used_day_mb = ${param_idx}')
+                    params.append(item.traffic_used_day_mb)
+                    param_idx += 1
+
+                if item.traffic_limit_day_mb != 0:
+                    updates.append(f'traffic_limit_day = ${param_idx}')
+                    params.append(item.traffic_limit_day_mb)
+                    param_idx += 1
+
+                if item.traffic_limit_mb is not None:
+                    updates.append(f'used_mb_limit = ${param_idx}')
+                    params.append(item.traffic_limit_mb)
+                    param_idx += 1
+
+                if item.infinite_traffic is not None:
+                    updates.append(f'infinite_traffic = ${param_idx}')
+                    params.append(item.infinite_traffic)
+                    param_idx += 1
+
+                if item.expire_date is not None:
+                    updates.append(f'expire_date = ${param_idx}')
+                    params.append(item.expire_date)
+                    param_idx += 1
+
+                if item.infinite_expire is not None:
+                    updates.append(f'infinite_expire = ${param_idx}')
+                    params.append(item.infinite_expire)
+                    param_idx += 1
+
+                if item.order_id != 0:
+                    updates.append(f'order_id = ${param_idx}')
+                    params.append(item.order_id)
+                    param_idx += 1
+
+                upd_query = f'''
+                UPDATE user_subs SET {', '.join(updates)}
+                WHERE user_id = $1 AND id = $2
+                RETURNING id
+                '''
+                if params:
+                    sub_upd_id = await self.conn.fetchval(upd_query, user_id, item.user_sub_id, *params)
+                    upd_sub_ids.append(sub_upd_id)
+                    log_event(f'Обновили параметры подписки пользователя | user_sub_id: \033[33m{item.user_sub_id}\033[0m; upd_params: \033[34m{list(zip(updates, params))}\033[0m')
+
+        "Вставка"
+        if add_subs:
+            log_event(f'\033[34m{add_subs[0].model_dump()}\033[0m', level='DEBUG')
+            "Порядок полей в схеме должен быть один в один как здесь"
+            b64_ids, uuids, order_ids, sub_plan_ids, traf_ud_mb, traf_ld_mb, traf_u_mb, traf_l_mb, inf_traf, exp_dates, inf_exp, is_actives, is_limiteds = zip(
+                *[item.model_dump().values() for item in add_subs]
+            )
+            add_sub_ids = await self.conn.fetch(
+                query.format(edit_query=add_query), CoreProtoActions.add,
+                order_ids, sub_plan_ids, is_actives, is_limiteds, exp_dates,
+                traf_ud_mb, inf_traf, b64_ids, uuids, inf_exp,
+                traf_ld_mb, traf_u_mb, traf_l_mb, user_id
+            )
+            log_event(f'Добавили новую подписку пользователю | user_sub_ids: \033[34m{[x['user_sub_id'] for x in add_sub_ids]}\033[0m; user_id: \033[32m{user_id}\033[0m')
+
+        "Удаление"
+        if del_sub_ids:
+            deleted_subs = await self.conn.fetch(
+                query.format(edit_query=del_query), CoreProtoActions.delete, user_id, del_sub_ids
+            )
+            log_event(f'Удалили подписки пользователя | user_sub_ids: \033[31m{del_sub_ids}\033[0m; user_id: \033[35m{user_id}\033[0m', level='WARNING')
+
+        return deleted_subs, add_sub_ids, upd_sub_ids
