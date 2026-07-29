@@ -96,7 +96,7 @@ async def bulk_add_users_into_single_node(
     """
     Логика outbox. Рекомендуется перейти на outbox_ids scoping, подход с парой (node_proto_id, user_sub_id, action) менее надёжный
     """
-    log_event(f'\033[35m[ARQ Bulk Add]\033[0m Юзер на удаление из конфиг-файла ядра | users_len: \033[35m{len(users)}\033[0m; node_proto_id: \033[33m{node_proto_id}\033[0m; private_ip: \033[33m{private_ip}\033[0m; api_port: \033[35m{api_port}\033[0m')
+    log_event(f'\033[35m[ARQ Bulk Add]\033[0m Юзер на добавление в конфиг-файла ядра | users_len: \033[35m{len(users)}\033[0m; node_proto_id: \033[33m{node_proto_id}\033[0m; private_ip: \033[33m{private_ip}\033[0m; api_port: \033[35m{api_port}\033[0m')
 
     "Собираем готовые объекты пользователей для конфиг-файлов ядра протокола"
     users_to_core = [{

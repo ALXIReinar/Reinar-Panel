@@ -351,6 +351,5 @@ class SubscriptionQueries:
         JOIN protocols p ON np.proto_id = p.id 
         JOIN proto_templates pt ON pt.id = p.tmp_id 
         WHERE np.user_visible = true
-        )
         '''
         return await self.conn.fetch(query, outbox_event_ids, CoreProtoActions.name2id[action])

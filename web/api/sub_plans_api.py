@@ -5,6 +5,7 @@ from web.config_dir.config import ArqDep
 from web.data.postgres import PgSqlDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
 from web.schemas.sub_plan_schema import SubPlanCreateSchema, SubPlanUpdateSchema, SubPlanVnodesSetSchema
+from web.utils.anything import CoreProtoActions
 
 from web.utils.logger_config import log_event
 
@@ -92,7 +93,7 @@ async def get_sub_plan(plan_id: int, request: Request, db: PgSqlDep, _: JWTCooki
         raise HTTPException(status_code=404, detail='Группа подписок не найдена')
 
     log_event(f'Отдали группу подписок | plan_id: \033[32m{plan_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
-    return {'success': True, 'plan': dict(plan), 'vnodes': plan['vnodes'], 'offers': plan['offers']}
+    return {'success': True, 'plan': plan}
 
 
 
@@ -105,20 +106,17 @@ async def edit_vnodes_loadout(plan_id: int, body: SubPlanVnodesSetSchema, reques
     3. В фоне всё распихивается как надо
     """
     attached, detached = await db.sub_plans.edit_vnodes_set(plan_id, body.add_vnodes, body.remove_vnodes)
+    add_job, del_job = None, None
 
-    # Редачим связки локаций(виртуальные ноды-протоколы) с группой подписок
-    attache_status_code, attache_msg = 202, "Без изменений"
-    if body.add_node_proto_ids:
-        attache_status_code, attache_msg = await db.sub_plans.attach_vnodes(plan_id, body.add_node_proto_ids)
-        log_event(f"Попробовали прикрепить ноды к подписке | attache_res: \033[32m{attache_status_code}: {attache_msg}\033[0m; attache_list: {body.add_node_proto_ids}; plan_id: \033[33m{plan_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request)
+    # Редачим связки локаций(виртуальные ноды) с тарифным планом
+    if attached:
+        job = await arq.enqueue_job('pointed_bulk_action', attached, CoreProtoActions.word_add)
+        log_event(f"Закинули в фон вставку впн-пользователей на новые ноды(локации) | sub_plan_id: \033[35m{plan_id}\033[0m; job_id: \033[31m{job.job_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request)
+        add_job = job.job_id
 
-    detach_status_code, detach_msg = 202, "Без изменений"
-    if body.remove_node_proto_ids:
-        detach_status_code, detach_msg = await db.sub_plans.detach_vnodes(plan_id, body.remove_node_proto_ids)
-        log_event(f'Попробовали открепить ноды от подписки | detach_res: \033[31m{detach_status_code}: {detach_msg}\033[0m; detache_list: {body.remove_node_proto_ids}; plan_id: \033[33m{plan_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
+    if detached:
+        job = await arq.enqueue_job('pointed_bulk_action', detached, CoreProtoActions.word_delete)
+        log_event(f"Закинули в фон удаление впн-пользователей с только что удалённых локаций | sub_plan_id: \033[36m{plan_id}\033[0m; job_id: \033[31m{job.job_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request)
+        del_job = job.job_id
 
-    return {
-        "success": True,
-        "attache_res": {"status_code": attache_status_code, "attached_msg": attache_msg},
-        "detach_res": {"status_code": detach_status_code, 'detach_message': detach_msg},
-    }
+    return {"success": True, "attache_job_id": add_job, "detache_job_id": del_job}

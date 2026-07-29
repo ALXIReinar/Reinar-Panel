@@ -1,6 +1,8 @@
 from asyncpg import Connection, ForeignKeyViolationError
 
 from web.schemas.sub_plan_schema import SubPlanOfferSchema
+from web.utils.anything import CoreProtoActions
+from web.utils.logger_config import log_event
 
 
 class SubPlansQueries:
@@ -235,10 +237,46 @@ class SubPlansQueries:
         return await self.conn.fetchrow(query, plan_id)
 
 
-    async def edit_vnodes_set(self, sub_plan_id: int, add_vnodes, remove_vnodes):
+    async def edit_vnodes_set(self, sub_plan_id: int, add_vnodes, remove_vnodes) -> tuple[list[int], list[int]]:
         """
         Сначала обновление связей, затем оутбокс для удаления
         """
         query = """
-        
+        WITH locations_edit AS (
+            {edit_query}
+            RETURNING sub_plan_id, node_proto_id
+        )
+        INSERT INTO sub_nodes_outbox (user_uuid, operation, user_sub_id, node_proto_id)
+        SELECT us.uuid, $3, us.id, le.node_proto_id
+        FROM user_subs us
+        JOIN locations_edit le ON le.sub_plan_id = us.sub_plan_id
+        JOIN nodes_protocols np ON np.id = le.node_proto_id AND np.user_visible = true
+        JOIN nodes n ON n.id = np.node_id AND n.is_active = true
+        RETURNING sub_nodes_outbox.id
         """
+        query_add = """
+        INSERT INTO vnodes_sub_plans (sub_plan_id, node_proto_id) 
+        SELECT $1, np_id FROM UNNEST($2::integer[]) AS t(np_id)
+        ON CONFLICT DO NOTHING
+        """
+        query_remove = """
+        DELETE FROM vnodes_sub_plans WHERE sub_plan_id = $1 AND node_proto_id = ANY($2)
+        """
+
+        "Прикрепляем локации"
+        add_outbox_ids = []
+        if add_vnodes:
+            add_outbox_ids = await self.conn.fetch(
+                query.format(edit_query=query_add), sub_plan_id, add_vnodes, CoreProtoActions.add
+            )
+            log_event(f'К тарифному плану добавлены ноды | sub_plan_id: \033[34m{sub_plan_id}\033[0m; node_proto_ids: \033[33m{add_vnodes}\033[0m; total_adds: \033[32m{len(add_outbox_ids)}\033[0m')
+
+        "Открепляем локации"
+        remove_outbox_ids = []
+        if remove_vnodes:
+            remove_outbox_ids = await self.conn.fetch(
+                query.format(edit_query=query_remove), sub_plan_id, remove_vnodes, CoreProtoActions.delete
+            )
+            log_event(f'Из тарифного плана удалены ноды | sub_plan_id: \033[35m{sub_plan_id}\033[0m; node_proto_ids: \033[32m{remove_vnodes}\033[0m; total_dels: \033[31m{len(remove_outbox_ids)}\033[0m')
+
+        return [rec['id'] for rec in add_outbox_ids], [rec['id'] for rec in remove_outbox_ids]
