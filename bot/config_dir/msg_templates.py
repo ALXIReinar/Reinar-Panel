@@ -11,6 +11,7 @@ class MessageTemplates(BaseModel):
     message_start: str = Field(description='Ответ бота на команду /start')
     message_profile: str
     message_about: str
+    message_help: str
 
     message_subscriptions_shop_intro: str
     message_subscriptions_shop_extent: str

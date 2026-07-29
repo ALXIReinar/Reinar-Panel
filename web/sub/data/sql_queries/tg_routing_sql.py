@@ -34,7 +34,7 @@ class TgRoutingQueries:
     async def tg_user_profile(self, tg_id: int):
         query = """
         SELECT u.id, u.registered_at, COUNT(us.id) AS sub_count FROM users u
-        JOIN user_subs us ON us.user_id = u.id
+        LEFT JOIN user_subs us ON us.user_id = u.id
         WHERE u.tg_id = $1
         GROUP BY u.id
         """

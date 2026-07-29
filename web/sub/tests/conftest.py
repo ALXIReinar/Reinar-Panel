@@ -155,6 +155,10 @@ class FakeAiohttpResponse:
     async def json(self):
         return self._json_data
     
+    def release(self):
+        """Имитация release из aiohttp (освобождение соединения)"""
+        pass
+    
     def raise_for_status(self):
         """Имитация raise_for_status из aiohttp"""
         if self.status >= 400:
@@ -2548,4 +2552,538 @@ async def infinite_flags_test_seed(db_pool, arq_test_seed):
             "user_limited_expired_id": user_limited_expired_id,
             "sub_limited_expired_id": sub_limited_expired,
             "uuid_limited_expired": "uuid-limited-expired",
+        }
+
+
+@pytest.fixture
+async def tg_routing_seed(db_pool, db_seed, arq_test_seed):
+    """
+    Создаёт тестовые данные для проверки TG routing эндпоинтов.
+    
+    ПЕРЕИСПОЛЬЗУЕТ инфраструктуру из arq_test_seed (ноды, протоколы, планы, офферы).
+    Создаёт 2 ОТДЕЛЬНЫХ пользователя для изоляции:
+    - user_with_subs: пользователь с активными подписками
+    - user_no_subs: пользователь без подписок
+    
+    Возвращает:
+    - user_with_subs: dict с tg_id, user_id, tg_username, sub_count
+    - user_no_subs: dict с tg_id, user_id, tg_username
+    - plan_id, offer_id: для проверки структуры данных
+    """
+    async with db_pool.acquire() as conn:
+        # Получаем plan_id и offer_id из arq_test_seed
+        plan_id = arq_test_seed['plan_id']
+        offer_id = arq_test_seed['offer_id']
+        
+        # === User 1: Пользователь с подписками ===
+        user1_id = await conn.fetchval("""
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
+            RETURNING id
+        """, 800001, "tg_user_with_subs")
+        
+        # Создаём платёж для User 1
+        pay_order1 = await conn.fetchval("""
+            INSERT INTO pay_orders (
+                user_id, status,
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            )
+            SELECT $1, 2,
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers
+            WHERE id = $2
+            RETURNING id
+        """, user1_id, offer_id)
+        
+        # Создаём подписку для User 1
+        user1_sub_id = await conn.fetchval("""
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
+            RETURNING id
+        """, user1_id, plan_id, pay_order1, "uuid-tg-user-1", "b64-tg-user-1")
+        
+        # === User 2: Пользователь без подписок ===
+        user2_id = await conn.fetchval("""
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
+            RETURNING id
+        """, 800002, "tg_user_no_subs")
+        
+        return {
+            # Пользователь с подписками
+            "user_with_subs": {
+                "user_id": user1_id,
+                "tg_id": 800001,
+                "tg_username": "tg_user_with_subs",
+                "sub_count": 1,
+                "sub_id": user1_sub_id,
+            },
+            
+            # Пользователь без подписок
+            "user_no_subs": {
+                "user_id": user2_id,
+                "tg_id": 800002,
+                "tg_username": "tg_user_no_subs",
+            },
+            
+            # Инфраструктура из arq_test_seed
+            "plan_id": plan_id,
+            "offer_id": offer_id,
+        }
+
+
+
+@pytest.fixture
+async def pointed_bulk_seed(db_pool, db_seed):
+    """
+    Создаёт данные для тестирования pointed_bulk_action:
+    - Пользователи с разными состояниями (активные, удалённые)
+    - Виртуальные ноды (активные, неактивные, невидимые)
+    - Outbox записи для ADD/DELETE операций
+    """
+    async with db_pool.acquire() as conn:
+        # 1. Создаём план подписки
+        plan_id = await conn.fetchval("""
+            INSERT INTO sub_plans (title, description, is_active, position)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id
+        """, "Pointed Bulk Test Plan", "Plan for testing pointed bulk", True, 1)
+        
+        # Создаём оффер для плана
+        offer_id = await conn.fetchval("""
+            INSERT INTO sub_plan_offers (
+                sub_plan_id, ttl_days, cost,
+                traffic_limit_day_mb, traffic_limit_mb,
+                infinite_traffic, infinite_expire, is_active, position
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id
+        """, plan_id, 30, 500, 10240, None, False, False, True, 1)
+        
+        # 2. Создаём физические ноды
+        node_id_active = await conn.fetchval("""
+            INSERT INTO nodes (ip, private_ip, api_port, node_name, title, is_active)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
+        """, "192.168.1.100", "10.0.0.100", 8100, "pointed-node-active", "Pointed Active Node", True)
+        
+        node_id_inactive = await conn.fetchval("""
+            INSERT INTO nodes (ip, private_ip, api_port, node_name, title, is_active)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
+        """, "192.168.1.101", "10.0.0.101", 8101, "pointed-node-inactive", "Pointed Inactive Node", False)
+        
+        # 3. Создаём шаблон протокола
+        tmp_id = await conn.fetchval("""
+            INSERT INTO proto_templates (
+                title, url_tmp, status, is_accepted,
+                reload_core_command, sub_prepare_script,
+                proto_python_lib, api_add_user_script, api_delete_user_script,
+                api_bulk_add_user_script, api_bulk_delete_user_script,
+                flatten_json_users_key, flatten_user_identifier_key,
+                add_script_custom_params, delete_script_custom_params,
+                bulk_add_script_custom_params, bulk_delete_script_custom_params,
+                required_user_data_obj, constant_user_data_obj
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+            RETURNING id
+        """, "Pointed Test Template", "https://pointed.test.com", 1, True,
+            "systemctl reload pointed", "#!/bin/bash", "vless",
+            "python add.py", "python del.py",
+            "python bulk_add.py", "python bulk_del.py",
+            "clients", "email", '{}', '{}', '{}', '{}',
+            '{"id": "{USER_UUID}", "email": "{USER_TG_USERNAME}"}',
+            '{"level": 0}'
+        )
+        
+        # 4. Создаём протокол
+        proto_id = await conn.fetchval("""
+            INSERT INTO protocols (tmp_id, name)
+            VALUES ($1, $2)
+            RETURNING id
+        """, tmp_id, "Pointed Test Protocol")
+        
+        # 5. Создаём виртуальные ноды
+        # 5.1. Активная виртуальная нода 10
+        vnode_id_10 = await conn.fetchval("""
+            INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, config_path, user_visible)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id
+        """, node_id_active, proto_id, "Pointed VNode 10", "vnode10.pointed.com", 9090, "/etc/pointed10.json", True)
+        
+        # 5.2. Активная виртуальная нода 11
+        vnode_id_11 = await conn.fetchval("""
+            INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, config_path, user_visible)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id
+        """, node_id_active, proto_id, "Pointed VNode 11", "vnode11.pointed.com", 9091, "/etc/pointed11.json", True)
+        
+        # 5.3. Невидимая виртуальная нода (user_visible=false)
+        vnode_id_invisible = await conn.fetchval("""
+            INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, config_path, user_visible)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id
+        """, node_id_active, proto_id, "Pointed VNode Invisible", "vnode-invis.pointed.com", 9092, "/etc/pointed-invis.json", False)
+        
+        # 5.4. Виртуальная нода на неактивной физической ноде
+        vnode_id_on_inactive = await conn.fetchval("""
+            INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, config_path, user_visible)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id
+        """, node_id_inactive, proto_id, "Pointed VNode On Inactive", "vnode-inactive.pointed.com", 9093, "/etc/pointed-inactive.json", True)
+        
+        # 6. Связываем подписки с виртуальными нодами
+        await conn.execute("""
+            INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id)
+            VALUES ($1, $2), ($3, $2), ($4, $2), ($5, $2)
+        """, vnode_id_10, plan_id, vnode_id_11, vnode_id_invisible, vnode_id_on_inactive)
+        
+        # ========== ПОЛЬЗОВАТЕЛИ ==========
+        
+        # User 3: Живой пользователь для ADD на vnode_10
+        user3_id = await conn.fetchval("""
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
+            RETURNING id
+        """, 100003, "user3_add_vnode10")
+        
+        pay_order3 = await conn.fetchval("""
+            INSERT INTO pay_orders (
+                user_id, status,
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            )
+            SELECT $1, 2,
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers
+            WHERE id = $2
+            RETURNING id
+        """, user3_id, offer_id)
+        
+        user3_row = await conn.fetchrow("""
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
+            RETURNING id, uuid
+        """, user3_id, plan_id, pay_order3, "uuid-pointed-user3", "b64-user3-add")
+        
+        user3_order_active = user3_row['id']
+        user3_uuid = user3_row['uuid']
+        
+        # Создаём outbox запись для ADD на vnode_10
+        outbox_user3_add_vnode10 = await conn.fetchval("""
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+            VALUES ($1, $2, 1, $3)
+            RETURNING id
+        """, user3_uuid, user3_order_active, vnode_id_10)
+        
+        # User 4: Живой пользователь для DELETE на vnode_10
+        user4_id = await conn.fetchval("""
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
+            RETURNING id
+        """, 100004, "user4_delete_vnode10")
+        
+        pay_order4 = await conn.fetchval("""
+            INSERT INTO pay_orders (
+                user_id, status,
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            )
+            SELECT $1, 2,
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers
+            WHERE id = $2
+            RETURNING id
+        """, user4_id, offer_id)
+        
+        user4_row = await conn.fetchrow("""
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
+            RETURNING id, uuid
+        """, user4_id, plan_id, pay_order4, "uuid-pointed-user4", "b64-user4-delete")
+        
+        user4_order_active = user4_row['id']
+        user4_uuid = user4_row['uuid']
+        
+        # Создаём outbox запись для DELETE на vnode_10
+        outbox_user4_delete_vnode10 = await conn.fetchval("""
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+            VALUES ($1, $2, 2, $3)
+            RETURNING id
+        """, user4_uuid, user4_order_active, vnode_id_10)
+        
+        # User 5: Живой пользователь для ADD на vnode_11
+        user5_id = await conn.fetchval("""
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
+            RETURNING id
+        """, 100005, "user5_add_vnode11")
+        
+        pay_order5 = await conn.fetchval("""
+            INSERT INTO pay_orders (
+                user_id, status,
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            )
+            SELECT $1, 2,
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers
+            WHERE id = $2
+            RETURNING id
+        """, user5_id, offer_id)
+        
+        user5_row = await conn.fetchrow("""
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
+            RETURNING id, uuid
+        """, user5_id, plan_id, pay_order5, "uuid-pointed-user5", "b64-user5-add")
+        
+        user5_order_active = user5_row['id']
+        user5_uuid = user5_row['uuid']
+        
+        # Создаём outbox запись для ADD на vnode_11
+        outbox_user5_add_vnode11 = await conn.fetchval("""
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+            VALUES ($1, $2, 1, $3)
+            RETURNING id
+        """, user5_uuid, user5_order_active, vnode_id_11)
+        
+        # User 6: Живой пользователь для DELETE на vnode_11
+        user6_id = await conn.fetchval("""
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
+            RETURNING id
+        """, 100006, "user6_delete_vnode11")
+        
+        pay_order6 = await conn.fetchval("""
+            INSERT INTO pay_orders (
+                user_id, status,
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            )
+            SELECT $1, 2,
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers
+            WHERE id = $2
+            RETURNING id
+        """, user6_id, offer_id)
+        
+        user6_row = await conn.fetchrow("""
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
+            RETURNING id, uuid
+        """, user6_id, plan_id, pay_order6, "uuid-pointed-user6", "b64-user6-delete")
+        
+        user6_order_active = user6_row['id']
+        user6_uuid = user6_row['uuid']
+        
+        # Создаём outbox запись для DELETE на vnode_11
+        outbox_user6_delete_vnode11 = await conn.fetchval("""
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+            VALUES ($1, $2, 2, $3)
+            RETURNING id
+        """, user6_uuid, user6_order_active, vnode_id_11)
+        
+        # ========== ТЕСТЫ ФИЛЬТРАЦИИ ==========
+        
+        # User 8: Живой пользователь на НЕАКТИВНОЙ ноде (должен фильтроваться)
+        user8_id = await conn.fetchval("""
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
+            RETURNING id
+        """, 100008, "user8_inactive_node")
+        
+        pay_order8 = await conn.fetchval("""
+            INSERT INTO pay_orders (
+                user_id, status,
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            )
+            SELECT $1, 2,
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers
+            WHERE id = $2
+            RETURNING id
+        """, user8_id, offer_id)
+        
+        user8_row = await conn.fetchrow("""
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
+            RETURNING id, uuid
+        """, user8_id, plan_id, pay_order8, "uuid-pointed-user8", "b64-user8-inactive")
+        
+        user8_order = user8_row['id']
+        user8_uuid = user8_row['uuid']
+        
+        outbox_user8_inactive_node = await conn.fetchval("""
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+            VALUES ($1, $2, 1, $3)
+            RETURNING id
+        """, user8_uuid, user8_order, vnode_id_on_inactive)
+        
+        # User 9: Живой пользователь на НЕВИДИМОЙ ноде (должен фильтроваться)
+        user9_id = await conn.fetchval("""
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, false)
+            RETURNING id
+        """, 100009, "user9_invisible_node")
+        
+        pay_order9 = await conn.fetchval("""
+            INSERT INTO pay_orders (
+                user_id, status,
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            )
+            SELECT $1, 2,
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers
+            WHERE id = $2
+            RETURNING id
+        """, user9_id, offer_id)
+        
+        user9_row = await conn.fetchrow("""
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
+            RETURNING id, uuid
+        """, user9_id, plan_id, pay_order9, "uuid-pointed-user9", "b64-user9-invisible")
+        
+        user9_order = user9_row['id']
+        user9_uuid = user9_row['uuid']
+        
+        outbox_user9_invisible_node = await conn.fetchval("""
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+            VALUES ($1, $2, 1, $3)
+            RETURNING id
+        """, user9_uuid, user9_order, vnode_id_invisible)
+        
+        # User 10: УДАЛЁННЫЙ пользователь (is_deleted=true, должен фильтроваться)
+        user10_id = await conn.fetchval("""
+            INSERT INTO users (tg_id, tg_username, is_deleted)
+            VALUES ($1, $2, true)
+            RETURNING id
+        """, 100010, "user10_deleted")
+        
+        pay_order10 = await conn.fetchval("""
+            INSERT INTO pay_orders (
+                user_id, status,
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            )
+            SELECT $1, 2,
+                infinite_expire, infinite_traffic,
+                traffic_limit_mb, traffic_limit_day_mb,
+                ttl_days, cost
+            FROM sub_plan_offers
+            WHERE id = $2
+            RETURNING id
+        """, user10_id, offer_id)
+        
+        user10_row = await conn.fetchrow("""
+            INSERT INTO user_subs (
+                user_id, sub_plan_id, order_id, is_active, expire_date,
+                uuid, b64_id, infinite_traffic, infinite_expire,
+                traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited
+            )
+            VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
+            RETURNING id, uuid
+        """, user10_id, plan_id, pay_order10, "uuid-pointed-user10", "b64-user10-deleted")
+        
+        user10_order = user10_row['id']
+        user10_uuid = user10_row['uuid']
+        
+        outbox_user10_deleted = await conn.fetchval("""
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+            VALUES ($1, $2, 2, $3)
+            RETURNING id
+        """, user10_uuid, user10_order, vnode_id_10)
+        
+        return {
+            # План и оффер
+            "plan_id": plan_id,
+            "offer_id": offer_id,
+            
+            # Виртуальные ноды
+            "vnode_id_10": vnode_id_10,
+            "vnode_id_11": vnode_id_11,
+            "vnode_id_invisible": vnode_id_invisible,
+            "vnode_id_on_inactive": vnode_id_on_inactive,
+            
+            # User 3 (ADD на vnode_10)
+            "user3_uuid": user3_uuid,
+            "user3_order_active": user3_order_active,
+            "outbox_user3_add_vnode10": outbox_user3_add_vnode10,
+            
+            # User 4 (DELETE на vnode_10)
+            "user4_uuid": user4_uuid,
+            "user4_order_active": user4_order_active,
+            "outbox_user4_delete_vnode10": outbox_user4_delete_vnode10,
+            
+            # User 5 (ADD на vnode_11)
+            "user5_uuid": user5_uuid,
+            "user5_order_active": user5_order_active,
+            "outbox_user5_add_vnode11": outbox_user5_add_vnode11,
+            
+            # User 6 (DELETE на vnode_11)
+            "user6_uuid": user6_uuid,
+            "user6_order_active": user6_order_active,
+            "outbox_user6_delete_vnode11": outbox_user6_delete_vnode11,
+            
+            # User 8 (неактивная нода)
+            "outbox_user8_inactive_node": outbox_user8_inactive_node,
+            
+            # User 9 (невидимая нода)
+            "outbox_user9_invisible_node": outbox_user9_invisible_node,
+            
+            # User 10 (удалённый пользователь)
+            "outbox_user10_deleted": outbox_user10_deleted,
         }

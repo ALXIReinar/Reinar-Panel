@@ -25,5 +25,6 @@ async def send_sub_link_tg_user(ctx: dict, user_id: int, user_sub_id: int, db: P
             resp.release()
     except Exception as e:
         log_event(f'Не удалось подключиться к апи телеграм | err: \033[31m{repr(e)}\033[0m')
+        return {'success': False, 'message': 'Апи телеграма недоступен'}
 
     return {'success': True, 'message': 'Пользователь в тг уведомлён', 'status_code': resp.status}

@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     # Message templates (загружаются из ENV напрямую)
     message_start: str = Field(description='Ответ бота на команду /start')
     message_profile: str
+    message_help: str
     message_about: str
     message_subscriptions_shop_intro: str
     message_subscriptions_shop_extent: str
@@ -73,6 +74,7 @@ class Settings(BaseSettings):
             message_subscriptions_offers_intro=self.message_subscriptions_offers_intro,
             message_subscriptions_offers_extent=self.message_subscriptions_offers_extent,
             message_pay_window=self.message_pay_window,
+            message_help=self.message_help,
         )
 
 @lru_cache

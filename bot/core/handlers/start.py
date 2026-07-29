@@ -26,10 +26,12 @@ async def start_handler(event: Union[Message, CallbackQuery], redis: Redis, aio_
     ok, user_data = await aio_http.users.save_user(
         event.from_user.id, event.from_user.username, return_data=True
     )
-    user_preview = UserSchema.fast_create(user_data)
+    text = '🛠 Что-то пошло не так. Попробуйте позже'
+    if ok:
+        user_preview = UserSchema.fast_create(user_data)
 
-    text = env.message_templates.render('message_start', event, user=user_preview)
-    
+        text = env.message_templates.render('message_start', event, user=user_preview)
+
     if isinstance(event, Message):
         await event.answer(text, reply_markup=main_kb())
     else:  # CallbackQuery

@@ -48,7 +48,7 @@ class UserSubscriptions:
         "Получаем подписки"
         user_subs = (await state.get_data()).get('user_subs')
         if not user_subs:
-            log_event(f'Подписки пользователя Пропали из Стейта! | tg_id: \033[33m{call.from_user.id}\033[0m; sub_len: \033[34m{len(user_subs)}\033[0m')
+            log_event(f'Подписки пользователя Пропали из Стейта! | tg_id: \033[33m{call.from_user.id}\033[0m')
             return None, None
 
         "Отображаем слайдер"
@@ -81,8 +81,8 @@ class UserSubscriptions:
     async def give_issued_payment(call: CallbackQuery, redis: Redis, state: FSMContext, aio_http: SubServiceConn, user_sub_idx: int, offer_idx: int):
         user_subs = (await state.get_data()).get('user_subs')
         if not user_subs:
-            log_event(f'Подписки пользователя Пропали из Стейта! | tg_id: \033[33m{call.from_user.id}\033[0m; sub_len: \033[34m{len(user_subs)}\033[0m')
-            await UserSubscriptions.user_subscriptions_slider(call, state, aio_http)
+            log_event(f'Подписки пользователя Пропали из Стейта! | tg_id: \033[33m{call.from_user.id}\033[0m')
+            await UserSubscriptions.user_subscriptions_slider(call, redis, state, aio_http)
             return None, None
 
         "Запрос на формирование заказа, получим ссылку для оплаты"
