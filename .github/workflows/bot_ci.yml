@@ -135,9 +135,9 @@ jobs:
 
       - name: Run Installation Script
         env:
-          BOT_TOKEN: "123456789:ABCDEFabcdef"
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           SUB_SERVICE_URL: "http://127.0.0.1:8080"
-          ADMIN_TG_ID: "12346"
+          ADMIN_TG_ID: ${{ secrets.ADMIN_TG_ID }}
         run: |
           echo "🚀 Запуск скрипта установки..."
           chmod +x ./bot/scripts/install.sh
