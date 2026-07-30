@@ -19,8 +19,6 @@ services:
     container_name: bot
     environment:
       - ENV_FILE=/run/secrets/.env.bot.test
-    volumes:
-      - ./bot_logs:/app/bot/bot_logs
     secrets:
       - .env.bot.test
     network_mode: host
