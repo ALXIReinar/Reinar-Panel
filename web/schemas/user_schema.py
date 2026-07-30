@@ -45,30 +45,30 @@ class UserSubUpdItem(BaseModel):
     - is_active, is_limited - та же ерунда. Возня с арком, функционал для изменения этих флагов есть
     """
     user_sub_id: int
-    b64_id: Optional[str] = Field(max_length=90, min_length=10)
+    b64_id: Optional[str] = Field(None, max_length=90, min_length=10)
     order_id: int | None = Field(0, ge=0)
-    traffic_used_day_mb: Optional[int]
+    traffic_used_day_mb: Optional[int] = None
     traffic_limit_day_mb: int | None = Field(0, ge=0)
-    traffic_used_mb: Optional[int]
+    traffic_used_mb: Optional[int] = None
     traffic_limit_mb: int | None = Field(0, ge=0)
-    infinite_traffic: Optional[bool]
-    expire_date: Optional[datetime]
-    infinite_expire: Optional[bool]
+    infinite_traffic: Optional[bool] = None
+    expire_date: Optional[datetime] = None
+    infinite_expire: Optional[bool] = None
 
 class UserSubAddItem(BaseModel):
     b64_id: str = Field(max_length=90, min_length=10)
     uuid: str = Field(max_length=36)
-    order_id: Optional[int]
+    order_id: Optional[int] = None
     sub_plan_id: int
-    traffic_used_day_mb: Optional[int]
-    traffic_limit_day_mb: Optional[int]
-    traffic_used_mb: Optional[int]
-    traffic_limit_mb: Optional[int]
+    traffic_used_day_mb: Optional[int] = None
+    traffic_limit_day_mb: Optional[int] = None
+    traffic_used_mb: Optional[int] = None
+    traffic_limit_mb: Optional[int] = None
     infinite_traffic: bool
-    expire_date: Optional[datetime]
+    expire_date: Optional[datetime] = None
     infinite_expire: bool
-    is_active: Optional[bool]
-    is_limited: Optional[bool]
+    is_active: Optional[bool] = None
+    is_limited: Optional[bool] = None
 
 class UserSubsUpdateSchema(BaseModel):
     user_subs_to_delete: Optional[list[int]] = Field([])

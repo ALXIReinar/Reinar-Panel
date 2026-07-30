@@ -182,7 +182,7 @@ class UsersQueries:
         WHERE id = $1 AND is_deleted = false
         '''
         query_subs = '''
-        SELECT us.id AS user_sub_id, us.order_id, us.b64_id, us.uuid, us.traffic_used_day_mb, us.traffic_limit_day AS traffic_limit_day_mb, 
+        SELECT us.id AS user_sub_id, us.order_id, us.b64_id, us.uuid, us.traffic_used_day_mb, us.traffic_limit_day AS traffic_limit_day, 
                us.used_mb AS traffic_used_mb, us.used_mb_limit AS traffic_limit_mb,
                us.infinite_traffic, us.expire_date, us.infinite_expire, us.is_active, us.is_limited, po.timestamp AS sub_bought_at,
                us.sub_plan_id, sp.title AS sub_plan_title, sp.is_active AS sub_plan_active
@@ -275,15 +275,15 @@ class UsersQueries:
                             'add_script_custom_params', pt.add_script_custom_params,
                             'delete_script_custom_params', pt.delete_script_custom_params
                         )
-                    ),
+                    ) FILTER (WHERE np.id IS NOT NULL),
                     '[]'::json
                 ) AS nodes
             FROM sub_changes sc
-            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = sc.sub_plan_id
-            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
-            JOIN protocols p ON np.proto_id = p.id
-            JOIN nodes n ON np.node_id = n.id AND n.is_active = true
-            JOIN proto_templates pt ON p.tmp_id = pt.id
+            LEFT JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = sc.sub_plan_id
+            LEFT JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
+            LEFT JOIN protocols p ON np.proto_id = p.id
+            LEFT JOIN nodes n ON np.node_id = n.id AND n.is_active = true
+            LEFT JOIN proto_templates pt ON p.tmp_id = pt.id
             GROUP BY sc.user_sub_id, sc.uuid, sc.sub_plan_id
         ),
         -- 3. Оутбокс (денормализованный - по записи на каждую ноду)
@@ -325,6 +325,13 @@ class UsersQueries:
         del_query = '''
         DELETE FROM user_subs WHERE user_id = $2 AND id = ANY($3)
         '''
+
+        "Удаление (выполняется первым, чтобы освободить constraint UNIQUE (user_id, sub_plan_id))"
+        if del_sub_ids:
+            deleted_subs = await self.conn.fetch(
+                query.format(edit_query=del_query), CoreProtoActions.delete, user_id, del_sub_ids
+            )
+            log_event(f'Удалили подписки пользователя | user_sub_ids: \033[31m{del_sub_ids}\033[0m; user_id: \033[35m{user_id}\033[0m', level='WARNING')
 
         "Обновление"
         if upd_subs:
@@ -386,12 +393,16 @@ class UsersQueries:
                     upd_sub_ids.append(sub_upd_id)
                     log_event(f'Обновили параметры подписки пользователя | user_sub_id: \033[33m{item.user_sub_id}\033[0m; upd_params: \033[34m{list(zip(updates, params))}\033[0m')
 
-        "Вставка"
+        "Вставка (выполняется последней, после освобождения constraint через DELETE)"
         if add_subs:
             log_event(f'\033[34m{add_subs[0].model_dump()}\033[0m', level='DEBUG')
-            "Порядок полей в схеме должен быть один в один как здесь"
-            b64_ids, uuids, order_ids, sub_plan_ids, traf_ud_mb, traf_ld_mb, traf_u_mb, traf_l_mb, inf_traf, exp_dates, inf_exp, is_actives, is_limiteds = zip(
-                *[item.model_dump().values() for item in add_subs]
+            "Явная распаковка полей для соответствия порядку в UNNEST"
+            order_ids, sub_plan_ids, is_actives, is_limiteds, exp_dates, traf_ud_mb, inf_traf, b64_ids, uuids, inf_exp, traf_ld_mb, traf_u_mb, traf_l_mb = zip(
+                *[(
+                    item.order_id, item.sub_plan_id, item.is_active, item.is_limited, item.expire_date,
+                    item.traffic_used_day_mb, item.infinite_traffic, item.b64_id, item.uuid, item.infinite_expire,
+                    item.traffic_limit_day_mb, item.traffic_used_mb, item.traffic_limit_mb
+                ) for item in add_subs]
             )
             add_sub_ids = await self.conn.fetch(
                 query.format(edit_query=add_query), CoreProtoActions.add,
@@ -400,12 +411,5 @@ class UsersQueries:
                 traf_ld_mb, traf_u_mb, traf_l_mb, user_id
             )
             log_event(f'Добавили новую подписку пользователю | user_sub_ids: \033[34m{[x['user_sub_id'] for x in add_sub_ids]}\033[0m; user_id: \033[32m{user_id}\033[0m')
-
-        "Удаление"
-        if del_sub_ids:
-            deleted_subs = await self.conn.fetch(
-                query.format(edit_query=del_query), CoreProtoActions.delete, user_id, del_sub_ids
-            )
-            log_event(f'Удалили подписки пользователя | user_sub_ids: \033[31m{del_sub_ids}\033[0m; user_id: \033[35m{user_id}\033[0m', level='WARNING')
 
         return deleted_subs, add_sub_ids, upd_sub_ids

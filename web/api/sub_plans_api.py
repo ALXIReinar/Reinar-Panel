@@ -48,7 +48,7 @@ async def update_sub_plan(plan_id: int, body: SubPlanUpdateSchema, request: Requ
         offers=body.offers,
     )
 
-    if not plan_updated and (not body.add_node_proto_ids and not body.remove_node_proto_ids):
+    if not plan_updated:
         log_event(f'Группа подписок не найдена | plan_id: \033[33m{plan_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
         raise HTTPException(status_code=404, detail={'success': False, 'message': 'Группа подписок не найдена'})
 
