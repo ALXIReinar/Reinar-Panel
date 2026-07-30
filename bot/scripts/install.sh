@@ -330,15 +330,16 @@ mkdir -p "$INSTALL_DIR/bot_logs"
 chmod -R 777 "$INSTALL_DIR/bot_logs"
 echo -e "${GREEN}✓${NC} Директории логов подготовлены"
 
-# Остановка существующих контейнеров
-echo -e "\n${YELLOW}Остановка существующих контейнеров...${NC}"
-cd "$INSTALL_DIR"
-docker compose down 2>/dev/null || true
-echo -e "${GREEN}✓${NC} Контейнеры остановлены"
+echo -e "\n${YELLOW}Финальная настройка прав доступа...${NC}"
+sudo chown -R 1000:1000 /opt/vpn-panel/bot/
+find /opt/vpn-panel/bot/ -type d -exec sudo chmod 755 {} +
+find /opt/vpn-panel/bot/ -type f -exec sudo chmod 644 {} +
+sudo chmod -R 777 /opt/vpn-panel/bot/bot_logs
+echo -e "${GREEN}✓${NC} Права установлены"
 
 # Сборка и запуск
 echo -e "\n${YELLOW}Сборка и запуск контейнеров...${NC}"
-docker compose up -d --build
+docker compose -f /opt/vpn-panel/bot/docker-compose.yml up -d --build
 
 # Ожидание запуска
 echo -e "\n${YELLOW}Ожидание запуска бота...${NC}"
