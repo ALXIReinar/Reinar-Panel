@@ -10,7 +10,7 @@ services:
     volumes:
       - redis_data:/data
     ports:
-      - "127.0.0.1:${REDIS_PORT}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
 
   bot:
     image: reinar_panel/bot_service
