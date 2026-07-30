@@ -76,7 +76,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set lowercase image name
-        run: echo "IMAGE_NAME_LOWER=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')/web_service" >> $GITHUB_ENV
+        run: echo "IMAGE_NAME_LOWER=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')/bot_service" >> $GITHUB_ENV
 
       - name: Decode and extract artifacts
         run: |
@@ -146,7 +146,7 @@ jobs:
           sudo -E ./bot/scripts/install.sh || {
             echo "❌ Ошибка установки, логи контейнеров:"
             sudo docker logs redis-bot 2>&1 || echo "Контейнер redis не найден"
-            sudo docker logs bot 2>&1 || echo "Контейнер web-service не найден"
+            sudo docker logs bot 2>&1 || echo "Контейнер bot не найден"
             exit 1
           }
 
