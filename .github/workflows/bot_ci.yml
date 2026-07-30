@@ -85,8 +85,9 @@ jobs:
           echo "BOT_TOKEN=$BOT_TOKEN" >> bot/.env.bot.test
           echo "REDIS_PASSWORD=$REDIS_PASSWORD" >> bot/.env.bot.test
           echo "REDIS_PORT=6379" >> bot/.env.bot.test
+          
           cat > bot/.env <<ENVEOF
-          REDIS_PASSWORD=${ENV_BOT_TEST_FILE}
+          REDIS_PASSWORD=${REDIS_PASSWORD}
           REDIS_PORT=6379
           ENVEOF
         env:
