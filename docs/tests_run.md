@@ -37,3 +37,13 @@
 ### `Coverage Run`. Рекомендуется запуск с настоящим ядром (нужен `docker`)
 
 > python -m pytest node_client/tests --mode real --vpn-core vless --cov=node_client --cov-config=node_client/.coveragerc --cov-report=html --cov-report=term
+
+## Bot Service
+
+### `Test Run`
+
+> python -m pytest bot/tests
+
+### `Coverage Run`
+
+> python -m pytest bot/tests --cov=bot --cov-config=bot/.coveragerc --cov-report=html --cov-report=term

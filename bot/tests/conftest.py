@@ -150,8 +150,9 @@ async def redis_client():
     После каждого теста очищает тестовые ключи по паттерну.
     """
     redis = Redis(
-        host=getattr(env, 'redis_test_host', 'localhost'),
-        port=getattr(env, 'redis_test_port', 6379),
+        host=getattr(env, 'redis_host'),
+        port=getattr(env, 'redis_port'),
+        password=env.redis_password if env.app_mode != 'local' else None,
         decode_responses=True
     )
     

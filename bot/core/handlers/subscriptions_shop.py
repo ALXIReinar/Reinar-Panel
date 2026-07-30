@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 import orjson
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
@@ -25,14 +23,36 @@ class UserSubscriptions:
     @staticmethod
     @rate_limit(env.user_req_limit, env.user_req_window_seconds)
     async def user_subscriptions_slider(call: CallbackQuery, redis: Redis, state: FSMContext, aio_http: SubServiceConn):
-        _, user_subs = await aio_http.user_subs.all(call.from_user.id)
+        """
+        Возможен сценарий, при котором state после первоначальных проверок в user_subscriptions_slider, при вызове
+        build_user_subs_slider_msg получит None для text, из-за чего будет исключение.
+        Такое учтено в ShopSubscriptions, т.к. используется Редис с TTL. С FSMContext(In-Memory) такого не должно быть: нет ТТЛ + внутренний механизм
 
-        log_event(f'Получили подписки пользователя | tg_id: \033[33m{call.from_user.id}\033[0m; sub_len: \033[34m{len(user_subs)}\033[0m')
+        File "bot/core/handlers/subscriptions_shop.py", line 148, in shop_subscriptions_slider
+                await call.message.answer(text, reply_markup=kb)
+        File ".venv/Lib/site-packages/aiogram/types/message.py", line 2238, in answer
+                return SendMessage(
+        File ".venv/Lib/site-packages/pydantic/main.py", line 250, in __init__
+                validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
+        pydantic_core._pydantic_core.ValidationError: 1 validation error for SendMessage
+            text
+        Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]        
+        """
+        ok, user_subs = await aio_http.user_subs.all(call.from_user.id)
+
+        "Фоллбек. Нет подписок - не можем отобразить слайдер"
+        if not ok:
+            log_event(f'Саб сервис недоступен | tg_id: \033[33m{call.from_user.id}\033[0m', level='CRITICAL')
+            await call.message.answer('⚒️ Технический перерыв. Попробуйте позже')
+            return
+
         "Фоллбек. Нет подписок - не можем отобразить слайдер"
         if not user_subs:
             log_event(f'У пользователя нет ни одной подписки | tg_id: \033[33m{call.from_user.id}\033[0m', level='WARNING')
             await call.message.answer('У Вас нет ни одной подписки', reply_markup=fallback_user_subs())
             return
+
+        log_event(f'Получили подписки пользователя | tg_id: \033[33m{call.from_user.id}\033[0m; sub_len: \033[34m{len(user_subs)}\033[0m')
 
         "Сохраняем подписки, отображаем слайдер"
         await state.update_data(user_subs=user_subs)
@@ -110,13 +130,16 @@ class UserSubscriptions:
 
 
 class ShopSubscriptions:
-
     @staticmethod
     @rate_limit(env.user_req_limit, env.user_req_window_seconds)
     async def shop_subscriptions_slider(call: CallbackQuery, redis: Redis, aio_http: SubServiceConn):
-        _, sub_plans = await aio_http.sub_plans.all()
+        ok, sub_plans = await aio_http.sub_plans.all()
 
-        log_event(f'Получили Тарифные планы | tg_id: \033[33m{call.from_user.id}\033[0m; sub_plans_len: \033[34m{len(sub_plans)}\033[0m')
+        "Саб сервис недоступен"
+        if not ok:
+            log_event(f'Не удалось связаться с саб-сервисом | tg_id: \033[33m{call.from_user.id}\033[0m', level='CRITICAL')
+            await call.message.answer('⚒️ Технический перерыв. Попробуйте позже')
+            return
 
         "Фоллбек. Нет подписок - не можем отобразить слайдер"
         if not sub_plans:
@@ -124,12 +147,17 @@ class ShopSubscriptions:
             await call.message.answer('⚒️ К сожалению, провайдер не предоставляет ни одной подписки')
             return
 
+        log_event(f'Получили Тарифные планы | tg_id: \033[33m{call.from_user.id}\033[0m; sub_plans_len: \033[34m{len(sub_plans)}\033[0m')
+
         "Сохраняем подписки, отображаем слайдер"
         shop_plans_json = orjson.dumps(sub_plans)
         await redis.set(RedisKeys.shop_sub_plans, shop_plans_json, ex=env.shop_sub_plans_ttl)
 
-
         text, kb = await ShopSubscriptions.build_shop_plans_slider_msg(0, call, redis)
+        if not text:
+            await ShopSubscriptions.shop_subscriptions_slider(call, redis, aio_http)
+            return
+
         log_event(f'Отобразили слайдер тарифных планов | tg_id: \033[33m{call.from_user.id}\033[0m; sub_plans_len: \033[34m{len(sub_plans)}\033[0m')
         await call.message.answer(text, reply_markup=kb)
 
@@ -138,7 +166,8 @@ class ShopSubscriptions:
     async def build_shop_plans_slider_msg(slider_idx: int, call: CallbackQuery, redis: Redis) -> tuple:
         """"""
         "Получаем подписки"
-        shop_plans = orjson.loads(await redis.get(RedisKeys.shop_sub_plans))
+        sp_redis = await redis.get(RedisKeys.shop_sub_plans) or '{}' # .get() отдаёт None -> JSONDecodeError, нужен фоллбек
+        shop_plans = orjson.loads(sp_redis)
         if not shop_plans:
             log_event('Тарифные планы пропали из кэша')
             return None, None
@@ -156,7 +185,9 @@ class ShopSubscriptions:
     @staticmethod
     @rate_limit(env.user_req_limit, env.user_req_window_seconds)
     async def give_issued_payment(call: CallbackQuery, redis: Redis, aio_http: SubServiceConn, sub_plan_idx: int, offer_idx: int):
-        shop_plans = orjson.loads(await redis.get(RedisKeys.shop_sub_plans))
+        sp_redis = await redis.get(RedisKeys.shop_sub_plans) or '{}'  # .get() отдаёт None -> JSONDecodeError, нужен фоллбек
+        shop_plans = orjson.loads(sp_redis)
+
         if not shop_plans:
             log_event('Тарифные планы пропали из кэша')
             await ShopSubscriptions.shop_subscriptions_slider(call, redis, aio_http)

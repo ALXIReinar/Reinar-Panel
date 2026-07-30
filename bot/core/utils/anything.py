@@ -1,8 +1,11 @@
 from dataclasses import dataclass
-from typing import Literal
-
 from bot.config_dir.config import env
 
+
+admin_commands = {
+    '/flush_shop_cache', # Очистка кэша тарифных планов магазина
+    '/reset_req_limit', # сброс счётчика запросов на пользователя
+}
 
 class RedisKeys:
     @staticmethod

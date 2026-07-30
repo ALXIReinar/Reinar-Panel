@@ -7,6 +7,7 @@ from redis.asyncio import Redis
 
 from bot.config_dir.config import bot, redis_settings, env
 from bot.core.handlers.about_handler import show_about
+from bot.core.handlers.admin_commands import reset_req_limit, flush_shop_cache, MiddlewareAdmin
 from bot.core.handlers.callback_center import callback_factory
 from bot.core.api.aiohttp_conn import SubServiceConn
 
@@ -27,9 +28,15 @@ async def main():
     "Redis"
     redis_conn = Redis(**redis_settings, decode_responses=True)
 
+    dp.message.middleware.register(MiddlewareAdmin())
+
     "Команды"
     dp.message.register(start_handler, Command('start'))
     dp.message.register(helping, Command('help'))
+
+    "Команды админа"
+    dp.message.register(reset_req_limit, Command('reset_req_limit'))
+    dp.message.register(flush_shop_cache, Command('flush_shop_cache'))
 
     dp.message.register(subscriptions_introduction, F.text == '💎 Купить/Продлить')
     dp.message.register(show_user_profile, F.text == '👤 Личный кабинет')

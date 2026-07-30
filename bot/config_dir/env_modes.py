@@ -12,11 +12,11 @@ APP_MODE_CONFIG = {
         'redis_port': 'redis_port',
     },
     AppMode.DOCKER: {
-        'redis_host': 'redis_host_docker',
-        'redis_port': 'redis_port_docker',
+        'redis_host': 'redis_host',
+        'redis_port': 'redis_port',
     },
     AppMode.PROD: {
-        'redis_host': 'redis_host_docker',
-        'redis_port': 'redis_port_docker',
+        'redis_host': 'redis_host',
+        'redis_port': 'redis_port',
     },
 }

@@ -15,13 +15,14 @@ services:
   bot:
     image: reinar_panel/bot_service
     build: .
+    command: python -m pytest bot/tests -v
     container_name: bot
     environment:
-      - ENV_FILE=/run/secrets/.env.bot.prod
+      - ENV_FILE=/run/secrets/.env.bot.test
     volumes:
       - ./bot_logs:/app/bot/bot_logs
     secrets:
-      - .env.bot.prod
+      - .env.bot.test
     network_mode: host
 
 volumes:
@@ -29,5 +30,5 @@ volumes:
     driver: local
 
 secrets:
-  .env.bot.prod:
-    file: .env.bot.prod
+  .env.bot.test:
+    file: .env.bot.test

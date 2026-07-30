@@ -16,7 +16,6 @@ from bot.config_dir.msg_templates import MessageTemplates
 
 env_files = (
     os.getenv('ENV_FILE') or
-    os.getenv('ENV_LOCAL_TEST_FILE') or
     'bot/.env.bot.prod'
 )
 load_dotenv(env_files, override=True)

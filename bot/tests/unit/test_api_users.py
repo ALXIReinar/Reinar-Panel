@@ -577,3 +577,99 @@ async def test_api_get_payment_link_network_error():
     
     # Assert
     assert ok is False
+
+
+# ============================================================================
+# E. SubPlansAioHttp.all() - 4 теста
+# ============================================================================
+
+@pytest.mark.asyncio
+async def test_sub_plans_all_success():
+    """Тест: sub_plans.all() успешно возвращает список тарифных планов"""
+    from bot.tests.conftest import FakeAiohttpSession
+    from bot.core.api.aiohttp_conn import SubServiceConn
+    
+    # Arrange
+    shop_plans_data = {
+        'sub_plans': [
+            {'id': 1, 'title': 'Basic', 'description': 'Basic plan', 'offer_prices': []},
+            {'id': 2, 'title': 'Premium', 'description': 'Premium plan', 'offer_prices': []}
+        ]
+    }
+    
+    fake_session = FakeAiohttpSession(json_data=shop_plans_data, status=200)
+    conn = SubServiceConn(fake_session)
+    
+    # Act
+    ok, data = await conn.sub_plans.all()
+    
+    # Assert
+    assert ok is True
+    assert len(data) == 2
+    assert data[0]['id'] == 1
+    assert data[1]['id'] == 2
+
+
+@pytest.mark.asyncio
+async def test_sub_plans_all_calls_correct_endpoint():
+    """Тест: sub_plans.all() вызывает правильный эндпоинт"""
+    from bot.tests.conftest import FakeAiohttpSession
+    from bot.core.api.aiohttp_conn import SubServiceConn
+    from bot.core.utils.anything import SubServiceUris
+    
+    # Arrange
+    fake_session = FakeAiohttpSession(
+        json_data={'sub_plans': []},
+        status=200
+    )
+    
+    conn = SubServiceConn(fake_session)
+    
+    # Act
+    await conn.sub_plans.all()
+    
+    # Assert
+    assert len(fake_session.request_calls) == 1
+    call = fake_session.request_calls[0]
+    
+    assert call['method'] == 'GET'
+    assert SubServiceUris.get_sub_plans_all in call['url']
+
+
+@pytest.mark.asyncio
+async def test_sub_plans_all_api_error():
+    """Тест: sub_plans.all() обрабатывает ошибку API и возвращает False, данные ошибки"""
+    from bot.tests.conftest import FakeAiohttpSession
+    from bot.core.api.aiohttp_conn import SubServiceConn
+    
+    # Arrange: API возвращает 500
+    fake_session = FakeAiohttpSession(
+        json_data={'error': 'Internal Server Error'},
+        status=500
+    )
+    
+    conn = SubServiceConn(fake_session)
+    
+    # Act
+    ok, data = await conn.sub_plans.all()
+    
+    # Assert
+    assert ok is False
+
+
+@pytest.mark.asyncio
+async def test_sub_plans_all_network_error():
+    """Тест: sub_plans.all() обрабатывает сетевую ошибку"""
+    from bot.tests.conftest import FakeAiohttpSession
+    from bot.core.api.aiohttp_conn import SubServiceConn
+    
+    # Arrange
+    fake_session = FakeAiohttpSession(raise_error=True)
+    
+    conn = SubServiceConn(fake_session)
+    
+    # Act
+    ok, data = await conn.sub_plans.all()
+    
+    # Assert
+    assert ok is False
