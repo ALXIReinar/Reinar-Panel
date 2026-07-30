@@ -330,27 +330,55 @@ mkdir -p "$INSTALL_DIR/bot_logs"
 chmod -R 777 "$INSTALL_DIR/bot_logs"
 echo -e "${GREEN}✓${NC} Директории логов подготовлены"
 
-echo -e "\n${YELLOW}Финальная настройка прав доступа...${NC}"
-sudo chown -R 1000:1000 /opt/vpn-panel/bot/
-find /opt/vpn-panel/bot/ -type d -exec sudo chmod 755 {} +
-find /opt/vpn-panel/bot/ -type f -exec sudo chmod 644 {} +
-sudo chmod -R 777 /opt/vpn-panel/bot/bot_logs
-echo -e "${GREEN}✓${NC} Права установлены"
+# Остановка существующих контейнеров
+echo -e "\n${YELLOW}Остановка существующих контейнеров...${NC}"
+cd "$INSTALL_DIR"
+docker compose down 2>/dev/null || true
+echo -e "${GREEN}✓${NC} Контейнеры остановлены"
 
 # Сборка и запуск
 echo -e "\n${YELLOW}Сборка и запуск контейнеров...${NC}"
-docker compose -f /opt/vpn-panel/bot/docker-compose.yml up -d --build
+echo -e "${BLUE}Рабочая директория: $INSTALL_DIR${NC}"
+echo -e "${BLUE}Выполняется: docker compose up -d --build${NC}"
+
+# Запускаем с полным выводом для диагностики
+if ! docker compose up -d --build 2>&1 | tee /tmp/docker_compose_output.log; then
+    echo -e "\n${RED}✗${NC} Ошибка сборки/запуска контейнеров!"
+    echo -e "\n${YELLOW}Вывод Docker Compose:${NC}"
+    cat /tmp/docker_compose_output.log
+    
+    echo -e "\n${YELLOW}Попытка получить логи контейнеров...${NC}"
+    docker compose logs 2>&1 || echo "Логи недоступны"
+    
+    echo -e "\n${YELLOW}Статус контейнеров:${NC}"
+    docker compose ps -a 2>&1 || echo "Не удалось получить статус"
+    
+    exit 1
+fi
 
 # Ожидание запуска
 echo -e "\n${YELLOW}Ожидание запуска бота...${NC}"
-sleep 5
+sleep 10
 
-# Проверка статуса
-if docker compose ps | grep -q "Up"; then
-    echo -e "${GREEN}✓${NC} Контейнер успешно запущен"
+# Проверка статуса с подробной диагностикой
+echo -e "${YELLOW}Проверка статуса контейнеров...${NC}"
+CONTAINER_STATUS=$(docker compose ps 2>&1)
+echo "$CONTAINER_STATUS"
+
+if echo "$CONTAINER_STATUS" | grep -q "Up\|running"; then
+    echo -e "${GREEN}✓${NC} Контейнеры успешно запущены"
 else
-    echo -e "${RED}✗${NC} Ошибка запуска контейнера"
-    echo "Проверьте логи: cd $INSTALL_DIR && docker compose logs"
+    echo -e "${RED}✗${NC} Ошибка: контейнеры не запущены"
+    
+    echo -e "\n${YELLOW}Логи redis-bot:${NC}"
+    docker logs redis-bot 2>&1 || echo "Контейнер redis-bot не найден"
+    
+    echo -e "\n${YELLOW}Логи bot:${NC}"
+    docker logs bot 2>&1 || echo "Контейнер bot не найден"
+    
+    echo -e "\n${YELLOW}Docker Compose логи:${NC}"
+    docker compose logs 2>&1 || echo "Логи недоступны"
+    
     exit 1
 fi
 
