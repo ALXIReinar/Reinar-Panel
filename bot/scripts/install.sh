@@ -161,12 +161,9 @@ else
 fi
 
 # Redis настройки
-DEFAULT_REDIS_HOST="127.0.0.1"
-DEFAULT_REDIS_PORT="6379"
+
 DEFAULT_REDIS_PASSWORD=$(openssl rand -base64 24 | tr -d "=+/" | cut -c1-20)
 
-read_with_default "Введите REDIS_HOST" "$DEFAULT_REDIS_HOST" "REDIS_HOST"
-read_with_default "Введите REDIS_PORT" "$DEFAULT_REDIS_PORT" "REDIS_PORT"
 
 if [ -z "$REDIS_PASSWORD" ]; then
     echo -e "${YELLOW}Генерация безопасного пароля для Redis...${NC}"
@@ -184,7 +181,7 @@ cat > "$ENV_FILE" <<ENVEOF
 
 # Redis
 REDIS_PASSWORD=${REDIS_PASSWORD}
-REDIS_PORT=${REDIS_PORT}
+REDIS_PORT=6379
 ENVEOF
 
 echo -e "${GREEN}✓${NC} Конфигурация Docker Compose создана: $ENV_FILE"
@@ -199,8 +196,8 @@ BOT_TOKEN=${BOT_TOKEN}
 # Redis
 REDIS_PASSWORD=${REDIS_PASSWORD}
 REDIS_MAX_CONNECTIONS=50
-REDIS_HOST=${REDIS_HOST}
-REDIS_PORT=${REDIS_PORT}
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
 
 # Rate Limiting
 USER_REQ_LIMIT=50

@@ -135,10 +135,9 @@ jobs:
 
       - name: Run Installation Script
         env:
-          BOT_TOKEN: "123456789:ABCDEF..."
+          BOT_TOKEN: "123456789:ABCDEFabcdef"
           SUB_SERVICE_URL: "http://127.0.0.1:8080"
           ADMIN_TG_ID: "12346"
-          REDIS_PASSWORD: "SecurePassword123"
         run: |
           echo "🚀 Запуск скрипта установки..."
           chmod +x ./bot/scripts/install.sh
