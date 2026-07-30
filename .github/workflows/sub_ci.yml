@@ -93,6 +93,8 @@ jobs:
           PG_HOST=pg_db
           PG_PORT=5432
           PG_MAX_CONNECTIONS=50
+          DOMAIN=http://127.0.0.1:8080
+          TG_BOT_SERVICE_PRIVATE_IP=127.0.0.1,10.0.0.2
 
           REDIS_PASSWORD=R'F&scBdorS8@0A-1!
           REDIS_MAX_CONNECTIONS=50
