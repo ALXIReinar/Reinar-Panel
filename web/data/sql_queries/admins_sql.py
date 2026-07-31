@@ -79,8 +79,3 @@ class AuthQueries:
     async def session_termination(self, admin_id: int, session_id: str):
         query = 'DELETE FROM sessions_admins WHERE admin_id = $1 AND session_id = $2'
         await self.conn.execute(query, admin_id, session_id)
-
-
-    async def slam_refresh_tokens(self):
-        query = 'DELETE FROM sessions_admins WHERE exp < now()'
-        await self.conn.execute(query)

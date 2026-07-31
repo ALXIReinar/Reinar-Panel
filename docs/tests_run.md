@@ -13,6 +13,16 @@
 
 > python -m pytest web/tests --cov=web --cov-config=web/.coveragerc --cov-report=html --cov-report=term
 
+## Background Service(`web/arq_worker/tests`)
+
+### `Test Run`
+
+> python -m pytest web/arq_worker/tests
+
+### `Coverage Run`
+
+> python -m pytest web/arq_worker/tests --cov=web/arq_worker --cov-config=web/arq_worker/.coveragerc --cov-report=html --cov-report=term
+
 ## Sub Service(`web/sub/tests`)
 
 ### `Test Run`
