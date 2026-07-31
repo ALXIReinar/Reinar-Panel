@@ -168,7 +168,7 @@ jobs:
       - name: Install Admin Panel first
         env:
           ADMIN_PORT: ${{ vars.ADMIN_PORT }}
-          SUB_SERVICE_DOMAIN: ${{ vars.SUB_SERVICE_DOMAIN }}
+          SUB_SERVICE_DOMAIN: "https://sub.example.com"
         run: |
           echo "🚀 Установка Admin Panel..."
           chmod +x ./web/scripts/install.sh
