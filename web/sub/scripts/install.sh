@@ -176,18 +176,6 @@ ENVEOF
 
 echo -e "${GREEN}✓${NC} Конфигурация создана: $ENV_SUB_FILE"
 
-# Обновление docker-compose.yml (раскомментирование include)
-echo -e "\n${YELLOW}Обновление docker-compose.yml...${NC}"
-COMPOSE_FILE="$INSTALL_DIR/docker-compose.yml"
-
-if [ -f "$COMPOSE_FILE" ]; then
-    # Раскомментируем строчку с sub/docker-compose.yml
-    sed -i 's/^  # - sub\/docker-compose\.yml$/  - sub\/docker-compose.yml/' "$COMPOSE_FILE"
-    echo -e "${GREEN}✓${NC} docker-compose.yml обновлён"
-else
-    echo -e "${RED}✗${NC} docker-compose.yml не найден: $COMPOSE_FILE"
-    exit 1
-fi
 
 # Обновление .env для docker-compose (добавление SUB_PORT)
 echo -e "\n${YELLOW}Обновление .env для Docker Compose...${NC}"
