@@ -3,7 +3,7 @@ import os
 from yarl import URL
 
 "ВАЖНО: Устанавливаем переменную окружения ДО любых импортов из web/"
-os.environ['ENV_FILE'] = 'web/arq_worker/.env.arq.test'
+os.environ['ENV_FILE'] = os.getenv('ENV_FILE') if os.getenv('ENV_FILE') else 'web/arq_worker/.env.arq.test'
 
 import asyncpg
 import pytest
