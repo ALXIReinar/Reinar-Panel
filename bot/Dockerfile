@@ -1,13 +1,11 @@
-FROM python:3.12-slim as builder
+FROM python:3.12-slim AS builder
 
 COPY requirements.txt ./requirements.txt
-
 
 RUN pip3 install --no-cache-dir --user -r requirements.txt
 
 
 FROM python:3.12-slim
-
 
 RUN groupadd -r appuser && useradd -r -m -g  appuser appuser -d /home/appuser
 
@@ -20,7 +18,9 @@ RUN chown -R appuser:appuser /home/appuser /app
 
 ENV PATH=/home/appuser/.local/bin:$PATH
 ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
 USER appuser
+
 
 CMD ["python", "-m", "bot.core.main"]

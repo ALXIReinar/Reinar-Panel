@@ -1,0 +1,172 @@
+name: Bot CI
+
+# Запускаем при пуше в main или при создании Pull Request в main
+on:
+  push:
+    branches: ["main", "dev/bot"]
+  pull_request:
+    branches: ["main", "dev/master"]
+
+env:
+  REGISTRY: ghcr.io
+  # IMAGE_NAME устанавливается в каждой job отдельно с lowercase преобразованием
+
+jobs:
+  # 1. Сборка образа и публикация в GHCR с SHA тегом
+  # Образ переиспользуется в test job для ускорения CI
+  build:
+    runs-on: ubuntu-latest
+    environment: bot
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE_NAME: ${{ github.repository }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set lowercase image name
+        run: echo "IMAGE_NAME_LOWER=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')/bot_service" >> $GITHUB_ENV
+
+      - name: Decode and extract artifacts
+        run: |
+          echo "📦 Распаковка артефактов..."
+          echo "$ARTIFACTS_B64" | base64 -d > artifacts.tar.gz
+          tar -xzf artifacts.tar.gz
+        env:
+          ARTIFACTS_B64: ${{ vars.ARTIFACTS_B64 }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}
+          tags: |
+            type=sha,prefix=,format=short
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./bot
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # 2. Тестирование с переиспользованием образа из GHCR
+  # Образ пуллится из реестра вместо повторной сборки для экономии времени
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: bot
+    permissions:
+      contents: read
+      packages: read
+    env:
+      IMAGE_NAME: ${{ github.repository }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set lowercase image name
+        run: echo "IMAGE_NAME_LOWER=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')/bot_service" >> $GITHUB_ENV
+
+      - name: Setup test environment file
+        run: |
+          echo "📝 Создание .env.bot.test..."
+          echo "$ENV_BOT_TEST_FILE" > bot/.env.bot.test
+          echo "BOT_TOKEN=$BOT_TOKEN" >> bot/.env.bot.test
+          echo "REDIS_PASSWORD=$REDIS_PASSWORD" >> bot/.env.bot.test
+          echo "REDIS_PORT=6379" >> bot/.env.bot.test
+          
+          cat > bot/.env <<ENVEOF
+          REDIS_PASSWORD=${REDIS_PASSWORD}
+          REDIS_PORT=6379
+          ENVEOF
+        env:
+          ENV_BOT_TEST_FILE: ${{ vars.ENV_BOT_TEST_FILE }}
+          BOT_TOKEN: "123456789:ABCDEF..."
+          REDIS_PASSWORD: "123456789_ABCDEF"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Docker image from GHCR
+        run: |
+          echo "📥 Получение образа из GHCR..."
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:${SHORT_SHA}"
+          docker pull ${IMAGE_TAG}
+          docker tag ${IMAGE_TAG} reinar_panel/bot_service:${SHORT_SHA}
+          echo "IMAGE_TAG=${SHORT_SHA}" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: docker compose -f bot/docker-compose.test.yml up --abort-on-container-exit --exit-code-from bot
+
+      - name: Stop test containers
+        if: always()
+        run: docker compose -f bot/docker-compose.test.yml down -v
+
+  # 3. Установка и Healthcheck
+  # Использует локальную сборку через install.sh (production сценарий)
+  install-test:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: bot
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check and free ports
+        run: |
+          echo "🔍 Проверка занятости портов..."
+          sudo lsof -i :6379 || echo "Порт 6379 свободен"
+
+      - name: Run Installation Script
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          SUB_SERVICE_URL: "http://127.0.0.1:8080"
+          ADMIN_TG_ID: ${{ secrets.ADMIN_TG_ID }}
+        run: |
+          echo "🚀 Запуск скрипта установки..."
+          chmod +x ./bot/scripts/install.sh
+          sudo -E ./bot/scripts/install.sh || {
+            echo "❌ Ошибка установки, логи контейнеров:"
+            sudo docker logs redis-bot 2>&1 || echo "Контейнер redis не найден"
+            sudo docker logs bot 2>&1 || echo "Контейнер bot не найден"
+            exit 1
+          }
+
+      - name: Verify Bot Service Health
+        run: |
+          echo "⏳ Проверка состояния контейнера с ботом..."
+          for i in {1..12}; do
+            # 1. Проверяем, что контейнер запущен и status == running
+            CONTAINER_STATUS=$(docker inspect --format='{{.State.Status}}' bot 2>/dev/null || true)
+            
+            # 2. Проверяем, что внутри контейнера крутится процесс python
+            PROCESS_CHECK=$(docker exec bot pgrep -f "python" 2>/dev/null || true)
+      
+            if [ "$CONTAINER_STATUS" = "running" ] && [ -n "$PROCESS_CHECK" ]; then
+              echo "✅ Контейнер с ботом успешно запущен и процесс активен!"
+              exit 0
+            fi
+      
+            echo "Ждем запуск бота... ($i/12)"
+            sleep 5
+          done
+      
+          echo "❌ Бот не смог запуститься или упал!"
+          docker logs bot || true
+          exit 1

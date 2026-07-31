@@ -125,6 +125,19 @@ else
     echo -e "${GREEN}✓${NC} Используется порт из переменной окружения: $ADMIN_PORT"
 fi
 
+# Интерактивный выбор SUB_SERVICE_DOMAIN (для отправки ссылок на подписки)
+echo -e "\n${YELLOW}Настройка домена Sub Service${NC}"
+DEFAULT_SUB_DOMAIN="https://example.sub.com"
+
+# Если переменная SUB_SERVICE_DOMAIN задана (например, в CI), используем её
+if [ -z "$SUB_SERVICE_DOMAIN" ]; then
+    read -p "Введите домен Sub Service (по умолчанию $DEFAULT_SUB_DOMAIN): " USER_SUB_DOMAIN
+    SUB_SERVICE_DOMAIN=${USER_SUB_DOMAIN:-$DEFAULT_SUB_DOMAIN}
+    echo -e "${GREEN}✓${NC} Домен Sub Service: $SUB_SERVICE_DOMAIN"
+else
+    echo -e "${GREEN}✓${NC} Используется домен из переменной окружения: $SUB_SERVICE_DOMAIN"
+fi
+
 # Создание директории установки
 echo -e "\n${YELLOW}Создание директории ${INSTALL_DIR}...${NC}"
 mkdir -p "$INSTALL_DIR"
@@ -180,6 +193,7 @@ fi
 # Путь к .env файлам
 ENV_FILE="$INSTALL_DIR/.env"
 ENV_API_FILE="$INSTALL_DIR/.env.api.prod"
+ENV_ARQ_FILE="$INSTALL_DIR/arq_worker/.env.arq.prod"
 
 # Создание или обновление .env файла для docker-compose
 echo -e "\n${YELLOW}Настройка конфигурации Docker Compose...${NC}"
@@ -203,10 +217,12 @@ ENVEOF
 echo -e "${GREEN}✓${NC} Конфигурация Docker Compose создана: $ENV_FILE"
 
 # Создание или обновление .env.api.prod для приложения
-echo -e "\n${YELLOW}Настройка конфигурации приложения...${NC}"
+echo -e "\n${YELLOW}Настройка конфигурации приложения (Admin API)...${NC}"
 
 if [ ! -f "$ENV_API_FILE" ]; then
     cat > "$ENV_API_FILE" <<APIENVEOF
+PYTHONUNBUFFERED=1
+
 # PostgreSQL (НЕ МЕНЯТЬ - вшито в скрипты инициализации БД!)
 PG_USER=reinar_crud_user
 PG_PASSWORD=VjZ0ChrfMfp9!
@@ -235,10 +251,10 @@ POST_PROCESSING_RESPONSES=1
 UVICORN_WORKERS=1
 UVICORN_PORT=${ADMIN_PORT}
 DOMAIN=http://localhost:${ADMIN_PORT}
-ALLOWED_IPS=127.0.0.1
+ALLOWED_IPS=127.0.0.1,10.0.0.1
 TRUSTED_PROXIES=127.0.0.1,10.0.0.1
 APIENVEOF
-    echo -e "${GREEN}✓${NC} Конфигурация приложения создана: $ENV_API_FILE"
+    echo -e "${GREEN}✓${NC} Конфигурация Admin API создана: $ENV_API_FILE"
 else
     echo -e "${YELLOW}Обновление существующего .env.api.prod...${NC}"
     
@@ -253,19 +269,80 @@ else
     if ! grep -q "^ARQ_QUEUE_NAME=" "$ENV_API_FILE"; then
         echo "" >> "$ENV_API_FILE"
         echo "# ARQ Settings" >> "$ENV_API_FILE"
-        echo "ARQ_QUEUE_NAME=arq:web_queue" >> "$ENV_API_FILE"
+        echo "ARQ_QUEUE_NAME=arq:cron_background_queue" >> "$ENV_API_FILE"
         echo "ARQ_MAX_JOBS=10" >> "$ENV_API_FILE"
         echo "ARQ_JOB_TIMEOUT=300" >> "$ENV_API_FILE"
     fi
     
     # Добавляем Subscription настройки, если их нет
-    if ! grep -q "^SUB_LINK_BYTES=" "$ENV_API_FILE"; then
+    if ! grep -q "^NODE_METRICS_QUEUE_LIMIT=" "$ENV_API_FILE"; then
         echo "" >> "$ENV_API_FILE"
         echo "# Subscription settings" >> "$ENV_API_FILE"
         echo "NODE_METRICS_QUEUE_LIMIT=8" >> "$ENV_API_FILE"
     fi
     
-    echo -e "${GREEN}✓${NC} Конфигурация приложения обновлена"
+    echo -e "${GREEN}✓${NC} Конфигурация Admin API обновлена"
+fi
+
+# Создание или обновление .env.arq.prod для ARQ worker
+echo -e "\n${YELLOW}Настройка конфигурации ARQ Worker...${NC}"
+
+# Создаём директорию arq_worker если её нет
+mkdir -p "$INSTALL_DIR/arq_worker"
+
+if [ ! -f "$ENV_ARQ_FILE" ]; then
+    cat > "$ENV_ARQ_FILE" <<ARQENVEOF
+PYTHONUNBUFFERED=1
+
+# PostgreSQL (должны совпадать с .env.api.prod)
+PG_USER=reinar_crud_user
+PG_PASSWORD=VjZ0ChrfMfp9!
+PG_DB=reinar_db
+PG_HOST=127.0.0.1
+PG_PORT=5432
+PG_MAX_CONNECTIONS=50
+
+# Redis (должны совпадать с .env.api.prod)
+REDIS_PASSWORD=R'F&scBdorS8@0A-1!
+REDIS_MAX_CONNECTIONS=50
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+
+# Subscription settings
+NODE_METRICS_QUEUE_LIMIT=8
+
+# ARQ Settings (должны совпадать с .env.api.prod)
+ARQ_QUEUE_NAME=arq:cron_background_queue
+ARQ_MAX_JOBS=10
+ARQ_JOB_TIMEOUT=300
+ACTION_ON_CORE_PROTO_LIMIT=10
+
+# Telegram Bot (опционально - настройте если используете TG бота)
+# TG_BOT_TOKEN=your_bot_token_here
+
+# Sub Service Domain (для генерации ссылок на подписки)
+SUB_SERVICE_DOMAIN=${SUB_SERVICE_DOMAIN}
+
+# Application Configuration
+APP_MODE=docker
+ARQENVEOF
+    echo -e "${GREEN}✓${NC} Конфигурация ARQ Worker создана: $ENV_ARQ_FILE"
+else
+    echo -e "${YELLOW}Обновление существующего .env.arq.prod...${NC}"
+    
+    # Обновляем SUB_SERVICE_DOMAIN если изменился
+    if grep -q "^SUB_SERVICE_DOMAIN=" "$ENV_ARQ_FILE"; then
+        sed -i "s|^SUB_SERVICE_DOMAIN=.*|SUB_SERVICE_DOMAIN=${SUB_SERVICE_DOMAIN}|" "$ENV_ARQ_FILE"
+    else
+        echo "SUB_SERVICE_DOMAIN=${SUB_SERVICE_DOMAIN}" >> "$ENV_ARQ_FILE"
+    fi
+    
+    # Добавляем ACTION_ON_CORE_PROTO_LIMIT если его нет
+    if ! grep -q "^ACTION_ON_CORE_PROTO_LIMIT=" "$ENV_ARQ_FILE"; then
+        sed -i "/^ARQ_JOB_TIMEOUT=/a ACTION_ON_CORE_PROTO_LIMIT=10" "$ENV_ARQ_FILE"
+    fi
+    
+    echo -e "${GREEN}✓${NC} Конфигурация ARQ Worker обновлена"
 fi
 
 # Экспорт переменной для docker compose
@@ -273,8 +350,8 @@ export ADMIN_PORT
 
 # Подготовка директорий логов с правильными правами
 echo -e "\n${YELLOW}Подготовка директорий логов...${NC}"
-mkdir -p "$INSTALL_DIR/web_logs" "$INSTALL_DIR/arq_logs"
-chmod -R 777 "$INSTALL_DIR/web_logs" "$INSTALL_DIR/arq_logs"
+mkdir -p "$INSTALL_DIR/web_logs" "$INSTALL_DIR/arq_worker/arq_logs"
+chmod -R 777 "$INSTALL_DIR/web_logs" "$INSTALL_DIR/arq_worker/arq_logs"
 echo -e "${GREEN}✓${NC} Директории логов подготовлены"
 
 # Остановка существующих контейнеров
@@ -310,7 +387,7 @@ find /opt/vpn-panel/ -type d -exec sudo chmod 755 {} +
 find /opt/vpn-panel/ -type f -exec sudo chmod 644 {} +
 
 # 2. Выставляем права 777 (разрешить чтение/запись ВСЕМ, включая любого юзера внутри докера)
-sudo chmod -R 777 /opt/vpn-panel/web/arq_logs
+sudo chmod -R 777 /opt/vpn-panel/web/arq_worker/arq_logs
 sudo chmod -R 777 /opt/vpn-panel/web/web_logs
 
 # Финальное сообщение
@@ -331,7 +408,8 @@ echo -e "  Логи:        ${BLUE}docker compose -f docker-compose.admin.yml lo
 
 echo -e "${YELLOW}Конфигурация:${NC}"
 echo -e "  Docker Compose: ${BLUE}$ENV_FILE${NC}"
-echo -e "  Приложение:     ${BLUE}$ENV_API_FILE${NC}"
+echo -e "  Admin API:      ${BLUE}$ENV_API_FILE${NC}"
+echo -e "  ARQ Worker:     ${BLUE}$ENV_ARQ_FILE${NC}"
 echo -e "  JWT ключи:      ${BLUE}$INSTALL_DIR/secrets/keys/${NC}\n"
 
 echo -e "${YELLOW}Следующие шаги:${NC}"

@@ -5,7 +5,7 @@ Unit-тесты для web.api.users.handlers.put_to_arq_bg
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from web.api.users.handlers import put_to_arq_bg
+from web.api.users.handlers import put_to_arq_bg_bulk
 
 
 class TestPutToArqBgActionMapping:
@@ -24,7 +24,7 @@ class TestPutToArqBgActionMapping:
             {"order_id": 2, "sub_plan_id": 1, "user_id": 2}
         ]
         
-        job_id = await put_to_arq_bg(mock_arq, users, "activate")
+        job_id = await put_to_arq_bg_bulk(mock_arq, users, "activate")
         
         # Проверяем что вызвался правильный метод
         mock_arq.enqueue_job.assert_called_once()
@@ -52,7 +52,7 @@ class TestPutToArqBgActionMapping:
             {"order_id": 3, "sub_plan_id": 2, "user_id": 3},
         ]
         
-        job_id = await put_to_arq_bg(mock_arq, users, "deactivate")
+        job_id = await put_to_arq_bg_bulk(mock_arq, users, "deactivate")
         
         mock_arq.enqueue_job.assert_called_once()
         call_args = mock_arq.enqueue_job.call_args
@@ -72,7 +72,7 @@ class TestPutToArqBgActionMapping:
         
         users = [{"order_id": 4, "sub_plan_id": 1, "user_id": 4}]
         
-        job_id = await put_to_arq_bg(mock_arq, users, "add")
+        job_id = await put_to_arq_bg_bulk(mock_arq, users, "add")
         
         call_args = mock_arq.enqueue_job.call_args
         assert call_args[0][0] == "admin_request_bulk_action_users"
@@ -89,7 +89,7 @@ class TestPutToArqBgActionMapping:
         
         users = [{"order_id": 5, "sub_plan_id": 2, "user_id": 5}]
         
-        job_id = await put_to_arq_bg(mock_arq, users, "delete")
+        job_id = await put_to_arq_bg_bulk(mock_arq, users, "delete")
         
         call_args = mock_arq.enqueue_job.call_args
         assert call_args[0][0] == "admin_request_bulk_action_users"
@@ -113,7 +113,7 @@ class TestPutToArqBgResetTraffic:
             {"order_id": 7, "sub_plan_id": 1, "user_id": 7}
         ]
         
-        job_id = await put_to_arq_bg(mock_arq, users, "reset_traffic")
+        job_id = await put_to_arq_bg_bulk(mock_arq, users, "reset_traffic")
         
         mock_arq.enqueue_job.assert_called_once()
         call_args = mock_arq.enqueue_job.call_args
@@ -134,7 +134,7 @@ class TestPutToArqBgResetTraffic:
         
         users = []
         
-        job_id = await put_to_arq_bg(mock_arq, users, "reset_traffic")
+        job_id = await put_to_arq_bg_bulk(mock_arq, users, "reset_traffic")
         
         call_args = mock_arq.enqueue_job.call_args
         assert call_args[0][0] == "reset_day_user_traffic"
@@ -155,7 +155,7 @@ class TestPutToArqBgParameterOrder:
         
         users = [{"order_id": 8, "sub_plan_id": 3, "user_id": 8}]
         
-        await put_to_arq_bg(mock_arq, users, "activate")
+        await put_to_arq_bg_bulk(mock_arq, users, "activate")
         
         # Проверяем что позиционные аргументы переданы в правильном порядке
         call_args = mock_arq.enqueue_job.call_args[0]
@@ -174,7 +174,7 @@ class TestPutToArqBgParameterOrder:
         
         users = [{"order_id": 9, "sub_plan_id": 1, "user_id": 9}]
         
-        await put_to_arq_bg(mock_arq, users, "reset_traffic")
+        await put_to_arq_bg_bulk(mock_arq, users, "reset_traffic")
         
         # Проверяем что передан только task_name и users
         call_args = mock_arq.enqueue_job.call_args[0]
@@ -197,7 +197,7 @@ class TestPutToArqBgParameterOrder:
             {"order_id": 12, "sub_plan_id": 2, "user_id": 12}
         ]
         
-        await put_to_arq_bg(mock_arq, users, "deactivate")
+        await put_to_arq_bg_bulk(mock_arq, users, "deactivate")
         
         # Проверяем что данные пользователей не изменились
         call_args = mock_arq.enqueue_job.call_args[0]

@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set lowercase image name
-        run: echo "IMAGE_NAME_LOWER=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')/sub_service" >> $GITHUB_ENV
+        run: echo "IMAGE_NAME_LOWER=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')/web_service" >> $GITHUB_ENV
 
       - name: Decode and extract artifacts
         run: |
@@ -53,7 +53,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./web/sub
+          context: ./web
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -73,7 +73,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set lowercase image name
-        run: echo "IMAGE_NAME_LOWER=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')/sub_service" >> $GITHUB_ENV
+        run: echo "IMAGE_NAME_LOWER=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')/web_service" >> $GITHUB_ENV
 
       - name: Decode and extract artifacts
         run: |
@@ -90,13 +90,15 @@ jobs:
           PG_USER=test_reinar_user
           PG_PASSWORD=CAK!uiAGd89_ADhlsanca
           PG_DB=test_reinar_db
-          PG_HOST=pg_db
+          PG_HOST=127.0.0.1
           PG_PORT=5432
           PG_MAX_CONNECTIONS=50
+          DOMAIN=http://127.0.0.1:8080
+          TG_BOT_SERVICE_PRIVATE_IP=127.0.0.1,10.0.0.2
 
           REDIS_PASSWORD=R'F&scBdorS8@0A-1!
           REDIS_MAX_CONNECTIONS=50
-          REDIS_HOST=redis
+          REDIS_HOST=127.0.0.1
           REDIS_PORT=6379
 
           UVICORN_WORKERS=1
@@ -135,7 +137,7 @@ jobs:
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:${SHORT_SHA}"
           docker pull ${IMAGE_TAG}
-          docker tag ${IMAGE_TAG} reinar_panel/sub_service:${SHORT_SHA}
+          docker tag ${IMAGE_TAG} reinar_panel/web_service:${SHORT_SHA}
           echo "IMAGE_TAG=${SHORT_SHA}" >> $GITHUB_ENV
 
       - name: Run tests
@@ -166,6 +168,7 @@ jobs:
       - name: Install Admin Panel first
         env:
           ADMIN_PORT: ${{ vars.ADMIN_PORT }}
+          SUB_SERVICE_DOMAIN: "https://sub.example.com"
         run: |
           echo "🚀 Установка Admin Panel..."
           chmod +x ./web/scripts/install.sh
@@ -173,6 +176,7 @@ jobs:
             echo "❌ Ошибка установки Admin Panel"
             sudo docker logs pg_db 2>&1 || true
             sudo docker logs web-service 2>&1 || true
+            sudo docker logs arq-sub-worker 2>&1 || true
             exit 1
           }
 

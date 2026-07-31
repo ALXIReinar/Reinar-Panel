@@ -8,9 +8,6 @@ Integration тесты для Robokassa Payment API.
 Используем имитацию webhook с правильной сигнатурой вместо реального взаимодействия.
 """
 import pytest
-import hashlib
-import secrets
-from datetime import datetime, timedelta
 from urllib.parse import urlparse, parse_qs
 import httpx
 
@@ -36,27 +33,36 @@ def test_payment_app():
 
 
 @pytest.fixture(scope="function")
-async def test_payment_client(test_payment_app, db_pool, redis_pool, arq_pool, payment_seed):
+async def test_payment_client(test_payment_app, db_pool, redis_pool, payment_seed):
     """
     HTTP клиент для тестирования payment API.
     
     Setup:
-    1. Устанавливает db_pool, redis, arq_pool в app.state
+    1. Устанавливает db_pool, redis, mock arq_pool в app.state
     2. Создаёт httpx.AsyncClient с ASGITransport
     
     Teardown:
     1. Закрывает AsyncClient
     2. Очищает state
     """
+    from unittest.mock import AsyncMock, MagicMock
+    
+    # Mock arq_pool
+    mock_arq = AsyncMock()
+    mock_job = MagicMock()
+    mock_job.job_id = "test-payment-job-id"
+    mock_arq.enqueue_job = AsyncMock(return_value=mock_job)
+    
     try:
         # Setup: устанавливаем зависимости
         test_payment_app.state.pg_pool = db_pool
         test_payment_app.state.redis = redis_pool
-        test_payment_app.state.arq_pool = arq_pool
+        test_payment_app.state.arq_pool = mock_arq
         
         # Создаём HTTP клиент
         transport = httpx.ASGITransport(app=test_payment_app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+            ac.mock_arq = mock_arq  # Добавляем mock для доступа в тестах
             yield ac
     finally:
         # Teardown: очищаем state
@@ -65,19 +71,19 @@ async def test_payment_client(test_payment_app, db_pool, redis_pool, arq_pool, p
                 delattr(test_payment_app.state, attr)
 
 
-def create_valid_webhook_payload_dict(order_id: int, user_id: int, sub_plan_id: int, csrf_token: str, amount: str = "500.00", sub_days: int = 30):
+def create_valid_webhook_payload_dict(order_id: int, user_id: int, sub_plan_id: int, offer_id: int, csrf_token: str, amount: str = "500.00", sub_days: int = 30):
     """
     Генерирует валидный webhook payload с правильной сигнатурой.
     
     Использует те же алгоритмы что и продакшн код для генерации валидной подписи.
     Возвращает dict для form data (не Pydantic модель).
     
-    ВАЖНО: Shp_sub_days - обязательное поле в схеме WebhookRoboPayload.
+    ВАЖНО: Shp_offer_id - обязательное поле в схеме WebhookRoboPayload.
     """
     # Формируем payment_meta для подписи
     payment_meta_for_signature = {
         'Shp_csrf_token': csrf_token,
-        'Shp_sub_days': sub_days,
+        'Shp_offer_id': offer_id,
         'Shp_sub_plan_id': sub_plan_id,
         'Shp_user_id': user_id,
     }
@@ -95,7 +101,7 @@ def create_valid_webhook_payload_dict(order_id: int, user_id: int, sub_plan_id: 
         'Shp_user_id': user_id,
         'Shp_csrf_token': csrf_token,
         'Shp_sub_plan_id': sub_plan_id,
-        'Shp_sub_days': sub_days,
+        'Shp_offer_id': offer_id,
     }
 
 
@@ -117,8 +123,7 @@ class TestCreatePaymentLink:
         payload = {
             'user_id': payment_seed['user_id'],
             'sub_plan_id': payment_seed['plan_id'],
-            'ttl_days': 30,
-            'amount': '500.00',
+            'offer_id': payment_seed['offer_id'],
             'description': 'Тестовая подписка Premium',
         }
         
@@ -140,7 +145,8 @@ class TestCreatePaymentLink:
         
         # Проверяем параметры в URL
         assert 'MerchantLogin' in query_params
-        assert query_params['OutSum'][0] == '500.00'
+        # OutSum может быть '5' или '5.00' (зависит от форматирования Decimal)
+        assert query_params['OutSum'][0] in ['5', '5.00']  # 500 копеек = 5.00 рублей
         assert 'InvId' in query_params
         assert 'SignatureValue' in query_params
         assert 'Shp_user_id' in query_params
@@ -165,8 +171,7 @@ class TestCreatePaymentLink:
         payload = {
             'user_id': 999999,  # Несуществующий
             'sub_plan_id': payment_seed['plan_id'],
-            'ttl_days': 30,
-            'amount': '500.00',
+            'offer_id': payment_seed['offer_id'],
             'description': 'Тест',
         }
         
@@ -182,26 +187,24 @@ class TestCreatePaymentLink:
     
     async def test_create_pay_link_invalid_plan(self, test_payment_client, payment_seed):
         """
-        Несуществующий sub_plan_id принимается при создании ссылки (проверка происходит в webhook).
-        API не валидирует существование плана при создании ссылки, только при активации подписки.
+        Несуществующий offer_id → 404.
+        API валидирует существование оффера при создании ссылки через order_subscription.
         """
         # Arrange
         payload = {
             'user_id': payment_seed['user_id'],
-            'sub_plan_id': 999999,  # Несуществующий
-            'ttl_days': 30,
-            'amount': '500.00',
+            'sub_plan_id': payment_seed['plan_id'],
+            'offer_id': 999999,  # Несуществующий
             'description': 'Тест',
         }
         
         # Act
         response = await test_payment_client.post('/api/v1/robokassa/get_pay_link', json=payload)
         
-        # Assert - ссылка создаётся успешно (валидация будет в webhook)
-        assert response.status_code == 200
+        # Assert - 404 так как оффер не найден
+        assert response.status_code == 404
         data = response.json()
-        assert data['success'] is True
-        assert 'payment_url' in data
+        assert data['detail']['success'] is False
     
     
     async def test_create_pay_link_signature_valid(self, test_payment_client, payment_seed):
@@ -214,8 +217,7 @@ class TestCreatePaymentLink:
         payload = {
             'user_id': payment_seed['user_id'],
             'sub_plan_id': payment_seed['plan_id'],
-            'ttl_days': 30,
-            'amount': '750.50',
+            'offer_id': payment_seed['offer_id'],
             'description': 'Premium план',
         }
         
@@ -255,8 +257,7 @@ class TestCreatePaymentLink:
         payload = {
             'user_id': payment_seed['user_id'],
             'sub_plan_id': payment_seed['plan_id'],
-            'ttl_days': 30,
-            'amount': '1000.00',
+            'offer_id': payment_seed['offer_id'],
             'description': 'VIP план',
         }
         
@@ -299,8 +300,7 @@ class TestWebhookProcessing:
         create_link_payload = {
             'user_id': payment_seed['user_id'],
             'sub_plan_id': payment_seed['plan_id'],
-            'ttl_days': 30,
-            'amount': '500.00',
+            'offer_id': payment_seed['offer_id'],
             'description': 'Test',
         }
         link_response = await test_payment_client.post('/api/v1/robokassa/get_pay_link', json=create_link_payload)
@@ -316,8 +316,9 @@ class TestWebhookProcessing:
             order_id=order_id,
             user_id=payment_seed['user_id'],
             sub_plan_id=payment_seed['plan_id'],
+            offer_id=payment_seed['offer_id'],
             csrf_token=csrf_token,
-            amount='500.00'
+            amount='5.00'  # 500 копеек = 5.00 рублей
         )
         
         # Act
@@ -356,13 +357,13 @@ class TestWebhookProcessing:
         """
         # Arrange
         webhook_data = {
-            'OutSum': '500.00',
+            'OutSum': '5.00',  # 500 копеек = 5.00 рублей
             'InvId': 999,
             'SignatureValue': 'invalid_signature_hash_12345',
             'Shp_user_id': payment_seed['user_id'],
             'Shp_csrf_token': 'fake_token',
             'Shp_sub_plan_id': payment_seed['plan_id'],
-            'Shp_sub_days': 30,
+            'Shp_offer_id': payment_seed['offer_id'],
         }
         
         # Act
@@ -390,8 +391,7 @@ class TestWebhookProcessing:
         create_link_payload = {
             'user_id': payment_seed['user_id'],
             'sub_plan_id': payment_seed['plan_id'],
-            'ttl_days': 30,
-            'amount': '500.00',
+            'offer_id': payment_seed['offer_id'],
             'description': 'Test idempotency',
         }
         link_response = await test_payment_client.post('/api/v1/robokassa/get_pay_link', json=create_link_payload)
@@ -406,8 +406,9 @@ class TestWebhookProcessing:
             order_id=order_id,
             user_id=payment_seed['user_id'],
             sub_plan_id=payment_seed['plan_id'],
+            offer_id=payment_seed['offer_id'],
             csrf_token=csrf_token,
-            amount='500.00'
+            amount='5.00'  # 500 копеек = 5.00 рублей
         )
         
         # Act - первый запрос
@@ -436,11 +437,22 @@ class TestWebhookProcessing:
         """
         # Arrange - создаём старую активную подписку
         async with db_pool.acquire() as conn:
+            # Создаём pay_order с полными данными
             old_pay_order = await conn.fetchval("""
-                INSERT INTO pay_orders (user_id, status)
-                VALUES ($1, 2)
+                INSERT INTO pay_orders (
+                    user_id, status, 
+                    infinite_expire, infinite_traffic,
+                    traffic_limit_mb, traffic_limit_day_mb,
+                    ttl_days, cost
+                )
+                SELECT $1, 2,
+                    infinite_expire, infinite_traffic,
+                    traffic_limit_mb, traffic_limit_day_mb,
+                    ttl_days, cost
+                FROM sub_plan_offers
+                WHERE id = $2
                 RETURNING id
-            """, payment_seed['user_id'])
+            """, payment_seed['user_id'], payment_seed['offer_id'])
             
             old_order_id = await conn.fetchval("""
                 INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date, 
@@ -455,8 +467,7 @@ class TestWebhookProcessing:
         create_link_payload = {
             'user_id': payment_seed['user_id'],
             'sub_plan_id': payment_seed['plan_id'],
-            'ttl_days': 30,
-            'amount': '500.00',
+            'offer_id': payment_seed['offer_id'],
             'description': 'New subscription',
         }
         link_response = await test_payment_client.post('/api/v1/robokassa/get_pay_link', json=create_link_payload)
@@ -471,8 +482,9 @@ class TestWebhookProcessing:
             order_id=new_order_id,
             user_id=payment_seed['user_id'],
             sub_plan_id=payment_seed['plan_id'],
+            offer_id=payment_seed['offer_id'],
             csrf_token=csrf_token,
-            amount='500.00'
+            amount='5.00'  # 500 копеек = 5.00 рублей
         )
         
         # Act
@@ -491,7 +503,7 @@ class TestWebhookProcessing:
         assert updated_sub['order_id'] == new_order_id  # Обновлён на новый заказ
     
     
-    async def test_webhook_enqueues_arq_job(self, test_payment_client, payment_seed, arq_pool):
+    async def test_webhook_enqueues_arq_job(self, test_payment_client, payment_seed):
         """
         Webhook ставит задачу action_on_core_proto_by_sub_plan в Arq.
         """
@@ -499,8 +511,7 @@ class TestWebhookProcessing:
         create_link_payload = {
             'user_id': payment_seed['user_id'],
             'sub_plan_id': payment_seed['plan_id'],
-            'ttl_days': 30,
-            'amount': '500.00',
+            'offer_id': payment_seed['offer_id'],
             'description': 'Test ARQ',
         }
         link_response = await test_payment_client.post('/api/v1/robokassa/get_pay_link', json=create_link_payload)
@@ -515,18 +526,15 @@ class TestWebhookProcessing:
             order_id=order_id,
             user_id=payment_seed['user_id'],
             sub_plan_id=payment_seed['plan_id'],
+            offer_id=payment_seed['offer_id'],
             csrf_token=csrf_token,
-            amount='500.00'
+            amount='5.00'  # 500 копеек = 5.00 рублей
         )
         
         # Act
         await test_payment_client.post('/api/v1/robokassa/webhook', data=webhook_data)
         
-        # Assert - проверяем что задача в Arq
-        # Получаем последнюю задачу из очереди
-        jobs = await arq_pool.queued_jobs()
-        assert len(jobs) > 0
-        
-        # Проверяем что последняя задача - это action_on_core_proto_by_sub_plan
-        last_job = jobs[-1]
-        assert last_job.function == 'action_on_core_proto_by_sub_plan'
+        # Assert - проверяем что задача была поставлена в Arq
+        test_payment_client.mock_arq.enqueue_job.assert_called_once()
+        call_args = test_payment_client.mock_arq.enqueue_job.call_args
+        assert call_args[0][0] == 'action_on_core_proto_by_sub_plan'

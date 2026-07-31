@@ -51,7 +51,7 @@ async def users_with_subs_for_delete(db_pool, virtual_node_seed, sub_plan_seed):
         for i in range(2):
             # Создаём pay_order
             pay_order_id = await conn.fetchval(
-                "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 2, NOW()) RETURNING id",
+                "INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) VALUES ($1, 2, NOW(), false, false, 0) RETURNING id",
                 user_ids[i]
             )
             
@@ -73,7 +73,7 @@ async def users_with_subs_for_delete(db_pool, virtual_node_seed, sub_plan_seed):
         
         # Пользователь 2 - активная подписка, is_limited=true (НЕ должен попасть в outbox)
         pay_order_limited = await conn.fetchval(
-            "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 2, NOW()) RETURNING id",
+            "INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) VALUES ($1, 2, NOW(), false, false, 0) RETURNING id",
             user_ids[2]
         )
         user_sub_id_limited = await conn.fetchval(
@@ -93,7 +93,7 @@ async def users_with_subs_for_delete(db_pool, virtual_node_seed, sub_plan_seed):
         
         # Пользователь 3 - неактивная подписка (НЕ должен попасть в outbox)
         pay_order_inactive = await conn.fetchval(
-            "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 3, NOW()) RETURNING id",
+            "INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) VALUES ($1, 3, NOW(), false, false, 0) RETURNING id",
             user_ids[3]
         )
         user_sub_id_inactive = await conn.fetchval(
@@ -448,7 +448,7 @@ class TestBulkDeleteEdgeCases:
             
             # Создаём pay_order
             pay_order_id = await conn.fetchval(
-                "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 2, NOW()) RETURNING id",
+                "INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) VALUES ($1, 2, NOW(), false, false, 0) RETURNING id",
                 user_id
             )
             
@@ -534,7 +534,7 @@ class TestBulkDeleteEdgeCases:
             
             # Создаём pay_order
             pay_order_id = await conn.fetchval(
-                "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 2, NOW()) RETURNING id",
+                "INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) VALUES ($1, 2, NOW(), false, false, 0) RETURNING id",
                 user_id
             )
             

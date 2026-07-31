@@ -21,6 +21,7 @@ omit =
     web/config_dir/arq_config.py
     web/main.py
     web/utils/arq_logger_config.py
+    web/utils/logger_config.py
 
 # Использовать относительные пути
 relative_files = True

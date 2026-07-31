@@ -30,10 +30,8 @@ logging.critical(f'\033[35m{env_files}\033[0m | app_mode: \033[32m{os.getenv('AP
 WORKDIR = Path(__file__).resolve().parent.parent
 
 LOG_DIR = WORKDIR / 'web_logs'
-ARQ_LOG_DIR = WORKDIR / 'arq_logs'
 
 LOG_DIR.mkdir(parents=True, exist_ok=True)
-ARQ_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 "Хэш-метод"
 encryption = CryptContext(schemes=['argon2'], deprecated='auto')

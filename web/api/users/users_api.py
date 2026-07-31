@@ -3,14 +3,14 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from starlette.requests import Request
 
-from web.api.users.handlers import put_to_arq_bg
+from web.api.users.handlers import put_to_arq_bg_bulk, put_to_arq_bg_single
 from web.config_dir.config import ArqDep
 from web.data.postgres import PgSqlDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
 from web.schemas.user_schema import (
     UserBulkCreateSchema,
     UserBulkUpdateSchema,
-    UserBulkDeleteSchema
+    UserBulkDeleteSchema, UserSubsUpdateSchema, UserUpdateSchema
 )
 from web.utils.anything import CoreProtoActions
 from web.utils.logger_config import log_event
@@ -71,7 +71,7 @@ async def bulk_update_users(body: UserBulkUpdateSchema, request: Request, db: Pg
     "2. Пробрасываем фоновую задачу на исполнение 'action' на ядрах"
     job_id = None
     if affected_users:  # Вызываем ARQ только если есть пользователи
-        job_id = await put_to_arq_bg(arq, affected_users, body.action)
+        job_id = await put_to_arq_bg_bulk(arq, affected_users, body.action)
 
     log_event(f'Обновлено пользователей ({len(affected_users)}). Закинули исполнение операции в фон | job_id: \033[31m{job_id}\033[0m; action: \033[32m{body.action}\033[0m; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request)
     return {'success': True, 'message': f'Bulk Операция ({body.action}) выполнена', 'affected_count': len(affected_users), 'arq_job_id': job_id}
@@ -91,17 +91,62 @@ async def bulk_delete_users(body: UserBulkDeleteSchema, request: Request, db: Pg
     users_for_arq_bg = [dict(arq_u) for arq_u in deleted_users]
     job_id = None
     if users_for_arq_bg:  # Вызываем ARQ только если есть пользователи
-        job_id = await put_to_arq_bg(arq, users_for_arq_bg, CoreProtoActions.word_delete)
+        job_id = await put_to_arq_bg_bulk(arq, users_for_arq_bg, CoreProtoActions.word_delete)
 
     log_event(f'Удалено пользователей: {len(deleted_users)}; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request, level='WARNING')
     return {'success': True, 'message': f'Пользователи удалены!', 'deleted_count': len(deleted_users), 'arq_job_id': job_id}
 
 
-# @router.put('/update')
-# async def edit_user(body: UserUpdateSchema, request: Request, db: PgSqlDep, arq: ArqDep, _: JWTCookieDep):
-#     await db.users.update(
-#         user_id=body.user_id,
-#         tg_username=...,
-#         sub_plan_ids=...
-#     )
+@router.put('/meta/{user_id}')
+async def edit_user(user_id: int, body: UserUpdateSchema, request: Request, db: PgSqlDep, arq: ArqDep, _: JWTCookieDep):
+    status_code, upd = await db.users.update(
+        user_id=user_id,
+        tg_username=body.tg_username,
+        tg_id=body.tg_id,
+        registered_at=body.registered_at,
+    )
+    if status_code == 409:
+        log_event(f'Ограничение уникальности | err: \033[31m{upd}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
+        raise HTTPException(status_code=409, detail={'success': False, 'message': 'Ограничение уникальности', 'err': upd})
 
+    if not upd:
+        log_event(f'Не удалось обновить пользователя, не существует | upd_body: \033[34m{repr(body)}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+        raise HTTPException(status_code=404, detail={'success': False, 'message': 'Пользователь не существует'})
+
+    return {'success': True, 'message': 'Пользователь обновлён'}
+
+
+@router.put('/subs/{user_id}')
+async def edit_user_sub(user_id: int, body: UserSubsUpdateSchema, request: Request, db: PgSqlDep, arq: ArqDep, _: JWTCookieDep):
+    user_subs_del, users_subs_add, users_sub_ids_upd = await db.users.edit_user_subs(
+        user_id=user_id,
+        upd_subs=body.user_subs_to_update,
+        del_sub_ids=body.user_subs_to_delete,
+        add_subs=body.user_subs_to_add,
+    )
+    add_jobs, del_jobs = [], []
+
+    "Фоновая на удаления из впн-ядер"
+    if user_subs_del:
+        del_jobs = await put_to_arq_bg_single(arq, user_subs_del, CoreProtoActions.word_delete)
+        log_event(f'\033[35m[User Subs Editor]\033[0m Отправка удаления впн-пользователей в фон | user_id: \033[34m{user_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+
+    "Фоновая на вставку в впн-ядра"
+    if users_subs_add:
+        log_event(f'\033[35m[User Subs Editor]\033[0m Отправка вставок подписок пользователя в фон на впн-ядра | user_id: \033[34m{user_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+        add_jobs = await put_to_arq_bg_single(arq, users_subs_add, CoreProtoActions.word_add)
+
+    return {
+        'success': True,
+        'updated_subs_ids': users_sub_ids_upd,
+        'added_subs_ids': [
+            {'user_sub_id': us_add['user_sub_id'], 'sub_plan_id': us_add['sub_plan_id']}
+            for us_add in users_subs_add
+        ],
+        'deleted_subs_ids': [
+            {'user_sub_id': us_del['user_sub_id'], 'sub_plan_id': us_del['sub_plan_id']}
+            for us_del in user_subs_del
+        ],
+        'add_jobs': add_jobs,
+        'del_jobs': del_jobs,
+    }
