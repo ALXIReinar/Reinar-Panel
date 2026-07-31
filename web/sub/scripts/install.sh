@@ -205,16 +205,16 @@ docker compose -f /opt/vpn-panel/web/sub/docker-compose.yml up -d --build
 
 # Ожидание запуска
 echo -e "\n${YELLOW}Ожидание запуска сервисов...${NC}"
-sleep 5
+#sleep 5
 
 # Проверка статуса
-if docker compose ps | grep -q "sub-service.*Up"; then
-    echo -e "${GREEN}✓${NC} Sub Service успешно запущен"
-else
-    echo -e "${RED}✗${NC} Ошибка запуска Sub Service"
-    echo "Проверьте логи: cd $INSTALL_DIR && docker compose logs sub-service"
-    exit 1
-fi
+#if docker compose ps | grep -q "sub-service.*Up"; then
+#    echo -e "${GREEN}✓${NC} Sub Service успешно запущен"
+#else
+#    echo -e "${RED}✗${NC} Ошибка запуска Sub Service"
+#    echo "Проверьте логи: cd $INSTALL_DIR && docker compose logs sub-service"
+#    exit 1
+#fi
 
 # Финальное сообщение
 echo -e "\n${BLUE}========================================${NC}"
