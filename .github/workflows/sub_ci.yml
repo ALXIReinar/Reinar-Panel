@@ -90,7 +90,7 @@ jobs:
           PG_USER=test_reinar_user
           PG_PASSWORD=CAK!uiAGd89_ADhlsanca
           PG_DB=test_reinar_db
-          PG_HOST=pg_db
+          PG_HOST=127.0.0.1
           PG_PORT=5432
           PG_MAX_CONNECTIONS=50
           DOMAIN=http://127.0.0.1:8080
@@ -98,7 +98,7 @@ jobs:
 
           REDIS_PASSWORD=R'F&scBdorS8@0A-1!
           REDIS_MAX_CONNECTIONS=50
-          REDIS_HOST=redis
+          REDIS_HOST=127.0.0.1
           REDIS_PORT=6379
 
           UVICORN_WORKERS=1
