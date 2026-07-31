@@ -69,8 +69,9 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  # 2. Тестирование с переиспользованием образа из GHCR
+  # 2. Тестирование Admin API и ARQ Worker последовательно
   # Образ пуллится из реестра вместо повторной сборки для экономии времени
+  # Сначала запускаются тесты Admin API, после их завершения - тесты ARQ Worker
   test:
     needs: build
     runs-on: ubuntu-latest
@@ -104,13 +105,17 @@ jobs:
           chmod 644 web/secrets/test_keys/private_key.pem
           chmod 644 web/secrets/test_keys/public_key.pem
 
-      - name: Setup test environment file
+      - name: Setup test environment files
         run: |
           echo "📝 Создание .env.api.test..."
           echo "$ENV_API_TEST_FILE" > web/.env.api.test
           echo "UVICORN_PORT=$ADMIN_PORT" >> web/.env.api.test
+          
+          echo "📝 Создание .env.arq.test..."
+          echo "$ENV_ARQ_TEST_FILE" > web/arq_worker/.env.arq.test
         env:
           ENV_API_TEST_FILE: ${{ vars.ENV_API_TEST_FILE }}
+          ENV_ARQ_TEST_FILE: ${{ vars.ENV_ARQ_TEST_FILE }}
           ADMIN_PORT: ${{ vars.ADMIN_PORT }}
 
       - name: Log in to GitHub Container Registry
@@ -129,12 +134,27 @@ jobs:
           docker tag ${IMAGE_TAG} reinar_panel/web_service:${SHORT_SHA}
           echo "IMAGE_TAG=${SHORT_SHA}" >> $GITHUB_ENV
 
-      - name: Run tests
-        run: docker compose -f web/docker-compose.test_admin.yml up --abort-on-container-exit --exit-code-from web-service
+      - name: Run Admin API tests
+        run: |
+          echo "🧪 Запуск тестов Admin API..."
+          docker compose -f web/docker-compose.test_admin.yml up --abort-on-container-exit --exit-code-from web-service
 
-      - name: Stop test containers
+      - name: Stop Admin test containers
         if: always()
-        run: docker compose -f web/docker-compose.test_admin.yml down -v
+        run: |
+          echo "🛑 Остановка контейнеров Admin API..."
+          docker compose -f web/docker-compose.test_admin.yml down -v
+
+      - name: Run ARQ Worker tests
+        run: |
+          echo "🧪 Запуск тестов ARQ Worker..."
+          docker compose -f web/docker-compose.test_arq_worker.yml up --abort-on-container-exit --exit-code-from arq-sub-worker
+
+      - name: Stop ARQ Worker test containers
+        if: always()
+        run: |
+          echo "🛑 Остановка контейнеров ARQ Worker..."
+          docker compose -f web/docker-compose.test_arq_worker.yml down -v
 
   # 3. Установка и Healthcheck
   # Использует локальную сборку через install.sh (production сценарий)
@@ -163,6 +183,7 @@ jobs:
       - name: Run Installation Script
         env:
           ADMIN_PORT: ${{ vars.ADMIN_PORT }}
+          SUB_SERVICE_DOMAIN: ${{ vars.SUB_SERVICE_DOMAIN }}
         run: |
           echo "🚀 Запуск скрипта установки..."
           chmod +x ./web/scripts/install.sh
@@ -171,6 +192,7 @@ jobs:
             sudo docker logs pg_db 2>&1 || echo "Контейнер pg_db не найден"
             sudo docker logs redis 2>&1 || echo "Контейнер redis не найден"
             sudo docker logs web-service 2>&1 || echo "Контейнер web-service не найден"
+            sudo docker logs arq-sub-worker 2>&1 || echo "Контейнер arq-sub-worker не найден"
             exit 1
           }
 

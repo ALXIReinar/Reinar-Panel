@@ -1,4 +1,4 @@
-name: test_reinar_panel_admin
+name: test_reinar_panel_arq_worker
 
 # Используется в CI для тестирования
 # IMAGE_TAG передается из GitHub Actions с SHA коммита (например: abc1234)
@@ -39,22 +39,20 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
 
-  web-service:
+  arq-sub-worker:
+    container_name: test_arq-sub-worker
     build: .
     image: reinar_panel/web_service:${IMAGE_TAG:-latest}
-#    command: python -m pytest web/tests -v
-    command: python -m pytest web/tests -v
-    container_name: test_web-service
+    command: python -m pytest web/arq_worker/tests -v
     depends_on:
       pg_db:
         condition: service_healthy
     environment:
-      - ENV_FILE=/run/secrets/env.api.test
+      - ENV_FILE=/run/secrets/env.arq.test
     network_mode: host
     secrets:
-      - env.api.test
-      - private_key.pem
-      - public_key.pem
+      - env.arq.test
+
 
 volumes:
   pgdata:
@@ -63,8 +61,8 @@ volumes:
     driver: local
 
 secrets:
-  env.api.test:
-    file: .env.api.test
+  env.arq.test:
+    file: arq_worker/.env.arq.test
   private_key.pem:
     file: secrets/test_keys/private_key.pem
   public_key.pem:

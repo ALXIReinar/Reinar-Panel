@@ -1,7 +1,0 @@
-# Запуск web и sub сервисы как один Docker Stack
-name: reinar_panel
-
-include:
-  - docker-compose.admin.yml
-  # Раскомментируйте после установки sub сервиса (web/sub/install.sh)
-  - sub/docker-compose.yml

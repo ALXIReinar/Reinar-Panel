@@ -33,27 +33,36 @@ def test_payment_app():
 
 
 @pytest.fixture(scope="function")
-async def test_payment_client(test_payment_app, db_pool, redis_pool, arq_pool, payment_seed):
+async def test_payment_client(test_payment_app, db_pool, redis_pool, payment_seed):
     """
     HTTP клиент для тестирования payment API.
     
     Setup:
-    1. Устанавливает db_pool, redis, arq_pool в app.state
+    1. Устанавливает db_pool, redis, mock arq_pool в app.state
     2. Создаёт httpx.AsyncClient с ASGITransport
     
     Teardown:
     1. Закрывает AsyncClient
     2. Очищает state
     """
+    from unittest.mock import AsyncMock, MagicMock
+    
+    # Mock arq_pool
+    mock_arq = AsyncMock()
+    mock_job = MagicMock()
+    mock_job.job_id = "test-payment-job-id"
+    mock_arq.enqueue_job = AsyncMock(return_value=mock_job)
+    
     try:
         # Setup: устанавливаем зависимости
         test_payment_app.state.pg_pool = db_pool
         test_payment_app.state.redis = redis_pool
-        test_payment_app.state.arq_pool = arq_pool
+        test_payment_app.state.arq_pool = mock_arq
         
         # Создаём HTTP клиент
         transport = httpx.ASGITransport(app=test_payment_app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+            ac.mock_arq = mock_arq  # Добавляем mock для доступа в тестах
             yield ac
     finally:
         # Teardown: очищаем state
@@ -494,7 +503,7 @@ class TestWebhookProcessing:
         assert updated_sub['order_id'] == new_order_id  # Обновлён на новый заказ
     
     
-    async def test_webhook_enqueues_arq_job(self, test_payment_client, payment_seed, arq_pool):
+    async def test_webhook_enqueues_arq_job(self, test_payment_client, payment_seed):
         """
         Webhook ставит задачу action_on_core_proto_by_sub_plan в Arq.
         """
@@ -525,11 +534,7 @@ class TestWebhookProcessing:
         # Act
         await test_payment_client.post('/api/v1/robokassa/webhook', data=webhook_data)
         
-        # Assert - проверяем что задача в Arq
-        # Получаем последнюю задачу из очереди
-        jobs = await arq_pool.queued_jobs()
-        assert len(jobs) > 0
-        
-        # Проверяем что последняя задача - это action_on_core_proto_by_sub_plan
-        last_job = jobs[-1]
-        assert last_job.function == 'action_on_core_proto_by_sub_plan'
+        # Assert - проверяем что задача была поставлена в Arq
+        test_payment_client.mock_arq.enqueue_job.assert_called_once()
+        call_args = test_payment_client.mock_arq.enqueue_job.call_args
+        assert call_args[0][0] == 'action_on_core_proto_by_sub_plan'

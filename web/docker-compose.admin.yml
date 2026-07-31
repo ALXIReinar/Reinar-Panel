@@ -65,6 +65,24 @@ services:
       - private_key.pem
       - public_key.pem
 
+  arq-sub-worker:
+    container_name: arq-sub-worker
+    build: .
+    image: reinar_panel/web_service
+    command: python -m arq web.arq_worker.arq_config.WorkerSettings
+    depends_on:
+      pg_db:
+        condition: service_healthy
+      web-service:
+        condition: service_healthy
+    environment:
+      - ENV_FILE=/run/secrets/env.arq.prod
+    network_mode: host
+    volumes:
+      - ./arq_logs:/app/web/arq_worker/arq_logs
+    secrets:
+      - env.arq.prod
+
 volumes:
   pgdata:
     driver: local
@@ -74,6 +92,8 @@ volumes:
 secrets:
   env.api.prod:
     file: .env.api.prod
+  env.arq.prod:
+    file: arq_worker/.env.arq.prod
   private_key.pem:
     file: secrets/keys/private_key.pem
   public_key.pem:

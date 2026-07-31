@@ -20,6 +20,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ../secrets/test_dumps:/docker-entrypoint-initdb.d:z
+    ports:
+      - "127.0.0.1:5432:5432"
 
   redis:
     image: redis:7.2-alpine
@@ -34,11 +36,14 @@ services:
       - redis_data:/data
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:6379:6379"
 
   sub-service:
-    image: reinar_panel/sub_service:${IMAGE_TAG}
-    command: python -m pytest web/sub/tests/unit -v
+    image: reinar_panel/web_service:${IMAGE_TAG:-latest}
+    command: python -m pytest web/sub/tests -v
     container_name: test_sub-service
+    network_mode: host
     depends_on:
       pg_db:
         condition: service_healthy
