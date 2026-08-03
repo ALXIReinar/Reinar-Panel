@@ -1,0 +1,63 @@
+{$SUB_DOMAIN:localhost} {
+    root * /var/www/html
+
+    encode zstd gzip
+
+
+    # 1.1 Эндпоинт выдачи подписки
+    handle /api/v1/public/sub/* {
+        rate_limit {
+            zone public_zone {
+                key {http.request.remote_ip}
+                events 20
+                window 60s
+            }
+        }
+
+        reverse_proxy 127.0.0.1:{$SUB_PORT} {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # 1.2 Маршрут для Робокассы. У каждой платёжной системы - отдельный. Разные R/S
+    handle /api/v1/robokassa/* {
+        rate_limit {
+            zone robokassa_zone {
+                key {http.request.remote_ip}
+                events 30
+                window 1s
+            }
+        }
+
+        reverse_proxy 127.0.0.1:{$SUB_PORT} {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+
+    # 2. Раздача фронтенда (SPA)
+    handle {
+        try_files {path} {path}/ /index.html
+        file_server
+
+        # Запрещаем кэшировать сам index.html, чтобы пользователи всегда получали свежую версию
+        header Cache-Control "no-store, no-cache, must-revalidate"
+
+        # Кэшируем скомпилированные файлы (у Vite/React они обычно в /assets/ или /static/)
+        @static path /assets/* /static/* /images/*
+        header @static Cache-Control "public, max-age=15768000, immutable"
+    }
+
+    # 3. Заголовки безопасности
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+
+        Server "Reinar Panel Sub 0.1"
+    }
+}

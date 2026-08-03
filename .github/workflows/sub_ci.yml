@@ -168,6 +168,7 @@ jobs:
       - name: Install Admin Panel first
         env:
           ADMIN_PORT: ${{ vars.ADMIN_PORT }}
+          ADMIN_DOMAIN: "admin.ci.local"
           SUB_SERVICE_DOMAIN: "https://sub.example.com"
         run: |
           echo "🚀 Установка Admin Panel..."
@@ -183,10 +184,11 @@ jobs:
       - name: Install Sub Service
         env:
           SUB_PORT: ${{ vars.SUB_PORT }}
-          ROBO_SHOP_LOGIN: ${{ secrets.ROBO_SHOP_LOGIN }}
-          ROBO_PASSW_1: ${{ secrets.ROBO_PASSW_1 }}
-          ROBO_PASSW_2: ${{ secrets.ROBO_PASSW_2 }}
-          TG_BOT_LINK: ${{ vars.TG_BOT_LINK }}
+          SUB_DOMAIN: "localhost"
+          ROBO_SHOP_LOGIN: "TestShopLogin"
+          ROBO_PASSW_1: "TestPassword1"
+          ROBO_PASSW_2: "TestPassword2"
+          TG_BOT_LINK: "https://t.me/test_bot"
         run: |
           echo "🚀 Установка Sub Service..."
           chmod +x ./web/sub/scripts/install.sh

@@ -1,0 +1,9 @@
+FROM caddy:builder AS builder
+
+# xcaddy автоматически скачает исходники, добавит плагин и соберет бинарник
+RUN xcaddy build \
+    --with github.com/mholt/caddy-ratelimit
+
+# Легковесный финальный образ
+FROM caddy:alpine
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy

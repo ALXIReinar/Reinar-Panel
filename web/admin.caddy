@@ -1,0 +1,55 @@
+{$ADMIN_DOMAIN:localhost} {
+
+    root * /var/www/html
+
+    encode zstd gzip
+
+
+    # 0. Все public роуты на бэк + rate limit
+    handle /api/v1/public/* {
+        rate_limit {
+            zone public_zone {
+                key {http.request.remote_ip}
+                events 10
+                window 60s
+            }
+        }
+
+        reverse_proxy 127.0.0.1:{$ADMIN_PORT} {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # 1. Все private роуты на бэк. Для админки - без рейт лимита
+    handle /api/v1/private/* {
+        reverse_proxy 127.0.0.1:{$ADMIN_PORT} {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # 2. Раздача фронтенда (SPA)
+    handle {
+        try_files {path} {path}/ /index.html
+        file_server
+
+        # Запрещаем кэшировать сам index.html, чтобы пользователи всегда получали свежую версию
+        header Cache-Control "no-store, no-cache, must-revalidate"
+
+        # Кэшируем скомпилированные файлы (у Vite/React они обычно в /assets/ или /static/)
+        @static path /assets/* /static/* /images/*
+        header @static Cache-Control "public, max-age=15768000, immutable"
+    }
+
+    # 3. Базовые заголовки безопасности
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+
+        Server "Reinar Panel Admin 0.1"
+    }
+}

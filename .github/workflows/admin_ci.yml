@@ -183,7 +183,8 @@ jobs:
       - name: Run Installation Script
         env:
           ADMIN_PORT: ${{ vars.ADMIN_PORT }}
-          SUB_SERVICE_DOMAIN: ${{ vars.SUB_SERVICE_DOMAIN }}
+          ADMIN_DOMAIN: ${{ vars.ADMIN_DOMAIN }}
+          SUB_SERVICE_DOMAIN: "sub.service.example"
         run: |
           echo "🚀 Запуск скрипта установки..."
           chmod +x ./web/scripts/install.sh
@@ -193,19 +194,30 @@ jobs:
             sudo docker logs redis 2>&1 || echo "Контейнер redis не найден"
             sudo docker logs web-service 2>&1 || echo "Контейнер web-service не найден"
             sudo docker logs arq-sub-worker 2>&1 || echo "Контейнер arq-sub-worker не найден"
+            sudo docker logs caddy-admin 2>&1 || echo "Контейнер caddy-admin не найден"
             exit 1
           }
 
       - name: Verify Service Health
         env:
           ADMIN_PORT: ${{ vars.ADMIN_PORT }}
+          ADMIN_DOMAIN: ${{ vars.ADMIN_DOMAIN }}
         run: |
           echo "⏳ Проверка healthcheck..."
+          
+          # В CI используем HTTP для проверки (Caddy может не успеть получить сертификат)
+          HEALTH_URL="http://localhost:${ADMIN_PORT}/api/v1/healthcheck"
+          
           for i in {1..12}; do
-            if curl -s -o /dev/null -w "%{http_code}" http://localhost:${ADMIN_PORT}/api/v1/healthcheck | grep -q "200"; then
+            if curl -s -o /dev/null -w "%{http_code}" ${HEALTH_URL} | grep -q "200"; then
+              echo "✅ Healthcheck успешен"
               exit 0
             fi
+            echo "Попытка $i/12..."
             sleep 5
           done
+          
+          echo "❌ Healthcheck не прошёл"
           docker logs web-service || true
+          docker logs caddy-admin || true
           exit 1

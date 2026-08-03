@@ -22,7 +22,10 @@ router = APIRouter(prefix='/api/v1', tags=['🤖 RoboKassa Payment'])
 
 @router.post('/robokassa/get_pay_link')
 async def create_payment_give_link(body: CreateRoboPayLinkSchema, request: Request, db: PgSqlDep, redis: RedisDep):
-    """Генерация ссылки для оплаты. Фиксация начала платежка в нашей БД"""
+    """
+    Возможно, переименовать на /api/v1/internal/robokassa/get_pay_link -
+    - /internal - маршрут для использования из приватки WG
+    """
     "Создаём InvId(для нас payed_subs.id)"
     order = await db.users_subs.order_subscription(body.user_id, body.tg_id, body.sub_plan_id, body.offer_id)
     if order is None:

@@ -10,11 +10,11 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Константы
-INSTALL_BASE="/opt/vpn-panel"
+INSTALL_BASE="/opt/reinar_panel"
 INSTALL_DIR="$INSTALL_BASE/bot"
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  Telegram Bot - Установка${NC}"
+echo -e "${BLUE}  Reinar Telegram Bot - Установка${NC}"
 echo -e "${BLUE}========================================${NC}\n"
 
 # Проверка прав root
@@ -80,7 +80,7 @@ echo -e "${GREEN}✓${NC} Директория создана"
 # Копирование файлов
 echo -e "\n${YELLOW}Копирование файлов приложения...${NC}"
 
-# Копируем всю структуру bot/ в /opt/vpn-panel/bot/
+# Копируем всю структуру bot/ в /opt/reinar_panel/bot/
 cp -r "$BOT_DIR"/* "$INSTALL_DIR/" 2>/dev/null || true
 
 echo -e "${GREEN}✓${NC} Файлы скопированы"
@@ -381,10 +381,10 @@ fi
 
 # Установка прав на директории
 echo -e "\n${YELLOW}Финальная настройка прав доступа...${NC}"
-sudo chown -R 1000:1000 /opt/vpn-panel/bot/
-find /opt/vpn-panel/bot/ -type d -exec sudo chmod 755 {} +
-find /opt/vpn-panel/bot/ -type f -exec sudo chmod 644 {} +
-sudo chmod -R 777 /opt/vpn-panel/bot/bot_logs
+sudo chown -R 1000:1000 /opt/reinar_panel/bot/
+find /opt/reinar_panel/bot/ -type d -exec sudo chmod 755 {} +
+find /opt/reinar_panel/bot/ -type f -exec sudo chmod 644 {} +
+sudo chmod -R 777 /opt/reinar_panel/bot/bot_logs
 echo -e "${GREEN}✓${NC} Права установлены"
 
 # Финальное сообщение

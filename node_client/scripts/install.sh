@@ -10,13 +10,13 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Константы
-INSTALL_BASE="/opt/vpn-panel"
+INSTALL_BASE="/opt/reinar_panel"
 INSTALL_DIR="$INSTALL_BASE/node"
 SERVICE_NAME="vpn-node-client"
 PYTHON_MIN_VERSION="3.10"
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  VPN Node Client - Установка${NC}"
+echo -e "${BLUE}  Reinar Node Client - Установка${NC}"
 echo -e "${BLUE}========================================${NC}\n"
 
 # Проверка прав root
@@ -185,13 +185,13 @@ python3 -m venv venv
 echo -e "${GREEN}✓${NC} Виртуальное окружение создано"
 
 # Права для использования
-sudo chown -R 1000:1000 /opt/vpn-panel/node
+sudo chown -R 1000:1000 /opt/reinar_panel/node
 
 # Для всех папок ставим стандартные 755 (читать и заходить могут все, писать - только владелец)
-find /opt/vpn-panel/ -type d -exec sudo chmod 755 {} +
+find /opt/reinar_panel/ -type d -exec sudo chmod 755 {} +
 
 # Для всех файлов ставим стандартные 644 (читать могут все, писать - только владелец)
-find /opt/vpn-panel/ -type f -exec sudo chmod 644 {} +
+find /opt/reinar_panel/ -type f -exec sudo chmod 644 {} +
 
 # Разрешаем запускать весь bin
 chmod 755 -R $INSTALL_DIR/venv/bin

@@ -10,11 +10,11 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Константы
-INSTALL_BASE="/opt/vpn-panel"
+INSTALL_BASE="/opt/reinar_panel"
 INSTALL_DIR="$INSTALL_BASE/web"
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  VPN Admin Panel - Установка${NC}"
+echo -e "${BLUE}  Reinar Panel - Установка${NC}"
 echo -e "${BLUE}========================================${NC}\n"
 
 # Проверка прав root
@@ -80,6 +80,45 @@ if ! command -v docker compose &> /dev/null && ! docker compose version &> /dev/
 fi
 echo -e "${GREEN}✓${NC} Docker Compose найден"
 
+# Интерактивный выбор домена для Admin Panel
+echo -e "\n${YELLOW}Настройка домена для Admin Panel${NC}"
+echo -e "${BLUE}Caddy будет использовать этот домен для HTTPS${NC}\n"
+
+echo -e "${YELLOW}Варианты настройки:${NC}"
+echo -e "  ${GREEN}1. localhost${NC} - для локального доступа (самоподписанный сертификат)"
+echo -e "     Доступ: https://localhost"
+echo -e "     ${YELLOW}⚠ Недоступно из интернета${NC}\n"
+
+echo -e "  ${GREEN}2. Реальный домен${NC} - для доступа из интернета (Let's Encrypt сертификат)"
+echo -e "     Пример: admin.example.com"
+echo -e "     ${YELLOW}⚠ Требуется настройка DNS A-записи на публичный IP этого сервера${NC}\n"
+
+DEFAULT_ADMIN_DOMAIN="localhost"
+
+# Если переменная ADMIN_DOMAIN задана (например, в CI), используем её
+if [ -z "$ADMIN_DOMAIN" ]; then
+    read -p "Введите домен для Admin Panel (по умолчанию $DEFAULT_ADMIN_DOMAIN): " USER_DOMAIN
+    ADMIN_DOMAIN=${USER_DOMAIN:-$DEFAULT_ADMIN_DOMAIN}
+    
+    # Валидация домена
+    if [[ "$ADMIN_DOMAIN" =~ ^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$ ]] || [ "$ADMIN_DOMAIN" = "localhost" ]; then
+        if [ "$ADMIN_DOMAIN" = "localhost" ]; then
+            echo -e "${GREEN}✓${NC} Будет использован localhost (самоподписанный сертификат)"
+            echo -e "${YELLOW}  Доступ только локально: https://localhost${NC}"
+        else
+            echo -e "${GREEN}✓${NC} Будет использован домен: $ADMIN_DOMAIN"
+            echo -e "${YELLOW}  Убедитесь что DNS A-запись указывает на IP этого сервера${NC}"
+            echo -e "${YELLOW}  Caddy автоматически получит Let's Encrypt сертификат${NC}"
+        fi
+    else
+        echo -e "${RED}✗${NC} Некорректный домен"
+        echo -e "${YELLOW}Установка отменена${NC}"
+        exit 1
+    fi
+else
+    echo -e "${GREEN}✓${NC} Используется домен из переменной окружения: $ADMIN_DOMAIN"
+fi
+
 # Интерактивный выбор порта для админ-панели
 echo -e "\n${YELLOW}Настройка порта для Admin Panel${NC}"
 DEFAULT_PORT=8000
@@ -125,18 +164,43 @@ else
     echo -e "${GREEN}✓${NC} Используется порт из переменной окружения: $ADMIN_PORT"
 fi
 
-# Интерактивный выбор SUB_SERVICE_DOMAIN (для отправки ссылок на подписки)
-echo -e "\n${YELLOW}Настройка домена Sub Service${NC}"
-DEFAULT_SUB_DOMAIN="https://example.sub.com"
+# Установка и настройка WireGuard сервера
+echo -e "\n${YELLOW}Установка WireGuard для приватной сети${NC}"
+echo -e "${BLUE}WireGuard создаст приватную сеть между сервисами (admin, sub, bot)${NC}\n"
 
-# Если переменная SUB_SERVICE_DOMAIN задана (например, в CI), используем её
-if [ -z "$SUB_SERVICE_DOMAIN" ]; then
-    read -p "Введите домен Sub Service (по умолчанию $DEFAULT_SUB_DOMAIN): " USER_SUB_DOMAIN
-    SUB_SERVICE_DOMAIN=${USER_SUB_DOMAIN:-$DEFAULT_SUB_DOMAIN}
-    echo -e "${GREEN}✓${NC} Домен Sub Service: $SUB_SERVICE_DOMAIN"
+WG_SCRIPT="/opt/vpn-panel/wireguard_setup/install_wg_server.sh"
+
+if [ ! -f "$WG_SCRIPT" ]; then
+    echo -e "${RED}✗${NC} Скрипт $WG_SCRIPT не найден"
+    echo -e "${YELLOW}⚠${NC}  Пропуск установки WireGuard"
 else
-    echo -e "${GREEN}✓${NC} Используется домен из переменной окружения: $SUB_SERVICE_DOMAIN"
+    # Проверка, установлен ли уже WireGuard
+    if systemctl is-active --quiet wg-quick@wg0 2>/dev/null; then
+        echo -e "${GREEN}✓${NC} WireGuard уже установлен и запущен"
+        echo -e "\n${BLUE}Информация о сервере:${NC}"
+        if [ -f "/etc/wireguard/server_info.txt" ]; then
+            cat /etc/wireguard/server_info.txt
+            echo
+        else
+            echo -e "${YELLOW}⚠${NC}  Файл server_info.txt не найден"
+        fi
+    else
+        echo -e "${YELLOW}Запуск установки WireGuard сервера...${NC}\n"
+        
+        if bash "$WG_SCRIPT"; then
+            if systemctl is-active --quiet wg-quick@wg0 2>/dev/null; then
+                echo -e "\n${GREEN}✓${NC} WireGuard сервер успешно установлен и запущен"
+            else
+                echo -e "${RED}✗${NC} WireGuard установлен, но не запущен"
+                echo -e "${YELLOW}⚠${NC}  Продолжаем установку без приватной сети"
+            fi
+        else
+            echo -e "${RED}✗${NC} Ошибка установки WireGuard"
+            echo -e "${YELLOW}⚠${NC}  Продолжаем установку без приватной сети"
+        fi
+    fi
 fi
+
 
 # Создание директории установки
 echo -e "\n${YELLOW}Создание директории ${INSTALL_DIR}...${NC}"
@@ -146,7 +210,7 @@ echo -e "${GREEN}✓${NC} Директория создана"
 # Копирование файлов
 echo -e "\n${YELLOW}Копирование файлов приложения...${NC}"
 
-# Копируем всю структуру web/ в /opt/vpn-panel/web/
+# Копируем всю структуру web/ в /opt/reinar_panel/web/
 cp -r "$WEB_DIR"/* "$INSTALL_DIR/" 2>/dev/null || true
 
 echo -e "${GREEN}✓${NC} Файлы скопированы"
@@ -202,6 +266,7 @@ cat > "$ENV_FILE" <<ENVEOF
 # Docker Compose Configuration
 # Для работы docker compose healthcheck. Убедитесь, что в .env.api.prod эти переменные идентичны
 ADMIN_PORT=${ADMIN_PORT}
+ADMIN_DOMAIN=${ADMIN_DOMAIN}
 
 # Redis
 REDIS_PASSWORD=R'F&scBdorS8@0A-1!
@@ -246,7 +311,7 @@ ARQ_MAX_JOBS=10
 ARQ_JOB_TIMEOUT=300
 
 # Application Configuration
-APP_MODE=docker
+APP_MODE=prod
 POST_PROCESSING_RESPONSES=1
 UVICORN_WORKERS=1
 UVICORN_PORT=${ADMIN_PORT}
@@ -320,22 +385,13 @@ ACTION_ON_CORE_PROTO_LIMIT=10
 # Telegram Bot (опционально - настройте если используете TG бота)
 # TG_BOT_TOKEN=your_bot_token_here
 
-# Sub Service Domain (для генерации ссылок на подписки)
-SUB_SERVICE_DOMAIN=${SUB_SERVICE_DOMAIN}
-
 # Application Configuration
-APP_MODE=docker
+APP_MODE=prod
 ARQENVEOF
     echo -e "${GREEN}✓${NC} Конфигурация ARQ Worker создана: $ENV_ARQ_FILE"
 else
     echo -e "${YELLOW}Обновление существующего .env.arq.prod...${NC}"
     
-    # Обновляем SUB_SERVICE_DOMAIN если изменился
-    if grep -q "^SUB_SERVICE_DOMAIN=" "$ENV_ARQ_FILE"; then
-        sed -i "s|^SUB_SERVICE_DOMAIN=.*|SUB_SERVICE_DOMAIN=${SUB_SERVICE_DOMAIN}|" "$ENV_ARQ_FILE"
-    else
-        echo "SUB_SERVICE_DOMAIN=${SUB_SERVICE_DOMAIN}" >> "$ENV_ARQ_FILE"
-    fi
     
     # Добавляем ACTION_ON_CORE_PROTO_LIMIT если его нет
     if ! grep -q "^ACTION_ON_CORE_PROTO_LIMIT=" "$ENV_ARQ_FILE"; then
@@ -378,17 +434,17 @@ else
 fi
 
 # 1. Принудительно отдаем папку проекта текущему юзеру (UID 1000)
-sudo chown -R 1000:1000 /opt/vpn-panel/
+sudo chown -R 1000:1000 /opt/reinar_panel/
 
 # Для всех папок ставим стандартные 755 (читать и заходить могут все, писать - только владелец)
-find /opt/vpn-panel/ -type d -exec sudo chmod 755 {} +
+find /opt/reinar_panel/ -type d -exec sudo chmod 755 {} +
 
 # Для всех файлов ставим стандартные 644 (читать могут все, писать - только владелец)
-find /opt/vpn-panel/ -type f -exec sudo chmod 644 {} +
+find /opt/reinar_panel/ -type f -exec sudo chmod 644 {} +
 
 # 2. Выставляем права 777 (разрешить чтение/запись ВСЕМ, включая любого юзера внутри докера)
-sudo chmod -R 777 /opt/vpn-panel/web/arq_worker/arq_logs
-sudo chmod -R 777 /opt/vpn-panel/web/web_logs
+sudo chmod -R 777 /opt/reinar_panel/web/arq_worker/arq_logs
+sudo chmod -R 777 /opt/reinar_panel/web/web_logs
 
 # Финальное сообщение
 echo -e "\n${BLUE}========================================${NC}"
@@ -396,7 +452,12 @@ echo -e "${GREEN}  Установка завершена успешно!${NC}"
 echo -e "${BLUE}========================================${NC}\n"
 
 echo -e "Директория установки: ${GREEN}${INSTALL_DIR}${NC}"
-echo -e "Admin Panel доступна по адресу: ${GREEN}http://localhost:${ADMIN_PORT}${NC}\n"
+echo -e "Admin Panel доступна по адресу: ${GREEN}https://${ADMIN_DOMAIN}${NC}"
+if [ "$ADMIN_DOMAIN" = "localhost" ]; then
+    echo -e "${YELLOW}⚠  Самоподписанный сертификат - браузер покажет предупреждение${NC}"
+    echo -e "${YELLOW}   Это нормально для localhost. Продолжите через 'Advanced' → 'Proceed'${NC}"
+fi
+echo ""
 
 echo -e "${YELLOW}Управление сервисами:${NC}"
 echo -e "  Перейти в директорию: ${BLUE}cd $INSTALL_DIR${NC}"
@@ -410,9 +471,10 @@ echo -e "${YELLOW}Конфигурация:${NC}"
 echo -e "  Docker Compose: ${BLUE}$ENV_FILE${NC}"
 echo -e "  Admin API:      ${BLUE}$ENV_API_FILE${NC}"
 echo -e "  ARQ Worker:     ${BLUE}$ENV_ARQ_FILE${NC}"
-echo -e "  JWT ключи:      ${BLUE}$INSTALL_DIR/secrets/keys/${NC}\n"
+echo -e "  JWT ключи:      ${BLUE}$INSTALL_DIR/secrets/keys/${NC}"
+echo -e "  Домен:          ${BLUE}${ADMIN_DOMAIN}${NC}\n"
 
-echo -e "${YELLOW}Следующие шаги:${NC}"
-echo -e "  1. Добавьте ноды через Admin Panel"
-echo -e "  2. Установите Node Client на серверах: ${BLUE}cd /path/to/node_client && sudo bash install.sh${NC}"
-echo -e "  3. Настройте подключение между Admin Panel и нодами\n"
+#echo -e "${YELLOW}Следующие шаги:${NC}"
+#echo -e "  1. Добавьте ноды через Admin Panel"
+#echo -e "  2. Установите Node Client на серверах: ${BLUE}cd /path/to/node_client && sudo bash install.sh${NC}"
+#echo -e "  3. Настройте подключение между Admin Panel и нодами\n"

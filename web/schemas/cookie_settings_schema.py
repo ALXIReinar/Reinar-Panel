@@ -13,14 +13,14 @@ from web.utils.logger_config import log_event
 class AccToken(BaseModel):
     httponly: bool = True
     secure: bool = True if env.app_mode == AppMode.PROD else False
-    samesite: str = 'strict'
+    samesite: str = 'lax'
     max_age: int = 900   # 15 минут
 
 
 class RtToken(BaseModel):
     httponly: bool = True
     secure: bool = True if env.app_mode == AppMode.PROD else False
-    samesite: str = 'strict'
+    samesite: str = 'lax'
     max_age: int = 15_552_000   # 180 дней
 
 def check_at_factor(request: Request, response: Response):

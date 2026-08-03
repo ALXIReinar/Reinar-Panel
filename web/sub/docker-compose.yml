@@ -18,7 +18,7 @@ services:
       - ENV_FILE=/run/secrets/env.sub.prod
     network_mode: host
     volumes:
-      - ./sub_logs:/app/sub/sub_logs
+      - ./sub_logs:/app/web/sub/sub_logs
     secrets:
       - env.sub.prod
 

@@ -1,0 +1,31 @@
+name: reinar_panel_sub
+
+include:
+  - docker-compose.yml
+
+services:
+  caddy:
+    build:
+      context: ..
+      dockerfile: Dockerfile.caddy
+    container_name: caddy-sub
+    restart: unless-stopped
+    depends_on:
+      sub-service:
+        condition: service_healthy
+    environment:
+      - SUB_DOMAIN=${SUB_DOMAIN:-localhost}
+      - SUB_PORT=${SUB_PORT:-8080}
+    volumes:
+      - ../Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sub.caddy:/etc/caddy/conf.d/sub.caddy:ro
+      - ../frontend:/var/www/html:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    network_mode: host
+
+volumes:
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local

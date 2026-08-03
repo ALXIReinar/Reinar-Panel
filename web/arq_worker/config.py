@@ -40,8 +40,8 @@ class Settings(BaseSettings):
     redis_port: int
 
     tg_bot_token: str | None = os.getenv('TG_BOT_TOKEN')
+    sub_service_domain: str | None = os.getenv('SUB_SERVICE_DOMAIN')
     app_mode: AppMode
-    sub_service_domain: str
 
     # ARQ Settings
     arq_queue_name: str
