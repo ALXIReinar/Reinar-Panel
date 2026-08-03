@@ -48,7 +48,7 @@ async def users_with_subs(db_pool, virtual_node_seed, sub_plan_seed):
         for i in range(2):
             # Создаём pay_order
             order_id = await conn.fetchval(
-                "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 2, NOW()) RETURNING id",
+                "INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) VALUES ($1, 2, NOW(), false, false, 0) RETURNING id",
                 user_ids[i]
             )
             
@@ -71,7 +71,7 @@ async def users_with_subs(db_pool, virtual_node_seed, sub_plan_seed):
         inactive_order_ids = []
         for i in range(2, 4):
             order_id = await conn.fetchval(
-                "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 3, NOW()) RETURNING id",
+                "INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) VALUES ($1, 3, NOW(), false, false, 0) RETURNING id",
                 user_ids[i]
             )
             
@@ -91,7 +91,7 @@ async def users_with_subs(db_pool, virtual_node_seed, sub_plan_seed):
         
         # Пользователь 4 - активная подписка с трафиком и is_limited=true (для reset_traffic)
         order_id_traffic = await conn.fetchval(
-            "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 2, NOW()) RETURNING id",
+            "INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) VALUES ($1, 2, NOW(), false, false, 0) RETURNING id",
             user_ids[4]
         )
         
@@ -436,7 +436,7 @@ class TestBulkUpdateEdgeCases:
             
             # Создаём pay_order
             order_id = await conn.fetchval(
-                "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 3, NOW()) RETURNING id",
+                "INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) VALUES ($1, 3, NOW(), false, false, 0) RETURNING id",
                 user_id
             )
             
@@ -502,7 +502,7 @@ class TestBulkUpdateEdgeCases:
             
             # Создаём pay_order
             order_id = await conn.fetchval(
-                "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 2, NOW()) RETURNING id",
+                "INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) VALUES ($1, 2, NOW(), false, false, 0) RETURNING id",
                 user_id
             )
             
@@ -573,7 +573,7 @@ class TestBulkUpdateEdgeCases:
             # Создаём подписки: одна limited, другая нет
             # Limited подписка
             order_id_lim = await conn.fetchval(
-                "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 2, NOW()) RETURNING id",
+                "INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) VALUES ($1, 2, NOW(), false, false, 0) RETURNING id",
                 user_id_limited
             )
             order_id_limited = await conn.fetchval(
@@ -592,7 +592,7 @@ class TestBulkUpdateEdgeCases:
             
             # Normal подписка
             order_id_norm = await conn.fetchval(
-                "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 2, NOW()) RETURNING id",
+                "INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) VALUES ($1, 2, NOW(), false, false, 0) RETURNING id",
                 user_id_normal
             )
             order_id_normal = await conn.fetchval(
@@ -668,7 +668,7 @@ class TestBulkUpdateEdgeCases:
             # Создаём 2 подписки на РАЗНЫЕ планы: одна активная, другая нет
             # Активная подписка
             order_active = await conn.fetchval(
-                "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 2, NOW()) RETURNING id",
+                "INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) VALUES ($1, 2, NOW(), false, false, 0) RETURNING id",
                 user_id
             )
             order_id_active = await conn.fetchval(
@@ -687,7 +687,7 @@ class TestBulkUpdateEdgeCases:
             
             # Неактивная подписка
             order_inactive = await conn.fetchval(
-                "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 3, NOW()) RETURNING id",
+                "INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) VALUES ($1, 3, NOW(), false, false, 0) RETURNING id",
                 user_id
             )
             order_id_inactive = await conn.fetchval(
@@ -775,7 +775,7 @@ class TestBulkUpdateEdgeCases:
             
             # Создаём pay_order
             pay_order_id = await conn.fetchval(
-                "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 3, NOW()) RETURNING id",
+                "INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) VALUES ($1, 3, NOW(), false, false, 0) RETURNING id",
                 user_id
             )
             
@@ -863,7 +863,7 @@ class TestBulkUpdateEdgeCases:
             
             # Создаём pay_order
             pay_order_id = await conn.fetchval(
-                "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 3, NOW()) RETURNING id",
+                "INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) VALUES ($1, 3, NOW(), false, false, 0) RETURNING id",
                 user_id
             )
             

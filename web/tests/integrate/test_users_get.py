@@ -40,8 +40,8 @@ async def users_for_get(db_pool, sub_plan_seed):
             # Создаём pay_order для пользователя
             order_id = await conn.fetchval(
                 """
-                INSERT INTO pay_orders (user_id, status, timestamp)
-                VALUES ($1, 2, NOW())
+                INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost)
+                VALUES ($1, 2, NOW(), false, false, 0)
                 RETURNING id
                 """,
                 user_id
@@ -63,7 +63,11 @@ async def users_for_get(db_pool, sub_plan_seed):
         
         # Пользователь 0: добавляем вторую подписку (inactive) 
         order_id_inactive = await conn.fetchval(
-            "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 3, NOW()) RETURNING id",
+            """
+            INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) 
+            VALUES ($1, 3, NOW(), false, false, 0) 
+            RETURNING id
+            """,
             user_ids[0]
         )
         await conn.execute(
@@ -81,7 +85,11 @@ async def users_for_get(db_pool, sub_plan_seed):
         
         # Пользователь 1: добавляем вторую активную подписку (newer)
         order_id_new = await conn.fetchval(
-            "INSERT INTO pay_orders (user_id, status, timestamp) VALUES ($1, 2, NOW()) RETURNING id",
+            """
+            INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) 
+            VALUES ($1, 2, NOW(), false, false, 0) 
+            RETURNING id
+            """,
             user_ids[1]
         )
         await conn.execute(

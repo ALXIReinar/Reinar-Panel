@@ -1,5 +1,6 @@
 import secrets
 from datetime import timedelta, datetime
+from decimal import Decimal
 from typing import Annotated
 from urllib.parse import urlencode
 
@@ -13,7 +14,7 @@ from web.sub.config_dir.env_modes import PayMode
 from web.sub.config_dir.logger_config import log_event
 from web.sub.data.postgres import PgSqlDep
 from web.sub.data.redis_storage import RedisDep
-from web.sub.schemas import CreateRoboPayLinkSchema, WebhookRoboPayload
+from web.sub.schemas.sub_robo_schema import CreateRoboPayLinkSchema, WebhookRoboPayload
 
 router = APIRouter(prefix='/api/v1', tags=['🤖 RoboKassa Payment'])
 
@@ -23,31 +24,32 @@ router = APIRouter(prefix='/api/v1', tags=['🤖 RoboKassa Payment'])
 async def create_payment_give_link(body: CreateRoboPayLinkSchema, request: Request, db: PgSqlDep, redis: RedisDep):
     """Генерация ссылки для оплаты. Фиксация начала платежка в нашей БД"""
     "Создаём InvId(для нас payed_subs.id)"
-    order_id = await db.users_subs.order_subscription(body.user_id)
-    if order_id is None:
-        log_event(f'\033[37m[Robokassa]\033[0m Были переданы несуществующие ID, не удалось выдать подписку | sub_plan_id: \033[33m{body.sub_plan_id}\033[0m | user_id: \033[31m{body.user_id}\033[0m', request=request, level='WARNING')
+    order = await db.users_subs.order_subscription(body.user_id, body.tg_id, body.sub_plan_id, body.offer_id)
+    if order is None:
+        log_event(f'\033[37m[Robokassa]\033[0m Были переданы несуществующие ID, не удалось выдать подписку | sub_plan_id: \033[33m{body.sub_plan_id}\033[0m | user_id: \033[31m{body.user_id}\033[0m; tg_id: \033[34m{body.tg_id}\033[0m', request=request, level='WARNING')
         raise HTTPException(status_code=404, detail={'success': False, 'message': 'Такого тарифного плана или пользователя не существует'})
 
     "Метаданные. Для наших потребностей. Должны начинаться с 'Shp_'"
+    order_id, user_id, amount = order['id'], order['user_id'], Decimal(order['cost']) / Decimal('100')
     anti_csrf_token = secrets.token_urlsafe(16) # токен для идемпотентной обработки в вебхуке
     payment_meta = {
-        'Shp_user_id': body.user_id,
+        'Shp_user_id': user_id,
         'Shp_sub_plan_id': body.sub_plan_id,
+        'Shp_offer_id': body.offer_id,
         'Shp_csrf_token': anti_csrf_token,
-        'Shp_sub_days': body.ttl_days,
     }
     "Сохраняем токен"
     await redis.set(Constants.payment_robo_lock(anti_csrf_token), order_id, ex=930) # 16 минут
     log_event(f'\033[37m[Robokassa]\033[0m Токен идемпотентности | anti_csrf: \033[31m{anti_csrf_token[:10]}\033[0m; id: \033[32m{order_id}\033[0m')
 
     "Составляем сигнатуру для платежа"
-    signature_string = create_signature(env.robo_passw_1, body.amount, order_id, payment_meta4signature_string(payment_meta), merchant_login=env.robo_shop_login)
+    signature_string = create_signature(env.robo_passw_1, amount, order_id, payment_meta4signature_string(payment_meta), merchant_login=env.robo_shop_login)
     signature = crypt_strategy[env.robo_crypt_algorithm](signature_string.encode('utf-8')).hexdigest()
 
     "Отдаём готовую ссылку"
     payment_params = {
         "MerchantLogin": env.robo_shop_login,
-        "OutSum": str(body.amount),
+        "OutSum": str(amount),
         "InvId": order_id,
         "Description": body.description,
         "SignatureValue": signature,
@@ -56,7 +58,7 @@ async def create_payment_give_link(body: CreateRoboPayLinkSchema, request: Reque
         **payment_meta,
     }
     payment_url = f'{RobokassaUrls.create_payment}?{urlencode(payment_params)}'
-    log_event(f'\033[37m[Robokassa]\033[0m Выдали ссылку на оплату | user_id: \033[32m{body.user_id}\033[0m; cost: \033[35m{body.amount}\033[0m; order_id: \033[36m{order_id}\033[0m; csrf_string: {anti_csrf_token}', request=request)
+    log_event(f'\033[37m[Robokassa]\033[0m Выдали ссылку на оплату | user_id: \033[32m{body.user_id}\033[0m; tg_id: \033[33m{body.tg_id}\033[0m; cost: \033[35m{amount}\033[0m; order_id: \033[36m{order_id}\033[0m; csrf_string: {anti_csrf_token}', request=request)
     return {'success': True, 'message': 'Ссылка на оплату', 'payment_url': payment_url}
 
 
@@ -84,19 +86,23 @@ async def processing_pay_result(form: Annotated[WebhookRoboPayload, Form()], req
         return f"OK{form.InvId}"
 
     "3.1. Активация подписку пользователя"
-    user_sub = await db.users_subs.activate_subscription(form.InvId, form.Shp_user_id, form.Shp_sub_plan_id, form.Shp_sub_days)
+    user_sub = await db.users_subs.activate_subscription(form.InvId, form.Shp_user_id, form.Shp_sub_plan_id, form.Shp_offer_id)
     log_event(f'Активировали подписку | user_id: \033[32m{form.Shp_user_id}\033[0m; order_id: \033[33m{form.InvId}\033[0m; user_sub_id: \033[34m{user_sub['id']}\033[0m', request=request)
 
-    "3.2. Запускаем в фон таску на добавление пользователя в ядра нод, указанных в подписке"
 
+    "3.2. Запускаем в фон таску на добавление пользователя в ядра нод, указанных в подписке"
     # Находим ноды по подписке, фиксируем попытку вставки пользователя в ядра протоколов
-    sub_nodes = await db.sub.get_core_proto_deps_by_user_id( user_sub['uuid'], user_sub['id'], CoreProtoActions.add)
+    sub_nodes = await db.sub.get_core_proto_deps_by_user_id(user_sub['uuid'], user_sub['id'], CoreProtoActions.add)
     # Преобразуем asyncpg.Record в dict для сериализации
     sub_nodes_serializable = [dict(node) for node in sub_nodes]
     
     job = await arq.enqueue_job(
         'action_on_core_proto_by_sub_plan', user_sub['uuid'], user_sub['id'], sub_nodes_serializable, CoreProtoActions.word_add
     )
+
+    "4. Кидаем в фон отправку сообщения с ссылкой для подключения в телеграмм"
+    if env.tg_bot_token:
+        await arq.enqueue_job('send_sub_link_tg_user', form.Shp_user_id, user_sub['id'])
 
     log_event(f'Кинули добавление пользователя на впн-ноды в Arq | job_id: \033[33m{job.job_id}\033[0m; user_id: \033[31m{form.Shp_user_id}\033[0m; user_sub_id: \033[34m{user_sub['id']}\033[0m; user_uuid: \033[35m{user_sub['uuid']}\033[0m; order_id: \033[33m{form.InvId}\033[0m', request=request)
     return f"OK{form.InvId}"

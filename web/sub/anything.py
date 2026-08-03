@@ -1,4 +1,10 @@
 from dataclasses import dataclass
+from typing import Annotated
+
+from fastapi import HTTPException, Depends
+from starlette.requests import Request
+
+from web.sub.config_dir.config import env
 
 
 @dataclass
@@ -19,14 +25,6 @@ class Constants:
     def payment_robo_lock(csrf_token: str):
         return f'pay_lock:robo:{csrf_token}'
 
-
-@dataclass
-class NodeUris:
-    proto_core_add_user: str = '/api/v1/server/proto_core/user/add'
-    proto_core_delete_user: str = '/api/v1/server/proto_core/user/delete'
-    proto_core_bulk_delete_users: str = '/api/v1/server/proto_core/user/bulk/delete'
-    proto_core_bulk_add_users: str = '/api/v1/server/proto_core/user/bulk/add'
-    get_metrics: str = '/api/v1/server/node/metrics'
 
 @dataclass
 class DeleteReasons:
@@ -59,3 +57,14 @@ class UserStatuses:
     not_connect: int = 1
     offline: int = 2
     online: int = 3
+
+
+def tg_routing_is_tg_bot_access(request: Request):
+    """
+    Обработка X-Forwarded-For не нужна, т.к. микросервисы состоят в приватно сети WireGuard
+    """
+    ip = request.client.host
+    if ip not in env.tg_bot_service_private_ip:
+        raise HTTPException(status_code=403, detail='Forbidden')
+
+TgRoutingAccessDep = Annotated[None, Depends(tg_routing_is_tg_bot_access)]

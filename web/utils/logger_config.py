@@ -12,7 +12,7 @@ import orjson
 from starlette.requests import Request
 from starlette.websockets import WebSocket
 
-from web.config_dir.config import env, LOG_DIR, ARQ_LOG_DIR
+from web.config_dir.config import env, LOG_DIR
 from web.utils.anything import get_client_ip
 
 
@@ -113,9 +113,6 @@ logger_settings = {
     }
 }
 
-logger_settings_arq = deepcopy(logger_settings)
-logger_settings_arq['formatters']['default']['format'] = "%(log_color)s%(levelname)-8s%(reset)s | \033[32mD%(asctime)s\033[0m | %(cyan)s%(location)s:%(reset)s def %(cyan)s%(func)s%(reset)s(): line - %(cyan)s%(line)d%(reset)s %(message)s"
-logger_settings_arq["handlers"]["json_file"]["filename"] = ARQ_LOG_DIR / "app.log"
 
 dictConfig(logger_settings)
 logger = logging.getLogger('prod_log')

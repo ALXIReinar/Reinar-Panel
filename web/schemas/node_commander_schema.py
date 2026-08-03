@@ -71,7 +71,7 @@ class WriteConfigSchema(BaseModel):
 
 
 class UserCoreProtoActionSchema(BaseModel):
-    uuid: str = Field(min_length=36, max_length=36, description='Буквенный ID пользователя, обычно используется в списках пользователей в ядрах протоколов')
+    uuid: str = Field(max_length=36, description='Буквенный ID пользователя, обычно используется в списках пользователей в ядрах протоколов')
     user_sub_id: int = Field(description='ID подписки')
     action: Literal['add', 'delete']
 

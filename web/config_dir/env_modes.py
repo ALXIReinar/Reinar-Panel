@@ -5,7 +5,6 @@ class AppMode(str, Enum):
     DOCKER = "docker"
     PROD = "prod"
 
-
 APP_MODE_CONFIG = {
     AppMode.LOCAL: {
         "pg_host": "pg_host",

@@ -1,0 +1,32 @@
+name: reinar_panel_bot
+
+services:
+  redis-bot:
+    image: redis:7.2-alpine
+    container_name: redis-bot
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+
+  bot:
+    image: reinar_panel/bot_service
+    build: .
+    command: python -m pytest bot/tests -v
+    container_name: bot
+    environment:
+      - ENV_FILE=/run/secrets/.env.bot.test
+    secrets:
+      - .env.bot.test
+    network_mode: host
+
+volumes:
+  redis_data:
+    driver: local
+
+secrets:
+  .env.bot.test:
+    file: .env.bot.test

@@ -124,7 +124,7 @@ ENV_SUB_FILE="$SUB_DIR/.env.sub.prod"
 echo -e "\n${YELLOW}Создание конфигурации Sub Service...${NC}"
 
 cat > "$ENV_SUB_FILE" <<ENVEOF
-# PostgreSQL (используется из web)
+# PostgreSQL (используется из web admin)
 PG_USER=reinar_crud_user
 PG_PASSWORD=VjZ0ChrfMfp9!
 PG_DB=reinar_db
@@ -132,7 +132,7 @@ PG_HOST=127.0.0.1
 PG_PORT=5432
 PG_MAX_CONNECTIONS=50
 
-# Redis (используется из web)
+# Redis (используется из web admin)
 REDIS_PASSWORD=R'F&scBdorS8@0A-1!
 REDIS_MAX_CONNECTIONS=50
 REDIS_HOST=127.0.0.1
@@ -142,7 +142,8 @@ REDIS_PORT=6379
 UVICORN_WORKERS=1
 POST_PROCESSING_RESPONSES=1
 UVICORN_PORT=${SUB_PORT}
-TRUSTED_PROXIES=127.0.0.1,172.18.0.1
+TRUSTED_PROXIES=127.0.0.1,10.0.0.1
+DOMAIN=http://127.0.0.1:${SUB_PORT}
 
 # Robokassa
 ROBO_SHOP_LOGIN=${ROBO_SHOP_LOGIN}
@@ -150,18 +151,23 @@ ROBO_CRYPT_ALGORITHM=sha256
 ROBO_PASSW_1=${ROBO_PASSW_1}
 ROBO_PASSW_2=${ROBO_PASSW_2}
 
-# ARQ Settings
+# ARQ Settings (должны совпадать с web admin)
 ARQ_QUEUE_NAME=arq:cron_background_queue
 ARQ_MAX_JOBS=10
 ARQ_JOB_TIMEOUT=300
+ACTION_ON_CORE_PROTO_LIMIT=10
 
 # Subscription settings
-ACTION_ON_CORE_PROTO_LIMIT=10
+# Длина строки для подписок. Увеличить, если новые пользователи вставляются с 3-4 раза. Макс 64
 SUB_LINK_BYTES=32
+# Указывать только числа в часах
 SUBSCRIPTION_UPDATE_INTERVAL=12
 
 # Telegram Bot
 TG_BOT_LINK=${TG_BOT_LINK}
+TG_BOT_SERVICE_PRIVATE_IP=10.0.0.2,127.0.0.1
+# TG_BOT_TOKEN можно настроить позже, если используется TG бот для уведомлений
+# TG_BOT_TOKEN=your_bot_token_here
 
 # App Mode
 APP_MODE=docker
@@ -170,18 +176,6 @@ ENVEOF
 
 echo -e "${GREEN}✓${NC} Конфигурация создана: $ENV_SUB_FILE"
 
-# Обновление docker-compose.yml (раскомментирование include)
-echo -e "\n${YELLOW}Обновление docker-compose.yml...${NC}"
-COMPOSE_FILE="$INSTALL_DIR/docker-compose.yml"
-
-if [ -f "$COMPOSE_FILE" ]; then
-    # Раскомментируем строчку с sub/docker-compose.yml
-    sed -i 's/^  # - sub\/docker-compose\.yml$/  - sub\/docker-compose.yml/' "$COMPOSE_FILE"
-    echo -e "${GREEN}✓${NC} docker-compose.yml обновлён"
-else
-    echo -e "${RED}✗${NC} docker-compose.yml не найден: $COMPOSE_FILE"
-    exit 1
-fi
 
 # Обновление .env для docker-compose (добавление SUB_PORT)
 echo -e "\n${YELLOW}Обновление .env для Docker Compose...${NC}"
@@ -197,32 +191,30 @@ echo -e "${GREEN}✓${NC} .env обновлён"
 
 # Подготовка директорий логов для sub-сервиса
 echo -e "\n${YELLOW}Подготовка директорий логов...${NC}"
-mkdir -p "$SUB_DIR/sub_logs" "$SUB_DIR/arq_logs"
-chmod -R 777 "$SUB_DIR/sub_logs" "$SUB_DIR/arq_logs"
+mkdir -p "$SUB_DIR/sub_logs"
+chmod -R 777 "$SUB_DIR/sub_logs"
 echo -e "${GREEN}✓${NC} Директории логов подготовлены"
 
 # Перезапуск Docker Compose
 echo -e "\n${YELLOW}Перезапуск Docker Compose...${NC}"
 cd "$INSTALL_DIR"
 
-# Останавливаем текущие контейнеры
-docker compose -f /opt/vpn-panel/web/docker-compose.admin.yml down
 
 # Запускаем с новой конфигурацией
-docker compose -f /opt/vpn-panel/web/docker-compose.yml up -d --build
+docker compose -f /opt/vpn-panel/web/sub/docker-compose.yml up -d --build
 
 # Ожидание запуска
 echo -e "\n${YELLOW}Ожидание запуска сервисов...${NC}"
-sleep 5
+#sleep 5
 
 # Проверка статуса
-if docker compose ps | grep -q "sub-service.*Up"; then
-    echo -e "${GREEN}✓${NC} Sub Service успешно запущен"
-else
-    echo -e "${RED}✗${NC} Ошибка запуска Sub Service"
-    echo "Проверьте логи: cd $INSTALL_DIR && docker compose logs sub-service"
-    exit 1
-fi
+#if docker compose ps | grep -q "sub-service.*Up"; then
+#    echo -e "${GREEN}✓${NC} Sub Service успешно запущен"
+#else
+#    echo -e "${RED}✗${NC} Ошибка запуска Sub Service"
+#    echo "Проверьте логи: cd $INSTALL_DIR && docker compose logs sub-service"
+#    exit 1
+#fi
 
 # Финальное сообщение
 echo -e "\n${BLUE}========================================${NC}"
@@ -237,9 +229,8 @@ echo -e "  Перейти в директорию: ${BLUE}cd $INSTALL_DIR${NC}"
 echo -e "  Статус:      ${BLUE}docker compose ps${NC}"
 echo -e "  Остановка:   ${BLUE}docker compose down${NC}"
 echo -e "  Запуск:      ${BLUE}docker compose up -d${NC}"
-echo -e "  Перезапуск:  ${BLUE}docker compose restart sub-service arq-sub-worker${NC}"
-echo -e "  Логи Sub:    ${BLUE}docker compose logs -f sub-service${NC}"
-echo -e "  Логи ARQ:    ${BLUE}docker compose logs -f arq-sub-worker${NC}\n"
+echo -e "  Перезапуск:  ${BLUE}docker compose restart sub-service${NC}"
+echo -e "  Логи Sub:    ${BLUE}docker compose logs -f sub-service${NC}\n"
 
 echo -e "${YELLOW}Конфигурация:${NC}"
 echo -e "  Sub Service: ${BLUE}$ENV_SUB_FILE${NC}\n"
