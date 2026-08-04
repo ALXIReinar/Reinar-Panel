@@ -174,3 +174,5 @@ vendor/
 node_modules/
 *.generated.py
 graphify-out/
+!/web/db/seed_data.json
+*.sql

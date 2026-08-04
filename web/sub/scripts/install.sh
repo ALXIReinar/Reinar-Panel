@@ -253,6 +253,33 @@ elif [ "$DEPLOYMENT_MODE" = "standalone" ]; then
     echo -e "  Redis: ${BLUE}${REDIS_HOST}:${REDIS_PORT}${NC}"
 fi
 
+# Получение пароля PostgreSQL CRUD пользователя
+echo -e "\n${YELLOW}Настройка пароля PostgreSQL${NC}"
+
+if [ -z "$PG_CRUD_PASSWORD" ]; then
+    # Интерактивный режим
+    if [ "$DEPLOYMENT_MODE" = "shared" ]; then
+        echo -e "${BLUE}Введите пароль пользователя reinar_crud_user из Admin Panel${NC}"
+        echo -e "${BLUE}Найти можно в файле: /opt/vpn-panel/web/.env.api.prod${NC}"
+        echo -e "${BLUE}Строка: PG_PASSWORD=...${NC}"
+    else
+        echo -e "${BLUE}Введите пароль пользователя reinar_crud_user с Admin сервера${NC}"
+        echo -e "${BLUE}Пароль должен совпадать с паролем на Admin Panel${NC}"
+    fi
+    
+    read -sp "Пароль PostgreSQL CRUD пользователя: " PG_CRUD_PASSWORD
+    echo
+    
+    if [ -z "$PG_CRUD_PASSWORD" ]; then
+        echo -e "${RED}✗${NC} Пароль не может быть пустым"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}✓${NC} Пароль получен"
+else
+    echo -e "${GREEN}✓${NC} Используется пароль из переменной окружения"
+fi
+
 # Интерактивный выбор домена для Sub Service
 echo -e "\n${YELLOW}Настройка домена для Sub Service${NC}"
 echo -e "${BLUE}Caddy будет использовать этот домен для HTTPS${NC}\n"
@@ -352,7 +379,7 @@ echo -e "\n${YELLOW}Создание конфигурации Sub Service...${NC
 cat > "$ENV_SUB_FILE" <<ENVEOF
 # PostgreSQL (используется из web admin через WireGuard)
 PG_USER=reinar_crud_user
-PG_PASSWORD=VjZ0ChrfMfp9!
+PG_PASSWORD=${PG_CRUD_PASSWORD}
 PG_DB=reinar_db
 PG_HOST=${PG_HOST}
 PG_PORT=${PG_PORT}

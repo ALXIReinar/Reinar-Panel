@@ -1,0 +1,155 @@
+{
+  "templates_statuses": [
+    {"id": 1, "name": "Системный"},
+    {"id": 2, "name": "Пользовательский"}
+  ],
+  "proto_templates": [
+    {
+      "title": "vless_tcp_sni_based",
+      "url_tmp": "vless://{user_uuid}@{{node___address}}:{{inbounds___1___port}}?encryption=none&flow={{flow}}&security={{inbounds___1___streamSettings___security}}&sni={{inbounds___1___streamSettings___realitySettings___serverNames___0}}&fp={{inbounds___1___streamSettings___realitySettings___fingerprint}}&pbk={{pbk}}&sid={{inbounds___1___streamSettings___realitySettings___shortIds___1}}&type={{network_type}}#{{node___title}}",
+      "status": 1,
+      "is_accepted": true,
+      "reload_core_command": "systemctl restart xray",
+      "required_user_data_obj": "{\"id\": \"{USER_UUID}\", \"email\": \"{USER_SUB_ID}\"}",
+      "constant_user_data_obj": "{\"flow\": \"xtls-rprx-vision\", \"level\": 0}",
+      "api_add_user_script": "async def add_user(user_obj, node_ip, core_port, custom_params):\n    # Извлекаем параметры, с фолбеками по умолчанию\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vless-inbound\")\n\n    user_uuid = user_obj.get(\"id\")  # USER_UUID\n    email = user_obj.get(\"email\")  # USER_SUB_ID (числовой ID подписки)\n    flow = custom_params.get('flow', 'xtls-rprx-vision')\n\n    # Инициализируем клиент (xtlsapi прокинут из global_scope)\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    # Оборачиваем синхронный вызов библиотеки\n    def _do_add():\n        client.add_client(\n            inbound_tag=inbound_tag,\n            user_id_or_password=user_uuid,\n            email=email,\n            flow=flow,\n        )\n\n    # Выполняем в отдельном пуле потоков без блокировки Event Loop\n    try:\n        _do_add()\n        # await asyncio.to_thread(_do_add)\n    except xtlsapi.exceptions.EmailAlreadyExists: # Если пользователь был, увы, это исключение\n        return True\n    return True",
+      "api_delete_user_script": "async def delete_user(user_obj, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vless-inbound\")\n    email = user_obj.get(\"email\")  # USER_SUB_ID (числовой ID подписки)\n\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_delete():\n        # В Xray удаление всегда происходит по email, а не по UUID\n        client.remove_client(\n            inbound_tag=inbound_tag,\n            email=email\n        )\n    try:\n        await asyncio.to_thread(_do_delete)\n    except xtlsapi.exceptions.EmailNotFound:\n        return True\n    return True",
+      "proto_python_lib": "xtlsapi",
+      "flatten_json_users_key": "inbounds___1___settings___clients",
+      "flatten_user_identifier_key": "id",
+      "sub_prepare_script": "def prepare_sub(user_uuid: str, config_link: str):\n    return config_link.format(user_uuid=user_uuid)",
+      "sub_required_libs": "",
+      "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vless-inbound\")\n\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
+      "metrics_parser_code": "def parse(raw_metrics):\n    \"\"\"\n    Универсальный парсер метрик для Xray\n\n    Принимает:\n    - JSON string от CLI (xray api statsquery)\n    - JSON dict от xtlsapi\n    - Plain text (fallback)\n\n    Возвращает: tuple(list[dict], list[dict])\n        - users_traffics: [{'user_sub_id': 1, 'total_mb_used': 1024}, ...]\n        - troubles: список проблемных записей\n    \"\"\"\n\n    def _parse_plain_text(text):\n        \"\"\"Fallback парсер для plain text формата\"\"\"\n        lines = text.strip().split('\\n')\n        traffic_map = defaultdict(int)\n\n        for line in lines:\n            if '>>>' not in line:\n                continue\n\n            parts = line.split('>>>')\n            if len(parts) >= 2:\n                username = parts[1]\n                numbers = re.findall(r'\\d+', line)\n                if numbers:\n                    traffic_map[username] += int(numbers[-1])\n\n        return [\n            {'user_sub_id': int(u), 'total_mb_used': mb}\n            for u, mb in traffic_map.items()\n        ], []\n\n    if isinstance(raw_metrics, str):\n        try:\n            json_obj = json.loads(raw_metrics)\n        except json.JSONDecodeError:\n            return _parse_plain_text(raw_metrics)\n    else:\n        json_obj = raw_metrics\n\n    traffic_map = defaultdict(int)\n    troubles = []\n\n    stats_list = json_obj.get('stat', [])\n    if not stats_list:\n        return [], []\n\n    for user in stats_list:\n        name = user.get('name', '')\n        if not name or 'user>>>' not in name:\n            troubles.append(user)\n            continue\n\n        parts = name.split('>>>')\n        if len(parts) < 2:\n            troubles.append(user)\n            continue\n\n        user_sub_id= int(parts[1])\n        traffic_bytes = int(user.get('value', 0))\n        traffic_mb = traffic_bytes // 1024 // 1024\n\n        traffic_map[user_sub_id] += traffic_mb\n\n    users_traffics = [\n        {'user_sub_id': username, 'total_mb_used': used_mb}\n        for username, used_mb in traffic_map.items()\n    ]\n\n    return users_traffics, troubles\n    ",
+      "metrics_command": "xray api statsquery --server=127.0.0.1:{} -pattern \"user>>>\" -reset",
+      "add_script_custom_params": "{\"flow\": \"xtls-rprx-vision\", \"level\": 0}",
+      "delete_script_custom_params": "{\"flow\": \"xtls-rprx-vision\", \"level\": 0}",
+      "bulk_delete_script_custom_params": "{\"flow\": \"xtls-rprx-vision\", \"level\": 0}",
+      "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
+      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vless-inbound\")\n    flow = custom_params.get('flow', 'xtls-rprx-vision')\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            _id = u.get('id')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                    flow=flow,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists:\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
+      "bulk_add_script_custom_params": "{\"flow\": \"xtls-rprx-vision\", \"level\": 0}",
+      "template_spec_params": [
+        {"key": "public_key", "tmp_id": "proto_templates_CURRENT"},
+        {"key": "flow", "tmp_id": "proto_templates_CURRENT"},
+        {"key": "network_type", "tmp_id": "proto_templates_CURRENT"}
+      ],
+      "protocols": [
+        {"name": "vless", "created_at": "2026-05-06 21:11:16.213501", "tmp_id": "proto_templates_CURRENT"},
+        {"name": "VLESS", "created_at": "2026-05-13 08:42:03.022118", "tmp_id": "proto_templates_CURRENT"}
+      ]
+    },
+    {
+      "title": "vmess tls ws",
+      "url_tmp": "vmess://",
+      "status": 2,
+      "is_accepted": false,
+      "reload_core_command": null,
+      "required_user_data_obj": null,
+      "constant_user_data_obj": "{}",
+      "api_add_user_script": null,
+      "api_delete_user_script": null,
+      "proto_python_lib": null,
+      "flatten_json_users_key": null,
+      "flatten_user_identifier_key": null,
+      "sub_prepare_script": null,
+      "sub_required_libs": "",
+      "api_bulk_delete_user_script": null,
+      "metrics_parser_code": null,
+      "metrics_command": null,
+      "add_script_custom_params": null,
+      "delete_script_custom_params": null,
+      "bulk_delete_script_custom_params": null,
+      "api_metrics_script": null,
+      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vless-inbound\")\n    flow = custom_params.get('flow', 'xtls-rprx-vision')\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email') or u.get('tg_username')\n            _id = u.get('id')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                    flow=flow,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists:\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
+      "bulk_add_script_custom_params": null,
+      "template_spec_params": [],
+      "protocols": []
+    },
+    {
+      "title": "Hysteria2 Brutal",
+      "url_tmp": "hysteria2://{user_uuid}@{{node___address}}:123,5000-6000/?insecure=1&obfs=salamander&obfs-password=gawrgura&pinSHA256=deadbeef&sni=www.microsoft.com",
+      "status": 2,
+      "is_accepted": true,
+      "reload_core_command": null,
+      "required_user_data_obj": null,
+      "constant_user_data_obj": "{}",
+      "api_add_user_script": null,
+      "api_delete_user_script": null,
+      "proto_python_lib": "",
+      "flatten_json_users_key": null,
+      "flatten_user_identifier_key": null,
+      "sub_prepare_script": null,
+      "sub_required_libs": "",
+      "api_bulk_delete_user_script": null,
+      "metrics_parser_code": null,
+      "metrics_command": null,
+      "add_script_custom_params": null,
+      "delete_script_custom_params": null,
+      "bulk_delete_script_custom_params": null,
+      "api_metrics_script": null,
+      "api_bulk_add_user_script": null,
+      "bulk_add_script_custom_params": null,
+      "template_spec_params": [],
+      "protocols": [
+        {"name": "smess", "created_at": "2026-06-15 16:40:01.240941", "tmp_id": "proto_templates_CURRENT"}
+      ]
+    },
+    {
+      "title": "shadowshocks",
+      "url_tmp": "ss://{{method_password_base64}}@{{node_ip}}:{{inbounds.0.port}}#{{node_title}}\n",
+      "status": 2,
+      "is_accepted": false,
+      "reload_core_command": null,
+      "required_user_data_obj": null,
+      "constant_user_data_obj": "{}",
+      "api_add_user_script": null,
+      "api_delete_user_script": null,
+      "proto_python_lib": null,
+      "flatten_json_users_key": null,
+      "flatten_user_identifier_key": null,
+      "sub_prepare_script": null,
+      "sub_required_libs": "",
+      "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vless-inbound\")\n\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('tg_username') or u.get('email')\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
+      "metrics_parser_code": null,
+      "metrics_command": null,
+      "add_script_custom_params": null,
+      "delete_script_custom_params": null,
+      "bulk_delete_script_custom_params": null,
+      "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
+      "api_bulk_add_user_script": null,
+      "bulk_add_script_custom_params": null,
+      "template_spec_params": [],
+      "protocols": [
+        {"name": "Hysteria2", "created_at": "2026-06-15 16:38:10.204135", "tmp_id": "proto_templates_CURRENT"}
+      ]
+    }
+  ],
+  "pay_statuses": [
+    {"id": 1, "name": "pending"},
+    {"id": 2, "name": "success"},
+    {"id": 3, "name": "expired"}
+  ],
+  "online_statuses": [
+    {"id": 1, "title": "Не подключался"},
+    {"id": 2, "title": "Оффлайн"},
+    {"id": 3, "title": "Онлайн"}
+  ],
+  "sub_nodes_operations": [
+    {"id": 1, "title": "add"},
+    {"id": 2, "title": "delete"}
+  ],
+  "whitelist_commands": [
+    {"command": "systemctl", "is_active": true},
+    {"command": "journalctl", "is_active": true},
+    {"command": "ls", "is_active": true},
+    {"command": "ps", "is_active": true},
+    {"command": "netstat", "is_active": true},
+    {"command": "ss", "is_active": true},
+    {"command": "cat", "is_active": true},
+    {"command": "ip", "is_active": true},
+    {"command": "ping", "is_active": true},
+    {"command": "grep", "is_active": true},
+    {"command": "hostname", "is_active": true},
+    {"command": "xray", "is_active": true}
+  ]
+}

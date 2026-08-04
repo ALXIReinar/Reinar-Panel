@@ -170,3 +170,4 @@ secrets/
 .gitignore
 docs/
 docker-*.yml
+*.sql

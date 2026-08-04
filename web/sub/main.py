@@ -50,4 +50,4 @@ app.include_router(tg_router)
 
 if __name__ == '__main__':
     # uvicorn.run('web.sub.main:app', log_config=None, host="0.0.0.0", port=env.uvicorn_port, workers=env.uvicorn_workers)
-    uvicorn.run('web.sub.main:app', host="0.0.0.0", port=env.uvicorn_port, workers=env.uvicorn_workers, reload=os.getenv('RELOAD', False))
+    uvicorn.run('web.sub.main:app', host="127.0.0.1", port=env.uvicorn_port, workers=env.uvicorn_workers)

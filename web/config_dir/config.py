@@ -20,7 +20,6 @@ from web.config_dir.env_modes import AppMode, APP_MODE_CONFIG
 
 env_files = (
     os.getenv('ENV_FILE') or
-    os.getenv('ENV_LOCAL_TEST_FILE') or
     'web/.env.api.prod'
 )
 load_dotenv(env_files, override=True)
@@ -78,8 +77,12 @@ class AuthConfig(BaseModel):
 
 class Settings(BaseSettings):
     JWTs: AuthConfig = AuthConfig()
+
     pg_user: str
     pg_password: str
+    pg_admin: str
+    pg_admin_password: str
+
     pg_max_connections: int
     pg_db: str
     pg_port: int

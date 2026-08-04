@@ -234,6 +234,51 @@ fi
 
 echo -e "${GREEN}✓${NC} Права установлены"
 
+# Генерация паролей для PostgreSQL
+echo -e "\n${YELLOW}Генерация паролей для PostgreSQL...${NC}"
+
+# PG Admin Password
+if [ -z "$PG_ADMIN_PASSWORD" ]; then
+    PG_ADMIN_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-24)
+    echo -e "${GREEN}✓${NC} PG Admin пароль сгенерирован"
+else
+    echo -e "${GREEN}✓${NC} PG Admin пароль из переменной окружения"
+fi
+
+# PG CRUD Password
+if [ -z "$PG_CRUD_PASSWORD" ]; then
+    PG_CRUD_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-24)
+    echo -e "${GREEN}✓${NC} PG CRUD пароль сгенерирован"
+else
+    echo -e "${GREEN}✓${NC} PG CRUD пароль из переменной окружения"
+fi
+
+# Создание SQL скрипта для инициализации ролей
+echo -e "\n${YELLOW}Создание SQL скрипта инициализации БД...${NC}"
+ENTRYPOINT_DIR="$INSTALL_DIR/db/docker-entrypoint"
+mkdir -p "$ENTRYPOINT_DIR"
+
+cat > "$ENTRYPOINT_DIR/00_roles.sql" <<SQLEOF
+-- Создание CRUD пользователя с сгенерированным паролем
+CREATE ROLE reinar_crud_user WITH LOGIN PASSWORD '${PG_CRUD_PASSWORD}';
+
+-- Доступ к БД
+GRANT CONNECT ON DATABASE reinar_db TO reinar_crud_user;
+
+-- Доступ к схеме
+GRANT USAGE ON SCHEMA public TO reinar_crud_user;
+
+-- CRUD на все текущие таблицы
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO reinar_crud_user;
+
+-- Автоматические права для новых таблиц
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO reinar_crud_user;
+SQLEOF
+
+chmod 644 "$ENTRYPOINT_DIR/00_roles.sql"
+echo -e "${GREEN}✓${NC} SQL скрипт создан: $ENTRYPOINT_DIR/00_roles.sql"
+
 # Генерация JWT ключей для JWT
 echo -e "\n${YELLOW}Генерация JWT ключей для JWT...${NC}"
 KEYS_DIR="$INSTALL_DIR/secrets/keys"
@@ -274,7 +319,7 @@ REDIS_PASSWORD=R'F&scBdorS8@0A-1!
 # PostgreSQL
 PG_DB=reinar_db
 PG_ADMIN=postgres
-PG_ADMIN_PASSWORD=(AD^9cya97tCA*9ouhCAksb!
+PG_ADMIN_PASSWORD=${PG_ADMIN_PASSWORD}
 REDIS_PORT=6379
 PG_PORT=5432
 ENVEOF
@@ -288,9 +333,11 @@ if [ ! -f "$ENV_API_FILE" ]; then
     cat > "$ENV_API_FILE" <<APIENVEOF
 PYTHONUNBUFFERED=1
 
-# PostgreSQL (НЕ МЕНЯТЬ - вшито в скрипты инициализации БД!)
+# PostgreSQL
+PG_ADMIN=postgres
+PG_ADMIN_PASSWORD=${PG_ADMIN_PASSWORD}
 PG_USER=reinar_crud_user
-PG_PASSWORD=VjZ0ChrfMfp9!
+PG_PASSWORD=${PG_CRUD_PASSWORD}
 PG_DB=reinar_db
 PG_HOST=127.0.0.1
 PG_PORT=5432
@@ -361,7 +408,7 @@ PYTHONUNBUFFERED=1
 
 # PostgreSQL (должны совпадать с .env.api.prod)
 PG_USER=reinar_crud_user
-PG_PASSWORD=VjZ0ChrfMfp9!
+PG_PASSWORD=${PG_CRUD_PASSWORD}
 PG_DB=reinar_db
 PG_HOST=127.0.0.1
 PG_PORT=5432

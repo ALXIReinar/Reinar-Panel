@@ -183,7 +183,7 @@ jobs:
       - name: Run Installation Script
         env:
           ADMIN_PORT: ${{ vars.ADMIN_PORT }}
-          ADMIN_DOMAIN: ${{ vars.ADMIN_DOMAIN }}
+          ADMIN_DOMAIN: "admin.reinar.com"
           SUB_SERVICE_DOMAIN: "sub.service.example"
         run: |
           echo "🚀 Запуск скрипта установки..."
