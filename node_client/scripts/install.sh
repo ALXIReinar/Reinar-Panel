@@ -12,7 +12,7 @@ NC='\033[0m' # No Color
 # Константы
 INSTALL_BASE="/opt/reinar_panel"
 INSTALL_DIR="$INSTALL_BASE/node"
-SERVICE_NAME="vpn-node-client"
+SERVICE_NAME="reinar-node"
 PYTHON_MIN_VERSION="3.10"
 
 echo -e "${BLUE}========================================${NC}"
