@@ -25,7 +25,8 @@ class BulkActionsQueries:
                pt.proto_python_lib, pt.flatten_json_users_key, pt.flatten_user_identifier_key, 
                pt.reload_core_command, np.config_path, pt.constant_user_data_obj, pt.required_user_data_obj,
                pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, pt.api_bulk_delete_user_script, 
-               pt.bulk_delete_script_custom_params, op.uuid, op.user_sub_id
+               pt.bulk_delete_script_custom_params, pt.process_user_item_script, pt.process_user_libs,
+               op.uuid, op.user_sub_id
         FROM nodes_protocols np
         JOIN outbox_plan op ON op.node_proto_id = np.id
         JOIN nodes n ON np.node_id = n.id AND n.is_active = true
@@ -60,7 +61,9 @@ class BulkActionsQueries:
                    pt.api_bulk_add_user_script,
                    pt.bulk_add_script_custom_params,
                    pt.api_bulk_delete_user_script,
-                   pt.bulk_delete_script_custom_params
+                   pt.bulk_delete_script_custom_params,
+                   pt.process_user_item_script, 
+                   pt.process_user_libs
             FROM users_to_proto_cores upc
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = upc.sub_plan_id 
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
@@ -74,6 +77,7 @@ class BulkActionsQueries:
                constant_user_data_obj, required_user_data_obj, 
                api_bulk_add_user_script, bulk_add_script_custom_params,
                api_bulk_delete_user_script, bulk_delete_script_custom_params,
+               process_user_item_script, process_user_libs,
                COALESCE(
                    json_agg(
                        json_build_object( 
@@ -89,7 +93,8 @@ class BulkActionsQueries:
                  flatten_json_users_key, flatten_user_identifier_key,
                  reload_core_command, config_path, constant_user_data_obj, required_user_data_obj, 
                  api_bulk_add_user_script, bulk_add_script_custom_params,
-                 api_bulk_delete_user_script, bulk_delete_script_custom_params
+                 api_bulk_delete_user_script, bulk_delete_script_custom_params,
+                 process_user_item_script, process_user_libs
         '''
         return await self.conn.fetch(query, user_sub_ids, sub_plan_ids, user_uuids)
 
@@ -122,7 +127,8 @@ class BulkActionsQueries:
         expired_nodes_info AS (
             SELECT ds.uuid, ds.user_sub_id, vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
                    pt.api_bulk_delete_user_script, pt.bulk_delete_script_custom_params, pt.flatten_json_users_key, pt.flatten_user_identifier_key,
-                   pt.reload_core_command, np.config_path
+                   pt.reload_core_command, np.config_path, pt.constant_user_data_obj, pt.required_user_data_obj,
+                   pt.process_user_item_script, pt.process_user_libs
             FROM deactivated_subs ds
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = ds.sub_plan_id 
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
@@ -139,6 +145,7 @@ class BulkActionsQueries:
         -- 5. Группируем пользователей по нодам для пакетной отправки
         SELECT node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script, 
                flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, bulk_delete_script_custom_params,
+               constant_user_data_obj, required_user_data_obj, process_user_item_script, process_user_libs,
                COALESCE(
                    json_agg(
                        json_build_object( 
@@ -151,7 +158,8 @@ class BulkActionsQueries:
                ) AS users
         FROM expired_nodes_info
         GROUP BY node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script, 
-                 flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, bulk_delete_script_custom_params
+                 flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, constant_user_data_obj,
+                 required_user_data_obj, process_user_item_script, process_user_libs, bulk_delete_script_custom_params
         '''
         return await self.conn.fetch(query, CoreProtoActions.delete, PayStatuses.expired)
 

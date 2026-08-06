@@ -181,7 +181,7 @@ async def bulk_delete_user_from_core(body: BulkDeleteUserCoreSchema, request: Re
             # Можно реализовать логику подсчёта успешных удалений по первому аргументу от delete_user
             await buffer.delete_user(
                 node_proto_id=body.node_proto_id,
-                user_obj_or_identifier=u.uuid,
+                user_obj_or_identifier=u,
                 filepath=body.config_file_path,
                 users_path=body.flatten_json_users_key,
                 flatten_user_identifier_key=body.flatten_user_identifier_key,

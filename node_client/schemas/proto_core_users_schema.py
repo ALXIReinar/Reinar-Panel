@@ -15,13 +15,6 @@ class BaseUserCoreSchema(BaseModel):
                                                                             ' относительно массива clients')
     custom_params: dict | None = Field(description='Зависимости для скрипта, которые идут отдельно от объекта пользователя')
 
-class UserCoreDeleteSchema(BaseModel):
-    uuid: str = Field(max_length=36)
-
-    node_proto_id: int = Field(description='ID ноды в группе подписок. Служебное, не для нод-кдиента')
-    user_sub_id: int = Field(description='ID купленной пользователем подписки. Служебное, не для нод-кдиента')
-
-
 class AddUserCoreSchema(BaseUserCoreSchema):
     """Схема для добавления пользователя в ядро протокола"""
     user_obj: dict = Field(..., description='Готовый объект пользователя для конфига')
@@ -34,7 +27,7 @@ class DeleteUserCoreSchema(BaseUserCoreSchema):
 
 class BulkDeleteUserCoreSchema(BaseUserCoreSchema):
     bulk_delete_script: str | None
-    users: list[UserCoreDeleteSchema]
+    users: list[dict] = Field(description='Список готовых объектов пользователей для конфига')
 
 class BulkAddUserCoreSchema(BaseUserCoreSchema):
     bulk_add_script: str | None

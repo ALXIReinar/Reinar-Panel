@@ -82,7 +82,7 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[dict], aio_http: Client
                     resp_data = await resp.json()
                 
                 "Парсим stdout скриптом пользователя"
-                script_res, script_res_pack, err_msg = await parse_node_output(node['metrics_parser_code'], resp_data['stdout'], node['sub_required_libs'])
+                script_res, script_res_pack, err_msg = await execute_script(node['metrics_parser_code'], resp_data['stdout'], node['metrics_parser_libs'])
 
                 "Ошибка в скрипте. Ранняя остановка"
                 if not script_res:
@@ -160,6 +160,10 @@ async def bulk_delete_by_traffic_limit(ctx: dict, outbox_event_ids: list, arq: A
                 vnode['config_path'],
                 vnode['flatten_json_users_key'],
                 vnode['flatten_user_identifier_key'],
+                vnode['constant_user_data_obj'],
+                vnode['required_user_data_obj'],
+                vnode['process_user_item_script'],
+                vnode['process_user_libs']
             )
             log_event(f'\033[31m[ARQ Metrics Collector]\033[0m \033[34mTask Chaining, depth: \033[32m3\033[0m бульк delete летит на ноду | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
             log_event(f'\033[31m[ARQ Metrics Collector]\033[0m Фоновая задача запущена | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
@@ -170,7 +174,72 @@ async def bulk_delete_by_traffic_limit(ctx: dict, outbox_event_ids: list, arq: A
     return {'success': True, 'message': 'Запущено Бульк удаление с нод', 'total_nodes': len(nodes_by_limited_users)}
 
 
-async def parse_node_output(script_text: str, stdout: str, lib_names: str | None) -> tuple[bool, tuple, str]:
+
+def resolve_user_template(
+        template: dict,
+        uuid: str,
+        user_sub_id: int | None = None
+) -> dict:
+    """
+    Подставляет значения в шаблон пользователя
+
+    Поддерживаемые маркеры:
+    - {USER_UUID} → uuid пользователя
+    - {USER_SUB_ID} → id подписки пользователя. В json объекте преобразуется в str
+    - Обычное значение (без {}) → используется как есть
+
+    Args:
+        template: Шаблон из required_user_data_obj
+        uuid: UUID пользователя (обязательно)
+        user_sub_id: Telegram username (опционально)
+
+    Returns:
+        dict: Разрешённый шаблон с подставленными значениями
+
+    Raises:
+        ValueError: Если требуется user_sub_id, но он не передан
+
+    Examples:
+        >>> template = {"id": "{USER_UUID}", "email": "{USER_SUB_ID}"}
+        >>> resolve_user_template(template, "abc-123", 1)
+        {"id": "abc-123", "email": "1"}
+
+        >>> template = {"password": "{USER_UUID}", "level": 5}
+        >>> resolve_user_template(template, "abc-123")
+        {"password": "abc-123", "level": 5}
+    """
+    markers_map = {
+        '{USER_UUID}': uuid,
+        '{USER_SUB_ID}': str(user_sub_id),
+    }
+
+    # Проверяем что user_sub_id передан, если он требуется в шаблоне
+    if '{USER_SUB_ID}' in template.values() and user_sub_id is None:
+        raise ValueError(
+            f"Одно из полей шаблона требует user_sub_id (плейсхолдер {{USER_SUB_ID}}), "
+            f"но оно не передано"
+        )
+
+    resolved = {}
+    for key, value in template.items():
+        # Если значение не строка, используем как есть
+        if not isinstance(value, str):
+            resolved[key] = value
+            continue
+
+        # Подстановка маркеров, если значение совпадает с ключом
+        if value in markers_map:
+            resolved[key] = markers_map[value]
+        else:
+            # Обычное значение - используем как есть
+            resolved[key] = value
+
+    return resolved
+
+
+
+
+async def execute_script(script_text: str, stdout: str | dict, lib_names: str | None) -> tuple[bool, tuple, str]:
     """
     Выполняет динамический код парсера.
     В скрипте должна быть определена функция parse(data)
@@ -178,8 +247,17 @@ async def parse_node_output(script_text: str, stdout: str, lib_names: str | None
     WARNING. Возможна миграция обработки сырых метрик на нод-клиент
     Current: нод-клиент отдаёт сырой выход из get_metrics скрипта. Он обрабатывается на саб-сервисе/МС фона
 
-    :returns
+    Args:
+    1. stdout.
+    - str. Сырой json от команды сбора метрик трафика с впн-ядра
+    - dict. Объект пользователя для вставки в список пользователей в впн ядре
+
+    :returns При Обработке метрик трафика
         Happy case: True, (user_statistics, troubles), 'Plug Message'
+        Other Exception cases: False, (None, None), 'Err Reason'
+
+    :returns При обработке объекта пользователя для списка пользователей в впн-ядре
+        Happy case: True, Dict, 'Plug Message'
         Other Exception cases: False, (None, None), 'Err Reason'
     """
     "Обработка строки-списка библиотек"
@@ -217,7 +295,10 @@ async def parse_node_output(script_text: str, stdout: str, lib_names: str | None
         exec(script_text, global_scope, local_scope)
 
         "Вызываем функцию из скрипта"
-        parse_func = local_scope.get("parse")
+        parse_func = (
+            local_scope.get("parse") or
+            local_scope.get("process_user_item")
+        )
         if not parse_func:
             return False, (None, None), "функция parse не найдена в скрипте!"
 
@@ -245,4 +326,37 @@ async def parse_node_output(script_text: str, stdout: str, lib_names: str | None
     except Exception as e:
         tb_str = traceback.format_exc()
         log_event(f"\033[31mОШИБКА ВЫПОЛНЕНИЯ СКРИПТА\033[0m\nAction: Parse Metrics\nБиблиотеки: {lib_names}\nТип ошибки: {type(e).__name__}\nСообщение: {str(e)}\n\nTraceback:\n{tb_str}\n", level='CRITICAL')
-        return False, (None, None), f"Ошибка выполнения скрипта ({type(e).__name__}): {str(e)}"
+        return False, (None, None), f"Ошибка выполнения скрипта ({type(e).__name__}): {repr(e)}"
+
+
+async def create_vpn_like_user(
+        user_uuid,
+        user_sub_id,
+        required_user_data_obj: dict,
+        constant_user_data_obj: dict,
+        process_user_item_script: str,
+        process_user_libs: str,
+):
+    """Собирает готовый объект пользователя для впн-ядра из шаблон-скриптов"""
+
+    "1. Подстановка значений в шаблон через плейсхолдеры"
+    required_user_obj = resolve_user_template(
+        template=required_user_data_obj,
+        uuid=user_uuid,
+        user_sub_id=user_sub_id,
+    )
+    final_user_obj = {
+        **required_user_obj,
+        **constant_user_data_obj
+    }
+    "2. Если есть скрипт обработки. (Например, требуется в SS для формирования USER_PSK из USER_UUID)"
+    if process_user_item_script is not None:
+        inp_user_obj = final_user_obj  # Ссылается на исходный объект. Не будет занимать память дополнительно
+        ok, final_user_obj, msg = await execute_script(
+            process_user_item_script, final_user_obj, process_user_libs
+        )
+        if not ok:
+            log_event(f'Некорректный скрипт обработки объекта пользователя | script_inp_user_obj: \033[34m{inp_user_obj}\033[0m; user_sub_id: \033[32m{user_sub_id}\033[0m; user_uuid: \033[35m{user_uuid}\033[0m;', level='CRITICAL')
+            return False, {}, "Скрипт обработки json_obj упал (json с подставленными значениями по плейсхолдерами)"
+
+    return True, final_user_obj, "Успешно! Vpn Like User создан"

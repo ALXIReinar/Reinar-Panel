@@ -10,7 +10,7 @@ class MetricsQueries:
     async def get_all_nodes_for_metrics_cron(self):
         query = '''
         SELECT np.id, n.ip, n.private_ip, n.api_port, np.metrics_port, pt.metrics_command, pt.api_metrics_script, pt.proto_python_lib,
-               pt.metrics_parser_code, pt.sub_required_libs
+               pt.metrics_parser_code, pt.metrics_parser_libs
         FROM nodes n
         JOIN nodes_protocols np ON np.node_id = n.id AND np.user_visible = true
         JOIN protocols p ON np.proto_id = p.id
@@ -27,7 +27,8 @@ class MetricsQueries:
         WITH limited_nodes_info AS (
             SELECT us.uuid, us.id AS user_sub_id, sno.node_proto_id, n.private_ip, n.api_port, np.metrics_port,
                    pt.proto_python_lib, pt.api_bulk_delete_user_script, pt.flatten_json_users_key, pt.flatten_user_identifier_key,
-                   pt.reload_core_command, np.config_path, pt.bulk_delete_script_custom_params
+                   pt.reload_core_command, np.config_path, pt.bulk_delete_script_custom_params,
+                   pt.constant_user_data_obj, pt.required_user_data_obj, pt.process_user_item_script, pt.process_user_libs
             FROM (SELECT UNNEST($1::bigint[]) AS outbox_id) AS limited_outbox_events
             JOIN sub_nodes_outbox sno ON sno.id = limited_outbox_events.outbox_id
             JOIN user_subs us ON us.id = sno.user_sub_id
@@ -39,6 +40,7 @@ class MetricsQueries:
         -- 2. Группируем пользователей по нодам для пакетной отправки
         SELECT node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script, 
                flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, bulk_delete_script_custom_params,
+               constant_user_data_obj, required_user_data_obj, process_user_item_script, process_user_libs,
                COALESCE(
                    json_agg(
                        json_build_object( 
@@ -51,7 +53,8 @@ class MetricsQueries:
                ) AS users
         FROM limited_nodes_info
         GROUP BY node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script, 
-                 flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, bulk_delete_script_custom_params
+                 flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, bulk_delete_script_custom_params,
+                 constant_user_data_obj, required_user_data_obj, process_user_item_script, process_user_libs
         '''
         return await self.conn.fetch(query, outbox_ids)
 

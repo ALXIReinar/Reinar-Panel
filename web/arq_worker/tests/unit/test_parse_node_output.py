@@ -8,7 +8,7 @@ parse_node_output создаёт изолированное окружение �
 """
 import pytest
 
-from web.arq_worker.funcs.metrics_collector import parse_node_output
+from web.arq_worker.funcs.metrics_collector import execute_script
 
 # Отключаем autouse фикстуры для unit тестов
 pytestmark = [
@@ -46,7 +46,7 @@ user2@test.com | 250
 """
         
         # Act
-        success, (data, troubles), message = await parse_node_output(script, stdout, None)
+        success, (data, troubles), message = await execute_script(script, stdout, None)
         
         # Assert
         assert success is True
@@ -75,7 +75,7 @@ async def parse(data):
         stdout = "user1@test.com\nuser2@test.com"
         
         # Act
-        success, (data, troubles), message = await parse_node_output(script, stdout, None)
+        success, (data, troubles), message = await execute_script(script, stdout, None)
         
         # Assert
         assert success is True
@@ -113,7 +113,7 @@ def parse(data):
         stdout = '{"users": [{"email": "user1@test.com", "traffic": 100}, {"email": "user2@test.com", "traffic": 200}]}'
         
         # Act
-        success, (data, troubles), message = await parse_node_output(script, stdout, None)
+        success, (data, troubles), message = await execute_script(script, stdout, None)
         
         # Assert
         assert success is True
@@ -134,7 +134,7 @@ def some_other_function():
 """
         
         # Act
-        success, (data, troubles), message = await parse_node_output(script, "test data", None)
+        success, (data, troubles), message = await execute_script(script, "test data", None)
         
         # Assert
         assert success is False
@@ -154,7 +154,7 @@ def parse(data):
 """
         
         # Act: пытаемся импортировать несуществующую библиотеку
-        success, (data, troubles), message = await parse_node_output(script, "test", "non_existent_library_xyz")
+        success, (data, troubles), message = await execute_script(script, "test", "non_existent_library_xyz")
         
         # Assert
         assert success is False
@@ -177,7 +177,7 @@ def parse(data):
 """
         
         # Act
-        success, (data, troubles), message = await parse_node_output(script, "test", None)
+        success, (data, troubles), message = await execute_script(script, "test", None)
         
         # Assert
         assert success is False
@@ -199,7 +199,7 @@ def parse(data):
 """
         
         # Act
-        success, (data, troubles), message = await parse_node_output(script, "test", None)
+        success, (data, troubles), message = await execute_script(script, "test", None)
         
         # Assert
         assert success is False
@@ -223,7 +223,7 @@ def parse(data):
 """
         
         # Act
-        success, (data, troubles), message = await parse_node_output(script_open, "test", None)
+        success, (data, troubles), message = await execute_script(script_open, "test", None)
         
         # Assert: должна быть ошибка (open недоступен)
         assert success is False
@@ -239,7 +239,7 @@ def parse(data):
 """
         
         # Act
-        success, (data, troubles), message = await parse_node_output(script_eval, "test", None)
+        success, (data, troubles), message = await execute_script(script_eval, "test", None)
         
         # Assert: должна быть ошибка (eval недоступен)
         assert success is False
@@ -258,7 +258,7 @@ def parse(data):
 """
         
         # Act
-        success, (data, troubles), message = await parse_node_output(script, "empty", None)
+        success, (data, troubles), message = await execute_script(script, "empty", None)
         
         # Assert
         assert success is True
@@ -278,7 +278,7 @@ class TestParseNodeOutputRealParser:
         stdout = sample_xray_outputs['json_dict_clean']
         
         # Act
-        success, (data, troubles), message = await parse_node_output(
+        success, (data, troubles), message = await execute_script(
             parser['metrics_parser_code'],
             stdout,
             parser['sub_required_libs']
@@ -310,7 +310,7 @@ class TestParseNodeOutputRealParser:
         stdout = sample_xray_outputs['json_string_from_cli']
         
         # Act
-        success, (data, troubles), message = await parse_node_output(
+        success, (data, troubles), message = await execute_script(
             parser['metrics_parser_code'],
             stdout,
             parser['sub_required_libs']
@@ -342,7 +342,7 @@ class TestParseNodeOutputRealParser:
         stdout = sample_xray_outputs['with_troubles']
         
         # Act
-        success, (data, troubles), message = await parse_node_output(
+        success, (data, troubles), message = await execute_script(
             parser['metrics_parser_code'],
             stdout,
             parser['sub_required_libs']
@@ -374,7 +374,7 @@ class TestParseNodeOutputRealParser:
         stdout = sample_xray_outputs['empty_stats']
         
         # Act
-        success, (data, troubles), message = await parse_node_output(
+        success, (data, troubles), message = await execute_script(
             parser['metrics_parser_code'],
             stdout,
             parser['sub_required_libs']

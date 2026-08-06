@@ -1,14 +1,12 @@
 #!/bin/bash
 
 TMP_ID=$1
-DOMAIN=$2
-CERT_PATH=$3
-KEY_PATH=$4
+METHOD=${2:-"2022-blake3-aes-128-gcm"}
 
-if [ -z "$TMP_ID" ] || [ -z "$DOMAIN" ] || [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ]; then
-    echo "Ошибка: Недостаточно параметров!"
-    echo "Использование: bash vmess-ws-tls.sh <tmp_id> <domain> <cert_path> <key_path>"
-    exit 1
+if [ -z "$TMP_ID" ]; then
+  echo "Error: TMP_ID is missing!"
+  echo "Usage: bash ss-exit-install.sh <tmp_id> [method]"
+  exit 1
 fi
 
 XRAY_BIN="/usr/local/bin/xray"
@@ -19,16 +17,23 @@ PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback"
 mkdir -p "$CONFIG_DIR"
 
 find_free_port() {
-    local port=$1
-    while ss -lnt | awk '{print $4}' | grep -q ":$port$"; do
-        port=$((port + 1))
-    done
-    echo $port
+  local port=$1
+  while ss -lnt | awk '{print $4}' | grep -q ":$port$"; do
+    port=$((port + 1))
+  done
+  echo $port
 }
 
 API_PORT=$(find_free_port 10085)
-INBOUND_PORT=$(find_free_port 443)
-WS_PATH="/ws-$(openssl rand -hex 4)-vmess"
+INBOUND_PORT=$(find_free_port 8388)
+
+if [[ "$METHOD" == *"128"* ]]; then
+  SERVER_PSK=$(openssl rand -base64 16)
+  EXIT_USER_PSK=$(openssl rand -base64 16)
+else
+  SERVER_PSK=$(openssl rand -base64 32)
+  EXIT_USER_PSK=$(openssl rand -base64 32)
+fi
 
 cat <<EOF > "$CONFIG_PATH"
 {
@@ -46,29 +51,16 @@ cat <<EOF > "$CONFIG_PATH"
     {
       "listen": "0.0.0.0",
       "port": $INBOUND_PORT,
-      "protocol": "vmess",
+      "protocol": "shadowsocks",
       "settings": {
-        "clients": []
-      },
-      "streamSettings": {
-        "network": "ws",
-        "security": "tls",
-        "wsSettings": {
-          "path": "$WS_PATH"
-        },
-        "tlsSettings": {
-          "serverName": "$DOMAIN",
-          "certificates": [
-            {
-              "certificateFile": "$CERT_PATH",
-              "keyFile": "$KEY_PATH"
-            }
-          ]
-        }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "quic"]
+        "method": "$METHOD",
+        "password": "$SERVER_PSK",
+        "network": "tcp,udp",
+        "clients": [
+          {
+            "password": "$EXIT_USER_PSK"
+          }
+        ]
       },
       "tag": "inbound"
     },
@@ -78,7 +70,7 @@ cat <<EOF > "$CONFIG_PATH"
       "protocol": "dokodemo-door",
       "settings": { "address": "127.0.0.1" },
       "tag": "api"
-    },
+    }
   ],
   "outbounds": [
     { "protocol": "freedom", "tag": "direct" },
@@ -97,7 +89,7 @@ EOF
 SERVICE_PATH="/etc/systemd/system/xray-${TMP_ID}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Xray VMess-WS-TLS Node (TMP_ID: ${TMP_ID})
+Description=Xray Shadowsocks-2022 Exit Node (TMP_ID: ${TMP_ID})
 After=network.target nss-lookup.target
 
 [Service]
@@ -116,6 +108,8 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
+systemctl enable "xray-${TMP_ID}"
+systemctl restart "xray-${TMP_ID}"
 
 curl -s -X POST "$PANEL_CALLBACK_URL" \
      -H "Content-Type: application/json" \
@@ -125,7 +119,7 @@ curl -s -X POST "$PANEL_CALLBACK_URL" \
            "api_port": '$API_PORT',
            "inbound_port": '$INBOUND_PORT',
            "status": "installed",
-           "node_type": "vmess_ws_tls",
+           "node_type": "shadowsocks_2022_exit"
          }'
 
-echo "VMess-WS-TLS нода $TMP_ID успешно установлена."
+echo "Shadowsocks-2022 Exit Node $TMP_ID installed successfully."

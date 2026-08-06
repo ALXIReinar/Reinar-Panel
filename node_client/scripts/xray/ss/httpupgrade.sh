@@ -3,10 +3,12 @@
 TMP_ID=$1
 METHOD=${2:-"2022-blake3-aes-128-gcm"}
 
+HTTP_PATH="/http-$(openssl rand -hex 4)-ss"
+
 if [ -z "$TMP_ID" ]; then
-  echo "Error: TMP_ID is missing!"
-  echo "Usage: bash ss-2022-install.sh <tmp_id> [method]"
-  exit 1
+    echo "Ошибка: Не указан TMP_ID!"
+    echo "Использование: bash ss-httpupgrade-install.sh <tmp_id> [method]"
+    exit 1
 fi
 
 XRAY_BIN="/usr/local/bin/xray"
@@ -17,20 +19,20 @@ PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback"
 mkdir -p "$CONFIG_DIR"
 
 find_free_port() {
-  local port=$1
-  while ss -lnt | awk '{print $4}' | grep -q ":$port$"; do
-    port=$((port + 1))
-  done
-  echo $port
+    local port=$1
+    while ss -lnt | awk '{print $4}' | grep -q ":$port$"; do
+        port=$((port + 1))
+    done
+    echo $port
 }
 
 API_PORT=$(find_free_port 10085)
-INBOUND_PORT=$(find_free_port 8388)
+INBOUND_PORT=$(find_free_port 8080)
 
 if [[ "$METHOD" == *"128"* ]]; then
-  SERVER_PSK=$(openssl rand -base64 16)
+    SERVER_PSK=$(openssl rand -base64 16)
 else
-  SERVER_PSK=$(openssl rand -base64 32)
+    SERVER_PSK=$(openssl rand -base64 32)
 fi
 
 cat <<EOF > "$CONFIG_PATH"
@@ -55,6 +57,12 @@ cat <<EOF > "$CONFIG_PATH"
         "password": "$SERVER_PSK",
         "network": "tcp,udp",
         "clients": []
+      },
+      "streamSettings": {
+        "network": "httpupgrade",
+        "httpupgradeSettings": {
+          "path": "$HTTP_PATH"
+        }
       },
       "tag": "ss-inbound"
     },
@@ -83,7 +91,7 @@ EOF
 SERVICE_PATH="/etc/systemd/system/xray-${TMP_ID}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Xray Shadowsocks-2022 Node (TMP_ID: ${TMP_ID})
+Description=Xray Shadowsocks-HTTPUpgrade Node (TMP_ID: ${TMP_ID})
 After=network.target nss-lookup.target
 
 [Service]
@@ -110,10 +118,10 @@ curl -s -X POST "$PANEL_CALLBACK_URL" \
      -d '{
            "tmp_id": "'"$TMP_ID"'",
            "config_path": "'"$CONFIG_PATH"'",
-           "api_port": '$API_POPT',
+           "api_port": '$API_PORT',
            "inbound_port": '$INBOUND_PORT',
            "status": "installed",
-           "node_type": "shadowsocks_2022"
+           "node_type": "shadowsocks_httpupgrade"
          }'
 
-echo "Shadowsocks-2022 node $TMP_ID installed successfully."
+echo "Shadowsocks-HTTPUpgrade нода $TMP_ID успешно установлена."

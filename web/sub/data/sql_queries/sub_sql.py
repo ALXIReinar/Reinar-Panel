@@ -63,7 +63,8 @@ class SubscriptionQueries:
         WITH vnodes_read AS (
             SELECT vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
                    pt.api_add_user_script, pt.api_delete_user_script, pt.reload_core_command, np.config_path, pt.flatten_json_users_key, pt.required_user_data_obj,
-                   pt.constant_user_data_obj, pt.flatten_user_identifier_key, pt.add_script_custom_params, pt.delete_script_custom_params
+                   pt.constant_user_data_obj, pt.flatten_user_identifier_key, pt.add_script_custom_params, pt.delete_script_custom_params,
+                   pt.process_user_item_script, pt.process_user_libs
             FROM user_subs us
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = us.sub_plan_id
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true

@@ -1,16 +1,21 @@
 #!/bin/bash
-# Использование: bash exit-node-vless-reality.sh <tmp_id>
 
 TMP_ID=$1
+METHOD=${2:-"2022-blake3-aes-128-gcm"}
+
+WS_PATH="/ws-$(openssl rand -hex 4)-ss"
+
+
 if [ -z "$TMP_ID" ]; then
-    echo "Ошибка: не передан tmp_id"
+    echo "Ошибка: Не указан TMP_ID!"
+    echo "Использование: bash ss-ws-install.sh <tmp_id> [method] [path]"
     exit 1
 fi
 
 XRAY_BIN="/usr/local/bin/xray"
 CONFIG_DIR="/etc/xray/configs"
 CONFIG_PATH="$CONFIG_DIR/${TMP_ID}.json"
-PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback" # IP панели в WG
+PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback"
 
 mkdir -p "$CONFIG_DIR"
 
@@ -23,14 +28,13 @@ find_free_port() {
 }
 
 API_PORT=$(find_free_port 10085)
-INBOUND_PORT=$(find_free_port 443)
+INBOUND_PORT=$(find_free_port 8080)
 
-# Генерация ключей и служебного UUID для входных нод
-KEYS=$($XRAY_BIN x25519)
-PRIVATE_KEY=$(echo "$KEYS" | grep "Private key:" | awk '{print $3}')
-PUBLIC_KEY=$(echo "$KEYS" | grep "Public key:" | awk '{print $3}')
-SHORT_ID=$(openssl rand -hex 8)
-EXIT_UUID=$($XRAY_BIN uuid)
+if [[ "$METHOD" == *"128"* ]]; then
+    SERVER_PSK=$(openssl rand -base64 16)
+else
+    SERVER_PSK=$(openssl rand -base64 32)
+fi
 
 cat <<EOF > "$CONFIG_PATH"
 {
@@ -48,33 +52,20 @@ cat <<EOF > "$CONFIG_PATH"
     {
       "listen": "0.0.0.0",
       "port": $INBOUND_PORT,
-      "protocol": "vless",
+      "protocol": "shadowsocks",
       "settings": {
-        "clients": [
-          {
-            "id": "$EXIT_UUID",
-            "flow": "xtls-rprx-vision"
-          }
-        ],
-        "decryption": "none"
+        "method": "$METHOD",
+        "password": "$SERVER_PSK",
+        "network": "tcp,udp",
+        "clients": []
       },
       "streamSettings": {
-        "network": "tcp",
-        "security": "reality",
-        "realitySettings": {
-          "show": false,
-          "dest": "microsoft.com:443",
-          "xver": 0,
-          "serverNames": ["microsoft.com", "www.microsoft.com"],
-          "privateKey": "$PRIVATE_KEY",
-          "shortIds": ["$SHORT_ID"]
+        "network": "ws",
+        "wsSettings": {
+          "path": "$WS_PATH"
         }
       },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "quic"]
-      },
-      "tag": "inbound"
+      "tag": "ss-inbound"
     },
     {
       "listen": "127.0.0.1",
@@ -85,18 +76,9 @@ cat <<EOF > "$CONFIG_PATH"
     }
   ],
   "outbounds": [
-    {
-      "protocol": "freedom",
-      "tag": "direct"
-    },
-    {
-      "protocol": "blackhole",
-      "tag": "block"
-    },
-    {
-      "protocol": "none",
-      "tag": "api_out"
-    }
+    { "protocol": "freedom", "tag": "direct" },
+    { "protocol": "blackhole", "tag": "block" },
+    { "protocol": "none", "tag": "api_out" }
   ],
   "routing": {
     "rules": [
@@ -107,11 +89,10 @@ cat <<EOF > "$CONFIG_PATH"
 }
 EOF
 
-# Systemd юнит
 SERVICE_PATH="/etc/systemd/system/xray-${TMP_ID}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Xray Anticensorship(AntiWhitelist/Block Bypass) Exit Node (TMP_ID: ${TMP_ID})
+Description=Xray Shadowsocks-WS Node (TMP_ID: ${TMP_ID})
 After=network.target nss-lookup.target
 
 [Service]
@@ -130,22 +111,18 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
+systemctl enable "xray-${TMP_ID}"
+systemctl restart "xray-${TMP_ID}"
 
-# В callback отдаем данные для подключения Entry нод к этой Выходной ноде
 curl -s -X POST "$PANEL_CALLBACK_URL" \
      -H "Content-Type: application/json" \
      -d '{
            "tmp_id": "'"$TMP_ID"'",
            "config_path": "'"$CONFIG_PATH"'",
-           "api_port": '$API_PORT',
-           "inbound_port": '$INBOUND_PORT',
+           "api_port": '"$API_PORT"',
+           "inbound_port": '"$INBOUND_PORT"',
            "status": "installed",
-           "node_type": "exit",
-           "custom_fields": {
-               "public_key": "'"$PUBLIC_KEY"'",
-               "short_id": "'"$SHORT_ID"'",
-               "exit_uuid": "'"$EXIT_UUID"'"
-           }
+           "node_type": "shadowsocks_ws"
          }'
 
-echo "Exit нода $TMP_ID установлена. UUID для релеев: $EXIT_UUID"
+echo "Shadowsocks-WS нода $TMP_ID успешно установлена."

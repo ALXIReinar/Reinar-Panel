@@ -7,6 +7,7 @@ from arq import ArqRedis
 from web.arq_worker.config import env
 from web.arq_worker.data.postgres import PgSql
 from web.arq_worker.depends_fabric import aiohttp_dep, arq_dep, pg_sql_dep
+from web.arq_worker.funcs.metrics_collector import create_vpn_like_user
 from web.arq_worker.utils.arq_logger_config import log_event
 from web.arq_worker.utils.anything import NodeUris
 
@@ -37,17 +38,20 @@ async def action_on_core_proto_by_sub_plan(
         
         async with sem:
             try:
-                "1. Подстановка значений в шаблон через плейсхолдеры"
-                required_user_obj = resolve_user_template(
-                    template=node['required_user_data_obj'],
-                    uuid=user_uuid,
+
+                "1. Формируем готовый объект-пользователя списка впн-ядра"
+                ok, final_user_obj = await create_vpn_like_user(
+                    user_uuid=user_uuid,
                     user_sub_id=user_sub_id,
+                    required_user_data_obj=node['required_user_data_obj'],
+                    constant_user_data_obj=node['constant_user_data_obj'],
+                    process_user_item_script=node['process_user_item_script'],
+                    process_user_libs=node['process_user_libs'],
                 )
-                final_user_obj = {
-                    **required_user_obj,
-                    **node['constant_user_data_obj']
-                }
-            
+                if not ok:
+                    log_event(f'Некорректный скрипт обработки объекта пользователя | user_sub_id: \033[31m{user_sub_id}\033[0m; user_uuid: \033[33m{user_uuid}\033[0m; node_proto_id: \033[33m{node["node_proto_id"]}\033[0m', level='CRITICAL')
+                    raise ValueError("Не удалось обработать объект пользователя для Списка Впн-ядра")
+
             except ValueError as e:
                 "Ошибка валидации шаблона (не ретраим, ошибка скрипта админа)"
                 log_event(f'\033[33m[ARQ]\033[0m Ошибка валидации шаблона | node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; error: \033[31m{str(e)}\033[0m', level='CRITICAL')
@@ -186,66 +190,3 @@ async def action_on_core_proto_by_sub_plan(
         'trouble_nodes': trouble_nodes,
         'retry_nodes': retry_nodes
     }
-
-
-
-def resolve_user_template(
-        template: dict,
-        uuid: str,
-        user_sub_id: int | None = None
-) -> dict:
-    """
-    Подставляет значения в шаблон пользователя
-
-    Поддерживаемые маркеры:
-    - {USER_UUID} → uuid пользователя
-    - {USER_SUB_ID} → id подписки пользователя. В json объекте преобразуется в str
-    - Обычное значение (без {}) → используется как есть
-
-    Args:
-        template: Шаблон из required_user_data_obj
-        uuid: UUID пользователя (обязательно)
-        user_sub_id: Telegram username (опционально)
-
-    Returns:
-        dict: Разрешённый шаблон с подставленными значениями
-
-    Raises:
-        ValueError: Если требуется user_sub_id, но он не передан
-
-    Examples:
-        >>> template = {"id": "{USER_UUID}", "email": "{USER_SUB_ID}"}
-        >>> resolve_user_template(template, "abc-123", 1)
-        {"id": "abc-123", "email": "1"}
-
-        >>> template = {"password": "{USER_UUID}", "level": 5}
-        >>> resolve_user_template(template, "abc-123")
-        {"password": "abc-123", "level": 5}
-    """
-    markers_map = {
-        '{USER_UUID}': uuid,
-        '{USER_SUB_ID}': str(user_sub_id),
-    }
-    
-    # Проверяем что user_sub_id передан, если он требуется в шаблоне
-    if '{USER_SUB_ID}' in template.values() and user_sub_id is None:
-        raise ValueError(
-            f"Одно из полей шаблона требует user_sub_id (плейсхолдер {{USER_SUB_ID}}), "
-            f"но оно не передано"
-        )
-
-    resolved = {}
-    for key, value in template.items():
-        # Если значение не строка, используем как есть
-        if not isinstance(value, str):
-            resolved[key] = value
-            continue
-
-        # Подстановка маркеров, если значение совпадает с ключом
-        if value in markers_map:
-            resolved[key] = markers_map[value]
-        else:
-            # Обычное значение - используем как есть
-            resolved[key] = value
-
-    return resolved

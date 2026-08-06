@@ -42,6 +42,10 @@ async def admin_request_bulk_action_users(ctx: dict, action: Literal['delete', '
                 vnode['config_path'],
                 vnode['flatten_json_users_key'],
                 vnode['flatten_user_identifier_key'],
+                vnode['required_user_data_obj'],
+                vnode['constant_user_data_obj'],
+                vnode['process_user_item_script'],
+                vnode['process_user_libs']
             )
             log_event(f'\033[36m[ARQ Admin Actioner]\033[0m Фоновая задача запущена | action: \033[31m{action}\033[0m; node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
 

@@ -4,6 +4,7 @@ from arq import ArqRedis
 from web.arq_worker.data.postgres import PgSql
 from web.arq_worker.depends_fabric import pg_sql_dep, arq_dep, aiohttp_dep
 from web.arq_worker.funcs.action_on_user_core_proto import resolve_user_template
+from web.arq_worker.funcs.metrics_collector import create_vpn_like_user
 from web.arq_worker.utils.anything import NodeUris, CoreProtoActions
 from web.arq_worker.utils.arq_logger_config import log_event
 
@@ -61,6 +62,8 @@ async def reset_day_user_traffic(
                 vnode['flatten_user_identifier_key'],
                 vnode['required_user_data_obj'],
                 vnode['constant_user_data_obj'],
+                vnode['process_user_item_script'],
+                vnode['process_user_libs'],
             )
             log_event(f'\033[35m[Traffic Reset]\033[0m Фоновая задача запущена, бульк-добавление | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
 
@@ -87,6 +90,8 @@ async def bulk_add_users_into_single_node(
         flatten_user_identifier_key: str,
         required_user_data_obj: dict,
         constant_user_data_obj: dict,
+        process_user_item_script: str,
+        process_user_libs: str,
         current_attempt = 1,
         db: PgSql = None,
         arq: ArqRedis = None,
@@ -97,16 +102,24 @@ async def bulk_add_users_into_single_node(
     """
     log_event(f'\033[35m[ARQ Bulk Add]\033[0m Юзер на добавление в конфиг-файла ядра | users_len: \033[35m{len(users)}\033[0m; node_proto_id: \033[33m{node_proto_id}\033[0m; private_ip: \033[33m{private_ip}\033[0m; api_port: \033[35m{api_port}\033[0m')
 
-    "Собираем готовые объекты пользователей для конфиг-файлов ядра протокола"
-    users_to_core = [{
-        **resolve_user_template(
-            template=required_user_data_obj,
-            uuid=u['uuid'],
+    "1. Собираем готовые объекты пользователей для конфиг-файлов ядра протокола"
+    users_to_core = []
+    for u in users:
+        success, vpn_user = await create_vpn_like_user(
+            user_uuid=u['uuid'],
             user_sub_id=u['user_sub_id'],
-        ),
-        **constant_user_data_obj
-    }
-    for u in users]
+            required_user_data_obj=required_user_data_obj,
+            constant_user_data_obj=constant_user_data_obj,
+            process_user_item_script=process_user_item_script,
+            process_user_libs=process_user_libs
+        )
+        if success:
+            users_to_core.append(vpn_user)
+
+    "1.2. Если ни одного пользователя не создалось, не запускаем бульк"
+    if not users_to_core:
+        log_event(f'\033[31m[ARQ Bulk Delete]\033[0m Не удалось создать ни одного впн-пользователя для ядра | node_proto_id: \033[31m{node_proto_id}\033[0m', level='CRITICAL')
+        return {'success': False, 'message': 'Нет впн-пользователей для ядра'}
 
     "Готовим тело запроса и Url"
     url = f"http://{private_ip}:{api_port}{NodeUris.proto_core_bulk_add_users}"
@@ -171,6 +184,8 @@ async def bulk_add_users_into_single_node(
             flatten_user_identifier_key,
             required_user_data_obj,
             constant_user_data_obj,
+            process_user_item_script,
+            process_user_libs,
             current_attempt + 1,            # Инкрементируем попытку
             _defer_by=defer_seconds         # Откладываем выполнение
         )

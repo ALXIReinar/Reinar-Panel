@@ -273,7 +273,9 @@ class UsersQueries:
                             'constant_user_data_obj', pt.constant_user_data_obj,
                             'flatten_user_identifier_key', pt.flatten_user_identifier_key,
                             'add_script_custom_params', pt.add_script_custom_params,
-                            'delete_script_custom_params', pt.delete_script_custom_params
+                            'delete_script_custom_params', pt.delete_script_custom_params,
+                            'process_user_item_script', pt.process_user_item_script,
+                            'process_user_libs', pt.process_user_libs
                         )
                     ) FILTER (WHERE np.id IS NOT NULL),
                     '[]'::json

@@ -29,40 +29,29 @@ async def pointed_bulk_action(ctx: dict, outbox_event_ids: list[int], action: Li
             log_event(f'\033[33m[ARQ Pointer Actioner]\033[0m Отправляем Бульк запрос на фоновое \033[31m{action}\033[0m пользователей в ядра | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
 
             "Что нужно делать: вставку или удаление"
-            arq_args = {
-                'add': (
-                    vnode['node_proto_id'],
-                    vnode['private_ip'],
-                    vnode['api_port'],
-                    vnode['metrics_port'],
-                    vnode['proto_python_lib'],
-                    vnode['api_bulk_add_user_script'],
-                    vnode['bulk_add_script_custom_params'],
-                    vnode['users'],
-                    vnode['reload_core_command'],
-                    vnode['config_path'],
-                    vnode['flatten_json_users_key'],
-                    vnode['flatten_user_identifier_key'],
-                    vnode['required_user_data_obj'],
-                    vnode['constant_user_data_obj'],
-                ),
-                'delete': (
-                    vnode['node_proto_id'],
-                    vnode['private_ip'],
-                    vnode['api_port'],
-                    vnode['metrics_port'],
-                    vnode['proto_python_lib'],
-                    vnode['api_bulk_delete_user_script'],
-                    vnode['bulk_delete_script_custom_params'],
-                    vnode['users'],
-                    vnode['reload_core_command'],
-                    vnode['config_path'],
-                    vnode['flatten_json_users_key'],
-                    vnode['flatten_user_identifier_key'],
-                )
+            action_script_custom_params = {
+                'delete': (vnode['api_bulk_delete_user_script'], vnode['bulk_delete_script_custom_params']),
+                'add': (vnode['api_bulk_add_user_script'], vnode['bulk_add_script_custom_params']),
             }
-            arq_func = {'add': 'bulk_add_users_into_single_node', 'delete': 'bulk_delete_users_from_single_node'}
-            job = await arq.enqueue_job(arq_func[action], *arq_args[action])
+            arq_func_name = {'add': 'bulk_add_users_into_single_node', 'delete': 'bulk_delete_users_from_single_node'}
+            job = await arq.enqueue_job(
+                arq_func_name[action],
+                vnode['node_proto_id'],
+                vnode['private_ip'],
+                vnode['api_port'],
+                vnode['metrics_port'],
+                vnode['proto_python_lib'],
+                *action_script_custom_params[action],
+                vnode['users'],
+                vnode['reload_core_command'],
+                vnode['config_path'],
+                vnode['flatten_json_users_key'],
+                vnode['flatten_user_identifier_key'],
+                vnode['required_user_data_obj'],
+                vnode['constant_user_data_obj'],
+                vnode['process_user_item_script'],
+                vnode['process_user_libs']
+            )
 
             log_event(f'\033[33m[Pointer Actioner]\033[0m Фоновая задача запущена, бульк-\033[31m{action}\033[0m | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
 

@@ -23,7 +23,7 @@ class TrafficResetQueries:
             SELECT upc.uuid, upc.user_sub_id, vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
                    pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, pt.flatten_json_users_key, 
                    pt.flatten_user_identifier_key, pt.reload_core_command, np.config_path, pt.constant_user_data_obj, 
-                   pt.required_user_data_obj
+                   pt.required_user_data_obj, pt.process_user_item_script, pt.process_user_libs
             FROM users_to_proto_cores upc
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = upc.sub_plan_id 
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
@@ -34,7 +34,7 @@ class TrafficResetQueries:
         -- 3. Группируем пользователей по нодам для пакетной отправки
         SELECT node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_add_user_script, 
                flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, constant_user_data_obj,
-               required_user_data_obj, bulk_add_script_custom_params,
+               required_user_data_obj, bulk_add_script_custom_params, process_user_item_script, process_user_libs,
                COALESCE(
                    json_agg(
                        json_build_object( 
@@ -48,7 +48,7 @@ class TrafficResetQueries:
         FROM expired_nodes_info
         GROUP BY node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_add_user_script, 
                  flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, constant_user_data_obj,
-                 required_user_data_obj, bulk_add_script_custom_params
+                 required_user_data_obj, bulk_add_script_custom_params, process_user_item_script, process_user_libs
         '''
         return await self.conn.fetch(query, order_ids, sub_plan_ids, user_uuids)
 
@@ -70,7 +70,7 @@ class TrafficResetQueries:
             SELECT upc.uuid, upc.user_sub_id, vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
                    pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, pt.flatten_json_users_key, 
                    pt.flatten_user_identifier_key, pt.reload_core_command, np.config_path, pt.constant_user_data_obj,
-                   pt.required_user_data_obj
+                   pt.required_user_data_obj, pt.process_user_item_script, pt.process_user_libs
             FROM users_to_proto_cores upc
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = upc.sub_plan_id 
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
@@ -87,7 +87,7 @@ class TrafficResetQueries:
         -- 5. Группируем пользователей по нодам для пакетной отправки
         SELECT node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_add_user_script, 
                flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, constant_user_data_obj,
-               required_user_data_obj, bulk_add_script_custom_params,
+               required_user_data_obj, bulk_add_script_custom_params, process_user_item_script, process_user_libs,
                COALESCE(
                    json_agg(
                        json_build_object( 
@@ -101,6 +101,6 @@ class TrafficResetQueries:
         FROM expired_nodes_info
         GROUP BY node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_add_user_script, 
                  flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, constant_user_data_obj,
-                 required_user_data_obj, bulk_add_script_custom_params
+                 required_user_data_obj, bulk_add_script_custom_params, process_user_item_script, process_user_libs
         '''
         return await self.conn.fetch(query, CoreProtoActions.add)

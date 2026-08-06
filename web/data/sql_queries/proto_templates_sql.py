@@ -66,7 +66,10 @@ class ProtoTemplatesQueries:
         """Получить шаблон по ID с привязанными spec параметрами"""
         template_query = """
         SELECT id, title, url_tmp, status, is_accepted, reload_core_command, required_user_data_obj, constant_user_data_obj,
-               api_add_user_script, api_delete_user_script, proto_python_lib, flatten_json_users_key, flatten_user_identifier_key
+               api_add_user_script, api_delete_user_script, proto_python_lib, flatten_json_users_key, flatten_user_identifier_key,
+               sub_prepare_script, sub_required_libs, api_bulk_delete_user_script, metrics_parser_code, metrics_command,
+               add_script_custom_params, delete_script_custom_params, bulk_delete_script_custom_params, api_metrics_script,
+               api_bulk_add_user_script, bulk_add_script_custom_params, description, process_user_item_script, process_user_libs
         FROM proto_templates 
         WHERE id = $1
         """
