@@ -1,24 +1,20 @@
 #!/bin/bash
-# Использование: bash http-upgrade-tls.sh <tmp_id> <domain>
+# Использование: bash vless-reality-grpc.sh <tmp_id>
 
 TMP_ID=$1
-DOMAIN=$2
-
-if [ -z "$TMP_ID" ] || [ -z "$DOMAIN" ]; then
-    echo "Ошибка: требуется tmp_id и domain"
-    echo "Пример: bash xray/vless/http-upgrade-tls.sh 1 mydomain.com"
+if [ -z "$TMP_ID" ]; then
+    echo "Ошибка: не передан tmp_id"
     exit 1
 fi
 
 XRAY_BIN="/usr/local/bin/xray"
 CONFIG_DIR="/etc/xray/configs"
-CERT_DIR="/etc/xray/certs/$DOMAIN"
 CONFIG_PATH="$CONFIG_DIR/${TMP_ID}.json"
-PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback"
+PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback" # IP вашей панели в сети WG
 
-mkdir -p "$CONFIG_DIR" "$CERT_DIR"
+mkdir -p "$CONFIG_DIR"
 
-# 1. Поиск свободных портов
+# 1. Функция поиска свободного порта
 find_free_port() {
     local port=$1
     while ss -lnt | awk '{print $4}' | grep -q ":$port$"; do
@@ -27,27 +23,18 @@ find_free_port() {
     echo $port
 }
 
+# Ищем порты
 API_PORT=$(find_free_port 10085)
 INBOUND_PORT=$(find_free_port 443)
 
-# 2. Выпуск SSL сертификата через acme.sh (если еще не выпущен)
-CERT_FILE="$CERT_DIR/fullchain.crt"
-KEY_FILE="$CERT_DIR/privkey.key"
+# 2. Генерация ключей для Reality и уникального gRPC ServiceName
+KEYS=$($XRAY_BIN x25519)
+PRIVATE_KEY=$(echo "$KEYS" | grep "Private key:" | awk '{print $3}')
+PUBLIC_KEY=$(echo "$KEYS" | grep "Public key:" | awk '{print $3}')
+SHORT_ID=$(openssl rand -hex 8)
+SERVICE_NAME="grpc-$(openssl rand -hex 4)"
 
-if [ ! -f "$CERT_FILE" ]; then
-    echo "Выпускаем SSL сертификат для $DOMAIN..."
-    curl https://get.acme.sh | sh -s email=admin@$DOMAIN
-    ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
-    ~/.acme.sh/acme.sh --issue -d "$DOMAIN" --standalone --httpport 80
-    ~/.acme.sh/acme.sh --install-cert -d "$DOMAIN" \
-        --key-file "$KEY_FILE" \
-        --fullchain-file "$CERT_FILE"
-fi
-
-# 3. Генерация endpoint пути
-HTTPUPGRADE_PATH="/http-$(openssl rand -hex 4)"
-
-# 4. Формирование JSON конфига
+# 3. Формирование JSON конфига
 cat <<EOF > "$CONFIG_PATH"
 {
   "log": {
@@ -89,33 +76,36 @@ cat <<EOF > "$CONFIG_PATH"
     {
       "listen": "0.0.0.0",
       "port": $INBOUND_PORT,
-      "protocol": "vless",
+      "protocol": "trojan",
       "settings": {
-        "clients": [],
-        "decryption": "none"
+        "clients": []
       },
       "streamSettings": {
-        "network": "httpupgrade",
-        "security": "tls",
-        "tlsSettings": {
-          "serverName": "$DOMAIN",
-          "certificates": [
-            {
-              "certificateFile": "$CERT_FILE",
-              "keyFile": "$KEY_FILE"
-            }
-          ]
+        "network": "grpc",
+        "security": "reality",
+        "grpcSettings": {
+          "serviceName": "$SERVICE_NAME",
+          "multiMode": true
         },
-        "httpupgradeSettings": {
-          "path": "$HTTPUPGRADE_PATH",
-          "host": "$DOMAIN"
+        "realitySettings": {
+          "show": false,
+          "dest": "microsoft.com:443",
+          "xver": 0,
+          "serverNames": [
+            "microsoft.com",
+            "www.microsoft.com"
+          ],
+          "privateKey": "$PRIVATE_KEY",
+          "shortIds": [
+            "$SHORT_ID"
+          ]
         }
-      }
+      },
       "sniffing": {
         "enabled": true,
         "destOverride": ["http", "tls", "quic"]
       },
-      "tag": "inbound"
+      "tag": "trojan-inbound"
     }
   ],
   "outbounds": [
@@ -149,11 +139,12 @@ cat <<EOF > "$CONFIG_PATH"
 }
 EOF
 
-# 5. Systemd юнит
+# 4. Создание Systemd юнита
 SERVICE_PATH="/etc/systemd/system/xray-${TMP_ID}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Xray Custom Instance VLESS-WS-TLS (TMP_ID: ${TMP_ID})
+Description=Xray Custom Instance Trojan-gRPC-Reality (TMP_ID: ${TMP_ID})
+Documentation=https://xtls.github.io
 After=network.target nss-lookup.target
 
 [Service]
@@ -173,7 +164,7 @@ EOF
 
 systemctl daemon-reload
 
-# 6. Callback в панель
+# 5. Callback на панель
 curl -s -X POST "$PANEL_CALLBACK_URL" \
      -H "Content-Type: application/json" \
      -d '{
@@ -183,9 +174,10 @@ curl -s -X POST "$PANEL_CALLBACK_URL" \
            "inbound_port": '$INBOUND_PORT',
            "status": "installed",
            "custom_fields": {
-               "domain": "'"$DOMAIN"'",
-               "path": "'"$HTTPUPGRADE_PATH"'"
+               "public_key": "'"$PUBLIC_KEY"'",
+               "short_id": "'"$SHORT_ID"'",
+               "service_name": "'"$SERVICE_NAME"'"
            }
          }'
 
-echo "Нода $TMP_ID (VLESS-HTTPUPGRADE-TLS) готова. Domain: $DOMAIN, Path: $HTTPUPGRADE_PATH"
+echo "Нода $TMP_ID (Trojan-gRPC-Reality) готова. API: $API_PORT, Inbound: $INBOUND_PORT, ServiceName: $SERVICE_NAME"

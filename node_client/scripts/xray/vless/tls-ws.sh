@@ -1,23 +1,26 @@
 #!/bin/bash
+# Использование: bash vless-tls-ws.sh <tmp_id> <domain>
 
 TMP_ID=$1
-DOMAIN=$2
-CERT_PATH=$3
-KEY_PATH=$4
+CERT_PATH=$2
+KEY_PATH=$3
+DOMAIN=$4
 
-if [ -z "$TMP_ID" ] || [ -z "$DOMAIN" ] || [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ]; then
-    echo "Ошибка: Недостаточно параметров!"
-    echo "Использование: bash vmess-tcp-tls-exit.sh <tmp_id> <domain> <cert_path> <key_path>"
+if [ -z "$TMP_ID" ] || [ -z "$DOMAIN" ]; then
+    echo "Ошибка: требуется tmp_id и domain"
+    echo "Пример: bash vless-tls-ws.sh 1 mydomain.com"
     exit 1
 fi
 
 XRAY_BIN="/usr/local/bin/xray"
 CONFIG_DIR="/etc/xray/configs"
+CERT_DIR="/etc/xray/certs/$DOMAIN"
 CONFIG_PATH="$CONFIG_DIR/${TMP_ID}.json"
 PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback"
 
-mkdir -p "$CONFIG_DIR"
+mkdir -p "$CONFIG_DIR" "$CERT_DIR"
 
+# 1. Поиск свободных портов
 find_free_port() {
     local port=$1
     while ss -lnt | awk '{print $4}' | grep -q ":$port$"; do
@@ -29,28 +32,59 @@ find_free_port() {
 API_PORT=$(find_free_port 10085)
 INBOUND_PORT=$(find_free_port 443)
 
+
+# 3. Генерация пути для WebSocket
+WS_PATH="/ws-$(openssl rand -hex 4)"
+
+# 4. Формирование JSON конфига
 cat <<EOF > "$CONFIG_PATH"
 {
-  "log": { "loglevel": "warning" },
+  "log": {
+    "loglevel": "warning"
+  },
   "api": {
-    "services": ["HandlerService", "LoggerService", "StatsService"],
+    "services": [
+      "HandlerService",
+      "LoggerService",
+      "StatsService"
+    ],
     "tag": "api"
   },
   "stats": {},
   "policy": {
-    "levels": { "0": { "statsUserUplink": true, "statsUserDownlink": true } },
-    "system": { "statsInboundUplink": true, "statsInboundDownlink": true }
+    "levels": {
+      "0": {
+        "statsUserUplink": true,
+        "statsUserDownlink": true
+      }
+    },
+    "system": {
+      "statsInboundUplink": true,
+      "statsInboundDownlink": true,
+      "statsOutboundUplink": true,
+      "statsOutboundDownlink": true
+    }
   },
   "inbounds": [
     {
+      "listen": "127.0.0.1",
+      "port": $API_PORT,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1"
+      },
+      "tag": "api"
+    },
+    {
       "listen": "0.0.0.0",
       "port": $INBOUND_PORT,
-      "protocol": "vmess",
+      "protocol": "vless",
       "settings": {
-        "clients": []
+        "clients": [],
+        "decryption": "none"
       },
       "streamSettings": {
-        "network": "tcp",
+        "network": "ws",
         "security": "tls",
         "tlsSettings": {
           "serverName": "$DOMAIN",
@@ -60,20 +94,19 @@ cat <<EOF > "$CONFIG_PATH"
               "keyFile": "$KEY_PATH"
             }
           ]
+        },
+        "wsSettings": {
+          "path": "$WS_PATH",
+          "headers": {
+            "Host": "$DOMAIN"
+          }
         }
       },
       "sniffing": {
         "enabled": true,
         "destOverride": ["http", "tls", "quic"]
       },
-      "tag": "vmess-inbound"
-    },
-    {
-      "listen": "127.0.0.1",
-      "port": $API_PORT,
-      "protocol": "dokodemo-door",
-      "settings": { "address": "127.0.0.1" },
-      "tag": "api"
+      "tag": "inbound"
     }
   ],
   "outbounds": [
@@ -91,30 +124,27 @@ cat <<EOF > "$CONFIG_PATH"
     }
   ],
   "routing": {
-    "domainStrategy": "IPIfNonMatch",
     "rules": [
-      { "inboundTag": ["api"], "outboundTag": "api_out", "type": "field" },
-      { "ip": ["geoip:private"], "outboundTag": "block", "type": "field" },
-      { "protocol": ["bittorrent"], "outboundTag": "block", "type": "field" },
       {
-        "type": "field",
-        "domain": ["geosite:category-ru", "domain:ru", "domain:su", "domain:rf"],
-        "outboundTag": "direct"
+        "inboundTag": ["api"],
+        "outboundTag": "api_out",
+        "type": "field"
       },
       {
-        "type": "field",
-        "ip": ["geoip:ru"],
-        "outboundTag": "direct"
+        "ip": ["geoip:private"],
+        "outboundTag": "block",
+        "type": "field"
       }
     ]
   }
 }
 EOF
 
+# 5. Systemd юнит
 SERVICE_PATH="/etc/systemd/system/xray-${TMP_ID}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Xray Entry Node VMess-TCP-TLS (TMP_ID: ${TMP_ID})
+Description=Xray Custom Instance VLESS-WS-TLS (TMP_ID: ${TMP_ID})
 After=network.target nss-lookup.target
 
 [Service]
@@ -134,6 +164,7 @@ EOF
 
 systemctl daemon-reload
 
+# 6. Callback в панель
 curl -s -X POST "$PANEL_CALLBACK_URL" \
      -H "Content-Type: application/json" \
      -d '{
@@ -142,7 +173,10 @@ curl -s -X POST "$PANEL_CALLBACK_URL" \
            "api_port": '$API_PORT',
            "inbound_port": '$INBOUND_PORT',
            "status": "installed",
-           "node_type": "entry_vmess_tcp_tls",
+           "custom_fields": {
+               "domain": "'"$DOMAIN"'",
+               "path": "'"$WS_PATH"'"
+           }
          }'
 
-echo "VMess Entry-нода $TMP_ID успешно установлена и подвязана к Exit-ноде $EXIT_HOST."
+echo "Нода $TMP_ID (VLESS-WS-TLS) готова. Domain: $DOMAIN, Path: $WS_PATH"

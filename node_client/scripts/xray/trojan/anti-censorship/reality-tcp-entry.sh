@@ -6,17 +6,18 @@ EXIT_HOST=$2
 EXIT_PORT=$3
 EXIT_PUBKEY=$4
 EXIT_SHORTID=$5
-EXIT_UUID=$6
+EXIT_PASSWORD=$6
+EXIT_REALITY_SNI=$7
 
-if [ -z "$TMP_ID" ] || [ -z "$EXIT_HOST" ] || [ -z "$EXIT_UUID" ]; then
+if [ -z "$TMP_ID" ] || [ -z "$EXIT_HOST" ] || [ -z "$EXIT_PASSWORD" ]; then
     echo "Ошибка: Недостаточно параметров!"
-    echo "Использование: bash entry-node.sh <tmp_id> <exit_host> <exit_port> <exit_pubkey> <exit_shortid> <exit_uuid>"
+    echo "Использование: bash entry-node.sh <tmp_id> <exit_host> <exit_port> <exit_pubkey> <exit_shortid> <exit_password> <exit_reality_sni>"
     exit 1
 fi
 
 XRAY_BIN="/usr/local/bin/xray"
 CONFIG_DIR="/opt/reinar_panel/configs"
-CONFIG_PATH="$CONFIG_DIR/vless-reality-tcp_${TMP_ID}.json"
+CONFIG_PATH="$CONFIG_DIR/trojan-reality-tcp_${TMP_ID}.json"
 PANEL_CALLBACK_URL="http://10.0.0.1/api/v1/nodes/protocols/callback" # Замени на IP твоей панели в сети Wireguard
 
 mkdir -p "$CONFIG_DIR"
@@ -74,10 +75,9 @@ cat <<EOF > "$CONFIG_PATH"
     {
       "listen": "0.0.0.0",
       "port": $INBOUND_PORT,
-      "protocol": "vless",
+      "protocol": "trojan",
       "settings": {
-        "clients": [],
-        "decryption": "none"
+        "clients": []
       },
       "streamSettings": {
         "network": "tcp",
@@ -100,7 +100,7 @@ cat <<EOF > "$CONFIG_PATH"
         "enabled": true,
         "destOverride": ["http", "tls", "quic"]
       },
-      "tag": "vless-inbound"
+      "tag": "trojan-inbound"
     },
     {
       "listen": "127.0.0.1",
@@ -115,7 +115,7 @@ cat <<EOF > "$CONFIG_PATH"
   "outbounds": [
     {
       "tag": "freedom_node",
-      "protocol": "vless",
+      "protocol": "trojan",
       "settings": {
         "vnext": [
           {
@@ -123,9 +123,7 @@ cat <<EOF > "$CONFIG_PATH"
             "port": $EXIT_PORT,
             "users": [
               {
-                "id": "$EXIT_UUID",
-                "flow": "xtls-rprx-vision",
-                "encryption": "none"
+                "password": "$EXIT_PASWORD"
               }
             ]
           }
@@ -135,7 +133,7 @@ cat <<EOF > "$CONFIG_PATH"
         "network": "tcp",
         "security": "reality",
         "realitySettings": {
-          "serverName": "microsoft.com",
+          "serverName": "$EXIT_REALITY_SNI",
           "publicKey": "$EXIT_PUBKEY",
           "shortId": "$EXIT_SHORTID",
           "fingerprint": "chrome"

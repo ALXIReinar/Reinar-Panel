@@ -1,14 +1,17 @@
 #!/bin/bash
 
 TMP_ID=$1
-METHOD=${2:-"2022-blake3-aes-128-gcm"}
+CERT_PATH=$2
+KEY_PATH=$3
+DOMAIN=$4
+METHOD=${5:-"2022-blake3-aes-128-gcm"}
 
 WS_PATH="/ws-$(openssl rand -hex 4)-ss"
 
 
 if [ -z "$TMP_ID" ]; then
     echo "Ошибка: Не указан TMP_ID!"
-    echo "Использование: bash ss-ws-install.sh <tmp_id> [method] [path]"
+    echo "Использование: bash ss-ws-install.sh <tmp_id> <cert_path> <key_path> <domain> [method]"
     exit 1
 fi
 
@@ -61,8 +64,21 @@ cat <<EOF > "$CONFIG_PATH"
       },
       "streamSettings": {
         "network": "ws",
+        "security": "tls",
+        "tlsSettings": {
+          "serverName": "$DOMAIN",
+          "certificates": [
+            {
+              "certificateFile": "$CERT_PATH",
+              "keyFile": "$KEY_PATH"
+            }
+          ]
+        },
         "wsSettings": {
-          "path": "$WS_PATH"
+          "path": "$WS_PATH",
+          "headers": {
+            "Host": "$DOMAIN"
+          }
         }
       },
       "tag": "ss-inbound"

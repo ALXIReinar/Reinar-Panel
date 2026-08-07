@@ -44,13 +44,6 @@ cat <<EOF > "$CONFIG_PATH"
   },
   "inbounds": [
     {
-      "listen": "127.0.0.1",
-      "port": $API_PORT,
-      "protocol": "dokodemo-door",
-      "settings": { "address": "127.0.0.1" },
-      "tag": "api"
-    },
-    {
       "listen": "0.0.0.0",
       "port": $INBOUND_PORT,
       "protocol": "vmess",
@@ -77,7 +70,14 @@ cat <<EOF > "$CONFIG_PATH"
         "enabled": true,
         "destOverride": ["http", "tls", "quic"]
       },
-      "tag": "inbound"
+      "tag": "vmess-inbound"
+    },
+    {
+      "listen": "127.0.0.1",
+      "port": $API_PORT,
+      "protocol": "dokodemo-door",
+      "settings": { "address": "127.0.0.1" },
+      "tag": "api"
     }
   ],
   "outbounds": [

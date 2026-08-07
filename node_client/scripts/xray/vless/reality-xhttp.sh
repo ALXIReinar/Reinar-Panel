@@ -2,15 +2,8 @@
 # Использование: bash vless-reality-tcp.sh <tmp_id>
 
 TMP_ID=$1
-EXIT_HOST=$2
-EXIT_PORT=$3
-EXIT_PUBKEY=$4
-EXIT_SHORTID=$5
-EXIT_UUID=$6
-
-if [ -z "$TMP_ID" ] || [ -z "$EXIT_HOST" ] || [ -z "$EXIT_UUID" ]; then
-    echo "Ошибка: Недостаточно параметров!"
-    echo "Использование: bash entry-node.sh <tmp_id> <exit_host> <exit_port> <exit_pubkey> <exit_shortid> <exit_uuid>"
+if [ -z "$TMP_ID" ]; then
+    echo "Ошибка: не передан tmp_id"
     exit 1
 fi
 
@@ -39,6 +32,7 @@ KEYS=$($XRAY_BIN x25519)
 PRIVATE_KEY=$(echo "$KEYS" | grep "Private key:" | awk '{print $3}')
 PUBLIC_KEY=$(echo "$KEYS" | grep "Public key:" | awk '{print $3}')
 SHORT_ID=$(openssl rand -hex 8)
+XHTTP_PATH=$(openssl rand -hex 4)
 
 # 3. Формирование JSON конфига
 # Важно: массив clients пуст, юзеров панель добавит позже через gRPC API
@@ -72,6 +66,15 @@ cat <<EOF > "$CONFIG_PATH"
   },
   "inbounds": [
     {
+      "listen": "127.0.0.1",
+      "port": $API_PORT,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1"
+      },
+      "tag": "api"
+    },
+    {
       "listen": "0.0.0.0",
       "port": $INBOUND_PORT,
       "protocol": "vless",
@@ -80,15 +83,20 @@ cat <<EOF > "$CONFIG_PATH"
         "decryption": "none"
       },
       "streamSettings": {
-        "network": "tcp",
+        "network": "xhttp",
+        "xhttpSettings": {
+          "mode": "auto",
+          "host": "microsoft.com",
+          "path": "xhttp-$XHTTP_PATH-vless-reality"
+        }
         "security": "reality",
         "realitySettings": {
           "show": false,
-          "dest": "vk.com:443",
+          "dest": "microsoft.com:443",
           "xver": 0,
           "serverNames": [
-            "vk.com",
-            "www.vk.com"
+            "microsoft.com",
+            "www.microsoft.com"
           ],
           "privateKey": "$PRIVATE_KEY",
           "shortIds": [
@@ -101,47 +109,9 @@ cat <<EOF > "$CONFIG_PATH"
         "destOverride": ["http", "tls", "quic"]
       },
       "tag": "vless-inbound"
-    },
-    {
-      "listen": "127.0.0.1",
-      "port": $API_PORT,
-      "protocol": "dokodemo-door",
-      "settings": {
-        "address": "127.0.0.1"
-      },
-      "tag": "api"
     }
   ],
   "outbounds": [
-    {
-      "tag": "freedom_node",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "$EXIT_HOST",
-            "port": $EXIT_PORT,
-            "users": [
-              {
-                "id": "$EXIT_UUID",
-                "flow": "xtls-rprx-vision",
-                "encryption": "none"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "tcp",
-        "security": "reality",
-        "realitySettings": {
-          "serverName": "microsoft.com",
-          "publicKey": "$EXIT_PUBKEY",
-          "shortId": "$EXIT_SHORTID",
-          "fingerprint": "chrome"
-        }
-      }
-    },
     {
       "protocol": "freedom",
       "tag": "direct"
@@ -156,37 +126,16 @@ cat <<EOF > "$CONFIG_PATH"
     }
   ],
   "routing": {
-    "domainStrategy": "IPIfNonMatch",
     "rules": [
       {
-        "type": "field",
         "inboundTag": ["api"],
-        "outboundTag": "api_out"
+        "outboundTag": "api_out",
+        "type": "field"
       },
       {
-        "type": "field",
         "ip": ["geoip:private"],
-        "outboundTag": "block"
-      },
-      {
-        "type": "field",
-        "protocol": ["bittorrent"],
-        "outboundTag": "block"
-      },
-      {
-        "type": "field",
-        "domain": ["geosite:category-ru", "domain:ru", "domain:su", "domain:rf"],
-        "outboundTag": "direct"
-      },
-      {
-        "type": "field",
-        "ip": ["geoip:ru"],
-        "outboundTag": "direct"
-      },
-      {
-        "type": "field",
-        "network": "tcp,udp",
-        "outboundTag": "freedom_node"
+        "outboundTag": "block",
+        "type": "field"
       }
     ]
   }

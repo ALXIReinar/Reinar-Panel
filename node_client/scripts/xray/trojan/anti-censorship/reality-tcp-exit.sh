@@ -1,20 +1,16 @@
 #!/bin/bash
+# Использование: bash exit-node-vless-reality.sh <tmp_id>
 
 TMP_ID=$1
-DOMAIN=$2
-CERT_PATH=$3
-KEY_PATH=$4
-
-if [ -z "$TMP_ID" ] || [ -z "$DOMAIN" ] || [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ]; then
-    echo "Ошибка: Недостаточно параметров!"
-    echo "Использование: bash vmess-ws-tls.sh <tmp_id> <domain> <cert_path> <key_path>"
+if [ -z "$TMP_ID" ]; then
+    echo "Ошибка: не передан tmp_id"
     exit 1
 fi
 
 XRAY_BIN="/usr/local/bin/xray"
 CONFIG_DIR="/etc/xray/configs"
 CONFIG_PATH="$CONFIG_DIR/${TMP_ID}.json"
-PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback"
+PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback" # IP панели в WG
 
 mkdir -p "$CONFIG_DIR"
 
@@ -28,7 +24,13 @@ find_free_port() {
 
 API_PORT=$(find_free_port 10085)
 INBOUND_PORT=$(find_free_port 443)
-WS_PATH="/ws-$(openssl rand -hex 4)-vmess"
+
+# Генерация ключей и служебного UUID для входных нод
+KEYS=$($XRAY_BIN x25519)
+PRIVATE_KEY=$(echo "$KEYS" | grep "Private key:" | awk '{print $3}')
+PUBLIC_KEY=$(echo "$KEYS" | grep "Public key:" | awk '{print $3}')
+SHORT_ID=$(openssl rand -hex 8)
+EXIT_UUID=$($XRAY_BIN uuid)
 
 cat <<EOF > "$CONFIG_PATH"
 {
@@ -46,34 +48,31 @@ cat <<EOF > "$CONFIG_PATH"
     {
       "listen": "0.0.0.0",
       "port": $INBOUND_PORT,
-      "protocol": "vmess",
+      "protocol": "trojan",
       "settings": {
-        "clients": []
+        "clients": [
+          {
+            "password": "$EXIT_UUID",
+          }
+        ]
       },
       "streamSettings": {
-        "network": "ws",
-        "security": "tls",
-        "wsSettings": {
-          "path": "$WS_PATH",
-          "headers": {
-            "Host": "$DOMAIN"
-          }
-        },
-        "tlsSettings": {
-          "serverName": "$DOMAIN",
-          "certificates": [
-            {
-              "certificateFile": "$CERT_PATH",
-              "keyFile": "$KEY_PATH"
-            }
-          ]
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "show": false,
+          "dest": "microsoft.com:443",
+          "xver": 0,
+          "serverNames": ["microsoft.com", "www.microsoft.com"],
+          "privateKey": "$PRIVATE_KEY",
+          "shortIds": ["$SHORT_ID"]
         }
       },
       "sniffing": {
         "enabled": true,
         "destOverride": ["http", "tls", "quic"]
       },
-      "tag": "vmess-inbound"
+      "tag": "trojan-inbound"
     },
     {
       "listen": "127.0.0.1",
@@ -84,9 +83,18 @@ cat <<EOF > "$CONFIG_PATH"
     }
   ],
   "outbounds": [
-    { "protocol": "freedom", "tag": "direct" },
-    { "protocol": "blackhole", "tag": "block" },
-    { "protocol": "none", "tag": "api_out" }
+    {
+      "protocol": "freedom",
+      "tag": "direct"
+    },
+    {
+      "protocol": "blackhole",
+      "tag": "block"
+    },
+    {
+      "protocol": "none",
+      "tag": "api_out"
+    }
   ],
   "routing": {
     "rules": [
@@ -97,10 +105,11 @@ cat <<EOF > "$CONFIG_PATH"
 }
 EOF
 
+# Systemd юнит
 SERVICE_PATH="/etc/systemd/system/xray-${TMP_ID}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Xray VMess-WS-TLS Node (TMP_ID: ${TMP_ID})
+Description=Xray Anticensorship(AntiWhitelist/Block Bypass) Exit Node (TMP_ID: ${TMP_ID}). Trojan-Reality-TCP
 After=network.target nss-lookup.target
 
 [Service]
@@ -120,6 +129,7 @@ EOF
 
 systemctl daemon-reload
 
+# В callback отдаем данные для подключения Entry нод к этой Выходной ноде
 curl -s -X POST "$PANEL_CALLBACK_URL" \
      -H "Content-Type: application/json" \
      -d '{
@@ -128,7 +138,15 @@ curl -s -X POST "$PANEL_CALLBACK_URL" \
            "api_port": '$API_PORT',
            "inbound_port": '$INBOUND_PORT',
            "status": "installed",
-           "node_type": "vmess_ws_tls",
+           "node_type": "exit",
+           "custom_fields": {
+               "public_key": "'"$PUBLIC_KEY"'",
+               "short_id": "'"$SHORT_ID"'",
+               "exit_uuid": "'"$EXIT_UUID"'"
+           }
          }'
 
-echo "VMess-WS-TLS нода $TMP_ID успешно установлена."
+echo "Exit нода $TMP_ID Trojan-Reality-TCP установлена. UUID для релеев: $EXIT_UUID"
+echo "Exit PublicKey: $PUBLIC_KEY"
+echo "Exit Reality SNI: microsoft.com"
+echo "Exit Short Id: $SHORT_ID"

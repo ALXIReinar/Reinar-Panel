@@ -1,12 +1,14 @@
 #!/bin/bash
-# Использование: bash vless-tls-ws.sh <tmp_id> <domain>
+# Использование: bash http-upgrade-tls.sh <tmp_id> <domain>
 
 TMP_ID=$1
-DOMAIN=$2
+CERT_PATH=$2
+KEY_PATH=$3
+DOMAIN=$4
 
 if [ -z "$TMP_ID" ] || [ -z "$DOMAIN" ]; then
     echo "Ошибка: требуется tmp_id и domain"
-    echo "Пример: bash vless-tls-ws.sh 1 mydomain.com"
+    echo "Пример: bash xray/vless/http-upgrade-tls.sh 1 mydomain.com"
     exit 1
 fi
 
@@ -30,22 +32,9 @@ find_free_port() {
 API_PORT=$(find_free_port 10085)
 INBOUND_PORT=$(find_free_port 443)
 
-# 2. Выпуск SSL сертификата через acme.sh (если еще не выпущен)
-CERT_FILE="$CERT_DIR/fullchain.crt"
-KEY_FILE="$CERT_DIR/privkey.key"
 
-if [ ! -f "$CERT_FILE" ]; then
-    echo "Выпускаем SSL сертификат для $DOMAIN..."
-    curl https://get.acme.sh | sh -s email=admin@$DOMAIN
-    ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt
-    ~/.acme.sh/acme.sh --issue -d "$DOMAIN" --standalone --httpport 80
-    ~/.acme.sh/acme.sh --install-cert -d "$DOMAIN" \
-        --key-file "$KEY_FILE" \
-        --fullchain-file "$CERT_FILE"
-fi
-
-# 3. Генерация пути для WebSocket
-WS_PATH="/ws-$(openssl rand -hex 4)"
+# 3. Генерация endpoint пути
+HTTPUPGRADE_PATH="/http-$(openssl rand -hex 4)"
 
 # 4. Формирование JSON конфига
 cat <<EOF > "$CONFIG_PATH"
@@ -78,15 +67,6 @@ cat <<EOF > "$CONFIG_PATH"
   },
   "inbounds": [
     {
-      "listen": "127.0.0.1",
-      "port": $API_PORT,
-      "protocol": "dokodemo-door",
-      "settings": {
-        "address": "127.0.0.1"
-      },
-      "tag": "api"
-    },
-    {
       "listen": "0.0.0.0",
       "port": $INBOUND_PORT,
       "protocol": "vless",
@@ -95,26 +75,36 @@ cat <<EOF > "$CONFIG_PATH"
         "decryption": "none"
       },
       "streamSettings": {
-        "network": "ws",
+        "network": "httpupgrade",
         "security": "tls",
         "tlsSettings": {
           "serverName": "$DOMAIN",
           "certificates": [
             {
-              "certificateFile": "$CERT_FILE",
-              "keyFile": "$KEY_FILE"
+              "certificateFile": "$CERT_PATH",
+              "keyFile": "$KEY_PATH"
             }
           ]
         },
-        "wsSettings": {
-          "path": "$WS_PATH"
+        "httpupgradeSettings": {
+          "path": "$HTTPUPGRADE_PATH",
+          "host": "$DOMAIN"
         }
-      },
+      }
       "sniffing": {
         "enabled": true,
         "destOverride": ["http", "tls", "quic"]
       },
-      "tag": "inbound"
+      "tag": "vless-inbound"
+    },
+    {
+      "listen": "127.0.0.1",
+      "port": $API_PORT,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1"
+      },
+      "tag": "api"
     }
   ],
   "outbounds": [
@@ -183,8 +173,8 @@ curl -s -X POST "$PANEL_CALLBACK_URL" \
            "status": "installed",
            "custom_fields": {
                "domain": "'"$DOMAIN"'",
-               "path": "'"$WS_PATH"'"
+               "path": "'"$HTTPUPGRADE_PATH"'"
            }
          }'
 
-echo "Нода $TMP_ID (VLESS-WS-TLS) готова. Domain: $DOMAIN, Path: $WS_PATH"
+echo "Нода $TMP_ID (VLESS-HTTPUPGRADE-TLS) готова. Domain: $DOMAIN, Path: $HTTPUPGRADE_PATH"

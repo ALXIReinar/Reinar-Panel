@@ -1,13 +1,13 @@
 #!/bin/bash
 
 TMP_ID=$1
-DOMAIN=$2
-CERT_PATH=$3
-KEY_PATH=$4
+CERT_PATH=$2
+KEY_PATH=$3
+DOMAIN=$4
 
-if [ -z "$TMP_ID" ] || [ -z "$DOMAIN" ] || [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ]; then
-    echo "Ошибка: Недостаточно параметров!"
-    echo "Использование: bash vmess-ws-tls.sh <tmp_id> <domain> <cert_path> <key_path>"
+if [ -z "$TMP_ID" ] || [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$DOMAIN" ]; then
+    echo "Ошибка: Необходимы параметры TMP_ID, CERT_PATH и KEY_PATH!"
+    echo "Использование: bash trojan-tls-install.sh <tmp_id> <cert_path> <key_path> <domain>"
     exit 1
 fi
 
@@ -27,8 +27,7 @@ find_free_port() {
 }
 
 API_PORT=$(find_free_port 10085)
-INBOUND_PORT=$(find_free_port 443)
-WS_PATH="/ws-$(openssl rand -hex 4)-vmess"
+INBOUND_PORT=$(find_free_port 443) # Обычно Trojan слушает 443, но ищем свободный
 
 cat <<EOF > "$CONFIG_PATH"
 {
@@ -46,19 +45,13 @@ cat <<EOF > "$CONFIG_PATH"
     {
       "listen": "0.0.0.0",
       "port": $INBOUND_PORT,
-      "protocol": "vmess",
+      "protocol": "trojan",
       "settings": {
         "clients": []
       },
       "streamSettings": {
-        "network": "ws",
+        "network": "tcp",
         "security": "tls",
-        "wsSettings": {
-          "path": "$WS_PATH",
-          "headers": {
-            "Host": "$DOMAIN"
-          }
-        },
         "tlsSettings": {
           "serverName": "$DOMAIN",
           "certificates": [
@@ -69,11 +62,7 @@ cat <<EOF > "$CONFIG_PATH"
           ]
         }
       },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": ["http", "tls", "quic"]
-      },
-      "tag": "vmess-inbound"
+      "tag": "trojan-inbound"
     },
     {
       "listen": "127.0.0.1",
@@ -100,7 +89,7 @@ EOF
 SERVICE_PATH="/etc/systemd/system/xray-${TMP_ID}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Xray VMess-WS-TLS Node (TMP_ID: ${TMP_ID})
+Description=Xray Trojan-TLS-TCP Node (TMP_ID: ${TMP_ID})
 After=network.target nss-lookup.target
 
 [Service]
@@ -119,6 +108,8 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
+systemctl enable "xray-${TMP_ID}"
+systemctl restart "xray-${TMP_ID}"
 
 curl -s -X POST "$PANEL_CALLBACK_URL" \
      -H "Content-Type: application/json" \
@@ -128,7 +119,10 @@ curl -s -X POST "$PANEL_CALLBACK_URL" \
            "api_port": '$API_PORT',
            "inbound_port": '$INBOUND_PORT',
            "status": "installed",
-           "node_type": "vmess_ws_tls",
+           "node_type": "trojan_tls",
+           "custom_fields": {
+               "password": "'"$TROJAN_PASS"'"
+           }
          }'
 
-echo "VMess-WS-TLS нода $TMP_ID успешно установлена."
+echo "Trojan-TLS нода $TMP_ID успешно установлена."

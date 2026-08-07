@@ -28,7 +28,7 @@ find_free_port() {
 
 API_PORT=$(find_free_port 10085)
 INBOUND_PORT=$(find_free_port 443)
-HU_PATH="/vmess-hu-${TMP_ID}"
+HU_PATH="/vmess-hu-$(openssl rand -hex 4)"
 
 cat <<EOF > "$CONFIG_PATH"
 {
@@ -71,7 +71,7 @@ cat <<EOF > "$CONFIG_PATH"
         "enabled": true,
         "destOverride": ["http", "tls", "quic"]
       },
-      "tag": "inbound"
+      "tag": "vmess-inbound"
     },
     {
       "listen": "127.0.0.1",
@@ -79,7 +79,7 @@ cat <<EOF > "$CONFIG_PATH"
       "protocol": "dokodemo-door",
       "settings": { "address": "127.0.0.1" },
       "tag": "api"
-    },
+    }
   ],
   "outbounds": [
     { "protocol": "freedom", "tag": "direct" },

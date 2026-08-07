@@ -1,13 +1,16 @@
 #!/bin/bash
 
 TMP_ID=$1
-METHOD=${2:-"2022-blake3-aes-128-gcm"}
+CERT_PATH=$2
+KEY_PATH=$3
+DOMAIN=$4
+METHOD=${5:-"2022-blake3-aes-128-gcm"}
 
 HTTP_PATH="/http-$(openssl rand -hex 4)-ss"
 
 if [ -z "$TMP_ID" ]; then
     echo "Ошибка: Не указан TMP_ID!"
-    echo "Использование: bash ss-httpupgrade-install.sh <tmp_id> [method]"
+    echo "Использование: bash ss-httpupgrade-install.sh <tmp_id> <cert_path> <key_path> <domain> [method]"
     exit 1
 fi
 
@@ -59,9 +62,20 @@ cat <<EOF > "$CONFIG_PATH"
         "clients": []
       },
       "streamSettings": {
+        "security": "tls",
+        "tlsSettings": {
+          "serverName": "$DOMAIN",
+          "certificates": [
+            {
+              "certificateFile": "$CERT_PATH",
+              "keyFile": "$KEY_PATH"
+            }
+          ]
+        },
         "network": "httpupgrade",
         "httpupgradeSettings": {
-          "path": "$HTTP_PATH"
+          "path": "$HTTP_PATH",
+          "host": "$DOMAIN"
         }
       },
       "tag": "ss-inbound"
