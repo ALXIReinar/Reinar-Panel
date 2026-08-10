@@ -42,60 +42,49 @@ class BulkActionsQueries:
         # user_sub_ids, sub_plan_ids, user_ids = zip(
         #     *tuple(tuple(u['user_sub_id'], u['sub_plan_id'], u['user_id']) for u in users)
         # )
-        query = '''
-        WITH users_to_proto_cores AS (
+        query = """
+        -- 1. Берем сырые данные
+        WITH raw_users AS (
             SELECT user_sub_id, sub_plan_id, uuid 
             FROM UNNEST($1::bigint[], $2::integer[], $3::varchar[]) AS t(user_sub_id, sub_plan_id, uuid)
         ),
-        -- 2. Собираем информацию о нодах для этих подписок
-        expired_nodes_info AS (
-            SELECT upc.uuid, upc.user_sub_id,
-                   vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, 
-                   pt.proto_python_lib,
-                   pt.flatten_json_users_key, 
-                   pt.flatten_user_identifier_key, 
-                   pt.reload_core_command,
-                   np.config_path, 
-                   pt.constant_user_data_obj, 
-                   pt.required_user_data_obj,
-                   pt.api_bulk_add_user_script,
-                   pt.bulk_add_script_custom_params,
-                   pt.api_bulk_delete_user_script,
-                   pt.bulk_delete_script_custom_params,
-                   pt.process_user_item_script, 
-                   pt.process_user_libs
-            FROM users_to_proto_cores upc
-            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = upc.sub_plan_id 
-            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
-            JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
-            JOIN protocols p ON np.proto_id = p.id 
-            JOIN proto_templates pt ON p.tmp_id = pt.id 
+        -- 2. Делаем легкий джойн ТОЛЬКО для получения ключа группировки (node_proto_id)
+        mapped_users AS (
+            SELECT 
+                vsp.node_proto_id, 
+                ru.user_sub_id, 
+                ru.uuid
+            FROM raw_users ru
+            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = ru.sub_plan_id
+        ),
+        -- 3. Пре-агрегация! Теперь у нас по одной записи на каждый node_proto_id с готовым JSON-массивом пользователей
+        pre_aggregated_users AS (
+            SELECT node_proto_id,
+                json_agg(
+                    json_build_object( 
+                        'uuid', uuid, 
+                        'user_sub_id', user_sub_id,
+                        'node_proto_id', node_proto_id
+                    )
+                ) AS users_json
+            FROM mapped_users
+            GROUP BY node_proto_id
         )
-        -- 3. Группируем пользователей по нодам для пакетной отправки
-        SELECT node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, 
-               flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, 
-               constant_user_data_obj, required_user_data_obj, 
-               api_bulk_add_user_script, bulk_add_script_custom_params,
-               api_bulk_delete_user_script, bulk_delete_script_custom_params,
-               process_user_item_script, process_user_libs,
-               COALESCE(
-                   json_agg(
-                       json_build_object( 
-                           'uuid', uuid, 
-                           'user_sub_id', user_sub_id,
-                           'node_proto_id', node_proto_id
-                       )
-                   ),
-                   '[]'::json
-               ) AS users
-        FROM expired_nodes_info
-        GROUP BY node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, 
-                 flatten_json_users_key, flatten_user_identifier_key,
-                 reload_core_command, config_path, constant_user_data_obj, required_user_data_obj, 
-                 api_bulk_add_user_script, bulk_add_script_custom_params,
-                 api_bulk_delete_user_script, bulk_delete_script_custom_params,
-                 process_user_item_script, process_user_libs
-        '''
+        -- 4. Финальный джойн. 
+        -- Декартово произведение не раздувает записи, экономия ресурсов
+        SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, 
+            pt.proto_python_lib, pt.flatten_json_users_key, pt.flatten_user_identifier_key, 
+            pt.reload_core_command, np.config_path, pt.constant_user_data_obj, 
+            pt.required_user_data_obj, pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params,
+            pt.api_bulk_delete_user_script, pt.bulk_delete_script_custom_params,
+            pt.process_user_item_script, pt.process_user_libs,
+            COALESCE(pau.users_json, '[]'::json) AS users
+        FROM pre_aggregated_users pau
+        JOIN nodes_protocols np ON np.id = pau.node_proto_id AND np.user_visible = true 
+        JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
+        JOIN protocols p ON np.proto_id = p.id 
+        JOIN proto_templates pt ON p.tmp_id = pt.id
+        """
         return await self.conn.fetch(query, user_sub_ids, sub_plan_ids, user_uuids)
 
 
