@@ -5,6 +5,7 @@ import asyncio
 import os
 import time
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from typing import Annotated
 
 import aiofiles
@@ -14,6 +15,7 @@ from starlette.requests import Request
 
 from node_client.config import TMP_DIR
 from node_client.logger_config import log_event
+from node_client.schemas.proto_core_users_schema import UserInjectors
 
 
 class ConfigWriteBuffer:
@@ -53,7 +55,12 @@ class ConfigWriteBuffer:
 
 
     async def register_node(
-            self, node_proto_id: int, filepath: str, users_path: str,  flatten_user_identifier_key: str, reload_command: str | None, user_obj: dict | None = None
+            self,
+            node_proto_id: int,
+            filepath: str,
+            user_injectors: list[dict],
+            reload_command: str | None,
+            user_obj: dict | None = None
     ):
         """
         Регистрирует виртуальную ноду в менеджере
@@ -68,38 +75,35 @@ class ConfigWriteBuffer:
         Args:
             node_proto_id: ID виртуальной ноды
             filepath: Путь к конфиг-файлу
-            users_path: Flatten-json путь до массива clients
-            flatten_user_identifier_key: Flatten-json путь до идентификатора пользователя
+            user_injectors:
+                - flatten_array_cursor (users_path): Flatten-json путь до массива clients
+                - extractor_script (flatten_user_identifier_key): Flatten-json путь до идентификатора пользователя
             reload_command: Команда перезагрузки ядра (если нет hot-reload)
             user_obj: Объект для валидации flatten_user_identifier_key
         """
         # 0. Проверяем значения перед сохранением
+        injectors = []
         try:
             # Проверка существования файла-конфига
-            file_content = await self._read_config(filepath)
+            ok, file_content = await self._read_config(filepath, True)
 
-            # Проверка работоспособности ключа списка пользователей в файле
-            users_list = self._navigate_to_path(file_content, users_path)
+            for inj in user_injectors:
+                # Проверка работоспособности ключа массива для операций в конфиг-файле
+               self._navigate_to_path(file_content, inj['flatten_array_cursor'])
+               injectors.append({
+                   "flatten_array_cursor": inj['flatten_array_cursor'],
+                   "extractor_script": eval(inj['extractor_script'])     # Внутри сидит код, который выдаст user_obj в нужном формате
+               })
 
-            # Проверка работоспособности ключа к пользовательскому объекту
-            user_key_check = flatten_key2value(
-                # user_obj - если вызов из add, users_list[0] - если из delete
-                # Проблема в том, что удаление могут вызвать при пустом списке пользователей => нужна заглушка
-                user_obj or (users_list[0] if users_list else {'success': Exception}),
-                flatten_user_identifier_key
-            )
-            if user_key_check is Exception:
-                return False, 500, f'{flatten_user_identifier_key} не найден в user_obj'
 
         except Exception as e:
-            log_event(f'\033[35m[Worker]\033[0m Валидация параметров перед регистрацией провалилась | error: \033[34m{e}\033[0m', level='ERROR')
+            log_event(f'\033[35m[Worker]\033[0m Валидация параметров перед регистрацией провалилась | user_injectors: \033[34m{user_injectors}\033[0m; error: \033[34m{e}\033[0m', level='ERROR')
             return False, 500, str(repr(e))
 
         # 1. Сохраняем метаданные
         self.node_metadata[node_proto_id] = {
             'filepath': filepath,
-            'users_path': users_path,
-            'flatten_user_identifier_key': flatten_user_identifier_key,
+            'injectors': injectors,
             'reload_command': reload_command,
         }
         
@@ -255,22 +259,23 @@ class ConfigWriteBuffer:
         
         try:
             # Читаем конфиг
-            config = await self._read_config(metadata['filepath'])
+
+            ok, state_config = await self._read_config(f"{metadata['filepath']}.state.json", True)
             
             # Получаем массив clients
-            clients_array = self._navigate_to_path(config, metadata['users_path'])
+            users_arr = state_config['users']
             
             # Создаём маппинг {uuid: user_obj}
             self.buffer_storage[node_id] = {}
-            for user_obj in clients_array:
+            for user_obj in users_arr:
                 # Парсим flatten ключ к user_identifier, составляем пару {user_identifier: user_obj}
-                user_identifier_value = flatten_key2value(user_obj, metadata['flatten_user_identifier_key'])
+                user_identifier_value = user_obj['user_uuid']
                 self.buffer_storage[node_id][user_identifier_value] = user_obj
             
             log_event(f"Загружено пользователей из конфига | node_proto_id: \033[32m{node_id}\033[0m; count: \033[32m{len(self.buffer_storage[node_id])}\033[0m")
             
         except Exception as e:
-            log_event(f"Ошибка загрузки пользователей из конфига | node_proto_id: \033[31m{node_id}\033[0m; error: \033[34m{e}\033[0m", level='ERROR')
+            log_event(f"Ошибка загрузки пользователей из State-конфига. Убедитесь, что существует файл \"\033[33m{metadata.get('filepath')}.state.json\033[0m\" | node_proto_id: \033[31m{node_id}\033[0m; error: \033[34m{e}\033[0m", level='ERROR')
             # Продолжаем с пустым буфером
             self.buffer_storage[node_id] = {}
 
@@ -317,7 +322,7 @@ class ConfigWriteBuffer:
                 if was_limited and self.queue_limited and operations:
                     log_event(f"\033[35m[Worker]\033[0m Батч собран | node_proto_id: \033[32m{node_id}\033[0m; opers_len: \033[35m{len(operations)}\033[0m")
                     asyncio.create_task(self._write_node_to_disk(node_id))
-                    
+
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -331,29 +336,36 @@ class ConfigWriteBuffer:
         НЕ читаем конфиг для получения пользователей - используем буфер!
         """
         metadata = self.node_metadata[node_id]
-        
+
         try:
             log_event(f"\033[34m[Write]\033[0m Запись на диск | node_proto_id: \033[32m{node_id}\033[0m | users: \033[34m{len(self.buffer_storage[node_id])}\033[0m")
-            
-            # 1. Читаем конфиг (только для получения структуры)
-            config = await self._read_config(metadata['filepath'])
-            
-            # 2. Получаем ссылку на массив clients
-            clients_array = self._navigate_to_path(config, metadata['users_path'])
-            
-            # 3. Заменяем массив на актуальное состояние буфера. Фишка структуры O(1). Значения в словаре - готовые пользовательские объекты для ядра
-            clients_array.clear()
-            clients_array.extend(list(self.buffer_storage[node_id].values()))
-            
-            # 4. Атомарно записываем конфиг
+
+            "0. Бэкап State в файл"
+            await self._write_config_atomic(f"{metadata['filepath']}.state.json", {'users': list(self.buffer_storage[node_id].values())})
+
+            "1. Читаем конфиги. Стейт - для формирирован (только для получения структуры)"
+            core_ok, config = await self._read_config(metadata['filepath'], True)
+
+            "2. Прогоняем каждый массив операций для конкретно этого ядра"
+            for inj in metadata['injectors']:
+                clients_array = self._navigate_to_path(config, inj['flatten_array_cursor'])
+
+                "3. Заменяем массив на актуальное состояние буфера. Фишка структуры O(1). Готовые пользовательские объекты для ядра получаем благодаря inj['extractor_script']"
+                clients_array.clear()
+
+                transformed_clients = [inj['extractor_script'](su) for su in self.buffer_storage[node_id].values()]
+                clients_array.extend(transformed_clients)
+
+
+            "4. Атомарно записываем конфиг ядра"
             await self._write_config_atomic(metadata['filepath'], config)
-            
-            # 5. Перезагружаем ядро (если нужно)
+
+            "5. Перезагружаем ядро (если нужно)"
             if metadata['reload_command']:
                 await self._reload_core(metadata['reload_command'])
-            
+
             log_event(f"\033[34m[Write]\033[0m Успешная запись | node_proto_id: \033[32m{node_id}\033[0m")
-            
+
         except Exception as e:
             log_event(f"\033[34m[Write]\033[0m КРИТИЧЕСКАЯ ошибка записи | node_proto_id: \033[31m{node_id}\033[0m | error: \033[34m{e}\033[0m", level='CRITICAL')
 
@@ -397,20 +409,98 @@ class ConfigWriteBuffer:
 
 
 
+    async def _audit_state(self, node_id: int, mode: str = "strict"):
+        """
+        Сверяет Shadow State (фарш) с реальным конфигом (котлетами).
+        mode: 'len_only', 'log_diff', 'strict'
+        """
+        metadata = self.node_metadata[node_id]
+        state_filepath = f"{metadata['filepath']}.state.json"
+
+        try:
+            # 1. Читаем фарш (state.json) и конфиг
+            state_ok, state_users = await self._read_config(state_filepath, False)
+            core_ok, config = await self._read_config(metadata['filepath'], False)
+
+            if not state_ok or not core_ok:
+                log_event(f'\033[36m[Audit]\033[0m Предоставлены неправильные конфигурации. Файлы не найдены; node_proto_id: \033[31m{node_id}\033[0m; node_meta: \033[34m{metadata}\033[0m', level='ERROR')
+                raise
+
+            state_users = state_users['users']
+
+            # 2. Проверяем каждый инжектор (массив)
+            for injector in metadata['injectors']:
+                target_array = self._navigate_to_path(config, injector['flatten_array_cursor'])
+
+                "Режим 1: Быстрая проверка длины"
+                if len(state_users) != len(target_array):
+                    msg = f"Дрифт длины! Ожидалось {len(state_users)}, в ядре {len(target_array)}"
+                    log_event(f"\033[36m[Audit]\033[0m Дрифт длины! Ожидалось {len(state_users)}, в ядре {len(target_array)}", level='CRITICAL')
+                    if mode == "strict":
+                        raise ValueError(msg)
+
+                if mode == "len_only":
+                    continue
+
+                "Режимы 2 и 3: Глубокая проверка за O(N)"
+
+                # Крутим фарш в ожидаемые котлеты и сериализуем в строки
+                expected_cutlets = set(
+                    orjson.dumps(injector['extractor'](u), option=orjson.OPT_SORT_KEYS)#.decode() # Если байты не подойдут
+                    for u in state_users
+                )
+
+                # Сериализуем реальные котлеты из конфига
+                actual_cutlets = set(
+                    orjson.dumps(c, option=orjson.OPT_SORT_KEYS)#.decode() # Если байты не подойдут
+                    for c in target_array
+                )
+
+                # Магия множеств: Слияние - находит расхождения моментально!
+                mismatches = expected_cutlets ^ actual_cutlets
+
+                if mismatches:
+                    # Кого не хватает, а кто лишний:
+                    missing = expected_cutlets - actual_cutlets
+                    alien = actual_cutlets - expected_cutlets
+
+                    msg = f'\033[36m[Audit]\033[0m Статистика расхождений | total_mismatches: \033[35m{len(mismatches)}\033[0m; missing: \033[33m{len(missing)}\033[0m; alien: \033[31m{len(alien)}\033[0m'
+                    log_event(msg, level='CRITICAL')
+
+                    if mode == "strict":
+                        raise ValueError(msg)
+
+            log_event(f"\033[36m[Audit]\033[0m Аудит пройден успешно | node_proto_id: \033[32m{node_id}\033[0m")
+            return True
+
+        except Exception as e:
+            log_event(f"Ошибка аудита | node_proto_id: \033[32m{node_id}\033[0m; err: \033[31m{repr(e)}\033[0m", level='ERROR')
+            if mode == "strict":
+                raise
+            return False
+
+
     # ========== Утилиты для работы с конфиг-файлами ==========
     
     @staticmethod
-    async def _read_config(filepath: str) -> dict:
+    async def _read_config(filepath: str, raise_exc: bool = False) -> tuple[bool, dict]:
         """Читает конфиг-файл"""
         try:
             async with aiofiles.open(filepath, mode='r', encoding='utf-8') as f:
                 content = await f.read()
-                return orjson.loads(content)
+                return True, orjson.loads(content)
         except FileNotFoundError:
             log_event(f'Конфиг-файл не найден: "\033[31m{filepath}\033[0m"', level='ERROR')
+            if not raise_exc:
+                return False, {}
+
             raise
+
         except orjson.JSONDecodeError as e:
             log_event(f'Ошибка парсинга JSON в "\033[31m{filepath}\033[0m"; error: \033[34m{e}\033[0m', level='ERROR')
+            if not raise_exc:
+                return False, {}
+
             raise
     
     @staticmethod
@@ -511,6 +601,16 @@ def flatten_key2value(
             return Exception
 
     return current
+
+
+@dataclass
+class AuditModes:
+    lite: str = 'lite'                       # Сравнение длины. Лог при расхождении. Нод клиент продолжает работать
+    medium: str = 'medium'                   # Глубокое сравнение каждого пользователя из State файла с пользователем из Конфиг-файла впн-ядра
+    strict: str = 'strict'                   # Как Medium, но нод клиент прекращает работу и падает с ValueError
+
+    medium_advanced: str = 'medium_advanced' # Medium. Расхождения отправляются на админку
+    strict_advanced: str = 'strict_advanced' # Strict + Умное уведомление на админку
 
 
 def get_proto_cores_buffer(request: Request):

@@ -155,7 +155,7 @@ class ProtoTemplates(Base):
     )
 
     id: Mapped[int] = mapped_column(SmallInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=32767, cycle=False, cache=1), primary_key=True, autoincrement=True)
-    title: Mapped[str] = mapped_column(String(32), nullable=False)
+    title: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text('2'))
     url_tmp: Mapped[Optional[str]] = mapped_column(Text)
     is_accepted: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
@@ -178,10 +178,15 @@ class ProtoTemplates(Base):
     api_metrics_script: Mapped[Optional[str]] = mapped_column(Text)
     api_bulk_add_user_script: Mapped[Optional[str]] = mapped_column(Text)
     bulk_add_script_custom_params: Mapped[Optional[dict]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    process_user_item_script: Mapped[Optional[str]] = mapped_column(Text)
+    process_user_libs: Mapped[Optional[str]] = mapped_column(String(512))
+    metrics_parser_libs: Mapped[Optional[str]] = mapped_column(String(512))
 
     templates_statuses: Mapped['TemplatesStatuses'] = relationship('TemplatesStatuses', back_populates='proto_templates')
     protocols: Mapped[list['Protocols']] = relationship('Protocols', back_populates='tmp')
     template_spec_params: Mapped[list['TemplateSpecParams']] = relationship('TemplateSpecParams', back_populates='tmp')
+    templates_users_extractors: Mapped[list['TemplatesUsersExtractors']] = relationship('TemplatesUsersExtractors', back_populates='tmp')
 
 
 class SessionsAdmins(Base):
@@ -307,6 +312,21 @@ class TemplateSpecParams(Base):
 
     tmp: Mapped['ProtoTemplates'] = relationship('ProtoTemplates', back_populates='template_spec_params')
     nodes_protocoles_spec_params_values: Mapped[list['NodesProtocolesSpecParamsValues']] = relationship('NodesProtocolesSpecParamsValues', back_populates='spec_key')
+
+
+class TemplatesUsersExtractors(Base):
+    __tablename__ = 'templates_users_extractors'
+    __table_args__ = (
+        ForeignKeyConstraint(['tmp_id'], ['proto_templates.id'], ondelete='CASCADE', name='templates_users_extractors_tmp_id_fkey'),
+        PrimaryKeyConstraint('id', name='templates_users_extractors_pkey')
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    tmp_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    flatten_array_cursor: Mapped[str] = mapped_column(String(1024), nullable=False)
+    extractor_script: Mapped[Optional[str]] = mapped_column(Text)
+
+    tmp: Mapped['ProtoTemplates'] = relationship('ProtoTemplates', back_populates='templates_users_extractors')
 
 
 class NodesProtocols(Base):

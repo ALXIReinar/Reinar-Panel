@@ -1,14 +1,13 @@
 #!/bin/bash
 
 TMP_ID=$1
-HY2_PASS=${2:-$(openssl rand -hex 16)}
-CERT_PATH=$3
-KEY_PATH=$4
-SNI_DOMAIN=$5
+CERT_PATH=$2
+KEY_PATH=$3
+SNI_DOMAIN=$4
 
 if [ -z "$TMP_ID" ] || [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$SNI_DOMAIN" ]; then
     echo "Ошибка: Необходимы параметры TMP_ID, CERT_PATH, KEY_PATH и SNI_DOMAIN!"
-    echo "Использование: bash sing-box-hy2-hopping-install.sh <tmp_id> [password] <cert_path> <key_path> <sni_domain>"
+    echo "Использование: bash sing-box-hy2-hopping-install.sh <tmp_id> <cert_path> <key_path> <sni_domain>"
     exit 1
 fi
 
@@ -61,6 +60,7 @@ find_free_port_range() {
 INTERNAL_PORT=$(find_free_port 8443)
 
 # Ищем свободный диапазон для хоппинга
+# shellcheck disable=SC2046
 read RANGE_START RANGE_END <<< $(find_free_port_range)
 
 echo "Выделен внутренний порт для Sing-box: $INTERNAL_PORT"
@@ -82,11 +82,7 @@ cat <<EOF > "$CONFIG_PATH"
       "tag": "hysteria-in",
       "listen": "::",
       "listen_port": $INTERNAL_PORT,
-      "users": [
-        {
-          "password": "$HY2_PASS"
-        }
-      ],
+      "users": [],
       "tls": {
         "enabled": true,
         "server_name": "$SNI_DOMAIN",
@@ -140,14 +136,11 @@ curl -s -X POST "$PANEL_CALLBACK_URL" \
            "tmp_id": "'"$TMP_ID"'",
            "config_path": "'"$CONFIG_PATH"'",
            "internal_port": '$INTERNAL_PORT',
-           "hop_start": '$RANGE_START',
-           "hop_end": '$RANGE_END',
            "status": "installed",
            "node_type": "singbox_hysteria2_hopping",
            "custom_fields": {
-               "password": "'"$HY2_PASS"'",
-               "sni": "'"$SNI_DOMAIN"'",
-               "port_range": "'"${RANGE_START}-${RANGE_END}"'"
+               "hop_start": '$RANGE_START',
+               "hop_end": '$RANGE_END'
            }
          }'
 

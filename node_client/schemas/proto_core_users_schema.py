@@ -10,10 +10,20 @@ class BaseUserCoreSchema(BaseModel):
     reload_core_command: str = Field(None, max_length=255, description='Команда перезагрузки ядра')
     core_port: int | None = Field(gt=0, le=65535, description='Порт к апи ядра для взаимодействия через скрипты')
     config_file_path: str = Field(..., min_length=1, description='Путь к конфиг-файлу')
-    flatten_json_users_key: str = Field(..., min_length=1, description='Flatten-json путь до массива clients')
-    flatten_user_identifier_key: str = Field(..., min_length=1, description='Flatten-json путь до идентификатора пользователя'
-                                                                            ' относительно массива clients')
     custom_params: dict | None = Field(description='Зависимости для скрипта, которые идут отдельно от объекта пользователя')
+    user_injectors: list["UserInjectors"]
+
+class UserInjectors:
+    """
+    Схема для BaseUserCoreSchema.user_injectors. Это список вставок в конкретные массивы с помощью extractor_script.
+    Массивы определяются flatten_array_cursor. Таких вставок может быть несколько.
+
+    - Задача extractor_script сделать из объекта в buffer_storage тот, который нужен в впн ядре.
+    - Позволяет сделать несколько операций(удаление/вставка) за одну операцию над пользователем
+    """
+    flatten_array_cursor: str = Field(description='indounds___0___users - массив')
+    extractor_script: str = Field(description='скрипт-обработчик для трансформации user_obj под требования массива под flatten_array_cursor')
+
 
 class AddUserCoreSchema(BaseUserCoreSchema):
     """Схема для добавления пользователя в ядро протокола"""
