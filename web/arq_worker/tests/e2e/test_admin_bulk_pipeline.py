@@ -11,7 +11,7 @@ import pytest
 from unittest.mock import MagicMock
 
 from web.arq_worker.funcs.admin_actions import admin_request_bulk_action_users
-from web.arq_worker.funcs.sub_revocator import bulk_delete_users_from_single_node
+from web.arq_worker.funcs.bulk_action_on_core_proto import bulk_action_users_by_node
 from web.arq_worker.funcs.traffic_reset import bulk_add_users_into_single_node
 
 pytestmark = pytest.mark.asyncio
@@ -178,15 +178,15 @@ class TestAdminBulkPipeline:
         for job_data in enqueued_jobs:
             args = job_data['args']
             
-            result = await bulk_delete_users_from_single_node(
+            result = await bulk_action_users_by_node(
                 ctx=arq_ctx,
                 node_proto_id=args[1],
                 private_ip=args[2],
                 api_port=args[3],
                 metrics_port=args[4],
                 proto_python_lib=args[5],
-                api_bulk_delete_user_script=args[6],
-                bulk_delete_script_custom_params=args[7],
+                api_bulk_action_script=args[6],
+                bulk_action_script_custom_params=args[7],
                 users=args[8],
                 reload_core_command=args[9],
                 config_file_path=args[10],

@@ -9,7 +9,7 @@ Integration тесты для pointed_bulk_action - функции-менедж�
 """
 import pytest
 
-from web.arq_worker.funcs.pounted_bulk.pointed_bulk_actions import pointed_bulk_action
+from web.arq_worker.funcs.pointed_bulk_actions import pointed_bulk_action
 
 pytestmark = pytest.mark.asyncio
 

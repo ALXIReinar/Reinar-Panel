@@ -45,8 +45,6 @@ async def action_on_core_proto_by_sub_plan(
                     user_sub_id=user_sub_id,
                     required_user_data_obj=node['required_user_data_obj'],
                     constant_user_data_obj=node['constant_user_data_obj'],
-                    process_user_item_script=node['process_user_item_script'],
-                    process_user_libs=node['process_user_libs'],
                 )
                 if not ok:
                     log_event(f'Некорректный скрипт обработки объекта пользователя | user_sub_id: \033[31m{user_sub_id}\033[0m; user_uuid: \033[33m{user_uuid}\033[0m; node_proto_id: \033[33m{node["node_proto_id"]}\033[0m', level='CRITICAL')
@@ -69,11 +67,10 @@ async def action_on_core_proto_by_sub_plan(
                 'core_lib': node['proto_python_lib'],
                 'user_obj': final_user_obj,
                 'add_script': node['api_add_user_script'],
-                'flatten_user_identifier_key': node['flatten_user_identifier_key'],
                 'core_port': node['metrics_port'],
                 'reload_core_command': node['reload_core_command'],
                 'config_file_path': node['config_path'],
-                'flatten_json_users_key': node['flatten_json_users_key'],
+                'user_injectors': node['user_injectors'],
                 'custom_params': node['add_script_custom_params'],
             }
             json_delete_body = {
@@ -81,11 +78,10 @@ async def action_on_core_proto_by_sub_plan(
                 'core_lib': node['proto_python_lib'],
                 'user_obj': final_user_obj,
                 'delete_script': node['api_delete_user_script'],
-                'flatten_user_identifier_key': node['flatten_user_identifier_key'],
                 'core_port': node['metrics_port'],
                 'reload_core_command': node['reload_core_command'],
                 'config_file_path': node['config_path'],
-                'flatten_json_users_key': node['flatten_json_users_key'],
+                'user_injectors': node['user_injectors'],
                 'custom_params': node['delete_script_custom_params'],
             }
             action_pack = {

@@ -54,10 +54,10 @@ async def add_user_to_core(body: AddUserCoreSchema, request: Request, buffer: Co
     # Добавляем пользователя (метод сам разберётся с регистрацией ноды)
     add_res, status_code, msg = await buffer.add_user(
         node_proto_id=body.node_proto_id,
-        user_obj_or_identifier=body.user_obj,
+        user_obj=body.user_obj,
         filepath=body.config_file_path,
-        users_path=body.flatten_json_users_key,
-        flatten_user_identifier_key=body.flatten_user_identifier_key,
+        # user_injectors=[{'flatten_array_cursor': u_inj.flatten_array_cursor, "extractor_script": u_inj.extractor_script} for u_inj in body.user_injectors],
+        user_injectors=[u_inj.model_dump() for u_inj in body.user_injectors],
 
         # Обеспечивает авто sync при неудачных вставках пользователя через апи, т.к. каждый раз обновляет reload_command
         reload_command=body.reload_core_command if not hot_reload_success else None
@@ -117,10 +117,9 @@ async def delete_user_from_core(body: DeleteUserCoreSchema, request: Request, bu
     "2. Удаление из ConfigWriteBuffer"
     del_res, status_code, msg = await buffer.delete_user(
         node_proto_id=body.node_proto_id,
-        user_obj_or_identifier=body.user_obj,
+        user_obj=body.user_obj,
         filepath=body.config_file_path,
-        users_path=body.flatten_json_users_key,
-        flatten_user_identifier_key=body.flatten_user_identifier_key,
+        user_injectors=[u_inj.model_dump() for u_inj in body.user_injectors],
         reload_command=body.reload_core_command
     )
 
@@ -161,7 +160,7 @@ async def bulk_delete_user_from_core(body: BulkDeleteUserCoreSchema, request: Re
             hot_reload_success, hot_reload_result = await HotReloadExecutor.execute_action_script(
                 script=body.bulk_delete_script,
                 lib_names=body.core_lib,
-                user_obj=body.model_dump()['users'],
+                user_obj=body.users,
                 node_ip='127.0.0.1',
                 core_api_port=body.core_port,
                 custom_params=body.custom_params,
@@ -181,10 +180,9 @@ async def bulk_delete_user_from_core(body: BulkDeleteUserCoreSchema, request: Re
             # Можно реализовать логику подсчёта успешных удалений по первому аргументу от delete_user
             await buffer.delete_user(
                 node_proto_id=body.node_proto_id,
-                user_obj_or_identifier=u,
+                user_obj=u,
                 filepath=body.config_file_path,
-                users_path=body.flatten_json_users_key,
-                flatten_user_identifier_key=body.flatten_user_identifier_key,
+                user_injectors=[u_inj.model_dump() for u_inj in body.user_injectors],
                 reload_command=body.reload_core_command,
             )
 
@@ -219,7 +217,7 @@ async def bulk_add_user_into_core(body: BulkAddUserCoreSchema, request: Request,
             hot_reload_success, hot_reload_result = await HotReloadExecutor.execute_action_script(
                 script=body.bulk_add_script,
                 lib_names=body.core_lib,
-                user_obj=body.model_dump()['users'],
+                user_obj=body.users,
                 node_ip='127.0.0.1',
                 core_api_port=body.core_port,
                 custom_params=body.custom_params,
@@ -239,10 +237,9 @@ async def bulk_add_user_into_core(body: BulkAddUserCoreSchema, request: Request,
             # Можно реализовать логику подсчёта успешных вставок по первому аргументу от add_user
             await buffer.add_user(
                 node_proto_id=body.node_proto_id,
-                user_obj_or_identifier=u,
+                user_obj=u,
                 filepath=body.config_file_path,
-                users_path=body.flatten_json_users_key,
-                flatten_user_identifier_key=body.flatten_user_identifier_key,
+                user_injectors=[u_inj.model_dump() for u_inj in body.user_injectors],
                 reload_command=body.reload_core_command,
             )
 

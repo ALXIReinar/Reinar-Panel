@@ -21,16 +21,12 @@ async def admin_request_bulk_action_users(ctx: dict, action: Literal['delete', '
         async with (sem):
             "Отправляем chain task на каждую ноду для бульк удаления"
             action_script_custom_params = {
-                'delete': (vnode['api_bulk_delete_user_script'], vnode['bulk_delete_script_custom_params']),
-                'add': (vnode['api_bulk_add_user_script'], vnode['bulk_add_script_custom_params']),
-            }
-            arq_func_name = {
-                'add': 'bulk_add_users_into_single_node',
-                'delete': 'bulk_delete_users_from_single_node'
+                'delete': (vnode['api_bulk_delete_user_script'], vnode['bulk_delete_script_custom_params'], CoreProtoActions.delete),
+                'add': (vnode['api_bulk_add_user_script'], vnode['bulk_add_script_custom_params'], CoreProtoActions.add),
             }
             log_event(f'\033[36m[ARQ Admin Actioner]\033[0m Отправляем Бульк запрос на фоновое исполнение | action: \033[31m{action}\033[0m; node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
             job = await arq.enqueue_job(
-                arq_func_name[action],
+                'bulk_action_users_by_node',
                 vnode['node_proto_id'],
                 vnode['private_ip'],
                 vnode['api_port'],
@@ -40,12 +36,9 @@ async def admin_request_bulk_action_users(ctx: dict, action: Literal['delete', '
                 vnode['users'],
                 vnode['reload_core_command'],
                 vnode['config_path'],
-                vnode['flatten_json_users_key'],
-                vnode['flatten_user_identifier_key'],
+                vnode['user_injectors'],
                 vnode['required_user_data_obj'],
                 vnode['constant_user_data_obj'],
-                vnode['process_user_item_script'],
-                vnode['process_user_libs']
             )
             log_event(f'\033[36m[ARQ Admin Actioner]\033[0m Фоновая задача запущена | action: \033[31m{action}\033[0m; node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
 

@@ -13,9 +13,10 @@ import orjson
 from fastapi.params import Depends
 from starlette.requests import Request
 
-from node_client.config import TMP_DIR
+from node_client.api.proto_core.hot_reload_executor import HotReloadExecutor
+from node_client.config import TMP_DIR, env
 from node_client.logger_config import log_event
-from node_client.schemas.proto_core_users_schema import UserInjectors
+
 
 
 class ConfigWriteBuffer:
@@ -60,7 +61,6 @@ class ConfigWriteBuffer:
             filepath: str,
             user_injectors: list[dict],
             reload_command: str | None,
-            user_obj: dict | None = None
     ):
         """
         Регистрирует виртуальную ноду в менеджере
@@ -92,7 +92,9 @@ class ConfigWriteBuffer:
                self._navigate_to_path(file_content, inj['flatten_array_cursor'])
                injectors.append({
                    "flatten_array_cursor": inj['flatten_array_cursor'],
-                   "extractor_script": eval(inj['extractor_script'])     # Внутри сидит код, который выдаст user_obj в нужном формате
+
+                   # Внутри сидит код, который выдаст user_obj в нужном формате
+                   "extractor_script": HotReloadExecutor.get_compiled_func(inj['extractor_script'], 'transform', inj['libs'])
                })
 
 
@@ -116,7 +118,10 @@ class ConfigWriteBuffer:
         # 4. Запускаем воркер для этой ноды
         task = asyncio.create_task(self._node_worker(node_proto_id))
         self.worker_tasks[node_proto_id] = task
-        
+
+        # 5. Запускаем аудит state конфига
+        await self._audit_state(node_proto_id)
+
         log_event(f"Нода зарегистрирована | node_proto_id: \033[33m{node_proto_id}\033[0m | users_len: \033[32m{len(self.buffer_storage[node_proto_id])}\033[0m")
         return True, 200, f'Зарегистрирована очередь | node_proto_id: \033[32m{node_proto_id}\033[0m'
 
@@ -124,10 +129,9 @@ class ConfigWriteBuffer:
     async def add_user(
         self, 
         node_proto_id: int,
-        user_obj_or_identifier: dict | str,
+        user_obj: dict | str,
         filepath: str,
-        users_path: str,
-        flatten_user_identifier_key: str,
+        user_injectors: list[dict],
         reload_command: str | None = None,
     ):
         """
@@ -140,17 +144,14 @@ class ConfigWriteBuffer:
         
         Args:
             node_proto_id: ID виртуальной ноды
-            uuid: UUID пользователя
-            user_obj_or_identifier: Объект пользователя
+            user_obj: Объект пользователя
             filepath: Путь к конфиг-файлу (нужен только при первом обращении)
-            users_path: Flatten-json путь (нужен только при первом обращении)
+            user_injectors:
+                - flatten_array_cursor (users_path): Flatten-json путь до массива clients
+                - extractor_script (flatten_user_identifier_key): Flatten-json путь до идентификатора пользователя
             reload_command: Команда перезагрузки (нужна только при первом обращении)
-            flatten_user_identifier_key: Flatten-json путь для формирования O(1) структуры пользователей в памяти
         """
-        uuid = user_obj_or_identifier
-        if isinstance(user_obj_or_identifier, dict):
-            # Достаём идентификатор, если передан целый объект
-            uuid = flatten_key2value(user_obj_or_identifier, flatten_user_identifier_key)
+        uuid = user_obj['user_uuid']
 
         # Сценарий 1: Пользователь УЖЕ в буфере
         if node_proto_id in self.buffer_storage and uuid in self.buffer_storage[node_proto_id]:
@@ -164,37 +165,44 @@ class ConfigWriteBuffer:
         # Сценарий 2: Очередь существует, пользователя нет
         if node_proto_id in self.node_queues:
             log_event(f"Добавление пользователя | node_proto_id: \033[32m{node_proto_id}\033[0m | uuid: \033[33m{uuid}\033[0m")
-            self.buffer_storage[node_proto_id][uuid] = user_obj_or_identifier
+            self.buffer_storage[node_proto_id][uuid] = user_obj
             await self.node_queues[node_proto_id].put({'op': 'add', 'uuid': uuid})
             return True, 200, 'Пользователь добавлен'
 
-        if not all([filepath, users_path]):
+        if not all([filepath, user_injectors]):
             raise ValueError(
                 f"При первом обращении к node_proto_id={node_proto_id} "
-                f"нужны filepath и users_path"
+                f"нужен список user_injectors. Он состоит из словарей с ключами(extractor_script: str, libs: str | None, flatten_array_cursor: str)"
             )
 
         # Сценарий 3: Первое обращение к ноде
         # Регистрируем ноду (загружаем существующих пользователей)
         log_event(f"Первое обращение к ноде | node_proto_id: \033[35m{node_proto_id}\033[0m | регистрируем")
-        reg_res, status_code, msg = await self.register_node(node_proto_id, filepath, users_path, flatten_user_identifier_key, reload_command, user_obj_or_identifier)
+        reg_res, status_code, msg = await self.register_node(node_proto_id, filepath, user_injectors, reload_command)
         if not reg_res:
             log_event(f'Не удалось зарегистрировать ноду | node_proto_id: \033[31m{node_proto_id}\033[0m', level='WARNING')
             return False, status_code, str(msg)
 
         # Добавляем нового пользователя
-        self.buffer_storage[node_proto_id][uuid] = user_obj_or_identifier
+        self.buffer_storage[node_proto_id][uuid] = user_obj
         await self.node_queues[node_proto_id].put({'op': 'add', 'uuid': uuid})
         return True, 200, 'Пользователь добавлен'
 
 
-    async def delete_user(self, node_proto_id: int, user_obj_or_identifier: dict | str, filepath: str, users_path: str, flatten_user_identifier_key: str, reload_command: str | None):
+    async def delete_user(
+            self,
+            node_proto_id: int,
+            user_obj: dict,
+            filepath: str,
+            user_injectors: list[dict],
+            reload_command: str | None
+    ):
         """
         Удаляет пользователя из буфера (O(1))
         
         Args:
             node_proto_id: ID виртуальной ноды
-            user_obj_or_identifier: объект пользователя в конфиг-файле ядра
+            user_obj: объект пользователя в конфиг-файле ядра
             filepath: Путь к конфиг-файлу
             users_path: Flatten-json путь до массива clients
             flatten_user_identifier_key: Flatten-json путь до идентификатора пользователя
@@ -203,17 +211,14 @@ class ConfigWriteBuffer:
         "Проверяем очередь node_proto_id в буфере"
         if node_proto_id not in self.buffer_storage:
             log_event(f"Попытка удаления из незарегистрированной ноды, пробуем подгрузить её | node_proto_id: \033[33m{node_proto_id}\033[0m", level='WARNING')
-            reg_res, status_code, msg = await self.register_node(node_proto_id, filepath, users_path, flatten_user_identifier_key, reload_command)
+            reg_res, status_code, msg = await self.register_node(node_proto_id, filepath, user_injectors, reload_command)
 
             "Если нет, пытаемся зарегать"
             if not reg_res:
                 log_event(f'Не удалось зарегистрировать ноду | node_proto_id: \033[31m{node_proto_id}\033[0m', level='WARNING')
                 return False, status_code, msg
 
-        uuid = user_obj_or_identifier
-        if isinstance(user_obj_or_identifier, dict):
-            # Достаём идентификатор, если передан целый объект
-            uuid = flatten_key2value(user_obj_or_identifier, flatten_user_identifier_key)
+        uuid = user_obj['user_uuid']
 
         "Проверяем наличие пользователя"
         if not uuid in self.buffer_storage[node_proto_id]:
@@ -258,12 +263,16 @@ class ConfigWriteBuffer:
         metadata = self.node_metadata[node_id]
         
         try:
-            # Читаем конфиг
 
-            ok, state_config = await self._read_config(f"{metadata['filepath']}.state.json", True)
-            
+            "Читаем конфиг. Если его нет, начинаем с чистого листа"
+            # Просто список в памяти будет изначально пуст. При сбросах на диск файл появится сам
+            ok, state_config = await self._read_config(f"{metadata['filepath']}.state.json", False)
+
             # Получаем массив clients
-            users_arr = state_config['users']
+            if not ok:
+                log_event(f'Конфиг файл не найден! Начинаем с чистого листа! | node_proto_id: \033[33m{node_id}\033[0m', level='WARNING')
+
+            users_arr = state_config.get('users', [])
             
             # Создаём маппинг {uuid: user_obj}
             self.buffer_storage[node_id] = {}
@@ -367,7 +376,7 @@ class ConfigWriteBuffer:
             log_event(f"\033[34m[Write]\033[0m Успешная запись | node_proto_id: \033[32m{node_id}\033[0m")
 
         except Exception as e:
-            log_event(f"\033[34m[Write]\033[0m КРИТИЧЕСКАЯ ошибка записи | node_proto_id: \033[31m{node_id}\033[0m | error: \033[34m{e}\033[0m", level='CRITICAL')
+            log_event(f"\033[34m[Write]\033[0m КРИТИЧЕСКАЯ ошибка записи | node_proto_id: \033[31m{node_id}\033[0m | error: \033[34m{repr(e)}\033[0m", level='CRITICAL')
 
 
     async def _reload_core(self, reload_command: str):
@@ -409,7 +418,7 @@ class ConfigWriteBuffer:
 
 
 
-    async def _audit_state(self, node_id: int, mode: str = "strict"):
+    async def _audit_state(self, node_id: int):
         """
         Сверяет Shadow State (фарш) с реальным конфигом (котлетами).
         mode: 'len_only', 'log_diff', 'strict'
@@ -436,17 +445,17 @@ class ConfigWriteBuffer:
                 if len(state_users) != len(target_array):
                     msg = f"Дрифт длины! Ожидалось {len(state_users)}, в ядре {len(target_array)}"
                     log_event(f"\033[36m[Audit]\033[0m Дрифт длины! Ожидалось {len(state_users)}, в ядре {len(target_array)}", level='CRITICAL')
-                    if mode == "strict":
+                    if env.audit_mode == AuditModes.strict:
                         raise ValueError(msg)
 
-                if mode == "len_only":
+                if env.audit_mode == AuditModes.lite:
                     continue
 
                 "Режимы 2 и 3: Глубокая проверка за O(N)"
 
-                # Крутим фарш в ожидаемые котлеты и сериализуем в строки
+                # Крутим фарш в ожидаемые котлеты и сериализуем в строки/байты
                 expected_cutlets = set(
-                    orjson.dumps(injector['extractor'](u), option=orjson.OPT_SORT_KEYS)#.decode() # Если байты не подойдут
+                    orjson.dumps(injector['extractor_script'](u), option=orjson.OPT_SORT_KEYS)#.decode() # Если байты не подойдут
                     for u in state_users
                 )
 
@@ -467,7 +476,7 @@ class ConfigWriteBuffer:
                     msg = f'\033[36m[Audit]\033[0m Статистика расхождений | total_mismatches: \033[35m{len(mismatches)}\033[0m; missing: \033[33m{len(missing)}\033[0m; alien: \033[31m{len(alien)}\033[0m'
                     log_event(msg, level='CRITICAL')
 
-                    if mode == "strict":
+                    if env.audit_mode == AuditModes.strict:
                         raise ValueError(msg)
 
             log_event(f"\033[36m[Audit]\033[0m Аудит пройден успешно | node_proto_id: \033[32m{node_id}\033[0m")
@@ -475,7 +484,7 @@ class ConfigWriteBuffer:
 
         except Exception as e:
             log_event(f"Ошибка аудита | node_proto_id: \033[32m{node_id}\033[0m; err: \033[31m{repr(e)}\033[0m", level='ERROR')
-            if mode == "strict":
+            if env.audit_mode == AuditModes.strict:
                 raise
             return False
 

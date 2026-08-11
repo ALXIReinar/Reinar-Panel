@@ -13,7 +13,7 @@ Integration тесты для bulk операций:
 import pytest
 
 from web.arq_worker.funcs.traffic_reset import bulk_add_users_into_single_node
-from web.arq_worker.funcs.sub_revocator import bulk_delete_users_from_single_node
+from web.arq_worker.funcs.bulk_action_on_core_proto import bulk_action_users_by_node
 
 pytestmark = pytest.mark.asyncio
 
@@ -373,15 +373,15 @@ class TestBulkDeleteUsersFromSingleNode:
         assert outbox_before == 1, "Outbox должен содержать 1 запись до выполнения"
         
         # Act
-        result = await bulk_delete_users_from_single_node(
+        result = await bulk_action_users_by_node(
             ctx=mock_arq_ctx,
             node_proto_id=arq_test_seed['vnode_id_10'],
             private_ip="10.0.0.100",
             api_port=8100,
             metrics_port=9090,
             proto_python_lib="vless",
-            api_bulk_delete_user_script="python bulk_del.py",
-            bulk_delete_script_custom_params={},
+            api_bulk_action_script="python bulk_del.py",
+            bulk_action_script_custom_params={},
             users=users,
             reload_core_command="systemctl reload test",
             config_file_path="/etc/config.json",
@@ -437,15 +437,15 @@ class TestBulkDeleteUsersFromSingleNode:
         mock_arq_ctx['aio_http'].status = 422
         
         # Act
-        result = await bulk_delete_users_from_single_node(
+        result = await bulk_action_users_by_node(
             ctx=mock_arq_ctx,
             node_proto_id=arq_test_seed['vnode_id_10'],
             private_ip="10.0.0.100",
             api_port=8100,
             metrics_port=9090,
             proto_python_lib="vless",
-            api_bulk_delete_user_script="python bulk_del.py",
-            bulk_delete_script_custom_params={},
+            api_bulk_action_script="python bulk_del.py",
+            bulk_action_script_custom_params={},
             users=users,
             reload_core_command="systemctl reload test",
             config_file_path="/etc/config.json",
@@ -484,15 +484,15 @@ class TestBulkDeleteUsersFromSingleNode:
         mock_arq_ctx['aio_http'].status = 500
         
         # Act
-        result = await bulk_delete_users_from_single_node(
+        result = await bulk_action_users_by_node(
             ctx=mock_arq_ctx,
             node_proto_id=arq_test_seed['vnode_id_10'],
             private_ip="10.0.0.100",
             api_port=8100,
             metrics_port=9090,
             proto_python_lib="vless",
-            api_bulk_delete_user_script="python bulk_del.py",
-            bulk_delete_script_custom_params={},
+            api_bulk_action_script="python bulk_del.py",
+            bulk_action_script_custom_params={},
             users=users,
             reload_core_command="systemctl reload test",
             config_file_path="/etc/config.json",
@@ -529,15 +529,15 @@ class TestBulkDeleteUsersFromSingleNode:
         mock_arq_ctx['aio_http'].raise_error = True
         
         # Act
-        result = await bulk_delete_users_from_single_node(
+        result = await bulk_action_users_by_node(
             ctx=mock_arq_ctx,
             node_proto_id=arq_test_seed['vnode_id_10'],
             private_ip="10.0.0.100",
             api_port=8100,
             metrics_port=9090,
             proto_python_lib="vless",
-            api_bulk_delete_user_script="python bulk_del.py",
-            bulk_delete_script_custom_params={},
+            api_bulk_action_script="python bulk_del.py",
+            bulk_action_script_custom_params={},
             users=users,
             reload_core_command="systemctl reload test",
             config_file_path="/etc/config.json",
@@ -567,15 +567,15 @@ class TestBulkDeleteUsersFromSingleNode:
         mock_arq_ctx['aio_http'].status = 500
         
         # Act
-        result = await bulk_delete_users_from_single_node(
+        result = await bulk_action_users_by_node(
             ctx=mock_arq_ctx,
             node_proto_id=arq_test_seed['vnode_id_10'],
             private_ip="10.0.0.100",
             api_port=8100,
             metrics_port=9090,
             proto_python_lib="vless",
-            api_bulk_delete_user_script="python bulk_del.py",
-            bulk_delete_script_custom_params={},
+            api_bulk_action_script="python bulk_del.py",
+            bulk_action_script_custom_params={},
             users=users,
             reload_core_command="systemctl reload test",
             config_file_path="/etc/config.json",

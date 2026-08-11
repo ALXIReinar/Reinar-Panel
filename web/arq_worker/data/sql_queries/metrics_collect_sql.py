@@ -20,44 +20,6 @@ class MetricsQueries:
         return await self.conn.fetch(query)
 
 
-
-    async def get_vnodes_by_outbox_events(self, outbox_ids: list[int]):
-        query = '''
-        -- 1. Собираем информацию о нодах по событиям
-        WITH limited_nodes_info AS (
-            SELECT us.uuid, us.id AS user_sub_id, sno.node_proto_id, n.private_ip, n.api_port, np.metrics_port,
-                   pt.proto_python_lib, pt.api_bulk_delete_user_script, pt.flatten_json_users_key, pt.flatten_user_identifier_key,
-                   pt.reload_core_command, np.config_path, pt.bulk_delete_script_custom_params,
-                   pt.constant_user_data_obj, pt.required_user_data_obj, pt.process_user_item_script, pt.process_user_libs
-            FROM (SELECT UNNEST($1::bigint[]) AS outbox_id) AS limited_outbox_events
-            JOIN sub_nodes_outbox sno ON sno.id = limited_outbox_events.outbox_id
-            JOIN user_subs us ON us.id = sno.user_sub_id
-            JOIN nodes_protocols np ON np.id = sno.node_proto_id AND np.user_visible = true 
-            JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
-            JOIN protocols p ON np.proto_id = p.id 
-            JOIN proto_templates pt ON p.tmp_id = pt.id 
-        )
-        -- 2. Группируем пользователей по нодам для пакетной отправки
-        SELECT node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script, 
-               flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, bulk_delete_script_custom_params,
-               constant_user_data_obj, required_user_data_obj, process_user_item_script, process_user_libs,
-               COALESCE(
-                   json_agg(
-                       json_build_object( 
-                           'uuid', uuid, 
-                           'user_sub_id', user_sub_id,
-                           'node_proto_id', node_proto_id
-                       )
-                   ),
-                   '[]'::json
-               ) AS users
-        FROM limited_nodes_info
-        GROUP BY node_proto_id, private_ip, api_port, metrics_port, proto_python_lib, api_bulk_delete_user_script, 
-                 flatten_json_users_key, flatten_user_identifier_key, reload_core_command, config_path, bulk_delete_script_custom_params,
-                 constant_user_data_obj, required_user_data_obj, process_user_item_script, process_user_libs
-        '''
-        return await self.conn.fetch(query, outbox_ids)
-
     async def update_traffic(self, user_sub_ids: list[str], traffic_add_mbs: list[int]):
         """
         Обновление трафика и блокировка подписок при превышении лимитов.

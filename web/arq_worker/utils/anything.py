@@ -37,6 +37,9 @@ class NodeUris:
     proto_core_delete_user: str = '/api/v1/server/proto_core/user/delete'
     proto_core_bulk_delete_users: str = '/api/v1/server/proto_core/user/bulk/delete'
     proto_core_bulk_add_users: str = '/api/v1/server/proto_core/user/bulk/add'
+
+    proto_core_bulk_action: str = '/api/v1/server/proto_core/user/bulk/add' # Experimental. Ещё не добавлено  на нод клиент
+
     get_metrics: str = '/api/v1/server/node/metrics'
 
 

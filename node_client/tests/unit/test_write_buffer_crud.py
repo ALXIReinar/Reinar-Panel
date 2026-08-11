@@ -86,7 +86,7 @@ async def test_add_user_first_time_with_empty_config(empty_config):
     # Первое обращение - нужны все параметры
     success, status_code, msg = await buffer.add_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier=new_user,
+        user_obj=new_user,
         filepath=str(empty_config),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -134,7 +134,7 @@ async def test_add_user_first_time_with_existing_users(config_with_3_users):
     
     success, status_code, msg = await buffer.add_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier=new_user,
+        user_obj=new_user,
         filepath=str(config_with_3_users),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -181,7 +181,7 @@ async def test_add_user_to_existing_node(config_with_3_users):
     user1 = create_test_user(email="user1@test.com")
     await buffer.add_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier=user1,
+        user_obj=user1,
         filepath=str(config_with_3_users),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -195,7 +195,7 @@ async def test_add_user_to_existing_node(config_with_3_users):
     user2 = create_test_user(email="user2@test.com")
     success, status_code, msg = await buffer.add_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier=user2,
+        user_obj=user2,
         filepath=str(config_with_3_users),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -233,7 +233,7 @@ async def test_add_user_idempotency(config_with_3_users):
     user = create_test_user(email="idempotent@test.com")
     await buffer.add_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier=user,
+        user_obj=user,
         filepath=str(config_with_3_users),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -253,7 +253,7 @@ async def test_add_user_idempotency(config_with_3_users):
     # Пытаемся добавить ТОГО ЖЕ пользователя снова
     success, status_code, msg = await buffer.add_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier=user,
+        user_obj=user,
         filepath=str(config_with_3_users),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -289,7 +289,7 @@ async def test_add_user_with_dict_vs_str(empty_config):
     user_dict = create_test_user(email="dict_user@test.com")
     success1, status_code1, msg1 = await buffer.add_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier=user_dict,  # dict
+        user_obj=user_dict,  # dict
         filepath=str(empty_config),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -303,7 +303,7 @@ async def test_add_user_with_dict_vs_str(empty_config):
     # Нода уже зарегистрирована, но параметры всё равно нужны
     success2, status_code2, msg2 = await buffer.add_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier="str_user@test.com",  # str
+        user_obj="str_user@test.com",  # str
         filepath=str(empty_config),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -336,7 +336,7 @@ async def test_add_user_registration_fails_invalid_config(tmp_path):
     
     success, status_code, msg = await buffer.add_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier=user,
+        user_obj=user,
         filepath=str(broken_config),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -367,7 +367,7 @@ async def test_add_user_registration_fails_invalid_identifier(config_with_3_user
     
     success, status_code, msg = await buffer.add_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier=user,
+        user_obj=user,
         filepath=str(config_with_3_users),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="nonexistent_field",  # ОШИБКА!
@@ -418,7 +418,7 @@ async def test_delete_user_existing(config_with_3_users):
     # Удаляем пользователя
     success, status_code, msg = await buffer.delete_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier="existing1@test.com",
+        user_obj="existing1@test.com",
         filepath=str(config_with_3_users),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -482,7 +482,7 @@ async def test_delete_user_nonexistent(config_with_3_users):
     # Пытаемся удалить несуществующего пользователя
     success, status_code, msg = await buffer.delete_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier="nonexistent@test.com",
+        user_obj="nonexistent@test.com",
         filepath=str(config_with_3_users),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -520,7 +520,7 @@ async def test_delete_user_unregistered_node_success(config_with_3_users):
     # Нода НЕ зарегистрирована, пытаемся удалить
     success, status_code, msg = await buffer.delete_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier="existing1@test.com",
+        user_obj="existing1@test.com",
         filepath=str(config_with_3_users),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -573,7 +573,7 @@ async def test_delete_user_with_dict_vs_str(config_with_3_users):
     user_dict = buffer.buffer_storage[node_proto_id]["existing1@test.com"]
     success1, status_code1, msg1 = await buffer.delete_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier=user_dict,  # dict
+        user_obj=user_dict,  # dict
         filepath=str(config_with_3_users),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -586,7 +586,7 @@ async def test_delete_user_with_dict_vs_str(config_with_3_users):
     # Способ 2: Удаляем через str
     success2, status_code2, msg2 = await buffer.delete_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier="existing2@test.com",  # str
+        user_obj="existing2@test.com",  # str
         filepath=str(config_with_3_users),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -617,7 +617,7 @@ async def test_delete_user_registration_fails(tmp_path):
     
     success, status_code, msg = await buffer.delete_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier="test@test.com",
+        user_obj="test@test.com",
         filepath=str(broken_config),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -664,7 +664,7 @@ async def test_delete_user_from_empty_buffer(empty_config):
     # Пытаемся удалить
     success, status_code, msg = await buffer.delete_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier="nonexistent@test.com",
+        user_obj="nonexistent@test.com",
         filepath=str(empty_config),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",

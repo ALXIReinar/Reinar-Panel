@@ -8,10 +8,11 @@ from web.arq_worker.funcs.admin_actions import admin_request_bulk_action_users
 from web.arq_worker.funcs.cron_tasks import run_rT_cleaner
 from web.arq_worker.funcs.metrics_collector import collect_traffic_metrics, bulk_delete_by_traffic_limit, traffic_sync_scheduler
 from web.arq_worker.funcs.outbox_cleaner import retry_stuck_core_proto_actions
-from web.arq_worker.funcs.pounted_bulk.pointed_bulk_actions import pointed_bulk_action
-from web.arq_worker.funcs.sub_revocator import bulk_delete_users_from_single_node, revoke_sub_plan_by_expire
+from web.arq_worker.funcs.pointed_bulk_actions import pointed_bulk_action
+from web.arq_worker.funcs.sub_revocator import revoke_sub_plan_by_expire
+from web.arq_worker.funcs.bulk_action_on_core_proto import bulk_action_users_by_node
 from web.arq_worker.funcs.tg_sub_sender import send_sub_link_tg_user
-from web.arq_worker.funcs.traffic_reset import reset_day_user_traffic, bulk_add_users_into_single_node
+from web.arq_worker.funcs.traffic_reset import reset_day_user_traffic
 from web.arq_worker.funcs.action_on_user_core_proto import action_on_core_proto_by_sub_plan
 
 
@@ -58,8 +59,7 @@ class WorkerSettings:
         collect_traffic_metrics,
         bulk_delete_by_traffic_limit,
 
-        bulk_add_users_into_single_node,
-        bulk_delete_users_from_single_node,
+        bulk_action_users_by_node,
 
         admin_request_bulk_action_users,
         send_sub_link_tg_user,

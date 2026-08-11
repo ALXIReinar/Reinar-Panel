@@ -16,7 +16,7 @@ from asyncpg import Pool
 from web.arq_worker.config import env
 from web.arq_worker.data.postgres import PgSql
 from web.arq_worker.depends_fabric import arq_dep, pg_sql_dep, aiohttp_dep
-from web.arq_worker.utils.anything import NodeUris
+from web.arq_worker.utils.anything import NodeUris, CoreProtoActions
 from web.arq_worker.utils.arq_logger_config import log_event
 
 
@@ -136,7 +136,7 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[dict], aio_http: Client
 async def bulk_delete_by_traffic_limit(ctx: dict, outbox_event_ids: list, arq: ArqRedis = None, db: PgSql = None):
     log_event(f'\033[31m[ARQ Metrics Collector]\033[0m \033[34mTask Chaining, depth: \033[33m2\033[0m Собираем данные и группируем пользователей по нодаи для отправки delete бульк-запроса | outbox_events_fst10: \033[37m{outbox_event_ids[:10]}\033[0m', level='WARNING')
 
-    nodes_by_limited_users = await db.metrics.get_vnodes_by_outbox_events(outbox_event_ids)
+    nodes_by_limited_users = await db.core_proto_bulk.get_meta_for_bulk(outbox_event_ids)
     users_to_delete = sum(len(vnode['users']) for vnode in nodes_by_limited_users)
 
     log_event(f'\033[31m[ARQ Metrics Collector]\033[0m Фон по удалению пользователей из ядер протоколов | total_deletes: \033[31m{users_to_delete}\033[0m')
@@ -147,7 +147,7 @@ async def bulk_delete_by_traffic_limit(ctx: dict, outbox_event_ids: list, arq: A
         async with sem:
             log_event(f'\033[31m[ARQ Metrics Collector]\033[0m Отправляем Бульк запрос на фоновое удаление пользователей из ядра | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
             job = await arq.enqueue_job(
-                'bulk_delete_users_from_single_node',
+                'bulk_action_users_by_node',
                 vnode['node_proto_id'],
                 vnode['private_ip'],
                 vnode['api_port'],
@@ -155,15 +155,13 @@ async def bulk_delete_by_traffic_limit(ctx: dict, outbox_event_ids: list, arq: A
                 vnode['proto_python_lib'],
                 vnode['api_bulk_delete_user_script'],
                 vnode['bulk_delete_script_custom_params'],
+                CoreProtoActions.delete,
                 vnode['users'],
                 vnode['reload_core_command'],
                 vnode['config_path'],
-                vnode['flatten_json_users_key'],
-                vnode['flatten_user_identifier_key'],
+                vnode['user_injectors'],
                 vnode['constant_user_data_obj'],
                 vnode['required_user_data_obj'],
-                vnode['process_user_item_script'],
-                vnode['process_user_libs']
             )
             log_event(f'\033[31m[ARQ Metrics Collector]\033[0m \033[34mTask Chaining, depth: \033[32m3\033[0m бульк delete летит на ноду | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
             log_event(f'\033[31m[ARQ Metrics Collector]\033[0m Фоновая задача запущена | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
@@ -334,8 +332,6 @@ async def create_vpn_like_user(
         user_sub_id,
         required_user_data_obj: dict,
         constant_user_data_obj: dict,
-        process_user_item_script: str,
-        process_user_libs: str,
 ):
     """Собирает готовый объект пользователя для впн-ядра из шаблон-скриптов"""
 
@@ -349,14 +345,4 @@ async def create_vpn_like_user(
         **required_user_obj,
         **constant_user_data_obj
     }
-    "2. Если есть скрипт обработки. (Например, требуется в SS для формирования USER_PSK из USER_UUID)"
-    if process_user_item_script is not None:
-        inp_user_obj = final_user_obj  # Ссылается на исходный объект. Не будет занимать память дополнительно
-        ok, final_user_obj, msg = await execute_script(
-            process_user_item_script, final_user_obj, process_user_libs
-        )
-        if not ok:
-            log_event(f'Некорректный скрипт обработки объекта пользователя | script_inp_user_obj: \033[34m{inp_user_obj}\033[0m; user_sub_id: \033[32m{user_sub_id}\033[0m; user_uuid: \033[35m{user_uuid}\033[0m;', level='CRITICAL')
-            return False, {}, "Скрипт обработки json_obj упал (json с подставленными значениями по плейсхолдерами)"
-
-    return True, final_user_obj, "Успешно! Vpn Like User создан"
+    return True, final_user_obj

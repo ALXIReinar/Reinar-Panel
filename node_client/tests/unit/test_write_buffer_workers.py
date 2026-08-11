@@ -77,7 +77,7 @@ async def test_worker_triggers_on_max_batch(config_with_2_users):
     for i in range(5):
         await buffer.add_user(
             node_proto_id=node_proto_id,
-            user_obj_or_identifier=create_test_user(email=f"batch_user_{i}@test.com"),
+            user_obj=create_test_user(email=f"batch_user_{i}@test.com"),
             filepath=str(config_with_2_users),
             users_path="inbounds___0___settings___clients",
             flatten_user_identifier_key="email",
@@ -90,7 +90,7 @@ async def test_worker_triggers_on_max_batch(config_with_2_users):
     # Теперь добавляем 6-го пользователя (после того как воркер начал обработку)
     await buffer.add_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier=create_test_user(email="batch_user_5@test.com"),
+        user_obj=create_test_user(email="batch_user_5@test.com"),
         filepath=str(config_with_2_users),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -146,7 +146,7 @@ async def test_worker_triggers_on_timeout(config_with_2_users):
     # Добавляем только 2 пользователя (не достигаем max_batch)
     await buffer.add_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier=create_test_user(email="timeout_user_1@test.com"),
+        user_obj=create_test_user(email="timeout_user_1@test.com"),
         filepath=str(config_with_2_users),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -154,7 +154,7 @@ async def test_worker_triggers_on_timeout(config_with_2_users):
     )
     await buffer.add_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier=create_test_user(email="timeout_user_2@test.com"),
+        user_obj=create_test_user(email="timeout_user_2@test.com"),
         filepath=str(config_with_2_users),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -209,7 +209,7 @@ async def test_worker_respects_queue_limited_flag(config_with_2_users):
     for i in range(3):
         await buffer.add_user(
             node_proto_id=node_proto_id,
-            user_obj_or_identifier=create_test_user(email=f"unlimit_user_{i}@test.com"),
+            user_obj=create_test_user(email=f"unlimit_user_{i}@test.com"),
             filepath=str(config_with_2_users),
             users_path="inbounds___0___settings___clients",
             flatten_user_identifier_key="email",
@@ -327,7 +327,7 @@ async def test_worker_isolation_between_nodes(tmp_path):
     for i in range(2):
         await buffer.add_user(
             node_proto_id=1,
-            user_obj_or_identifier=create_test_user(email=f"node1_user_{i}@test.com"),
+            user_obj=create_test_user(email=f"node1_user_{i}@test.com"),
             filepath=str(config1),
             users_path="inbounds___0___settings___clients",
             flatten_user_identifier_key="email",
@@ -335,7 +335,7 @@ async def test_worker_isolation_between_nodes(tmp_path):
         )
         await buffer.add_user(
             node_proto_id=2,
-            user_obj_or_identifier=create_test_user(email=f"node2_user_{i}@test.com"),
+            user_obj=create_test_user(email=f"node2_user_{i}@test.com"),
             filepath=str(config2),
             users_path="inbounds___0___settings___clients",
             flatten_user_identifier_key="email",
@@ -392,7 +392,7 @@ async def test_write_to_disk_success(config_with_2_users):
     for i in range(3):
         await buffer.add_user(
             node_proto_id=node_proto_id,
-            user_obj_or_identifier=create_test_user(email=f"write_user_{i}@test.com"),
+            user_obj=create_test_user(email=f"write_user_{i}@test.com"),
             filepath=str(config_with_2_users),
             users_path="inbounds___0___settings___clients",
             flatten_user_identifier_key="email",
@@ -481,7 +481,7 @@ async def test_write_preserves_file_structure(tmp_path):
     # Добавляем пользователя
     await buffer.add_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier=create_test_user(email="new@test.com"),
+        user_obj=create_test_user(email="new@test.com"),
         filepath=str(config_path),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -556,7 +556,7 @@ async def test_write_with_reload_command(config_with_2_users, tmp_path):
     # Добавляем пользователя
     await buffer.add_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier=create_test_user(email="reload_test@test.com"),
+        user_obj=create_test_user(email="reload_test@test.com"),
         filepath=str(config_with_2_users),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -606,7 +606,7 @@ async def test_write_without_reload_command(config_with_2_users):
     # Добавляем пользователя
     await buffer.add_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier=create_test_user(email="no_reload@test.com"),
+        user_obj=create_test_user(email="no_reload@test.com"),
         filepath=str(config_with_2_users),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",
@@ -779,7 +779,7 @@ async def test_unlimit_queue_flushes_on_exit(config_with_2_users):
         for i in range(3):
             await buffer.add_user(
                 node_proto_id=node_proto_id,
-                user_obj_or_identifier=create_test_user(email=f"unlimit_{i}@test.com"),
+                user_obj=create_test_user(email=f"unlimit_{i}@test.com"),
                 filepath=str(config_with_2_users),
                 users_path="inbounds___0___settings___clients",
                 flatten_user_identifier_key="email",
@@ -886,7 +886,7 @@ async def test_bulk_operations_without_intermediate_writes(config_with_2_users):
         for i in range(20):
             await buffer.add_user(
                 node_proto_id=node_proto_id,
-                user_obj_or_identifier=create_test_user(email=f"bulk_{i}@test.com"),
+                user_obj=create_test_user(email=f"bulk_{i}@test.com"),
                 filepath=str(config_with_2_users),
                 users_path="inbounds___0___settings___clients",
                 flatten_user_identifier_key="email",
@@ -1007,7 +1007,7 @@ async def test_stop_flushes_pending_operations(config_with_2_users):
     for i in range(3):
         await buffer.add_user(
             node_proto_id=node_proto_id,
-            user_obj_or_identifier=create_test_user(email=f"pending_{i}@test.com"),
+            user_obj=create_test_user(email=f"pending_{i}@test.com"),
             filepath=str(config_with_2_users),
             users_path="inbounds___0___settings___clients",
             flatten_user_identifier_key="email",
@@ -1061,7 +1061,7 @@ async def test_stop_idempotent(config_with_2_users):
     # Добавляем пользователя для проверки записи
     await buffer.add_user(
         node_proto_id=node_proto_id,
-        user_obj_or_identifier=create_test_user(email="idempotent@test.com"),
+        user_obj=create_test_user(email="idempotent@test.com"),
         filepath=str(config_with_2_users),
         users_path="inbounds___0___settings___clients",
         flatten_user_identifier_key="email",

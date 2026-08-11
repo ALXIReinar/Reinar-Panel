@@ -5,7 +5,7 @@ import math
 import re
 import traceback
 from collections import defaultdict
-from typing import Literal
+from typing import Literal, Callable, Any
 
 import flatten_json
 import jmespath
@@ -18,9 +18,43 @@ importlib.invalidate_caches()
 
 class HotReloadExecutor:
     """Выполнение Python скриптов для hot-reload операций"""
-    
-    @staticmethod
+    base_globals = {
+        "json": json,
+        "asyncio": asyncio,
+        "orjson": orjson,
+        "re": re,
+        "math": math,
+        "defaultdict": defaultdict,
+        "jmespath": jmespath,
+        "flatten_json": flatten_json,
+    }
+    safe_builtins = {
+        "int": int, "str": str, "float": float, "list": list, "dict": dict,
+        "set": set, "len": len, "range": range, "round": round, "print": print,
+        "enumerate": enumerate, "zip": zip, "map": map, "filter": filter,
+        "isinstance": isinstance, "type": type, "dir": dir, "all": all, "any": any,
+        "Exception": Exception, "ValueError": ValueError, "KeyError": KeyError,
+        "NameError": NameError, "TypeError": TypeError, "AttributeError": AttributeError,
+    }
+
+    @classmethod
+    def _prepare_globals(cls, lib_names: str | None = None) -> dict[str, Any]:
+        """Формирует изолированный global_scope для конкретного запуска"""
+        # Shallow copy словарь — это предотвратит кашу при замусоривании скоупа скриптом
+        g_scope = cls.base_globals.copy()
+        g_scope["__builtins__"] = cls.safe_builtins.copy()
+
+        if lib_names:
+            for lib in lib_names.split(','):
+                lib_clean = lib.strip()
+                if lib_clean:
+                    g_scope[lib_clean] = importlib.import_module(lib_clean)
+
+        return g_scope
+
+    @classmethod
     async def execute_action_script(
+            cls,
             script: str,
             lib_names: str | None,
             node_ip: str,
@@ -48,36 +82,12 @@ class HotReloadExecutor:
         if custom_params is None:
             custom_params = {}
 
-        "Обработка строки-списка библиотек"
-        if lib_names is None:
-            lib_names = []
-        else:
-            lib_names = lib_names.split(',')
         try:
 
             "Создаём локальное окружение для выполнения скрипта"
-            user_libs = {lib_name.strip(): importlib.import_module(lib_name.strip()) for lib_name in lib_names} # Подгружаем библиотеки пользователя
             local_scope = {}
-            global_scope = {
-                **user_libs,
-                "json": json,
-                "asyncio": asyncio,
-                "orjson": orjson,
-                "re": re,
-                "math": math,
-                "defaultdict": defaultdict,
-                "jmespath": jmespath,
-                "flatten_json": flatten_json,
-                # Запрещаем опасные встроенные функции типа open, eval, import
-                "__builtins__": {
-                    "int": int, "str": str, "float": float, "list": list, "dict": dict,
-                    "set": set, "len": len, "range": range, "round": round, "print": print,
-                    "enumerate": enumerate, "zip": zip, "map": map, "filter": filter,
-                    "isinstance": isinstance, "type": type, "dir": dir, "all": all, "any": any,
-                    "Exception": Exception, "ValueError": ValueError, "KeyError": KeyError,
-                    "NameError": NameError, "TypeError": TypeError, "AttributeError": AttributeError
-                }
-            }
+            global_scope = cls._prepare_globals(lib_names)
+
             # Выполняем скрипт
             exec(script, global_scope, local_scope)
 
@@ -91,7 +101,9 @@ class HotReloadExecutor:
                     local_scope.get('parse')
             )
             if not action_user_func:
-                return False, "Ни одна из функций: (add_user, delete_user, bulk_delete_users) - не найдена в скрипте"
+                msg = "Ни одна из функций: (add_user, delete_user, bulk_delete_users, bulk_add_users, get_metrics, parse) - не найдена в скрипте"
+                log_event(msg, level='ERROR')
+                return False, msg
 
             "Подбираем набор аргументов исходя от действия скрипта"
             args_func_map = {
@@ -127,3 +139,20 @@ class HotReloadExecutor:
 
             log_event(f"\033[31mОШИБКА ВЫПОЛНЕНИЯ СКРИПТА\033[0m\nAction: {action}\nБиблиотеки: {lib_names}\nТип ошибки: {type(e).__name__}\nСообщение: {str(e)}\n\nTraceback:\n{tb_str}\n", level='CRITICAL')
             return False, f"Ошибка выполнения скрипта ({type(e).__name__}): {str(e)}"
+
+
+    @classmethod
+    def get_compiled_func(cls, func_script: str, func_name: str, libs: str | None = None) -> Callable:
+        local_scope = {}
+        global_scope = cls._prepare_globals(libs)
+
+        exec(func_script, global_scope, local_scope)
+
+        "Достаём рабочую функцию"
+        compiled_func = local_scope.get(func_name)
+        if not compiled_func:
+            msg = f"Функция ней найдена в скрипте | func_name: \033[33m{func_name}\033[0m; \033[36m{func_script[:150]}\033[0m"
+            log_event(msg, level='ERROR')
+            raise ValueError(msg)
+
+        return compiled_func

@@ -1,5 +1,6 @@
 import logging
 import os
+from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
@@ -23,8 +24,18 @@ WORKDIR = Path(__file__).resolve().parent
 LOG_DIR = WORKDIR / 'node_logs'
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-TMP_DIR = Path('/tmp/vpn-panel')
+TMP_DIR = Path('/tmp/reinar_panel')
 TMP_DIR.mkdir(parents=True, exist_ok=True)
+
+
+class AuditModes(str, Enum):
+    lite = 'lite'                        # Сравнение длины. Лог при расхождении. Нод клиент продолжает работать
+    medium = 'medium'                    # Глубокое сравнение каждого пользователя из State файла с пользователем из Конфиг-файла впн-ядра
+    strict = 'strict'                    # Как Medium, но нод клиент прекращает работу и падает с ValueError
+
+    medium_advanced = 'medium_advanced'  # Medium. Расхождения отправляются на админку
+    strict_advanced = 'strict_advanced'  # Strict + Умное уведомление на админку
+
 
 class Settings(BaseSettings):
     """Настройки Node Client"""
@@ -37,6 +48,7 @@ class Settings(BaseSettings):
     write_buffer_interval: int # Интервал записи очереди из памяти на диск (в файл)
 
     admin_panel_private_ip: str
+    audit_mode: AuditModes = Field(default=AuditModes.lite)
     model_config = SettingsConfigDict(extra='allow')
 
 
