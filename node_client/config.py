@@ -28,6 +28,20 @@ TMP_DIR = Path('/tmp/reinar_panel')
 TMP_DIR.mkdir(parents=True, exist_ok=True)
 
 
+class CoreProtoActions:
+    add: int = 1
+    delete: int = 2
+
+    word_add: str = 'add'
+    word_delete: str = 'delete'
+
+    name2id: dict[str, int] = {
+        'add': 1,
+        'delete': 2,
+    }
+    id2name: dict[str, str] = {id: name for name, id in name2id.items()}
+
+
 class AuditModes(str, Enum):
     lite = 'lite'                        # Сравнение длины. Лог при расхождении. Нод клиент продолжает работать
     medium = 'medium'                    # Глубокое сравнение каждого пользователя из State файла с пользователем из Конфиг-файла впн-ядра

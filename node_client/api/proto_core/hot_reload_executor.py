@@ -59,7 +59,7 @@ class HotReloadExecutor:
             lib_names: str | None,
             node_ip: str,
             core_api_port: int,
-            action: Literal["add_user", "delete_user", "bulk_delete_users", "bulk_add_users", "get_metrics"],
+            action: Literal["bulk_delete_users", "bulk_add_users", "get_metrics"],
             custom_params: dict | None = None,
             user_obj: dict | str | list[dict] = None,
 
@@ -93,24 +93,19 @@ class HotReloadExecutor:
 
             "Вызываем функцию из скрипта"
             action_user_func = (
-                    local_scope.get('add_user') or
-                    local_scope.get('delete_user') or
                     local_scope.get('bulk_delete_users') or
                     local_scope.get('bulk_add_users') or
                     local_scope.get('get_metrics') or
                     local_scope.get('parse')
             )
             if not action_user_func:
-                msg = "Ни одна из функций: (add_user, delete_user, bulk_delete_users, bulk_add_users, get_metrics, parse) - не найдена в скрипте"
+                msg = "Ни одна из функций: (bulk_delete_users, bulk_add_users, get_metrics, parse) - не найдена в скрипте"
                 log_event(msg, level='ERROR')
                 return False, msg
 
             "Подбираем набор аргументов исходя от действия скрипта"
             args_func_map = {
-                "add_user": (user_obj, node_ip, core_api_port, custom_params),
-                "delete_user": (user_obj, node_ip, core_api_port, custom_params),
-                "bulk_delete_users": (user_obj, node_ip, core_api_port, custom_params),
-                "bulk_add_users": (user_obj, node_ip, core_api_port, custom_params),
+                "user_core_operation": (user_obj, node_ip, core_api_port, custom_params), # Подходит для бульк/обычных вставок/удалений
                 "get_metrics": (node_ip, core_api_port, custom_params),
             }
             result = action_user_func(*args_func_map[action])

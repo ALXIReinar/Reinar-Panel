@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class BaseUserCoreSchema(BaseModel):
@@ -9,6 +11,18 @@ class BaseUserCoreSchema(BaseModel):
     config_file_path: str = Field(..., min_length=1, description='Путь к конфиг-файлу')
     custom_params: dict | None = Field(description='Зависимости для скрипта, которые идут отдельно от объекта пользователя')
     user_injectors: list["UserInjector"]
+    users: list[dict]
+    action_script: str | None
+
+    operation: Literal["add", "delete", 1, 2] = Field(ge=1, le=2, description="Операция, выполняемая скриптом. Вставка или удаление. 1 - add, 2 - delete. Допускаются строки и цифры")
+
+    @field_validator("operation", mode="before")
+    @classmethod
+    def convert_int_to_str(cls, value):
+        mapping = {1: "add", 2: "delete"}
+        # Если пришло число 1 или 2, меняем его на строку
+        return mapping.get(value, value)
+
 
 class UserInjector(BaseModel):
     """
@@ -21,22 +35,3 @@ class UserInjector(BaseModel):
     flatten_array_cursor: str = Field(description='indounds___0___users - массив')
     extractor_script: str = Field(description='скрипт-обработчик для трансформации user_obj под требования массива под flatten_array_cursor')
     libs: str | None = Field(None, max_length=512, description='Либы, нужные для скрипта-экстрактора объекта пользователя для впн-ядра из Суперобъекта')
-
-
-class AddUserCoreSchema(BaseUserCoreSchema):
-    """Схема для добавления пользователя в ядро протокола"""
-    user_obj: dict = Field(..., description='Готовый объект пользователя для конфига')
-    add_script: str | None = Field(None, description='Python скрипт для добавления через API')
-
-class DeleteUserCoreSchema(BaseUserCoreSchema):
-    """Схема для удаления пользователя из ядра протокола"""
-    user_obj: dict = Field(..., description='Готовый объект пользователя для конфига')
-    delete_script: str | None = Field(None, description='Python скрипт для удаления через API')
-
-class BulkDeleteUserCoreSchema(BaseUserCoreSchema):
-    bulk_delete_script: str | None
-    users: list[dict] = Field(description='Список готовых объектов пользователей для конфига')
-
-class BulkAddUserCoreSchema(BaseUserCoreSchema):
-    bulk_add_script: str | None
-    users: list[dict]

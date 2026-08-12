@@ -95,7 +95,7 @@ async def processing_pay_result(form: Annotated[WebhookRoboPayload, Form()], req
 
     "3.2. Запускаем в фон таску на добавление пользователя в ядра нод, указанных в подписке"
     # Находим ноды по подписке, фиксируем попытку вставки пользователя в ядра протоколов
-    sub_nodes = await db.sub.get_core_proto_deps_by_user_id(user_sub['uuid'], user_sub['id'], CoreProtoActions.add)
+    sub_nodes = await db.sub.get_core_proto_deps_by_user_id(user_sub['id'], CoreProtoActions.add)
     # Преобразуем asyncpg.Record в dict для сериализации
     sub_nodes_serializable = [dict(node) for node in sub_nodes]
     

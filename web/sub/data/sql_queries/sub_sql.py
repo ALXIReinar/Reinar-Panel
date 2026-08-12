@@ -1,8 +1,7 @@
-from typing import Literal
 
 from asyncpg import Connection
 
-from web.sub.anything import CoreProtoActions, PayStatuses
+from web.sub.anything import CoreProtoActions
 
 
 class SubscriptionQueries:
@@ -49,7 +48,7 @@ class SubscriptionQueries:
 
 
     async def get_core_proto_deps_by_user_id(
-            self, user_uuid: str, user_sub_id: int, operation: CoreProtoActions | int
+            self, user_sub_id: int, operation: CoreProtoActions | int
     ):
         """
         Получить ноды для действия над пользователем в ядре протокола + зафиксировать в outbox
@@ -60,24 +59,35 @@ class SubscriptionQueries:
         3. Возвращает полные данные нод для обработки
         """
         query = '''
-        WITH vnodes_read AS (
-            SELECT vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
-                   pt.api_add_user_script, pt.api_delete_user_script, pt.reload_core_command, np.config_path, pt.flatten_json_users_key, pt.required_user_data_obj,
-                   pt.constant_user_data_obj, pt.flatten_user_identifier_key, pt.add_script_custom_params, pt.delete_script_custom_params,
-                   pt.process_user_item_script, pt.process_user_libs
+        WITH insert_outbox AS (
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+            SELECT us.uuid, us.id, $2, vsp.node_proto_id
             FROM user_subs us
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = us.sub_plan_id
-            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
-            JOIN protocols p ON np.proto_id = p.id
-            JOIN nodes n ON np.node_id = n.id AND n.is_active = true
-            JOIN proto_templates pt ON p.tmp_id = pt.id
-            WHERE us.is_active = true AND us.id = $2
+            WHERE us.is_active = true AND us.id = $1
+            RETURNING id AS event_id, user_sub_id, user_uuid, node_proto_id
         ),
-        outbox_insert AS (
-            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
-            SELECT $1, $2, $3, vnodes_read.node_proto_id
-            FROM vnodes_read
+        -- 5.1. Пре агрегация инжекторов
+        pre_agg_user_injectors AS (
+            SELECT tmp_id,
+               json_agg(
+                   json_build_object(
+                       'flatten_array_cursor', flatten_array_cursor,
+                       'extractor_script', extractor_script,
+                       'libs', libs
+                   )
+               ) AS user_injectors
+            FROM templates_users_extractors
+            GROUP BY tmp_id
         )
-        SELECT * FROM vnodes_read
+        SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib, pt.api_bulk_delete_user_script, 
+               pt.reload_core_command, np.config_path, pt.bulk_delete_script_custom_params, pt.constant_user_data_obj, pt.required_user_data_obj,
+               COALESCE(aui.user_injectors, '[]'::json) AS user_injectors, io.event_id
+        FROM nodes_protocols np
+        JOIN nodes n ON n.id = np.node_id AND n.is_active = true
+        JOIN protocols p ON p.id = np.proto_id
+        JOIN proto_templates pt ON p.tmp_id = pt.id 
+        LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id
+        JOIN insert_outbox io ON io.node_proto_id = np.id 
         '''
-        return await self.conn.fetch(query, user_uuid, user_sub_id, operation)
+        return await self.conn.fetch(query, user_sub_id, operation)

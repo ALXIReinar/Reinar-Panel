@@ -1,3 +1,4 @@
+import asyncio
 from typing import Annotated
 
 from aiohttp import ClientResponseError, ClientError
@@ -6,12 +7,12 @@ from fastapi.params import Query
 from starlette.requests import Request
 
 from web.api.protocols.proto_links_templates.handlers import generate_link_from_json
-from web.config_dir.config import NodeExecAiohttpDep, ArqDep
+from web.config_dir.config import NodeExecAiohttpDep, ArqDep, env
 from web.data.postgres import PgSqlDep
 from web.data.redis_storage import RedisDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
 from web.schemas.node_commander_schema import ExecCMDNodeSchema, ReadConfigSchema, WriteConfigSchema, UserCoreProtoActionSchema
-from web.utils.anything import NodeUris, ExecHistoryStatuses
+from web.utils.anything import NodeUris, ExecHistoryStatuses, CoreProtoActions
 from web.data.redis_storage import CommandWhitelistCache
 from web.utils.logger_config import log_event
 
@@ -168,25 +169,43 @@ async def add_user(
     WARNING. Упростить SQL запрос. Должен передавать только легкие метаданные и id.
     Сейчас через брокер гоняются в том числе текстовые скрипты-шаблоны
 
-    Добавление/Удаление пользователя по подписке.
-    1. Поиск доступных пользователю нод по **единственной** подписке, Outbox запись
+    Добавление/Удаление пользователя с конкретной ноды.
+    1. Метаданные по ноде, Outbox запись
     2. Закидываем задачу в фон
     """
-    log_event(f'Операция над пользователем на ядрах протоколов | action: {body.action}; uuid: \033[36m{body.uuid}\033[0m; user_sub_id: \033[35m{body.user_sub_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    log_event(f'Операция над пользователем на ноде | node_proto_id: \033[32m{body.node_proto_id}\033[0m; action: \033[35m{body.action}\033[0m; uuid: \033[36m{body.uuid}\033[0m; user_sub_id: \033[35m{body.user_sub_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
 
-    "Все ноды по подписке. Запрос на добавление на каждую ноду"
-    sub_nodes = await db.nodes_protocols.get_core_proto_deps_by_user_sub(
+    "Мета для операции на ноде. Оутбокс фиксация"
+    vnode = await db.nodes_protocols.get_core_proto_deps_by_user_sub(
         user_uuid=body.uuid,
         user_sub_id=body.user_sub_id,
+        node_proto_id=body.node_proto_id,
         operation=body.action
     )
-    sub_nodes_serializable = [dict(node) for node in sub_nodes]
+
+    "Апи бульк формата. Так что формат соблюдаем"
+    users = [{"user_sub_id": body.user_sub_id, "uuid": body.uuid, "event_id": vnode['event_id']}]
+    action_script_custom_params = {
+        'delete': (vnode['api_bulk_delete_user_script'], vnode['bulk_delete_script_custom_params'], CoreProtoActions.delete),
+        'add': (vnode['api_bulk_add_user_script'], vnode['bulk_add_script_custom_params'], CoreProtoActions.add),
+    }
+
+    "Кидаем в фон"
     job = await arq.enqueue_job(
-        'action_on_core_proto_by_sub_plan',
-        body.uuid,
-        body.user_sub_id,
-        sub_nodes_serializable,
-        body.action,
+        'bulk_action_users_by_node',
+        vnode['node_proto_id'],
+        vnode['private_ip'],
+        vnode['api_port'],
+        vnode['metrics_port'],
+        vnode['proto_python_lib'],
+        *action_script_custom_params[body.action],
+        users,
+        vnode['reload_core_command'],
+        vnode['config_path'],
+        vnode['user_injectors'],
+        vnode['required_user_data_obj'],
+        vnode['constant_user_data_obj'],
     )
-    log_event(f'Пользователь в фоне добавляется/удаляется на ядрах виртуальных нод | job_id: \033[35m{job.job_id}\033[0m; action: {body.action}; user_uuid: {body.uuid}; user_sub_id: {body.uuid}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    log_event(f'\033[35m[Node Command Center]\033[0m Отправили в фон \033[34m{body.action}\033[0m на ноду | node_proto_id: \033[33m{body.node_proto_id}\033[0m; users: \033[32m{vnode["users"]}\033[0m; job_id: \033[31m{job.job_id}\033[0m')
+
     return {'success': True, 'message': 'Пользователь обрабатывается в фоновой очереди', 'job_id': job.job_id}

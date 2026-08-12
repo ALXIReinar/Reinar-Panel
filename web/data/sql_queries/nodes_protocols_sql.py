@@ -185,27 +185,36 @@ class NodesProtocolsQueries:
 
 
     async def get_core_proto_deps_by_user_sub(
-            self, user_uuid: str, user_sub_id: int, operation: Literal['add', 'delete']
+            self, user_uuid: str, user_sub_id: int, node_proto_id: int, operation: Literal['add', 'delete']
     ):
         query = '''
-        WITH vnodes_read AS (
-            SELECT vsp.node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
-                   pt.api_add_user_script, pt.api_delete_user_script, pt.reload_core_command, np.config_path, pt.flatten_json_users_key, pt.required_user_data_obj,
-                   pt.constant_user_data_obj, pt.flatten_user_identifier_key, pt.add_script_custom_params, pt.delete_script_custom_params,
-                   pt.process_user_item_script, pt.process_user_libs
-            FROM user_subs us
-            JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = us.sub_plan_id
-            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
-            JOIN protocols p ON np.proto_id = p.id
-            JOIN nodes n ON np.node_id = n.id AND n.is_active = true
-            JOIN proto_templates pt ON p.tmp_id = pt.id
-            WHERE us.id = $2 AND us.is_active = true
+        WITH outbox_insert AS (
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id) 
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, node_proto_id
         ),
-        outbox_insert AS (
-            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
-            SELECT $1, $2, $3, vnodes_read.node_proto_id
-            FROM vnodes_read
+        pre_agg_user_injectors AS (
+            SELECT tmp_id,
+               json_agg(
+                   json_build_object(
+                       'flatten_array_cursor', flatten_array_cursor,
+                       'extractor_script', extractor_script,
+                       'libs', libs
+                   )
+               ) AS user_injectors
+            FROM templates_users_extractors
+            GROUP BY tmp_id
         )
-        SELECT * FROM vnodes_read
+        SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib, pt.api_bulk_add_user_script,
+               pt.api_bulk_delete_user_script, pt.reload_core_command, np.config_path, pt.required_user_data_obj,
+               pt.constant_user_data_obj, pt.bulk_delete_script_custom_params, pt.bulk_add_script_custom_params, oi.id AS event_id,
+               COALESCE(aui.user_injectors, '[]'::json)
+        FROM nodes_protocols np
+        JOIN protocols p ON np.proto_id = p.id
+        JOIN nodes n ON np.node_id = n.id AND n.is_active = true
+        JOIN proto_templates pt ON p.tmp_id = pt.id
+        LEFT JOIN pre_agg_user_injectors aui ON pt.id = aui.tmp_id
+        JOIN outbox_insert oi ON oi.node_proto_id = np.id
+        WHERE np.id = $4
         '''
-        return await self.conn.fetch(query, user_uuid, user_sub_id, CoreProtoActions.name2id[operation])
+        return await self.conn.fetch(query, user_uuid, user_sub_id, CoreProtoActions.name2id[operation], node_proto_id)

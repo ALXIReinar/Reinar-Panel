@@ -29,7 +29,7 @@ async def action_on_core_proto_by_sub_plan(
     sem = asyncio.Semaphore(env.action_on_core_proto_limit)  # Батчинг нод
     trouble_nodes = []  # Критические ошибки (не ретраим)
     retry_nodes = []    # Временные ошибки (ретраим)
-    success_nodes = []  # Ноды, где вставка пользователя прошла успешно
+    success_events = []  # Ноды, где вставка пользователя прошла успешно
     success_count = 0
     
     async def worker(node: dict):
@@ -62,47 +62,44 @@ async def action_on_core_proto_by_sub_plan(
             
             "2. Подбираем тело запроса и эндпоинт в соответствии с operation"
             log_event(f'\033[33m[ARQ]\033[0m Добавление юзера в ядро | uuid: \033[35m{user_uuid}\033[0m; node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; private_ip: \033[33m{node["private_ip"]}\033[0m; api_port: \033[35m{node['api_port']}\033[0m', level='DEBUG')
-            json_add_body = {
+
+            "Общий набор параметров"
+            json_body = {
                 'node_proto_id': node['node_proto_id'],
                 'core_lib': node['proto_python_lib'],
-                'user_obj': final_user_obj,
-                'add_script': node['api_add_user_script'],
+                'users': [final_user_obj], # Список, т.к. используется бульк-эндпоинт
                 'core_port': node['metrics_port'],
                 'reload_core_command': node['reload_core_command'],
                 'config_file_path': node['config_path'],
                 'user_injectors': node['user_injectors'],
-                'custom_params': node['add_script_custom_params'],
+                'action': operation,
             }
-            json_delete_body = {
-                'node_proto_id': node['node_proto_id'],
-                'core_lib': node['proto_python_lib'],
-                'user_obj': final_user_obj,
-                'delete_script': node['api_delete_user_script'],
-                'core_port': node['metrics_port'],
-                'reload_core_command': node['reload_core_command'],
-                'config_file_path': node['config_path'],
-                'user_injectors': node['user_injectors'],
-                'custom_params': node['delete_script_custom_params'],
-            }
+
+            "Выбираем нужный скрипт в зависимости от операции"
             action_pack = {
-                'add': (json_add_body, NodeUris.proto_core_add_user),
-                'delete': (json_delete_body, NodeUris.proto_core_delete_user)
+                'add': {
+                    'action_script': node['api_bulk_add_user_script'],
+                    'custom_params': node['bulk_add_script_custom_params'],
+                },
+                'delete': {
+                    'action_script': node['api_bulk_delete_user_script'],
+                    'custom_params': node['bulk_delete_script_custom_params'],
+                },
             }
-            # action_pack[operation][0] - json body;
-            # action_pack[operation][1] - endpoint_uri
-            url = f"http://localhost:8200{action_pack[operation][1]}"
-            # url = f"http://{node['private_ip']}:{node['api_port']}{action_pack[operation][1]}"
-            json_body = action_pack[operation][0]
+            json_body.update(action_pack[operation])
+
+            # url = f"http://localhost:8200{NodeUris.proto_core_bulk_action}"
+            url = f"http://{node['private_ip']}:{node['api_port']}{NodeUris.proto_core_bulk_action}"
 
             "3. Отправляем запрос на ноду"
             try:
                 "3.1. Happy case"
-                async with aio_http.post(url, json=json_body, timeout=30.0) as resp:
+                async with aio_http.put(url, json=json_body, timeout=30.0) as resp:
                     resp.raise_for_status()
 
                 success_count += 1
                 log_event(f'\033[33m[ARQ]\033[0m Пользователь добавлен | node_proto_id: \033[36m{node["node_proto_id"]}\033[0m')
-                success_nodes.append(node['node_proto_id'])
+                success_events.append(node['event_id'])
 
             except ClientResponseError as e:
                 "3.2.1. Шаблон некорректно настроен. Ошибки в параметрах для управления конфиг-файлом ядра"
@@ -110,6 +107,7 @@ async def action_on_core_proto_by_sub_plan(
                     log_event(f'Ошибка валидации в Инстансе ядре. Неправильные настройки для конфиг-файла, ключа к пользователям или ключа к идентификатору в объекте пользователя | node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m', level='WARNING')
                     trouble_nodes.append({
                         'node_proto_id': node['node_proto_id'],
+                        'event_id': node['event_id'],
                         'status_code': 422,
                         'response_json': str(e)
                     })
@@ -128,6 +126,7 @@ async def action_on_core_proto_by_sub_plan(
                 log_event(f'\033[33m[ARQ]\033[0m Неожиданная ошибка | node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; error: \033[31m{e}\033[0m', level='CRITICAL')
                 retry_nodes.append({
                     'node_proto_id': node['node_proto_id'],
+                    'event_id': node['event_id'],
                     'node_data': node,  # Уже dict, не нужно преобразовывать
                     'status_code': 500,
                     'response_json': {'error': str(e)}
@@ -148,7 +147,7 @@ async def action_on_core_proto_by_sub_plan(
     )
 
     "Фиксируем в БД успешные вставки (удаляем маркеры для кроны на повторную вставку)"
-    await db.core_proto_single.success_action_core_proto_user(success_nodes, operation, user_uuid)
+    await db.core_proto_bulk.success_bulk_action_core_proto_users(success_events)
 
     "1. Retry: если есть failed ноды, отправляем повторную попытку"
     if retry_nodes:

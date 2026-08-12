@@ -41,7 +41,7 @@ class TestResetDayUserTraffic:
         seed = traffic_reset_seed
         
         # Act
-        result = await reset_day_user_traffic(arq_ctx, users=None)
+        result = await reset_day_user_traffic(arq_ctx, outbox_event_ids=None)
         
         # Assert
         assert result['success'] is True
@@ -100,7 +100,7 @@ class TestResetDayUserTraffic:
         # Arrange - БД очищена через db_seed, нет подписок
         
         # Act
-        result = await reset_day_user_traffic(arq_ctx, users=None)
+        result = await reset_day_user_traffic(arq_ctx, outbox_event_ids=None)
         
         # Assert
         assert result['success'] is True
@@ -125,7 +125,7 @@ class TestResetDayUserTraffic:
         seed = traffic_reset_seed
         
         # Act
-        result = await reset_day_user_traffic(arq_ctx, users=None)
+        result = await reset_day_user_traffic(arq_ctx, outbox_event_ids=None)
         
         # Assert
         assert result['success'] is True
@@ -187,7 +187,7 @@ class TestResetDayUserTraffic:
             assert initial_traffic > 0  # Должен быть трафик
         
         # Act
-        result = await reset_day_user_traffic(arq_ctx, users=None)
+        result = await reset_day_user_traffic(arq_ctx, outbox_event_ids=None)
         
         # Assert
         assert result['success'] is True
@@ -238,7 +238,7 @@ class TestResetDayUserTraffic:
             """, seed['plan_id'])
         
         # Act
-        result = await reset_day_user_traffic(arq_ctx, users=None)
+        result = await reset_day_user_traffic(arq_ctx, outbox_event_ids=None)
         
         # Assert
         assert result['success'] is True
@@ -278,7 +278,7 @@ class TestResetDayUserTraffic:
             """)
         
         # Act
-        result = await reset_day_user_traffic(arq_ctx, users=None)
+        result = await reset_day_user_traffic(arq_ctx, outbox_event_ids=None)
         
         # Assert
         assert result['success'] is True

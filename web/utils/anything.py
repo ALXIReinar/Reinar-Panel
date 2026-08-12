@@ -13,8 +13,7 @@ class NodeUris:
     get_config_file: str = '/api/v1/server/node/config/read'
     write_config_file: str = '/api/v1/server/node/config/write'
     ping: str = '/api/v1/server/node/ping'
-    proto_core_add_user: str = '/api/v1/server/proto_core/user/add'
-    proto_core_delete_user: str = '/api/v1/server/proto_core/user/delete'
+    proto_core_bulk_action: str = '/api/v1/server/proto_core/user/bulk/action' # Experimental. Ещё не добавлено  на нод клиент
 
 class CoreProtoActions:
     add: int = 1
@@ -62,8 +61,8 @@ class Constants:
     }
     excluded_commands_words = {'sudo', }
     proto_core_methods = {
-        'add': NodeUris.proto_core_add_user,
-        'delete': NodeUris.proto_core_delete_user
+        'add': NodeUris.proto_core_bulk_action,
+        'delete': NodeUris.proto_core_bulk_action
     }
 
 

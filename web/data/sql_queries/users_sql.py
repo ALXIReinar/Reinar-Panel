@@ -85,15 +85,11 @@ class UsersQueries:
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
             {is_limited_filter}
-        ),
-        inserted AS (
-            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
-            SELECT uuid, user_sub_id, $2, node_proto_id
-            FROM sub_nodes_info
-            RETURNING user_sub_id
         )
-        SELECT sni.user_sub_id, sni.sub_plan_id, sni.uuid
-        FROM sub_nodes_info sni
+        INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+        SELECT uuid, user_sub_id, $2, node_proto_id
+        FROM sub_nodes_info
+        RETURNING id AS event_id
         '''
         return await self.conn.fetch(base_query, user_ids, action_param)
 
@@ -120,15 +116,11 @@ class UsersQueries:
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = us.sub_plan_id 
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
-        ),
-        inserted_outbox AS (
-            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
-            SELECT uuid, user_sub_id, $2, node_proto_id
-            FROM sub_nodes_info
-            RETURNING user_sub_id
         )
-        SELECT sni.user_sub_id, sni.sub_plan_id, sni.uuid
-        FROM sub_nodes_info sni
+        INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+        SELECT uuid, user_sub_id, $2, node_proto_id
+        FROM sub_nodes_info
+        RETURNING id AS event_id
         """
         return await self.conn.fetch(query, user_ids, CoreProtoActions.delete)
 
@@ -250,58 +242,58 @@ class UsersQueries:
             -- Обязательные поля для возврата ins/del запросов
             RETURNING id AS user_sub_id, uuid, sub_plan_id 
         ),
-        -- 2. Ноды для вставки пользователя (подписки, впн-пользователя)
-        nodes_info AS (
-            SELECT 
-                sc.user_sub_id, 
-                sc.uuid,
-                sc.sub_plan_id,  -- Берём прямо из RETURNING
-                COALESCE(
-                    json_agg(
-                        json_build_object(
-                            'node_proto_id', np.id,
-                            'private_ip', n.private_ip,
-                            'api_port', n.api_port,
-                            'metrics_port', np.metrics_port,
-                            'proto_python_lib', pt.proto_python_lib,
-                            'api_add_user_script', pt.api_add_user_script,
-                            'api_delete_user_script', pt.api_delete_user_script,
-                            'reload_core_command', pt.reload_core_command,
-                            'config_path', np.config_path,
-                            'flatten_json_users_key', pt.flatten_json_users_key,
-                            'required_user_data_obj', pt.required_user_data_obj,
-                            'constant_user_data_obj', pt.constant_user_data_obj,
-                            'flatten_user_identifier_key', pt.flatten_user_identifier_key,
-                            'add_script_custom_params', pt.add_script_custom_params,
-                            'delete_script_custom_params', pt.delete_script_custom_params,
-                            'process_user_item_script', pt.process_user_item_script,
-                            'process_user_libs', pt.process_user_libs
-                        )
-                    ) FILTER (WHERE np.id IS NOT NULL),
-                    '[]'::json
-                ) AS nodes
-            FROM sub_changes sc
-            LEFT JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = sc.sub_plan_id
-            LEFT JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
-            LEFT JOIN protocols p ON np.proto_id = p.id
-            LEFT JOIN nodes n ON np.node_id = n.id AND n.is_active = true
-            LEFT JOIN proto_templates pt ON p.tmp_id = pt.id
-            GROUP BY sc.user_sub_id, sc.uuid, sc.sub_plan_id
-        ),
-        -- 3. Оутбокс (денормализованный - по записи на каждую ноду)
-        insert_outbox AS (
-            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
-            SELECT 
-                sc.uuid, 
-                sc.user_sub_id, 
-                $1,  -- operation
-                np.id  -- node_proto_id
+        -- 2. Собираем outbox набор
+        outbox_pack AS (
+            SELECT sc.uuid, sc.user_sub_id, vsp.node_proto_id
             FROM sub_changes sc
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = sc.sub_plan_id
-            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
+        ),
+        -- 3. Фиксируем операцию удаления в outbox (двухэтапный ack)
+        insert_outbox AS (
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+            SELECT uuid, user_sub_id, $1, node_proto_id
+            FROM outbox_pack
+            RETURNING id AS event_id, user_sub_id, user_uuid, node_proto_id
+        ),
+        -- 4.1. Пре-агрегация впн-пользователей. Максимум 10 записей
+        pre_agg_users AS (
+            SELECT node_proto_id,
+                   json_agg(
+                        json_build_object(
+                            'event_id', event_id,
+                            'uuid', user_uuid,
+                            'user_sub_id', user_sub_id
+                        )
+                   ) AS users
+            FROM insert_outbox
+            GROUP BY node_proto_id
+        ),
+        -- 4.2. Пре агрегация инжекторов. До 2000-3000 записей, так что последняя
+        pre_agg_user_injectors AS (
+            SELECT tmp_id,
+               json_agg(
+                   json_build_object(
+                       'flatten_array_cursor', flatten_array_cursor,
+                       'extractor_script', extractor_script,
+                       'libs', libs
+                   )
+               ) AS user_injectors
+            FROM templates_users_extractors
+            GROUP BY tmp_id
         )
-        -- 4. Берём всё 
-        SELECT * FROM nodes_info
+        -- 5. Ноды для вставки пользователя (подписки, впн-пользователя)
+        SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib, pt.api_bulk_delete_user_script, 
+               pt.reload_core_command, np.config_path, pt.bulk_delete_script_custom_params, pt.constant_user_data_obj, pt.required_user_data_obj,
+               pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params,
+               pau.users,
+               COALESCE(aui.user_injectors, '[]'::json) AS user_injectors
+        FROM nodes_protocols np
+        JOIN nodes n ON n.id = np.node_id AND n.is_active = true
+        JOIN protocols p ON p.id = np.proto_id
+        JOIN pre_agg_users pau ON pau.node_proto_id = np.id
+        JOIN proto_templates pt ON p.tmp_id = pt.id 
+        LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id 
+        WHERE np.user_visible = true
         '''
         add_query = '''
         INSERT INTO user_subs (

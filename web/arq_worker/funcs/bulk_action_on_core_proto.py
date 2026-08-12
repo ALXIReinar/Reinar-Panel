@@ -52,7 +52,7 @@ async def bulk_action_users_by_node(
         return {'success': False, 'message': 'Нет впн-пользователей для ядра'}
 
 
-    # url = f"http://localhost:8200{NodeUris.proto_core_bulk_delete_users}"
+    # url = f"http://localhost:8200{NodeUris.proto_core_bulk_action}"
     url = f"http://{private_ip}:{api_port}{NodeUris.proto_core_bulk_action}"
     json_body = {
         'node_proto_id': node_proto_id,

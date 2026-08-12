@@ -1,6 +1,6 @@
 from asyncpg import Connection
 
-from web.arq_worker.data.sql_queries.action_core_proto_sql import BulkActionsQueries, SingleActionsQueries
+from web.arq_worker.data.sql_queries.action_core_proto_sql import BulkActionsQueries
 from web.arq_worker.data.sql_queries.metrics_collect_sql import MetricsQueries
 from web.arq_worker.data.sql_queries.outbox_sql import OutboxQueries
 from web.arq_worker.data.sql_queries.traffic_reset_sql import TrafficResetQueries
@@ -11,7 +11,6 @@ class PgSql:
         self.conn = conn
 
         self.core_proto_bulk = BulkActionsQueries(conn)
-        self.core_proto_single = SingleActionsQueries(conn)
 
         self.metrics = MetricsQueries(conn)
         self.outbox = OutboxQueries(conn)

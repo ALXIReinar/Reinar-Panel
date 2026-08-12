@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from asyncpg import Connection, ForeignKeyViolationError
 
-from web.sub.anything import PayStatuses, CoreProtoActions
+from web.sub.anything import PayStatuses
 from web.sub.config_dir.config import env
 
 

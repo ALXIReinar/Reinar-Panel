@@ -12,8 +12,8 @@ from web.arq_worker.utils.arq_logger_config import log_event
 
 @pg_sql_dep
 @arq_dep
-async def admin_request_bulk_action_users(ctx: dict, action: Literal['delete', 'add'] | CoreProtoActions, users: list[dict], db: PgSql = None, arq: ArqRedis = None):
-    sub_nodes = await db.core_proto_bulk.get_sub_nodes_for_bulk_action(users)
+async def admin_request_bulk_action_users(ctx: dict, action: Literal['delete', 'add'] | CoreProtoActions, outbox_event_ids: list[int], db: PgSql = None, arq: ArqRedis = None):
+    sub_nodes = await db.core_proto_bulk.get_meta_for_bulk(outbox_event_ids)
     
     sem = asyncio.Semaphore(env.action_on_core_proto_limit)
 

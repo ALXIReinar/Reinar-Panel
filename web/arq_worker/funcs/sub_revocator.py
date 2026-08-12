@@ -5,9 +5,8 @@ from arq import ArqRedis
 
 from web.arq_worker.config import env
 from web.arq_worker.data.postgres import PgSql
-from web.arq_worker.depends_fabric import pg_sql_dep, arq_dep, aiohttp_dep
-from web.arq_worker.funcs.metrics_collector import create_vpn_like_user
-from web.arq_worker.utils.anything import NodeUris, CoreProtoActions
+from web.arq_worker.depends_fabric import pg_sql_dep, arq_dep
+from web.arq_worker.utils.anything import CoreProtoActions
 from web.arq_worker.utils.arq_logger_config import log_event
 
 

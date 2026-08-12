@@ -1,5 +1,8 @@
+import asyncio
+
 from arq import ArqRedis
 
+from web.arq_worker.config import env
 from web.arq_worker.data.postgres import PgSql
 from web.arq_worker.depends_fabric import pg_sql_dep, arq_dep
 from web.arq_worker.utils.anything import CoreProtoActions
@@ -9,7 +12,7 @@ from web.arq_worker.utils.arq_logger_config import log_event
 @pg_sql_dep
 @arq_dep
 async def reset_day_user_traffic(
-        ctx: dict, users: list[dict] | None = None,
+        ctx: dict, outbox_event_ids: list[dict] | None = None,
         db: PgSql = None,
         arq: ArqRedis = None
 ):
@@ -20,16 +23,10 @@ async def reset_day_user_traffic(
         2. ЭТА функция исполняет бульк вставку + чейнит на саму функцию бульк-вставки
         3. bulk_add_users_into_single_node
     А крона должна быть вынесена
-
-    :param ctx:
-    :param users:
-    :param db:
-    :param arq:
-    :return:
     """
-    log_event(f'\033[35m[ARQ Traffic Reset]\033[0m Обнуление трафика пользователей. \033[34m(Крона, если users = None)\033[0m | users: {users}', level='WARNING')
-    if users:
-        unlock_users_by_node = await db.traffic_reset.reset_traffic_by_users(users)
+    log_event(f'\033[35m[ARQ Traffic Reset]\033[0m Обнуление трафика пользователей. \033[34m(Крона, если outbox_event_ids = None)\033[0m | outbox_event_ids: {outbox_event_ids}', level='WARNING')
+    if outbox_event_ids:
+        unlock_users_by_node = await db.core_proto_bulk.get_meta_for_bulk(outbox_event_ids)
     else:
         unlock_users_by_node = await db.traffic_reset.reset_user_traffic_per_day()
     users_to_add = sum(len(vnode['users']) for vnode in unlock_users_by_node)
@@ -37,11 +34,13 @@ async def reset_day_user_traffic(
 
     if not users_to_add:
         log_event('\033[32m[ARQ Traffic Reset]\033[0m Нет пользователей, блокированных по лимиту трафика. Idle')
-        return {'success': True, 'message': 'Нет пользователей, блокированных по лимиту трафика'}
+        return {'success': True, 'message': 'Нет пользоателей на нодах, блокированных по лимиту трафика'}
 
-    "Отправляем chain task на каждую ноду для бульк добавления в ядра"
-    for vnode in unlock_users_by_node:
-        if len(vnode['users']) > 0:
+    sem = asyncio.Semaphore(env.action_on_core_proto_limit)
+
+    async def enqueue_add(vnode):
+        async with sem:
+            "Отправляем chain task на каждую ноду для бульк добавления в ядра"
             log_event(f'\033[35m[Traffic Reset]\033[0m Отправляем Бульк запрос на фоновое добавление пользователей в ядра | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
             job = await arq.enqueue_job(
                 'bulk_action_users_by_node',
@@ -62,4 +61,5 @@ async def reset_day_user_traffic(
             )
             log_event(f'\033[35m[Traffic Reset]\033[0m Фоновая задача запущена, бульк-добавление | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
 
-    return {'success': True, 'message': 'Трафик пользователей обнулён', 'is_definite_users': bool(users)}
+    await asyncio.gather(*[enqueue_add(node) for node in unlock_users_by_node if len(node['users']) > 0])
+    return {'success': True, 'message': 'Трафик пользователей обнулён', 'is_definite_users': bool(outbox_event_ids)}
