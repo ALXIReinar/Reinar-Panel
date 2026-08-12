@@ -61,7 +61,10 @@ async def action_on_core_proto_by_sub_plan(
                 return
             
             "2. Подбираем тело запроса и эндпоинт в соответствии с operation"
-            log_event(f'\033[33m[ARQ]\033[0m Добавление юзера в ядро | uuid: \033[35m{user_uuid}\033[0m; node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; private_ip: \033[33m{node["private_ip"]}\033[0m; api_port: \033[35m{node['api_port']}\033[0m', level='DEBUG')
+            log_event(f'\033[33m[ARQ]\033[0m Добавление юзера в ядро | uuid: \033[35m{user_uuid}\033[0m; node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; private_ip: \033[33m{node["private_ip"]}\033[0m; api_port: \033[35m{node['api_port']}\033[0m')
+
+            log_event(f'\033[31m{node.keys()}\033[0m')
+            log_event(f'\033[34m{node.values()}\033[0m')
 
             "Общий набор параметров"
             json_body = {

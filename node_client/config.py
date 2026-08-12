@@ -13,7 +13,7 @@ from starlette.requests import Request
 env_files = (
     os.getenv('ENV_FILE') or
     os.getenv('ENV_LOCAL_TEST_FILE') or
-    '.env.node.prod'
+    'node_client/.env.node.prod'
 )
 load_dotenv(env_files, override=True)
 logging.critical(f'\033[35m{env_files}\033[0m | node_port: \033[32m{os.getenv("NODE_PORT", "8100")}\033[0m')

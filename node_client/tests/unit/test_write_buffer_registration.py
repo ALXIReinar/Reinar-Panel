@@ -3,7 +3,7 @@ Unit тесты для регистрации нод в ConfigWriteBuffer
 
 Тестируем:
 - register_node() - регистрация виртуальных нод
-- _load_users_from_config() - загрузка пользователей из конфиг-файла
+- _load_users_from_config() - загрузка пользователей из state.json файла
 """
 import asyncio
 import pytest
@@ -12,14 +12,20 @@ from pathlib import Path
 import orjson
 
 from node_client.api.proto_core.write_behind_caching_file import ConfigWriteBuffer
-from node_client.tests.utils.test_data_factory import create_test_user
+from node_client.tests.utils.test_data_factory import create_test_user, create_user_injectors
 
 
 # ========== Fixtures ==========
 
 @pytest.fixture
 def sample_config_with_users(tmp_path):
-    """Создаёт конфиг с 3 пользователями"""
+    """
+    Создаёт конфиг с 3 пользователями + state.json файл
+    
+    Returns:
+        tuple: (config_path, config_dict)
+    """
+    # Основной конфиг ядра (то что читает xray)
     config = {
         "inbounds": [
             {
@@ -27,9 +33,9 @@ def sample_config_with_users(tmp_path):
                 "protocol": "vless",
                 "settings": {
                     "clients": [
-                        create_test_user(email="user1@test.com", uuid="uuid-001"),
-                        create_test_user(email="user2@test.com", uuid="uuid-002"),
-                        create_test_user(email="user3@test.com", uuid="uuid-003"),
+                        create_test_user(email="user1@test.com", uuid="uuid-001", as_superuser=False),
+                        create_test_user(email="user2@test.com", uuid="uuid-002", as_superuser=False),
+                        create_test_user(email="user3@test.com", uuid="uuid-003", as_superuser=False),
                     ]
                 }
             }
@@ -39,12 +45,24 @@ def sample_config_with_users(tmp_path):
     config_path = tmp_path / "config_with_users.json"
     config_path.write_bytes(orjson.dumps(config, option=orjson.OPT_INDENT_2))
     
+    # State файл с суперобъектами (наш служебный файл)
+    state = {
+        "users": [
+            create_test_user(email="user1@test.com", uuid="uuid-001", as_superuser=True),
+            create_test_user(email="user2@test.com", uuid="uuid-002", as_superuser=True),
+            create_test_user(email="user3@test.com", uuid="uuid-003", as_superuser=True),
+        ]
+    }
+    
+    state_path = tmp_path / "config_with_users.json.state.json"
+    state_path.write_bytes(orjson.dumps(state, option=orjson.OPT_INDENT_2))
+    
     return config_path, config
 
 
 @pytest.fixture
 def empty_config(tmp_path):
-    """Создаёт конфиг с пустым массивом clients"""
+    """Создаёт конфиг с пустым массивом clients + пустой state"""
     config = {
         "inbounds": [
             {
@@ -60,6 +78,11 @@ def empty_config(tmp_path):
     config_path = tmp_path / "empty_config.json"
     config_path.write_bytes(orjson.dumps(config, option=orjson.OPT_INDENT_2))
     
+    # Пустой state файл
+    state = {"users": []}
+    state_path = tmp_path / "empty_config.json.state.json"
+    state_path.write_bytes(orjson.dumps(state, option=orjson.OPT_INDENT_2))
+    
     return config_path
 
 
@@ -72,7 +95,7 @@ async def test_register_node_success(sample_config_with_users):
     Проверяем что:
     1. Метаданные сохранены
     2. Очередь создана
-    3. Пользователи загружены в буфер
+    3. Пользователи загружены в буфер из state.json
     4. Воркер запущен
     """
     buffer = ConfigWriteBuffer(max_batch=5, timeout=1.0)
@@ -80,21 +103,15 @@ async def test_register_node_success(sample_config_with_users):
     
     node_proto_id = 1
     filepath = str(config_path)
-    users_path = "inbounds___0___settings___clients"
-    flatten_user_identifier_key = "email"
+    user_injectors = create_user_injectors()
     reload_command = "systemctl reload xray"
-    
-    # Создаём тестового пользователя для валидации
-    test_user = create_test_user(email="test@test.com")
     
     # Регистрируем ноду
     success, status_code, msg = await buffer.register_node(
         node_proto_id=node_proto_id,
         filepath=filepath,
-        users_path=users_path,
-        flatten_user_identifier_key=flatten_user_identifier_key,
-        reload_command=reload_command,
-        user_obj=test_user
+        user_injectors=user_injectors,
+        reload_command=reload_command
     )
     
     # Проверяем успех
@@ -106,25 +123,28 @@ async def test_register_node_success(sample_config_with_users):
     assert node_proto_id in buffer.node_metadata
     metadata = buffer.node_metadata[node_proto_id]
     assert metadata['filepath'] == filepath
-    assert metadata['users_path'] == users_path
-    assert metadata['flatten_user_identifier_key'] == flatten_user_identifier_key
     assert metadata['reload_command'] == reload_command
+    assert 'injectors' in metadata
+    assert len(metadata['injectors']) == 1
     
     # Проверяем очередь
     assert node_proto_id in buffer.node_queues
     assert isinstance(buffer.node_queues[node_proto_id], asyncio.Queue)
     
-    # Проверяем что пользователи загружены
+    # Проверяем что пользователи загружены из state.json
     assert node_proto_id in buffer.buffer_storage
     assert len(buffer.buffer_storage[node_proto_id]) == 3
-    assert "user1@test.com" in buffer.buffer_storage[node_proto_id]
-    assert "user2@test.com" in buffer.buffer_storage[node_proto_id]
-    assert "user3@test.com" in buffer.buffer_storage[node_proto_id]
+    
+    # В новой архитектуре ключи - это user_uuid
+    buffer_keys = list(buffer.buffer_storage[node_proto_id].keys())
+    assert "uuid-001" in buffer_keys
+    assert "uuid-002" in buffer_keys
+    assert "uuid-003" in buffer_keys
     
     # Проверяем O(1) структуру
-    user1 = buffer.buffer_storage[node_proto_id]["user1@test.com"]
+    user1 = buffer.buffer_storage[node_proto_id]["uuid-001"]
     assert user1["email"] == "user1@test.com"
-    assert user1["id"] == "uuid-001"
+    assert user1["user_uuid"] == "uuid-001"
     
     # Проверяем что воркер запущен
     assert node_proto_id in buffer.worker_tasks
@@ -136,7 +156,7 @@ async def test_register_node_success(sample_config_with_users):
 
 async def test_register_node_loads_existing_users(sample_config_with_users):
     """
-    Тест: Регистрация ноды загружает существующих пользователей из конфига
+    Тест: Регистрация ноды загружает существующих пользователей из state.json
     
     Проверяем что все 3 пользователя корректно загружены в O(1) структуру
     """
@@ -144,30 +164,28 @@ async def test_register_node_loads_existing_users(sample_config_with_users):
     config_path, config_dict = sample_config_with_users
     
     node_proto_id = 1
-    test_user = create_test_user(email="test@test.com")
+    user_injectors = create_user_injectors()
     
     success, status_code, msg = await buffer.register_node(
         node_proto_id=node_proto_id,
         filepath=str(config_path),
-        users_path="inbounds___0___settings___clients",
-        flatten_user_identifier_key="email",
-        reload_command=None,
-        user_obj=test_user
+        user_injectors=user_injectors,
+        reload_command=None
     )
     
     assert success is True
     assert status_code == 200
     
-    # Проверяем что все пользователи загружены
+    # Проверяем что все пользователи загружены из state.json
     assert len(buffer.buffer_storage[node_proto_id]) == 3
     
-    # Проверяем структуру {email: user_obj}
-    expected_emails = ["user1@test.com", "user2@test.com", "user3@test.com"]
-    for email in expected_emails:
-        assert email in buffer.buffer_storage[node_proto_id]
-        user = buffer.buffer_storage[node_proto_id][email]
-        assert user["email"] == email
-        assert "id" in user  # UUID должен быть
+    # Проверяем структуру {user_uuid: user_obj}
+    expected_uuids = ["uuid-001", "uuid-002", "uuid-003"]
+    for uuid in expected_uuids:
+        assert uuid in buffer.buffer_storage[node_proto_id]
+        user = buffer.buffer_storage[node_proto_id][uuid]
+        assert user["user_uuid"] == uuid
+        assert "email" in user
     
     await buffer.stop()
 
@@ -181,15 +199,13 @@ async def test_register_node_empty_config(empty_config):
     buffer = ConfigWriteBuffer()
     
     node_proto_id = 1
-    test_user = create_test_user(email="test@test.com")
+    user_injectors = create_user_injectors()
     
     success, status_code, msg = await buffer.register_node(
         node_proto_id=node_proto_id,
         filepath=str(empty_config),
-        users_path="inbounds___0___settings___clients",
-        flatten_user_identifier_key="email",
-        reload_command=None,
-        user_obj=test_user
+        user_injectors=user_injectors,
+        reload_command=None
     )
     
     assert success is True
@@ -218,15 +234,13 @@ async def test_register_node_file_not_found():
     buffer = ConfigWriteBuffer()
     
     node_proto_id = 1
-    test_user = create_test_user(email="test@test.com")
+    user_injectors = create_user_injectors()
     
     success, status_code, msg = await buffer.register_node(
         node_proto_id=node_proto_id,
         filepath="/path/to/nonexistent/file.json",
-        users_path="inbounds___0___settings___clients",
-        flatten_user_identifier_key="email",
-        reload_command=None,
-        user_obj=test_user
+        user_injectors=user_injectors,
+        reload_command=None
     )
     
     # Проверяем что регистрация провалилась
@@ -253,15 +267,14 @@ async def test_register_node_invalid_users_path(sample_config_with_users):
     config_path, _ = sample_config_with_users
     
     node_proto_id = 1
-    test_user = create_test_user(email="test@test.com")
+    # Создаём инжектор с неверным путём
+    user_injectors = create_user_injectors(flatten_array_cursor="inbounds___99___nonexistent___clients")
     
     success, status_code, msg = await buffer.register_node(
         node_proto_id=node_proto_id,
         filepath=str(config_path),
-        users_path="inbounds___99___nonexistent___clients",  # Неверный путь
-        flatten_user_identifier_key="email",
-        reload_command=None,
-        user_obj=test_user
+        user_injectors=user_injectors,
+        reload_command=None
     )
     
     # Проверяем что регистрация провалилась
@@ -275,36 +288,70 @@ async def test_register_node_invalid_users_path(sample_config_with_users):
     await buffer.stop()
 
 
-async def test_register_node_invalid_identifier_key(sample_config_with_users):
+async def test_register_node_invalid_extractor_script_syntax(sample_config_with_users):
     """
-    Тест: КРИТИЧНАЯ ошибка - неверный flatten_user_identifier_key
+    Тест: КРИТИЧНАЯ ошибка - невалидный extractor_script (синтаксическая ошибка)
     
-    Файл валидный, пользователи есть, но ключ идентификатора указывает
-    на несуществующее поле.
+    Файл валидный, пользователи есть, но скрипт содержит синтаксическую ошибку.
     
-    Ожидаем: (False, 500, error_message с указанием на ошибку identifier)
+    Ожидаем: (False, 500, error_message с указанием на ошибку скрипта)
     """
     buffer = ConfigWriteBuffer()
     config_path, _ = sample_config_with_users
     
     node_proto_id = 1
-    test_user = create_test_user(email="test@test.com")
+    # Создаём инжектор с синтаксически некорректным скриптом
+    user_injectors = create_user_injectors(
+        extractor_script="def transform(u) this is invalid syntax !!!"
+    )
     
     success, status_code, msg = await buffer.register_node(
         node_proto_id=node_proto_id,
         filepath=str(config_path),
-        users_path="inbounds___0___settings___clients",
-        flatten_user_identifier_key="nonexistent_field",  # ОШИБКА!
-        reload_command=None,
-        user_obj=test_user
+        user_injectors=user_injectors,
+        reload_command=None
     )
     
     # Проверяем что регистрация провалилась
     assert success is False
     assert status_code == 500
     assert isinstance(msg, str)
-    # Сообщение должно указывать на проблему с identifier
-    assert "nonexistent_field" in msg or "не найден" in msg.lower()
+    
+    # Нода не зарегистрирована
+    assert node_proto_id not in buffer.node_queues
+    
+    await buffer.stop()
+
+
+async def test_register_node_missing_transform_function(sample_config_with_users):
+    """
+    Тест: КРИТИЧНАЯ ошибка - в extractor_script отсутствует функция transform
+    
+    Скрипт валидный синтаксически, но не содержит требуемую функцию transform().
+    
+    Ожидаем: (False, 500, error_message)
+    """
+    buffer = ConfigWriteBuffer()
+    config_path, _ = sample_config_with_users
+    
+    node_proto_id = 1
+    # Создаём инжектор со скриптом без функции transform
+    user_injectors = create_user_injectors(
+        extractor_script="def wrong_name(u): return u"
+    )
+    
+    success, status_code, msg = await buffer.register_node(
+        node_proto_id=node_proto_id,
+        filepath=str(config_path),
+        user_injectors=user_injectors,
+        reload_command=None
+    )
+    
+    # Проверяем что регистрация провалилась
+    assert success is False
+    assert status_code == 500
+    assert isinstance(msg, str)
+    assert "transform" in msg.lower() or "не найден" in msg.lower()
     
     # Нода не зарегистрирована
     assert node_proto_id not in buffer.node_queues
@@ -325,15 +372,13 @@ async def test_register_node_corrupted_json(tmp_path):
     broken_file.write_text("{ this is not valid json !@#$%")
     
     node_proto_id = 1
-    test_user = create_test_user(email="test@test.com")
+    user_injectors = create_user_injectors()
     
     success, status_code, msg = await buffer.register_node(
         node_proto_id=node_proto_id,
         filepath=str(broken_file),
-        users_path="inbounds___0___settings___clients",
-        flatten_user_identifier_key="email",
-        reload_command=None,
-        user_obj=test_user
+        user_injectors=user_injectors,
+        reload_command=None
     )
     
     # Проверяем что регистрация провалилась
@@ -351,9 +396,9 @@ async def test_register_node_corrupted_json(tmp_path):
 
 async def test_load_users_creates_correct_mapping(sample_config_with_users):
     """
-    Тест: Создание корректного маппинга {identifier: user_obj}
+    Тест: Создание корректного маппинга {user_uuid: user_obj}
     
-    Проверяем что _load_users_from_config создаёт O(1) структуру
+    Проверяем что _load_users_from_config загружает из state.json и создаёт O(1) структуру
     """
     buffer = ConfigWriteBuffer()
     config_path, _ = sample_config_with_users
@@ -363,38 +408,37 @@ async def test_load_users_creates_correct_mapping(sample_config_with_users):
     # Подготавливаем метаданные вручную
     buffer.node_metadata[node_proto_id] = {
         'filepath': str(config_path),
-        'users_path': "inbounds___0___settings___clients",
-        'flatten_user_identifier_key': "email",
+        'injectors': [],  # Для _load_users_from_config не используется
         'reload_command': None
     }
     
-    # Загружаем пользователей
+    # Загружаем пользователей из state.json
     await buffer._load_users_from_config(node_proto_id)
     
     # Проверяем структуру
     assert node_proto_id in buffer.buffer_storage
     users_map = buffer.buffer_storage[node_proto_id]
     
-    # Должно быть 3 пользователя
+    # Должно быть 3 пользователя из state.json
     assert len(users_map) == 3
     
-    # Проверяем O(1) доступ
-    assert "user1@test.com" in users_map
-    assert "user2@test.com" in users_map
-    assert "user3@test.com" in users_map
+    # Проверяем O(1) доступ по user_uuid
+    assert "uuid-001" in users_map
+    assert "uuid-002" in users_map
+    assert "uuid-003" in users_map
     
-    # Проверяем что значения - это полные объекты пользователей
-    user1 = users_map["user1@test.com"]
+    # Проверяем что значения - это полные суперобъекты
+    user1 = users_map["uuid-001"]
     assert user1["email"] == "user1@test.com"
-    assert user1["id"] == "uuid-001"
+    assert user1["user_uuid"] == "uuid-001"
     assert "flow" in user1
 
 
 async def test_load_users_with_uuid_identifier(sample_config_with_users):
     """
-    Тест: Использование UUID в качестве идентификатора
+    Тест: Загрузка пользователей из state.json всегда использует user_uuid
     
-    Проверяем что можно использовать "id" вместо "email"
+    Проверяем что ключи - это всегда user_uuid
     """
     buffer = ConfigWriteBuffer()
     config_path, _ = sample_config_with_users
@@ -403,8 +447,7 @@ async def test_load_users_with_uuid_identifier(sample_config_with_users):
     
     buffer.node_metadata[node_proto_id] = {
         'filepath': str(config_path),
-        'users_path': "inbounds___0___settings___clients",
-        'flatten_user_identifier_key': "id",  # Используем UUID
+        'injectors': [],
         'reload_command': None
     }
     
@@ -412,12 +455,12 @@ async def test_load_users_with_uuid_identifier(sample_config_with_users):
     
     users_map = buffer.buffer_storage[node_proto_id]
     
-    # Проверяем что ключи - это UUID
+    # Проверяем что ключи - это user_uuid
     assert "uuid-001" in users_map
     assert "uuid-002" in users_map
     assert "uuid-003" in users_map
     
     # Проверяем значения
     user1 = users_map["uuid-001"]
-    assert user1["id"] == "uuid-001"
+    assert user1["user_uuid"] == "uuid-001"
     assert user1["email"] == "user1@test.com"

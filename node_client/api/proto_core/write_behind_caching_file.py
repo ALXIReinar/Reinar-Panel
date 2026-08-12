@@ -6,7 +6,7 @@ import os
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Literal
 
 import aiofiles
 import orjson
@@ -16,7 +16,7 @@ from starlette.requests import Request
 from node_client.api.proto_core.hot_reload_executor import HotReloadExecutor
 from node_client.config import TMP_DIR, env
 from node_client.logger_config import log_event
-
+from web.arq_worker.utils.anything import CoreProtoActions
 
 
 class ConfigWriteBuffer:
@@ -42,7 +42,7 @@ class ConfigWriteBuffer:
         # Хранилище пользователей {node_proto_id: {uuid: user_obj}}
         self.buffer_storage: dict[int, dict[str, dict]] = {}
         
-        # Метаданные нод {node_proto_id: {filepath, users_path, reload_command}}
+        # Метаданные нод {node_proto_id: {filepath, users_path, reload_command, queue_limited}}
         self.node_metadata: dict[int, dict] = {}
         
         # Очереди операций для каждой ноды {node_proto_id: Queue}
@@ -50,9 +50,6 @@ class ConfigWriteBuffer:
         
         # Воркеры для каждой ноды {node_proto_id: Task}
         self.worker_tasks: dict[int, asyncio.Task] = {}
-
-        # Флаг для выключения лимитов
-        self.queue_limited = True
 
 
     async def register_node(
@@ -107,6 +104,7 @@ class ConfigWriteBuffer:
             'filepath': filepath,
             'injectors': injectors,
             'reload_command': reload_command,
+            'queue_limited': True,  # Флаг для контроля лимитов конкретной ноды
         }
         
         # 2. Создаём очередь
@@ -254,6 +252,48 @@ class ConfigWriteBuffer:
         log_event("ConfigWriteBuffer остановлен")
 
 
+    async def bulk_action(
+            self,
+            node_proto_id: int,
+            users: list[dict],
+            filepath: str,
+            user_injectors: list[dict],
+            reload_command: str | None,
+            action: Literal["add", "delete"]
+    ):
+        if not self.node_metadata.get(node_proto_id):
+            success, status_code, msg = await self.register_node(node_proto_id, filepath, user_injectors, reload_command)
+            if not success:
+                return False, f"Не удалось выполнить действие. err: {msg}"
+
+        action_map = {"add": self.add_user, "delete": self.delete_user}
+
+        "Если мы будем на каждый вызов переключать флаг ограничения записи, то в WBC нет смысла!"
+        if len(users) < self.max_batch:
+            for u in users:
+                # Можно реализовать логику подсчёта успешных вставок по первому аргументу от add_user
+                await action_map[action](
+                    node_proto_id=node_proto_id,
+                    user_obj=u,
+                    filepath=filepath,
+                    user_injectors=user_injectors,
+                    reload_command=reload_command,
+                )
+        else:
+            async with self.unlimit_queue(node_proto_id):
+                for u in users:
+                    # Можно реализовать логику подсчёта успешных вставок по первому аргументу от add_user
+                    await action_map[action](
+                        node_proto_id=node_proto_id,
+                        user_obj=u,
+                        filepath=filepath,
+                        user_injectors=user_injectors,
+                        reload_command=reload_command,
+                    )
+        return True, "Операция выполнена"
+
+
+
     async def _load_users_from_config(self, node_id: int):
         """
         Загружает существующих пользователей из конфиг-файла в память
@@ -302,8 +342,8 @@ class ConfigWriteBuffer:
             try:
                 operations = []
                 start_time = time.time()
-                # 1. Запоминаем, состояние лимита на очередь перед сборкой батча
-                was_limited = self.queue_limited
+                # 1. Запоминаем состояние лимита на очередь конкретной ноды перед сборкой батча
+                was_limited = self.node_metadata[node_id]['queue_limited']
 
                 # Собираем батч операций
                 while len(operations) < self.max_batch:
@@ -326,9 +366,9 @@ class ConfigWriteBuffer:
                         # Таймаут истёк, выходим
                         break
 
-                # Если очередь ограничивается лимитами
+                # Если очередь ограничивается лимитами для этой ноды
                 # Если есть операции → пишем на диск (неблокирующе)
-                if was_limited and self.queue_limited and operations:
+                if was_limited and self.node_metadata[node_id]['queue_limited'] and operations:
                     log_event(f"\033[35m[Worker]\033[0m Батч собран | node_proto_id: \033[32m{node_id}\033[0m; opers_len: \033[35m{len(operations)}\033[0m")
                     asyncio.create_task(self._write_node_to_disk(node_id))
 
@@ -402,11 +442,31 @@ class ConfigWriteBuffer:
 
     @asynccontextmanager
     async def unlimit_queue(self, node_proto_id: int):
-        """Временно отключает лимиты очереди для bulk операций"""
-        self.queue_limited = False
+        """
+        Временно отключает лимиты очереди для bulk операций для конкретной ноды
+        
+        Args:
+            node_proto_id: ID ноды для которой отключаем лимиты
+            
+        Использование:
+            async with buffer.unlimit_queue(node_proto_id):
+                # Здесь можно добавлять операции без триггера батчинга
+                await buffer.add_user(...)
+                await buffer.add_user(...)
+            # При выходе автоматически записываем накопленные операции
+        """
+        # Сохраняем предыдущее состояние конкретной ноды
+        previous_state = self.node_metadata[node_proto_id]['queue_limited']
+        
+        # Отключаем лимиты для этой ноды
+        self.node_metadata[node_proto_id]['queue_limited'] = False
+        
         try:
             yield self
         finally:
+            # Восстанавливаем предыдущее состояние
+            self.node_metadata[node_proto_id]['queue_limited'] = previous_state
+            
             # Принудительно записываем все накопленные операции на диск
             await self._flush_all_nodes(node_proto_id)
 

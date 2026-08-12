@@ -14,9 +14,9 @@ class BaseUserCoreSchema(BaseModel):
     users: list[dict]
     action_script: str | None
 
-    operation: Literal["add", "delete", 1, 2] = Field(ge=1, le=2, description="Операция, выполняемая скриптом. Вставка или удаление. 1 - add, 2 - delete. Допускаются строки и цифры")
+    action: Literal["add", "delete"] = Field(description="Операция, выполняемая скриптом. Вставка или удаление. 1 - add, 2 - delete. Допускаются строки и цифры")
 
-    @field_validator("operation", mode="before")
+    @field_validator("action", mode="before")
     @classmethod
     def convert_int_to_str(cls, value):
         mapping = {1: "add", 2: "delete"}
