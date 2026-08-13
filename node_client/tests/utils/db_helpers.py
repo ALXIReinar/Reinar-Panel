@@ -179,6 +179,7 @@ async def load_templates_with_extractors(pool: asyncpg.Pool, protocol_filters: s
                 pt.reload_core_command, pt.metrics_command, pt.api_metrics_script, pt.metrics_parser_code,
                 pt.bulk_add_script_custom_params, pt.bulk_delete_script_custom_params,
                 pt.constant_user_data_obj, pt.required_user_data_obj,
+                pt.url_tmp, pt.sub_prepare_script, pt.sub_required_libs,
                 pt.is_accepted, pt.status,
                 (
                     SELECT json_agg(
@@ -211,6 +212,7 @@ async def load_templates_with_extractors(pool: asyncpg.Pool, protocol_filters: s
             pt.reload_core_command, pt.metrics_command, pt.api_metrics_script, pt.metrics_parser_code,
             pt.bulk_add_script_custom_params, pt.bulk_delete_script_custom_params,
             pt.constant_user_data_obj, pt.required_user_data_obj,
+            pt.url_tmp, pt.sub_prepare_script, pt.sub_required_libs,
             pt.is_accepted, pt.status,
             (
                 SELECT json_agg(
