@@ -23,7 +23,12 @@ from node_client.api import main_router
 from node_client.api.proto_core.write_behind_caching_file import ConfigWriteBuffer
 
 # Импорты утилит
-from node_client.tests.utils.db_helpers import load_template_by_protocol, get_all_active_templates
+from node_client.tests.utils.db_helpers import (
+    load_template_by_protocol, 
+    load_templates_by_protocol,  # Новая функция
+    load_templates_with_extractors,  # Для тестов шаблонов
+    get_all_active_templates
+)
 from node_client.tests.utils.fake_core import create_mock_subprocess
 
 
@@ -37,15 +42,11 @@ class TemplateScriptFields:
     Используется для унифицированного доступа к полям шаблона в тестах.
     Аналогично ExecHistoryStatuses в web модуле.
     """
-    add_user: str = 'api_add_user_script'
-    delete_user: str = 'api_delete_user_script'
     bulk_add_users: str = 'api_bulk_add_user_script'
     bulk_delete_users: str = 'api_bulk_delete_user_script'
     get_metrics: str = 'api_metrics_script'
     metrics_parser: str = 'metrics_parser_code'
     lib_names: str = 'proto_python_lib'
-    custom_params_add: str = 'add_script_custom_params'
-    custom_params_delete: str = 'delete_script_custom_params'
     custom_params_bulk_add: str = 'bulk_add_script_custom_params'
     custom_params_bulk_delete: str = 'bulk_delete_script_custom_params'
 
@@ -58,13 +59,15 @@ def pytest_addoption(parser):
         "--protocol",
         action="store",
         default="xray",
-        help="Протокол для тестирования: xray, hysteria2, shadowsocks (deprecated, используйте --vpn-core)"
-    )
-    parser.addoption(
-        "--vpn-core",
-        action="store",
-        default=None,
-        help="VPN ядра для тестирования (через запятую): xray,hysteria2,shadowsocks. Пример: --vpn-core=xray,hysteria2"
+        help=(
+            "Фильтр для загрузки шаблонов протоколов из БД. "
+            "Поддерживает: "
+            "1) Все шаблоны: --protocol=* (загрузит ВСЕ 24 шаблона) "
+            "2) Фильтр по ядру: --protocol=xray (20 шаблонов с 'xray') "
+            "3) Фильтр по протоколу: --protocol=vless (5 шаблонов с 'vless') "
+            "4) Точное имя: --protocol=xray-vless-reality-tcp (1 шаблон) "
+            "5) Множественные фильтры: --protocol=xray,shadowsocks (OR условие)"
+        )
     )
     parser.addoption(
         "--mode",
@@ -102,18 +105,9 @@ def pytest_collection_modifyitems(config, items):
     
     Логика:
     1. --mode=mock → пропускаем тесты с маркером real_core
-    2. --vpn-core=xray,hysteria2 → запускаем тесты только для указанных ядер
+    2. --protocol используется для фильтрации шаблонов при загрузке (в фикстурах)
     """
     test_mode = config.getoption("--mode")
-    vpn_cores_arg = config.getoption("--vpn-core")
-    
-    # Парсим список ядер
-    if vpn_cores_arg:
-        enabled_cores = [core.strip().lower() for core in vpn_cores_arg.split(',')]
-    else:
-        # Если --vpn-core не указан, используем --protocol (обратная совместимость)
-        protocol = config.getoption("--protocol")
-        enabled_cores = [protocol.lower()] if protocol else []
     
     # 1. Пропускаем real_core тесты в mock режиме
     if test_mode == "mock":
@@ -121,37 +115,6 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "real_core" in item.keywords:
                 item.add_marker(skip_real)
-    
-    # 2. Фильтруем тесты по VPN ядрам
-    if enabled_cores:
-        for item in items:
-            # Проверяем есть ли у теста маркер vpn_core с параметром
-            vpn_core_markers = [m for m in item.iter_markers(name="vpn_core")]
-            
-            if vpn_core_markers:
-                # Извлекаем имя ядра из параметризации теста
-                test_core = None
-                
-                # Проверяем callspec (для параметризованных тестов)
-                if hasattr(item, 'callspec'):
-                    # Ищем параметр который содержит имя протокола
-                    for param_name, param_value in item.callspec.params.items():
-                        if param_name in ['template', 'protocol_name', 'core_name']:
-                            # Извлекаем имя протокола из template dict или напрямую
-                            if isinstance(param_value, dict):
-                                test_core = param_value.get('title', '').lower()
-                            else:
-                                test_core = str(param_value).lower()
-                            break
-                
-                # Если нашли ядро и оно не в enabled_cores → пропускаем
-                if test_core:
-                    # Проверяем частичное совпадение (xray в vless_tcp_sni_based)
-                    core_matches = any(enabled_core in test_core for enabled_core in enabled_cores)
-                    
-                    if not core_matches:
-                        skip_msg = f"Пропускаем тест для '{test_core}' (запрошены: {', '.join(enabled_cores)})"
-                        item.add_marker(pytest.mark.skip(reason=skip_msg))
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -195,7 +158,17 @@ async def db_pool():
 
 @pytest.fixture(scope="session")
 def protocol_name(request):
-    """Получаем имя протокола из CLI аргумента --protocol"""
+    """
+    Получаем фильтр протокола/ядра из CLI аргумента --protocol
+    
+    Поддерживает:
+    - Одиночный фильтр: --protocol=xray
+    - Множественные фильтры: --protocol=xray,shadowsocks
+    - Точное совпадение: --protocol=xray-vless-reality-tcp
+    
+    Returns:
+        str: Строка с фильтром(ами), разделёнными запятой
+    """
     return request.config.getoption("--protocol")
 
 
@@ -203,24 +176,6 @@ def protocol_name(request):
 def test_mode(request):
     """Режим тестирования: mock или real"""
     return request.config.getoption("--mode")
-
-
-@pytest.fixture(scope="session")
-def enabled_vpn_cores(request):
-    """
-    Список VPN ядер для тестирования
-    
-    Returns:
-        list[str]: Список имён ядер ['xray', 'hysteria2']
-    """
-    vpn_cores_arg = request.config.getoption("--vpn-core")
-    
-    if vpn_cores_arg:
-        return [core.strip().lower() for core in vpn_cores_arg.split(',')]
-    
-    # Fallback на --protocol для обратной совместимости
-    protocol = request.config.getoption("--protocol")
-    return [protocol.lower()] if protocol else []
 
 
 @pytest.fixture
@@ -285,74 +240,84 @@ def xray_core_container(is_real_mode):
 
 
 @pytest.fixture(scope="session")
-async def cached_protocol_template(db_pool, enabled_vpn_cores):
+async def protocol_templates(db_pool, protocol_name):
     """
-    Загружается один раз из БД, затем переиспользуется во всех тестах.
-    Pytest автоматически кэширует результат благодаря scope="session".
+    Загружает ВСЕ шаблоны по фильтру --protocol.
+    
+    Примеры использования в тестах:
+    
+    # Тест для всех шаблонов
+    async def test_all_templates_have_scripts(protocol_templates):
+        for template in protocol_templates:
+            assert template['api_bulk_add_user_script'], f"{template['title']} missing bulk_add script"
+            assert template['api_bulk_delete_user_script'], f"{template['title']} missing bulk_delete script"
+    
+    # Тест с одним шаблоном (первым)
+    async def test_something(protocol_template):  # единственное число!
+        assert protocol_template['title']
+    
+    Примеры запуска:
+    - pytest --protocol=xray → загрузит все шаблоны xray
+    - pytest --protocol=vless → загрузит все vless шаблоны на любом ядре
+    - pytest --protocol=xray-vless → загрузит все xray-vless шаблоны
     
     Returns:
-        dict: Полный шаблон со всеми скриптами и метаданными
+        list[dict]: Список шаблонов со всеми скриптами и метаданными
         
     Raises:
-        pytest.skip: Если шаблон не найден в БД
+        pytest.skip: Если шаблоны не найдены в БД
     """
-    protocol_name = enabled_vpn_cores[0] if enabled_vpn_cores else "xray"
-    template = await load_template_by_protocol(db_pool, protocol_name)
+    templates = await load_templates_by_protocol(db_pool, protocol_name)
 
-    if not template:
+    if not templates:
         # Пробуем показать доступные шаблоны для помощи пользователю
         available = await get_all_active_templates(db_pool)
         available_names = [t['title'] for t in available]
         pytest.skip(
-            f"Шаблон для протокола '{protocol_name}' не найден в БД. "
+            f"Шаблоны по фильтру '{protocol_name}' не найдены в БД. "
             f"Доступные шаблоны: {available_names}. "
-            f"Используйте --vpn-core={available_names[0].split()[0].lower() if available_names else 'hysteria2'}"
+            f"Попробуйте: --protocol={available_names[0] if available_names else 'xray'}"
         )
     
-    return template
+    return templates
 
 
-@pytest.fixture
-async def protocol_template(cached_protocol_template):
+@pytest.fixture(scope="session")
+async def protocol_templates_with_extractors(db_pool, protocol_name):
     """
-    Возвращает кэшированный шаблон протокола
+    Загружает ВСЕ шаблоны по фильтру --protocol вместе с их extractors.
     
-    Обёртка для обратной совместимости с существующими тестами.
-    Все тесты используют один кэшированный шаблон.
+    Расширенная версия protocol_templates, которая также загружает
+    связанные extractors из таблицы templates_users_extractors.
+    
+    Используется в integration тестах для проверки:
+    - Наличия и валидности extractors
+    - Структуры constant_user_data_obj
+    - Выполнения скриптов с реальными данными
+    
+    Примеры запуска:
+    - pytest tests/integration/test_protocol_templates.py --protocol=xray
+    - pytest tests/integration/test_protocol_templates.py --protocol=*
     
     Returns:
-        dict: Полный шаблон со всеми скриптами и метаданными
-    """
-    return cached_protocol_template
-
-
-
-@pytest.fixture
-def get_script_from_template(cached_protocol_template):
-    """
-    Возвращает функцию для получения скрипта/поля из шаблона по имени
-    
-    Использует TemplateScriptFields для унифицированного доступа к полям.
-    
-    Returns:
-        callable: Функция _get(field_name: str) -> str
-        
-    Example:
-        script = get_script_from_template(TemplateScriptFields.add_user)
-        lib_names = get_script_from_template(TemplateScriptFields.lib_names)
+        list[dict]: Список шаблонов с полем 'extractors' (список extractors)
         
     Raises:
-        pytest.skip: Если поле не найдено в шаблоне
+        pytest.skip: Если шаблоны не найдены в БД
     """
-    def _get(field_name: str):
-        value = cached_protocol_template.get(field_name)
-        if value is None:
-            pytest.skip(
-                f"Поле '{field_name}' не найдено в шаблоне '{cached_protocol_template.get('title', 'unknown')}'"
-            )
-        return value
+    templates = await load_templates_with_extractors(db_pool, protocol_name)
+
+    if not templates:
+        # Пробуем показать доступные шаблоны для помощи пользователю
+        available = await get_all_active_templates(db_pool)
+        available_names = [t['title'] for t in available]
+        pytest.skip(
+            f"Шаблоны по фильтру '{protocol_name}' не найдены в БД. "
+            f"Доступные шаблоны: {available_names}. "
+            f"Попробуйте: --protocol={available_names[0] if available_names else 'xray'}"
+        )
     
-    return _get
+    return templates
 
 
 # ========== File System Fixtures ==========

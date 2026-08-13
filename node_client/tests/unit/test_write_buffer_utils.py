@@ -265,11 +265,13 @@ async def test_read_config_success(temp_config_file):
     Тест: Успешное чтение JSON конфига
     
     Проверяем что файл корректно парсится в dict
+    Метод теперь возвращает tuple[bool, dict]
     """
     buffer = ConfigWriteBuffer()
     
-    config = await buffer._read_config(str(temp_config_file))
+    success, config = await buffer._read_config(str(temp_config_file))
     
+    assert success is True
     assert isinstance(config, dict)
     assert "inbounds" in config
     assert "outbounds" in config
@@ -280,24 +282,38 @@ async def test_read_config_file_not_found():
     """
     Тест: Файл не существует
     
-    Ожидаем: FileNotFoundError
+    Ожидаем: (False, {}) если raise_exc=False
+    Ожидаем: FileNotFoundError если raise_exc=True
     """
     buffer = ConfigWriteBuffer()
     
+    # Сценарий 1: raise_exc=False (по умолчанию)
+    success, config = await buffer._read_config("/path/to/nonexistent/file.json", raise_exc=False)
+    assert success is False
+    assert config == {}
+    
+    # Сценарий 2: raise_exc=True
     with pytest.raises(FileNotFoundError):
-        await buffer._read_config("/path/to/nonexistent/file.json")
+        await buffer._read_config("/path/to/nonexistent/file.json", raise_exc=True)
 
 
 async def test_read_config_invalid_json(temp_invalid_json_file):
     """
     Тест: Файл содержит невалидный JSON
     
-    Ожидаем: orjson.JSONDecodeError
+    Ожидаем: (False, {}) если raise_exc=False
+    Ожидаем: orjson.JSONDecodeError если raise_exc=True
     """
     buffer = ConfigWriteBuffer()
     
+    # Сценарий 1: raise_exc=False (по умолчанию)
+    success, config = await buffer._read_config(str(temp_invalid_json_file), raise_exc=False)
+    assert success is False
+    assert config == {}
+    
+    # Сценарий 2: raise_exc=True
     with pytest.raises(orjson.JSONDecodeError):
-        await buffer._read_config(str(temp_invalid_json_file))
+        await buffer._read_config(str(temp_invalid_json_file), raise_exc=True)
 
 
 # ========== Тесты _write_config_atomic() ==========

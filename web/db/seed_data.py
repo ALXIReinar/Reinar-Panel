@@ -140,7 +140,7 @@ async def insert_proto_templates(
     templates: list[dict[str, Any]]
 ) -> None:
     """
-    Вставка шаблонов протоколов с вложенными данными (template_spec_params, protocols).
+    Вставка шаблонов протоколов с вложенными данными (template_spec_params, protocols, templates_users_extractors).
     Обрабатывает tmp_id для связи родитель-потомок.
     """
     if not templates:
@@ -149,6 +149,7 @@ async def insert_proto_templates(
     inserted_templates = 0
     inserted_params = 0
     inserted_protocols = 0
+    inserted_extractors = 0
     
     for template_data in templates:
         # Конвертируем datetime строки в объекты datetime
@@ -156,6 +157,7 @@ async def insert_proto_templates(
         # Извлекаем вложенные данные
         spec_params = template_data.pop("template_spec_params", [])
         protocols = template_data.pop("protocols", [])
+        extractors = template_data.pop("templates_users_extractors", [])
         
         # Проверяем существование шаблона по title
         existing_id = await conn.fetchval(
@@ -227,8 +229,34 @@ async def insert_proto_templates(
                 
                 await conn.execute(query, *values)
                 inserted_protocols += 1
+        
+        # Вставляем templates_users_extractors (НОВАЯ ТАБЛИЦА!)
+        for extractor in extractors:
+            # Заменяем tmp_id на реальный template_id
+            extractor_data = extractor.copy()
+            extractor_data.pop("tmp_id", None)
+            extractor_data["tmp_id"] = template_id
+            
+            # Проверяем существование экстрактора по flatten_array_cursor + tmp_id
+            exists = await conn.fetchval(
+                "SELECT 1 FROM templates_users_extractors WHERE flatten_array_cursor = $1 AND tmp_id = $2",
+                extractor_data["flatten_array_cursor"], template_id
+            )
+            
+            if not exists:
+                columns = list(extractor_data.keys())
+                placeholders = [f"${i+1}" for i in range(len(columns))]
+                values = [extractor_data[col] for col in columns]
+                
+                query = f"""
+                    INSERT INTO templates_users_extractors ({', '.join(columns)})
+                    VALUES ({', '.join(placeholders)})
+                """
+                
+                await conn.execute(query, *values)
+                inserted_extractors += 1
     
-    print(f"✓ proto_templates: {inserted_templates} шаблонов, {inserted_params} параметров, {inserted_protocols} протоколов")
+    print(f"✓ proto_templates: {inserted_templates} шаблонов, {inserted_params} параметров, {inserted_protocols} протоколов, {inserted_extractors} экстракторов")
 
 
 async def seed_all(conn: Connection, seed_data: dict[str, Any]) -> None:

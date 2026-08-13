@@ -14,15 +14,26 @@ def test_db_pool_connection(db_pool):
 
 
 @pytest.mark.db
-async def test_protocol_template_loading(protocol_template, protocol_name):
-    """Проверяем что шаблон загружается из БД"""
-    assert protocol_template is not None
-    assert 'id' in protocol_template
-    assert 'title' in protocol_template
+async def test_protocol_template_loading(protocol_templates, protocol_name):
+    """Проверяем что шаблоны загружаются из БД"""
+    assert protocol_templates is not None
+    assert len(protocol_templates) > 0, "Должен быть найден хотя бы один шаблон"
     
-    print(f"\n✅ Загружен шаблон: {protocol_template['title']} (ID: {protocol_template['id']})")
-    print(f"   Протокол: {protocol_name}")
-    print(f"   Библиотека: {protocol_template.get('proto_python_lib', 'Не указана')}")
+    # Проверяем первый шаблон
+    first_template = protocol_templates[0]
+    assert 'id' in first_template
+    assert 'title' in first_template
+    
+    print(f"\n✅ Загружено шаблонов: {len(protocol_templates)}")
+    print(f"   Фильтр: {protocol_name}")
+    print(f"   Первый шаблон: {first_template['title']} (ID: {first_template['id']})")
+    print(f"   Библиотека: {first_template.get('proto_python_lib', 'Не указана')}")
+    
+    # Показываем все найденные шаблоны
+    if len(protocol_templates) > 1:
+        print(f"\n   Все найденные шаблоны:")
+        for idx, template in enumerate(protocol_templates, 1):
+            print(f"   {idx}. {template['title']}")
 
 
 def test_working_config_exists(working_config_path):
@@ -63,7 +74,7 @@ async def test_mock_hot_reload_success(mock_hot_reload_success):
         lib_names=["test"],
         node_ip="127.0.0.1",
         core_api_port=8080,
-        action="add_user"
+        action="user_core_operation"
     )
     
     success, message = result
@@ -78,7 +89,7 @@ async def test_mock_hot_reload_failure(mock_hot_reload_failure):
         lib_names=["test"],
         node_ip="127.0.0.1",
         core_api_port=8080,
-        action="add_user"
+        action="user_core_operation"
     )
     
     success, message = result

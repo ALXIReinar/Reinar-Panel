@@ -39,7 +39,7 @@ async def bulk_action_users_core(body: BaseUserCoreSchema, request: Request, buf
                 node_ip='127.0.0.1',
                 core_api_port=body.core_port,
                 custom_params=body.custom_params,
-                action="bulk_delete_users" if body.action == CoreProtoActions.word_delete else 'bulk_add_users'
+                action="user_core_operation"  # Используем универсальный action для bulk операций
             )
 
             if not hot_reload_success:

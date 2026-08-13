@@ -47,52 +47,32 @@ async def db_seed(db_pool):
     Unit-тесты должны отключать эту фикстуру через pytestmark.
     """
     async with db_pool.acquire() as conn:
-        # 1. Очищаем все таблицы
+        # 1. Очищаем ТОЛЬКО пользовательские данные (НЕ ТРОГАЕМ СПРАВОЧНИКИ И ШАБЛОНЫ!)
         await conn.execute("""
             TRUNCATE TABLE 
                 sessions_admins, 
                 admins, 
                 nodes_protocoles_spec_params_values,
-                template_spec_params,
                 nodes_protocols, 
                 nodes, 
-                protocols, 
-                proto_templates,
-                protocols_commands,
-                whitelist_commands,
-                vnodes_sub_plans,
-                sub_plan_offers,
-                sub_plans,
                 remote_execute_history,
                 user_subs,
                 pay_orders,
                 sub_nodes_outbox,
-                sub_nodes_operations,
                 users,
-                templates_statuses,
-                online_statuses,
-                pay_statuses
+                vnodes_sub_plans,
+                sub_plan_offers,
+                sub_plans
             RESTART IDENTITY CASCADE
         """)
         
-        # 2. Заполняем справочники констант
-        await conn.execute("""
-            INSERT INTO templates_statuses (id, name) 
-            OVERRIDING SYSTEM VALUE 
-            VALUES (1, 'Системный'), (2, 'Пользовательский')
-        """)
-
-        await conn.execute("""
-            INSERT INTO online_statuses (id, title) 
-            OVERRIDING SYSTEM VALUE 
-            VALUES (1, 'Не подключался'), (2, 'Оффлайн'), (3, 'Онлайн')
-        """)
-
-        await conn.execute("""
-            INSERT INTO pay_statuses (id, name) 
-            OVERRIDING SYSTEM VALUE 
-            VALUES (1, 'pending'), (2, 'success'), (3, 'expired')
-        """)
+        # 2. Справочники уже должны быть залиты через seed_data.py
+        # Проверяем наличие
+        templates_count = await conn.fetchval("SELECT COUNT(*) FROM proto_templates")
+        if templates_count == 0:
+            raise RuntimeError(
+                "proto_templates пуста! Запустите: python -m web.db.seed_data"
+            )
     
     return {"db_cleaned": True}
 

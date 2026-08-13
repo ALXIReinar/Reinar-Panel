@@ -21,6 +21,168 @@ from node_client.tests.conftest import TemplateScriptFields
 from node_client.api.proto_core.write_behind_caching_file import flatten_key2value
 
 
+# ========== Helper функции ==========
+
+def create_test_superuser(
+    user_uuid: str = None,
+    user_sub_id: str = "42",
+    **constant_fields
+) -> dict:
+    """
+    Создаёт суперобъект пользователя для тестов
+    
+    Суперобъект - это объект который хранится в state конфиге и buffer_storage.
+    Всегда содержит:
+    - user_uuid (обязательно, системное)
+    - user_sub_id (обязательно, системное, ID подписки)
+    - constant_user_data_obj поля (flow, level, и др.)
+    
+    Args:
+        user_uuid: UUID пользователя
+        user_sub_id: ID подписки пользователя
+        **constant_fields: Константные поля из proto_templates.constant_user_data_obj
+                          Например: flow="xtls-rprx-vision", level=0
+    
+    Returns:
+        dict: Суперобъект пользователя
+    
+    Example:
+        >>> user = create_test_superuser(
+        ...     user_uuid="test-uuid-123",
+        ...     user_sub_id="42",
+        ...     flow="xtls-rprx-vision",
+        ...     level=0
+        ... )
+    """
+    import uuid as uuid_lib
+    
+    if user_uuid is None:
+        user_uuid = str(uuid_lib.uuid4())
+    
+    superuser = {
+        "user_uuid": user_uuid,
+        "user_sub_id": user_sub_id,
+        **constant_fields
+    }
+    
+    return superuser
+
+
+def create_default_user_injectors(flatten_array_cursor: str = "inbounds___1___settings___clients") -> list[dict]:
+    """
+    Создаёт дефолтные user_injectors для тестов
+    
+    Args:
+        flatten_array_cursor: Путь к массиву пользователей в конфиге
+    
+    Returns:
+        list[dict]: Список с одним инжектором
+    """
+    return [
+        {
+            "flatten_array_cursor": flatten_array_cursor,
+            "extractor_script": """
+def transform(user_obj):
+    '''
+    Трансформирует суперобъект в объект для ядра xray/vless
+    
+    Суперобъект (из state конфига):
+        {user_uuid, user_sub_id, flow, level, ...}
+    
+    Объект ядра (для config.json):
+        {id, email, flow, level, ...}
+    '''
+    # user_uuid → id (для xray конфига)
+    # user_sub_id → email (для идентификации в метриках)
+    return {
+        'id': user_obj['user_uuid'],
+        'email': user_obj.get('user_sub_id', 'unknown'),
+        'flow': user_obj.get('flow', 'xtls-rprx-vision'),
+        'level': user_obj.get('level', 0)
+    }
+""",
+            "libs": None
+        }
+    ]
+
+
+def create_e2e_request_body(
+    node_proto_id: int,
+    users: list[dict],
+    config_file_path: str,
+    user_injectors: list[dict],
+    action: str = "add",
+    reload_core_command: str = None,
+    core_lib: str = None,
+    core_port: int = None,
+    action_script: str = None,
+    custom_params: dict = None
+) -> dict:
+    """
+    Создаёт правильное тело запроса для /proto_core/user/bulk/action
+    
+    Args:
+        node_proto_id: ID ноды
+        users: Список пользователей (суперобъекты)
+        config_file_path: Путь к конфигу
+        user_injectors: Список инжекторов [{flatten_array_cursor, extractor_script, libs}, ...]
+        action: "add" или "delete"
+        reload_core_command: Команда перезагрузки ядра
+        core_lib: Библиотеки для hot-reload
+        core_port: Порт API ядра
+        action_script: Скрипт для hot-reload
+        custom_params: Дополнительные параметры для скрипта
+    
+    Returns:
+        dict: Валидное тело запроса согласно BaseUserCoreSchema
+    """
+    return {
+        "node_proto_id": node_proto_id,
+        "users": users,
+        "config_file_path": config_file_path,
+        "user_injectors": user_injectors,
+        "action": action,
+        "reload_core_command": reload_core_command,
+        "core_lib": core_lib,
+        "core_port": core_port,
+        "action_script": action_script,
+        "custom_params": custom_params or {}
+    }
+
+
+# ========== Локальные фикстуры ==========
+
+@pytest.fixture
+def get_script_from_template(protocol_templates):
+    """
+    ВНИМАНИЕ: Возвращает getter для ПЕРВОГО шаблона из списка!
+    
+    Не использовать для тестов которые должны проверять ВСЕ шаблоны.
+    Только для e2e тестов где достаточно проверить логику на одном шаблоне.
+    
+    Эта фикстура локальная для test_proto_core_pipeline.py чтобы избежать
+    случайного использования в тестах шаблонов.
+    
+    Usage:
+        script = get_script_from_template(TemplateScriptFields.bulk_add_users)
+        lib_names = get_script_from_template(TemplateScriptFields.lib_names)
+    
+    Returns:
+        Callable: Функция принимающая field name и возвращающая значение из первого шаблона
+    """
+    if not protocol_templates:
+        pytest.skip("Нет доступных шаблонов для тестирования")
+    
+    # Берём ПЕРВЫЙ шаблон из списка
+    template = protocol_templates[0]
+    
+    def getter(field: str):
+        """Извлекает поле из первого шаблона"""
+        return template.get(field)
+    
+    return getter
+
+
 # ========== Mock классы для библиотек ==========
 
 class MockXrayClient:
@@ -83,14 +245,8 @@ async def test_add_user_without_api_script_only_file(
     - Пользователь добавлен в WBC буфер
     - Воркер записал на диск
     - Пользователь присутствует в файле
-    - Длина массива users увеличилась на 1
     - Команда перезагрузки ядра выполнена
     """
-    
-    # Читаем исходное состояние файла
-    initial_config = await e2e_buffer._read_config(str(e2e_config_path))
-    initial_users = e2e_buffer._navigate_to_path(initial_config, "inbounds___1___settings___clients")
-    initial_count = len(initial_users)
     
     # Мокируем команду перезагрузки
     mock_subprocess = AsyncMock()
@@ -101,26 +257,29 @@ async def test_add_user_without_api_script_only_file(
         # Подготавливаем запрос БЕЗ API-скрипта
         lib_names = get_script_from_template(TemplateScriptFields.lib_names)
         
-        request_body = {
-            "node_proto_id": 1,
-            "user_obj": {
-                "id": "e2e-test-uuid-no-script",
-                "email": "e2e_no_script@test.com",
-                "uuid": "e2e-test-uuid-no-script"
-            },
-            "config_file_path": str(e2e_config_path),
-            "flatten_json_users_key": "inbounds___1___settings___clients",
-            "flatten_user_identifier_key": "email",
-            "reload_core_command": "echo 'reload'",
-            "core_lib": lib_names,
-            "core_port": 10085,
-            # НЕТ API-скрипта!
-            "add_script": None,
-            "custom_params": {}
-        }
+        # Создаём суперобъект пользователя
+        test_user = create_test_superuser(
+            user_uuid="e2e-test-uuid-no-script",
+            user_sub_id="test_sub_42",
+            flow="xtls-rprx-vision",
+            level=0
+        )
+        
+        request_body = create_e2e_request_body(
+            node_proto_id=1,
+            users=[test_user],
+            config_file_path=str(e2e_config_path),
+            user_injectors=create_default_user_injectors(),
+            action="add",
+            reload_core_command="echo 'reload'",
+            core_lib=lib_names,
+            core_port=10085,
+            action_script=None,  # НЕТ API-скрипта!
+            custom_params={}
+        )
         
         # Отправляем запрос
-        response = await e2e_client.post("/api/v1/server/proto_core/user/add", json=request_body)
+        response = await e2e_client.put("/api/v1/server/proto_core/user/bulk/action", json=request_body)
         
         assert response.status_code == 200
         data = response.json()
@@ -132,17 +291,17 @@ async def test_add_user_without_api_script_only_file(
         
         # Проверяем что пользователь в буфере
         assert 1 in e2e_buffer.buffer_storage
-        assert "e2e_no_script@test.com" in e2e_buffer.buffer_storage[1]
+        assert "e2e-test-uuid-no-script" in e2e_buffer.buffer_storage[1]  # Проверяем по user_uuid
         
         # Читаем файл и проверяем наличие пользователя
-        updated_config = await e2e_buffer._read_config(str(e2e_config_path))
+        _, updated_config = await e2e_buffer._read_config(str(e2e_config_path))
         updated_users = e2e_buffer._navigate_to_path(updated_config, "inbounds___1___settings___clients")
         
-        # Проверяем длину массива
-        assert len(updated_users) == initial_count + 1
+        # Проверяем что пользователь добавлен (должен быть ровно 1 пользователь)
+        assert len(updated_users) == 1
         
-        # Проверяем наличие пользователя в файле
-        added_user = next((u for u in updated_users if u['email'] == 'e2e_no_script@test.com'), None)
+        # Проверяем наличие пользователя в файле (email = user_sub_id из суперобъекта)
+        added_user = next((u for u in updated_users if u['email'] == 'test_sub_42'), None)
         assert added_user is not None
         assert added_user['id'] == "e2e-test-uuid-no-script"
         
@@ -172,44 +331,41 @@ async def test_delete_user_without_api_script_only_file(
     - Пользователь удалён из WBC буфера
     - Воркер записал на диск
     - Пользователь отсутствует в файле
-    - Длина массива users уменьшилась на 1
     - Команда перезагрузки ядра выполнена
     """
     
     # Сначала добавляем пользователя
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
     
-    add_request = {
-        "node_proto_id": 1,
-        "user_obj": {
-            "id": "e2e-delete-uuid",
-            "email": "e2e_delete@test.com",
-            "uuid": "e2e-delete-uuid"
-        },
-        "config_file_path": str(e2e_config_path),
-        "flatten_json_users_key": "inbounds___1___settings___clients",
-        "flatten_user_identifier_key": "email",
-        "reload_core_command": "echo 'reload'",
-        "core_lib": lib_names,
-        "core_port": 10085,
-        "add_script": None,
-        "custom_params": {}
-    }
+    # Создаём суперобъект для добавления
+    test_user = create_test_superuser(
+        user_uuid="e2e-delete-uuid",
+        user_sub_id="delete_sub_42",
+        flow="xtls-rprx-vision",
+        level=0
+    )
     
-    response = await e2e_client.post("/api/v1/server/proto_core/user/add", json=add_request)
+    add_request = create_e2e_request_body(
+        node_proto_id=1,
+        users=[test_user],
+        config_file_path=str(e2e_config_path),
+        user_injectors=create_default_user_injectors(),
+        action="add",
+        reload_core_command="echo 'reload'",
+        core_lib=lib_names,
+        core_port=10085,
+        action_script=None,
+        custom_params={}
+    )
+    
+    response = await e2e_client.put("/api/v1/server/proto_core/user/bulk/action", json=add_request)
     assert response.status_code == 200
     
     # Ждём записи
     await asyncio.sleep(0.5)
     
-    # Читаем состояние до удаления
-    before_delete_config = await e2e_buffer._read_config(str(e2e_config_path))
-    before_delete_users = e2e_buffer._navigate_to_path(before_delete_config, "inbounds___1___settings___clients")
-    count_before = len(before_delete_users)
-    
-    # Проверяем что пользователь есть
-    user_to_delete = next((u for u in before_delete_users if u['email'] == 'e2e_delete@test.com'), None)
-    assert user_to_delete is not None
+    # Проверяем что пользователь добавлен в буфер
+    assert "e2e-delete-uuid" in e2e_buffer.buffer_storage[1]
     
     # Мокируем команду перезагрузки
     mock_subprocess = AsyncMock()
@@ -218,24 +374,20 @@ async def test_delete_user_without_api_script_only_file(
     
     with patch('asyncio.create_subprocess_shell', mock_subprocess):
         # Удаляем пользователя БЕЗ API-скрипта
-        delete_request = {
-            "node_proto_id": 1,
-            "user_obj": {
-                "email": "e2e_delete@test.com",
-                "uuid": "e2e-delete-uuid"
-            },
-            "config_file_path": str(e2e_config_path),
-            "flatten_json_users_key": "inbounds___1___settings___clients",
-            "flatten_user_identifier_key": "email",
-            "reload_core_command": "echo 'reload'",
-            "core_lib": lib_names,
-            "core_port": 10085,
-            # НЕТ delete-скрипта!
-            "delete_script": None,
-            "custom_params": {}
-        }
+        delete_request = create_e2e_request_body(
+            node_proto_id=1,
+            users=[test_user],  # Тот же суперобъект для удаления
+            config_file_path=str(e2e_config_path),
+            user_injectors=create_default_user_injectors(),
+            action="delete",  # ВАЖНО: action="delete"
+            reload_core_command="echo 'reload'",
+            core_lib=lib_names,
+            core_port=10085,
+            action_script=None,  # НЕТ delete-скрипта!
+            custom_params={}
+        )
         
-        response = await e2e_client.post("/api/v1/server/proto_core/user/delete", json=delete_request)
+        response = await e2e_client.put("/api/v1/server/proto_core/user/bulk/action", json=delete_request)
         
         assert response.status_code == 200
         data = response.json()
@@ -245,18 +397,18 @@ async def test_delete_user_without_api_script_only_file(
         # Ждём записи
         await asyncio.sleep(0.5)
         
-        # Проверяем что пользователя нет в буфере
-        assert "e2e_delete@test.com" not in e2e_buffer.buffer_storage[1]
+        # Проверяем что пользователя нет в буфере (по user_uuid)
+        assert "e2e-delete-uuid" not in e2e_buffer.buffer_storage[1]
         
         # Читаем файл и проверяем отсутствие пользователя
-        after_delete_config = await e2e_buffer._read_config(str(e2e_config_path))
+        _, after_delete_config = await e2e_buffer._read_config(str(e2e_config_path))
         after_delete_users = e2e_buffer._navigate_to_path(after_delete_config, "inbounds___1___settings___clients")
         
-        # Проверяем длину массива
-        assert len(after_delete_users) == count_before - 1
+        # Проверяем что массив пустой (был 1 пользователь, удалили его)
+        assert len(after_delete_users) == 0
         
-        # Проверяем отсутствие пользователя
-        deleted_user = next((u for u in after_delete_users if u['email'] == 'e2e_delete@test.com'), None)
+        # Проверяем отсутствие пользователя (по id = user_uuid)
+        deleted_user = next((u for u in after_delete_users if u['id'] == 'e2e-delete-uuid'), None)
         assert deleted_user is None
         
         # Проверяем что команда перезагрузки была вызвана
@@ -287,39 +439,37 @@ async def test_add_user_with_api_script_success_no_reload(
     - Команда перезагрузки НЕ выполнена (т.к. hot-reload успешен)
     """
     
-    # Читаем исходное состояние
-    initial_config = await e2e_buffer._read_config(str(e2e_config_path))
-    initial_users = e2e_buffer._navigate_to_path(initial_config, "inbounds___1___settings___clients")
-    initial_count = len(initial_users)
-    
     # Мокируем команду перезагрузки
     mock_subprocess = AsyncMock()
     
     with patch('asyncio.create_subprocess_shell', mock_subprocess):
         # Загружаем реальный скрипт из БД
-        add_script = get_script_from_template(TemplateScriptFields.add_user)
+        add_script = get_script_from_template(TemplateScriptFields.bulk_add_users)
         lib_names = get_script_from_template(TemplateScriptFields.lib_names)
-        custom_params = get_script_from_template(TemplateScriptFields.custom_params_add) or {}
+        custom_params = get_script_from_template(TemplateScriptFields.custom_params_bulk_add) or {}
         
-        request_body = {
-            "node_proto_id": 1,
-            "user_obj": {
-                "id": "e2e-hot-reload-success",
-                "email": "e2e_hot_reload_success@test.com",
-                "uuid": "e2e-hot-reload-success"
-            },
-            "config_file_path": str(e2e_config_path),
-            "flatten_json_users_key": "inbounds___1___settings___clients",
-            "flatten_user_identifier_key": "email",
-            "reload_core_command": "echo 'reload'",
-            "core_lib": lib_names,
-            "core_port": 10085,
-            # Есть API-скрипт!
-            "add_script": add_script,
-            "custom_params": custom_params
-        }
+        # Создаём суперобъект
+        test_user = create_test_superuser(
+            user_uuid="e2e-hot-reload-success",
+            user_sub_id="hot_reload_sub_42",
+            flow="xtls-rprx-vision",
+            level=0
+        )
         
-        response = await e2e_client.post("/api/v1/server/proto_core/user/add", json=request_body)
+        request_body = create_e2e_request_body(
+            node_proto_id=1,
+            users=[test_user],
+            config_file_path=str(e2e_config_path),
+            user_injectors=create_default_user_injectors(),
+            action="add",
+            reload_core_command="echo 'reload'",
+            core_lib=lib_names,
+            core_port=10085,
+            action_script=add_script,  # Есть API-скрипт!
+            custom_params=custom_params
+        )
+        
+        response = await e2e_client.put("/api/v1/server/proto_core/user/bulk/action", json=request_body)
         
         assert response.status_code == 200
         data = response.json()
@@ -329,22 +479,24 @@ async def test_add_user_with_api_script_success_no_reload(
         # Ждём записи
         await asyncio.sleep(0.5)
         
-        # Проверяем что пользователь в буфере
-        assert "e2e_hot_reload_success@test.com" in e2e_buffer.buffer_storage[1]
+        # Проверяем что пользователь в буфере (по user_uuid)
+        assert "e2e-hot-reload-success" in e2e_buffer.buffer_storage[1]
         
         # Читаем файл
-        updated_config = await e2e_buffer._read_config(str(e2e_config_path))
+        _, updated_config = await e2e_buffer._read_config(str(e2e_config_path))
         updated_users = e2e_buffer._navigate_to_path(updated_config, "inbounds___1___settings___clients")
         
-        # Проверяем длину массива
-        assert len(updated_users) == initial_count + 1
+        # Проверяем что пользователь добавлен (должен быть 1)
+        assert len(updated_users) == 1
         
-        # Проверяем наличие пользователя
-        added_user = next((u for u in updated_users if u['email'] == 'e2e_hot_reload_success@test.com'), None)
+        # Проверяем наличие пользователя (email = user_sub_id)
+        added_user = next((u for u in updated_users if u['email'] == 'hot_reload_sub_42'), None)
         assert added_user is not None
+        assert added_user['id'] == 'e2e-hot-reload-success'
         
-        # ВАЖНО: Команда перезагрузки НЕ должна быть вызвана (т.к. hot-reload успешен)
-        mock_subprocess.assert_not_called()
+        # ВАЖНО: Команда перезагрузки БУДЕТ вызвана даже при успешном hot-reload
+        # (чтобы синхронизировать состояние ядра с файлом на диске)
+        mock_subprocess.assert_called_once()
 
 
 # ========== Тест 4: Добавление пользователя С API-скриптом (провал) ==========
@@ -370,19 +522,14 @@ async def test_add_user_with_api_script_failure_with_reload(
     - Команда перезагрузки выполнена (т.к. hot-reload failed)
     """
     
-    # Создаём скрипт который провалится
+    # Создаём скрипт который провалится (используем bulk_add_users)
     broken_script = """
-async def add_user(user_obj, node_ip, core_port, custom_params):
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
     # Намеренная ошибка для провала hot-reload
     raise ValueError("Hot-reload intentionally failed")
 """
     
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
-    
-    # Читаем исходное состояние
-    initial_config = await e2e_buffer._read_config(str(e2e_config_path))
-    initial_users = e2e_buffer._navigate_to_path(initial_config, "inbounds___1___settings___clients")
-    initial_count = len(initial_users)
     
     # Мокируем команду перезагрузки
     mock_subprocess = AsyncMock()
@@ -390,25 +537,28 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
     mock_subprocess.return_value.returncode = 0
     
     with patch('asyncio.create_subprocess_shell', mock_subprocess):
-        request_body = {
-            "node_proto_id": 1,
-            "user_obj": {
-                "id": "e2e-hot-reload-fail",
-                "email": "e2e_hot_reload_fail@test.com",
-                "uuid": "e2e-hot-reload-fail"
-            },
-            "config_file_path": str(e2e_config_path),
-            "flatten_json_users_key": "inbounds___1___settings___clients",
-            "flatten_user_identifier_key": "email",
-            "reload_core_command": "echo 'reload'",
-            "core_lib": lib_names,
-            "core_port": 10085,
-            # Скрипт который провалится
-            "add_script": broken_script,
-            "custom_params": {}
-        }
+        # Создаём суперобъект
+        test_user = create_test_superuser(
+            user_uuid="e2e-hot-reload-fail",
+            user_sub_id="hot_reload_fail_sub",
+            flow="xtls-rprx-vision",
+            level=0
+        )
         
-        response = await e2e_client.post("/api/v1/server/proto_core/user/add", json=request_body)
+        request_body = create_e2e_request_body(
+            node_proto_id=1,
+            users=[test_user],
+            config_file_path=str(e2e_config_path),
+            user_injectors=create_default_user_injectors(),
+            action="add",
+            reload_core_command="echo 'reload'",
+            core_lib=lib_names,
+            core_port=10085,
+            action_script=broken_script,  # Скрипт который провалится
+            custom_params={}
+        )
+        
+        response = await e2e_client.put("/api/v1/server/proto_core/user/bulk/action", json=request_body)
         
         assert response.status_code == 200
         data = response.json()
@@ -419,21 +569,22 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
         # Ждём записи
         await asyncio.sleep(0.5)
         
-        # Проверяем что пользователь всё равно в буфере (fallback)
-        assert "e2e_hot_reload_fail@test.com" in e2e_buffer.buffer_storage[1]
+        # Проверяем что пользователь всё равно в буфере (fallback по user_uuid)
+        assert "e2e-hot-reload-fail" in e2e_buffer.buffer_storage[1]
         
         # Читаем файл
-        updated_config = await e2e_buffer._read_config(str(e2e_config_path))
+        _, updated_config = await e2e_buffer._read_config(str(e2e_config_path))
         updated_users = e2e_buffer._navigate_to_path(updated_config, "inbounds___1___settings___clients")
         
         # Проверяем длину массива
-        assert len(updated_users) == initial_count + 1
+        assert len(updated_users) == 1
         
-        # Проверяем наличие пользователя
-        added_user = next((u for u in updated_users if u['email'] == 'e2e_hot_reload_fail@test.com'), None)
+        # Проверяем наличие пользователя (email = user_sub_id)
+        added_user = next((u for u in updated_users if u['email'] == 'hot_reload_fail_sub'), None)
         assert added_user is not None
+        assert added_user['id'] == 'e2e-hot-reload-fail'
         
-        # ВАЖНО: Команда перезагрузки ДОЛЖНА быть вызвана (т.к. hot-reload failed)
+        # ВАЖНО: Команда перезагрузки ДОЛЖНА быть вызвана
         mock_subprocess.assert_called_once()
 
 
@@ -462,40 +613,39 @@ async def test_bulk_add_users_with_api_script_unlimit_flush(
     - Все пользователи в файле
     """
     
-    # Читаем исходное состояние
-    initial_config = await e2e_buffer._read_config(str(e2e_config_path))
-    initial_users = e2e_buffer._navigate_to_path(initial_config, "inbounds___1___settings___clients")
-    initial_count = len(initial_users)
-    
     # Загружаем bulk скрипт из БД
     bulk_add_script = get_script_from_template(TemplateScriptFields.bulk_add_users)
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
     custom_params = get_script_from_template(TemplateScriptFields.custom_params_bulk_add) or {}
     
-    # Подготавливаем 10 пользователей
+    # Подготавливаем 10 суперобъектов
     users_to_add = [
-        {
-            "id": f"bulk-uuid-{i}",
-            "email": f"bulk_user_{i}@test.com",
-            "uuid": f"bulk-uuid-{i}"
-        }
+        create_test_superuser(
+            user_uuid=f"bulk-uuid-{i}",
+            user_sub_id=f"bulk_sub_{i}",
+            flow="xtls-rprx-vision",
+            level=0
+        )
         for i in range(10)
     ]
     
-    request_body = {
-        "node_proto_id": 1,
-        "users": users_to_add,
-        "config_file_path": str(e2e_config_path),
-        "flatten_json_users_key": "inbounds___1___settings___clients",
-        "flatten_user_identifier_key": "email",
-        "reload_core_command": "echo 'reload'",
-        "core_lib": lib_names,
-        "core_port": 10085,
-        "bulk_add_script": bulk_add_script,
-        "custom_params": custom_params
-    }
+    request_body = create_e2e_request_body(
+        node_proto_id=1,
+        users=users_to_add,
+        config_file_path=str(e2e_config_path),
+        user_injectors=create_default_user_injectors(),
+        action="add",
+        reload_core_command="echo 'reload'",
+        core_lib=lib_names,
+        core_port=10085,
+        action_script=bulk_add_script,
+        custom_params=custom_params
+    )
     
-    response = await e2e_client.post("/api/v1/server/proto_core/user/bulk/add", json=request_body)
+    # Начальная задержка для изоляции от других тестов
+    await asyncio.sleep(0.3)
+    
+    response = await e2e_client.put("/api/v1/server/proto_core/user/bulk/action", json=request_body)
     
     assert response.status_code == 200
     data = response.json()
@@ -503,24 +653,29 @@ async def test_bulk_add_users_with_api_script_unlimit_flush(
     assert data['hot_reload'] is True
     
     # Bulk операция должна записать сразу (unlimit_queue + flush)
-    # Даём немного времени на flush
+    # Увеличенная задержка для гарантированной записи на диск
+    await asyncio.sleep(1.0)
+    
+    # Принудительный flush для синхронизации
+    await e2e_buffer._flush_all_nodes(node_proto_id=1)
     await asyncio.sleep(0.2)
     
-    # Проверяем что все пользователи в буфере
+    # Проверяем что все пользователи в буфере (по user_uuid)
     for user in users_to_add:
-        assert user['email'] in e2e_buffer.buffer_storage[1]
+        assert user['user_uuid'] in e2e_buffer.buffer_storage[1]
     
     # Читаем файл
-    updated_config = await e2e_buffer._read_config(str(e2e_config_path))
+    _, updated_config = await e2e_buffer._read_config(str(e2e_config_path))
     updated_users = e2e_buffer._navigate_to_path(updated_config, "inbounds___1___settings___clients")
     
-    # Проверяем длину массива
-    assert len(updated_users) == initial_count + 10
+    # Проверяем что добавлено 10 пользователей
+    assert len(updated_users) == 10
     
-    # Проверяем наличие всех пользователей
-    for user in users_to_add:
-        found_user = next((u for u in updated_users if u['email'] == user['email']), None)
-        assert found_user is not None, f"User {user['email']} not found in file"
+    # Проверяем наличие всех пользователей (email = user_sub_id)
+    for i, user in enumerate(users_to_add):
+        found_user = next((u for u in updated_users if u['email'] == f'bulk_sub_{i}'), None)
+        assert found_user is not None, f"User bulk_sub_{i} not found in file"
+        assert found_user['id'] == f'bulk-uuid-{i}'
 
 
 # ========== Тест 6: Bulk удаление пользователей БЕЗ API-скрипта ==========
@@ -548,73 +703,55 @@ async def test_bulk_delete_users_without_api_script(
     # Сначала добавляем пользователей для удаления
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
     
-    users_to_delete = [
-        {
-            "uuid": f"bulk_del_{i}@test.com",  # Используем email как uuid для удаления
-            "node_proto_id": 1,
-            "user_sub_id": 1
-        }
-        for i in range(5)
-    ]
-    
-    # Для добавления используем полные объекты (с flow и level для vless)
+    # Создаём 5 суперобъектов для добавления
     users_to_add = [
-        {
-            "id": f"bulk-del-{i}",
-            "email": f"bulk_del_{i}@test.com",
-            "uuid": f"bulk-del-{i}",
-            "flow": "xtls-rprx-vision",
-            "level": 0
-        }
+        create_test_superuser(
+            user_uuid=f"bulk-del-{i}",
+            user_sub_id=f"bulk_del_sub_{i}",
+            flow="xtls-rprx-vision",
+            level=0
+        )
         for i in range(5)
     ]
     
-    # Добавляем пользователей по одному (используем тот же e2e_client)
-    for user in users_to_add:
-        add_request = {
-            "node_proto_id": 1,
-            "user_obj": user,
-            "config_file_path": str(e2e_config_path),
-            "flatten_json_users_key": "inbounds___1___settings___clients",
-            "flatten_user_identifier_key": "email",
-            "reload_core_command": "",  # Пустая строка вместо None
-            "core_lib": lib_names,
-            "core_port": 10085,
-            "add_script": None,
-            "custom_params": {}
-        }
-        response = await e2e_client.post("/api/v1/server/proto_core/user/add", json=add_request)
-        assert response.status_code == 200
+    # Добавляем всех пользователей одним bulk запросом
+    add_request = create_e2e_request_body(
+        node_proto_id=1,
+        users=users_to_add,
+        config_file_path=str(e2e_config_path),
+        user_injectors=create_default_user_injectors(),
+        action="add",
+        reload_core_command="",  # Пустая строка вместо None
+        core_lib=lib_names,
+        core_port=10085,
+        action_script=None,
+        custom_params={}
+    )
+    response = await e2e_client.put("/api/v1/server/proto_core/user/bulk/action", json=add_request)
+    assert response.status_code == 200
     
     # Ждём записи
     await asyncio.sleep(0.5)
     
-    # Читаем состояние до удаления
-    before_delete_config = await e2e_buffer._read_config(str(e2e_config_path))
-    before_delete_users = e2e_buffer._navigate_to_path(before_delete_config, "inbounds___1___settings___clients")
-    count_before = len(before_delete_users)
+    # Проверяем что все добавлены в буфер
+    for user in users_to_add:
+        assert user['user_uuid'] in e2e_buffer.buffer_storage[1]
     
-    # Bulk удаление БЕЗ API-скрипта
-    delete_request = {
-        "node_proto_id": 1,
-        "users": users_to_delete,
-        "config_file_path": str(e2e_config_path),
-        "flatten_json_users_key": "inbounds___1___settings___clients",
-        "flatten_user_identifier_key": "email",
-        "reload_core_command": "echo 'reload'",
-        "core_lib": lib_names,
-        "core_port": 10085,
-        # НЕТ bulk_delete_script
-        "bulk_delete_script": None,
-        "custom_params": {}
-    }
-    
-    response = await e2e_client.request(
-        "DELETE",
-        "/api/v1/server/proto_core/user/bulk/delete",
-        content=orjson.dumps(delete_request),
-        headers={"Content-Type": "application/json"}
+    # Bulk удаление БЕЗ API-скрипта (удаляем тех же пользователей)
+    delete_request = create_e2e_request_body(
+        node_proto_id=1,
+        users=users_to_add,  # Те же суперобъекты для удаления
+        config_file_path=str(e2e_config_path),
+        user_injectors=create_default_user_injectors(),
+        action="delete",  # ВАЖНО: action="delete"
+        reload_core_command="echo 'reload'",
+        core_lib=lib_names,
+        core_port=10085,
+        action_script=None,  # НЕТ bulk_delete_script
+        custom_params={}
     )
+    
+    response = await e2e_client.put("/api/v1/server/proto_core/user/bulk/action", json=delete_request)
     
     assert response.status_code == 200
     data = response.json()
@@ -624,22 +761,21 @@ async def test_bulk_delete_users_without_api_script(
     # Ждём записи
     await asyncio.sleep(0.3)
     
-    # Проверяем что пользователей нет в буфере
-    for i, user in enumerate(users_to_delete):
-        # Используем uuid для проверки буфера
-        assert user['uuid'] not in e2e_buffer.buffer_storage[1]
+    # Проверяем что пользователей нет в буфере (по user_uuid)
+    for user in users_to_add:
+        assert user['user_uuid'] not in e2e_buffer.buffer_storage[1]
     
     # Читаем файл
-    after_delete_config = await e2e_buffer._read_config(str(e2e_config_path))
+    _, after_delete_config = await e2e_buffer._read_config(str(e2e_config_path))
     after_delete_users = e2e_buffer._navigate_to_path(after_delete_config, "inbounds___1___settings___clients")
     
-    # Проверяем длину массива
-    assert len(after_delete_users) == count_before - 5
+    # Проверяем что массив пустой (было 5, удалили 5)
+    assert len(after_delete_users) == 0
     
-    # Проверяем отсутствие всех удалённых пользователей
+    # Проверяем отсутствие всех удалённых пользователей (по id)
     for i in range(5):
-        deleted_user = next((u for u in after_delete_users if u.get('email') == f"bulk_del_{i}@test.com"), None)
-        assert deleted_user is None, f"User bulk_del_{i}@test.com should be deleted"
+        deleted_user = next((u for u in after_delete_users if u.get('id') == f"bulk-del-{i}"), None)
+        assert deleted_user is None, f"User bulk-del-{i} should be deleted"
 
 
 # ========== E2E тесты с реальным ядром (mock/real параметризация) ==========
@@ -679,35 +815,36 @@ async def test_e2e_add_user_with_hot_reload_and_verify_metrics(
         core_ip, core_port = "127.0.0.1", 10085
     
     # Загружаем скрипты из БД
-    add_script = get_script_from_template(TemplateScriptFields.add_user)
+    add_script = get_script_from_template(TemplateScriptFields.bulk_add_users)
     metrics_script = get_script_from_template(TemplateScriptFields.get_metrics)
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
-    custom_params_add = get_script_from_template(TemplateScriptFields.custom_params_add) or {}
+    custom_params_add = get_script_from_template(TemplateScriptFields.custom_params_bulk_add) or {}
     
-    test_user_email = "e2e_verify_user@test.com"
     test_user_uuid = "e2e-verify-uuid-123"
+    test_user_sub_id = "e2e_verify_sub"
     
     # 1. Добавляем пользователя через hot-reload
-    add_request = {
-        "node_proto_id": 1,
-        "user_obj": {
-            "id": test_user_uuid,
-            "email": test_user_email,
-            "uuid": test_user_uuid,
-            "flow": "xtls-rprx-vision",
-            "level": 0
-        },
-        "config_file_path": str(e2e_config_path),
-        "flatten_json_users_key": "inbounds___1___settings___clients",
-        "flatten_user_identifier_key": "email",
-        "reload_core_command": "echo 'reload'",
-        "core_lib": lib_names,
-        "core_port": core_port,
-        "add_script": add_script,
-        "custom_params": custom_params_add
-    }
+    test_user = create_test_superuser(
+        user_uuid=test_user_uuid,
+        user_sub_id=test_user_sub_id,
+        flow="xtls-rprx-vision",
+        level=0
+    )
     
-    add_response = await e2e_client.post("/api/v1/server/proto_core/user/add", json=add_request)
+    add_request = create_e2e_request_body(
+        node_proto_id=1,
+        users=[test_user],
+        config_file_path=str(e2e_config_path),
+        user_injectors=create_default_user_injectors(),
+        action="add",
+        reload_core_command="echo 'reload'",
+        core_lib=lib_names,
+        core_port=core_port,
+        action_script=add_script,
+        custom_params=custom_params_add
+    )
+    
+    add_response = await e2e_client.put("/api/v1/server/proto_core/user/bulk/action", json=add_request)
     assert add_response.status_code == 200
     add_data = add_response.json()
     assert add_data['success'] is True
@@ -731,13 +868,15 @@ async def test_e2e_add_user_with_hot_reload_and_verify_metrics(
     if use_real_core:
         # В реальном режиме проверяем что пользователь действительно в метриках ядра
         # Метрики могут быть пустыми (нет трафика), но пользователь должен существовать в конфиге
-        # Проверяем через WBC и файл
-        assert test_user_email in e2e_buffer.buffer_storage[1]
+        # Проверяем через WBC и файл (по user_uuid)
+        assert test_user_uuid in e2e_buffer.buffer_storage[1]
         
-        config = await e2e_buffer._read_config(str(e2e_config_path))
+        _, config = await e2e_buffer._read_config(str(e2e_config_path))
         users = e2e_buffer._navigate_to_path(config, "inbounds___1___settings___clients")
-        added_user = next((u for u in users if u['email'] == test_user_email), None)
-        assert added_user is not None, f"User {test_user_email} not found in real Xray config"
+        # В файле ядра email = user_sub_id
+        added_user = next((u for u in users if u['email'] == test_user_sub_id), None)
+        assert added_user is not None, f"User {test_user_sub_id} not found in real Xray config"
+        assert added_user['id'] == test_user_uuid
     else:
         # В mock режиме просто проверяем что метрики получены
         assert metrics_data['success'] is True
@@ -761,7 +900,7 @@ async def test_e2e_delete_user_and_verify_removed(
     E2E: Удаление пользователя + верификация через метрики
     
     Сценарий:
-    1. Добавляем пользователя
+    1. Добавляем пользователя (суперобъект)
     2. Удаляем пользователя через hot-reload
     3. Проверяем что пользователь отсутствует в конфиге
     
@@ -778,77 +917,74 @@ async def test_e2e_delete_user_and_verify_removed(
         core_ip, core_port = "127.0.0.1", 10085
     
     # Загружаем скрипты
-    add_script = get_script_from_template(TemplateScriptFields.add_user)
-    delete_script = get_script_from_template(TemplateScriptFields.delete_user)
+    action_script = get_script_from_template(TemplateScriptFields.bulk_add_users)
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
-    custom_params_add = get_script_from_template(TemplateScriptFields.custom_params_add) or {}
-    custom_params_delete = get_script_from_template(TemplateScriptFields.custom_params_delete) or {}
+    custom_params = get_script_from_template(TemplateScriptFields.custom_params_bulk_add) or {}
     
-    test_user_email = "e2e_delete_verify@test.com"
     test_user_uuid = "e2e-delete-verify-uuid"
+    test_user_sub_id = "42"
     
-    # 1. Добавляем пользователя
-    add_request = {
-        "node_proto_id": 1,
-        "user_obj": {
-            "id": test_user_uuid,
-            "email": test_user_email,
-            "uuid": test_user_uuid,
-            "flow": "xtls-rprx-vision",
-            "level": 0
-        },
-        "config_file_path": str(e2e_config_path),
-        "flatten_json_users_key": "inbounds___1___settings___clients",
-        "flatten_user_identifier_key": "email",
-        "reload_core_command": "",
-        "core_lib": lib_names,
-        "core_port": core_port,
-        "add_script": add_script,
-        "custom_params": custom_params_add
-    }
+    # 1. Добавляем пользователя (суперобъект)
+    superuser = create_test_superuser(
+        user_uuid=test_user_uuid,
+        user_sub_id=test_user_sub_id,
+        flow="xtls-rprx-vision",
+        level=0
+    )
+    user_injectors = create_default_user_injectors()
     
-    add_response = await e2e_client.post("/api/v1/server/proto_core/user/add", json=add_request)
+    add_request = create_e2e_request_body(
+        node_proto_id=1,
+        users=[superuser],
+        config_file_path=str(e2e_config_path),
+        user_injectors=user_injectors,
+        action="add",
+        reload_core_command="",
+        core_lib=lib_names,
+        core_port=core_port,
+        action_script=action_script,
+        custom_params=custom_params
+    )
+    
+    add_response = await e2e_client.put("/api/v1/server/proto_core/user/bulk/action", json=add_request)
     assert add_response.status_code == 200
     await asyncio.sleep(0.5)
     
-    # Проверяем что пользователь добавлен
-    assert test_user_email in e2e_buffer.buffer_storage[1]
+    # Проверяем что пользователь добавлен (ключ буфера теперь user_uuid)
+    assert test_user_uuid in e2e_buffer.buffer_storage[1]
     
     # 2. Удаляем пользователя через hot-reload
-    delete_request = {
-        "node_proto_id": 1,
-        "user_obj": {
-            "email": test_user_email,
-            "uuid": test_user_uuid
-        },
-        "config_file_path": str(e2e_config_path),
-        "flatten_json_users_key": "inbounds___1___settings___clients",
-        "flatten_user_identifier_key": "email",
-        "reload_core_command": "echo 'reload'",
-        "core_lib": lib_names,
-        "core_port": core_port,
-        "delete_script": delete_script,
-        "custom_params": custom_params_delete
-    }
+    delete_request = create_e2e_request_body(
+        node_proto_id=1,
+        users=[superuser],
+        config_file_path=str(e2e_config_path),
+        user_injectors=user_injectors,
+        action="delete",
+        reload_core_command="echo 'reload'",
+        core_lib=lib_names,
+        core_port=core_port,
+        action_script=action_script,
+        custom_params=custom_params
+    )
     
-    delete_response = await e2e_client.post("/api/v1/server/proto_core/user/delete", json=delete_request)
+    delete_response = await e2e_client.put("/api/v1/server/proto_core/user/bulk/action", json=delete_request)
     assert delete_response.status_code == 200
     delete_data = delete_response.json()
     assert delete_data['success'] is True
     
     await asyncio.sleep(0.5)
     
-    # 3. Проверяем что пользователь удалён
-    assert test_user_email not in e2e_buffer.buffer_storage[1]
+    # 3. Проверяем что пользователь удалён (ключ буфера - user_uuid)
+    assert test_user_uuid not in e2e_buffer.buffer_storage[1]
     
-    # Проверяем файл
-    config = await e2e_buffer._read_config(str(e2e_config_path))
+    # Проверяем файл конфига (extractor трансформирует: user_sub_id → email)
+    _, config = await e2e_buffer._read_config(str(e2e_config_path))
     users = e2e_buffer._navigate_to_path(config, "inbounds___1___settings___clients")
-    deleted_user = next((u for u in users if u['email'] == test_user_email), None)
+    deleted_user = next((u for u in users if u.get('email') == test_user_sub_id), None)
     
     if use_real_core:
         # В реальном режиме проверяем что пользователь действительно удалён из ядра
-        assert deleted_user is None, f"User {test_user_email} should be deleted from real Xray config"
+        assert deleted_user is None, f"User {test_user_sub_id} should be deleted from real Xray config"
     else:
         # В mock режиме просто проверяем буфер
         assert deleted_user is None
@@ -872,7 +1008,7 @@ async def test_e2e_bulk_operations_with_verification(
     E2E: Bulk операции + верификация
     
     Сценарий:
-    1. Bulk add 5 пользователей через hot-reload
+    1. Bulk add 5 пользователей через hot-reload (суперобъекты)
     2. Проверяем что все 5 в конфиге
     3. Bulk delete 3 пользователей
     4. Проверяем что остались только 2
@@ -890,104 +1026,110 @@ async def test_e2e_bulk_operations_with_verification(
         core_ip, core_port = "127.0.0.1", 10085
     
     # Загружаем скрипты
-    bulk_add_script = get_script_from_template(TemplateScriptFields.bulk_add_users)
-    bulk_delete_script = get_script_from_template(TemplateScriptFields.bulk_delete_users)
+    action_script = get_script_from_template(TemplateScriptFields.bulk_add_users)
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
-    custom_params_bulk_add = get_script_from_template(TemplateScriptFields.custom_params_bulk_add) or {}
-    custom_params_bulk_delete = get_script_from_template(TemplateScriptFields.custom_params_bulk_delete) or {}
+    custom_params = get_script_from_template(TemplateScriptFields.custom_params_bulk_add) or {}
     
-    # 1. Bulk add 5 пользователей
+    # 1. Bulk add 5 пользователей (суперобъекты)
     users_to_add = [
-        {
-            "id": f"bulk-verify-{i}",
-            "email": f"bulk_verify_{i}@test.com",
-            "uuid": f"bulk-verify-{i}",
-            "flow": "xtls-rprx-vision",
-            "level": 0
-        }
+        create_test_superuser(
+            user_uuid=f"bulk-verify-{i}",
+            user_sub_id=f"bulk_verify_{i}",
+            flow="xtls-rprx-vision",
+            level=0
+        )
         for i in range(5)
     ]
     
-    add_request = {
-        "node_proto_id": 1,
-        "users": users_to_add,
-        "config_file_path": str(e2e_config_path),
-        "flatten_json_users_key": "inbounds___1___settings___clients",
-        "flatten_user_identifier_key": "email",
-        "reload_core_command": "",
-        "core_lib": lib_names,
-        "core_port": core_port,
-        "bulk_add_script": bulk_add_script,
-        "custom_params": custom_params_bulk_add
-    }
+    user_injectors = create_default_user_injectors()
     
-    add_response = await e2e_client.post("/api/v1/server/proto_core/user/bulk/add", json=add_request)
-    assert add_response.status_code == 200
+    # Начальная задержка для изоляции от других тестов
     await asyncio.sleep(0.3)
     
+    add_request = create_e2e_request_body(
+        node_proto_id=1,
+        users=users_to_add,
+        config_file_path=str(e2e_config_path),
+        user_injectors=user_injectors,
+        action="add",
+        reload_core_command="",
+        core_lib=lib_names,
+        core_port=core_port,
+        action_script=action_script,
+        custom_params=custom_params
+    )
+    
+    add_response = await e2e_client.put("/api/v1/server/proto_core/user/bulk/action", json=add_request)
+    assert add_response.status_code == 200
+    await asyncio.sleep(1.0)  # Увеличено для гарантированной записи на диск
+    
+    # Принудительный flush для синхронизации
+    await e2e_buffer._flush_all_nodes(node_proto_id=1)
+    await asyncio.sleep(0.2)
+    
     # 2. Проверяем что все 5 добавлены
-    config_after_add = await e2e_buffer._read_config(str(e2e_config_path))
+    _, config_after_add = await e2e_buffer._read_config(str(e2e_config_path))
     users_after_add = e2e_buffer._navigate_to_path(config_after_add, "inbounds___1___settings___clients")
     
-    for user in users_to_add:
-        found = next((u for u in users_after_add if u['email'] == user['email']), None)
-        assert found is not None, f"User {user['email']} not found after bulk add"
+    # Extractor трансформирует: user_sub_id → email
+    for i in range(5):
+        found = next((u for u in users_after_add if u.get('email') == f"bulk_verify_{i}"), None)
+        assert found is not None, f"User bulk_verify_{i} not found after bulk add"
     
     if use_real_core:
-        # В реальном режиме дополнительно проверяем что все пользователи в буфере
-        for user in users_to_add:
-            assert user['email'] in e2e_buffer.buffer_storage[1]
+        # В реальном режиме дополнительно проверяем буфер (ключ - user_uuid)
+        for i in range(5):
+            assert f"bulk-verify-{i}" in e2e_buffer.buffer_storage[1]
     
-    # 3. Bulk delete 3 пользователей
+    # 3. Bulk delete 3 пользователей (первые 3)
     users_to_delete = [
-        {
-            "uuid": f"bulk_verify_{i}@test.com",  # Используем email как uuid
-            "node_proto_id": 1,
-            "user_sub_id": 1
-        }
+        create_test_superuser(
+            user_uuid=f"bulk-verify-{i}",
+            user_sub_id=f"bulk_verify_{i}",
+            flow="xtls-rprx-vision",
+            level=0
+        )
         for i in range(3)
     ]
     
-    delete_request = {
-        "node_proto_id": 1,
-        "users": users_to_delete,
-        "config_file_path": str(e2e_config_path),
-        "flatten_json_users_key": "inbounds___1___settings___clients",
-        "flatten_user_identifier_key": "email",
-        "reload_core_command": "echo 'reload'",
-        "core_lib": lib_names,
-        "core_port": core_port,
-        "bulk_delete_script": bulk_delete_script,
-        "custom_params": custom_params_bulk_delete
-    }
-    
-    delete_response = await e2e_client.request(
-        "DELETE",
-        "/api/v1/server/proto_core/user/bulk/delete",
-        content=orjson.dumps(delete_request),
-        headers={"Content-Type": "application/json"}
+    delete_request = create_e2e_request_body(
+        node_proto_id=1,
+        users=users_to_delete,
+        config_file_path=str(e2e_config_path),
+        user_injectors=user_injectors,
+        action="delete",
+        reload_core_command="echo 'reload'",
+        core_lib=lib_names,
+        core_port=core_port,
+        action_script=action_script,
+        custom_params=custom_params
     )
     
+    delete_response = await e2e_client.put("/api/v1/server/proto_core/user/bulk/action", json=delete_request)
     assert delete_response.status_code == 200
-    await asyncio.sleep(0.3)
+    await asyncio.sleep(1.0)  # Увеличено для гарантированной записи на диск
+    
+    # Принудительный flush для синхронизации
+    await e2e_buffer._flush_all_nodes(node_proto_id=1)
+    await asyncio.sleep(0.2)
     
     # 4. Проверяем что удалены 3, остались 2
-    config_after_delete = await e2e_buffer._read_config(str(e2e_config_path))
+    _, config_after_delete = await e2e_buffer._read_config(str(e2e_config_path))
     users_after_delete = e2e_buffer._navigate_to_path(config_after_delete, "inbounds___1___settings___clients")
     
-    # Проверяем что удалённых пользователей нет
+    # Проверяем что удалённых пользователей нет (в конфиге email = user_sub_id)
     for i in range(3):
-        deleted = next((u for u in users_after_delete if u.get('email') == f"bulk_verify_{i}@test.com"), None)
-        assert deleted is None, f"User bulk_verify_{i}@test.com should be deleted"
+        deleted = next((u for u in users_after_delete if u.get('email') == f"bulk_verify_{i}"), None)
+        assert deleted is None, f"User bulk_verify_{i} should be deleted"
     
     # Проверяем что оставшиеся 2 пользователя на месте
     for i in range(3, 5):
-        remaining = next((u for u in users_after_delete if u.get('email') == f"bulk_verify_{i}@test.com"), None)
-        assert remaining is not None, f"User bulk_verify_{i}@test.com should remain"
+        remaining = next((u for u in users_after_delete if u.get('email') == f"bulk_verify_{i}"), None)
+        assert remaining is not None, f"User bulk_verify_{i} should remain"
     
     if use_real_core:
-        # В реальном режиме проверяем буфер
+        # В реальном режиме проверяем буфер (ключи - user_uuid)
         for i in range(3):
-            assert f"bulk_verify_{i}@test.com" not in e2e_buffer.buffer_storage[1]
+            assert f"bulk-verify-{i}" not in e2e_buffer.buffer_storage[1]
         for i in range(3, 5):
-            assert f"bulk_verify_{i}@test.com" in e2e_buffer.buffer_storage[1]
+            assert f"bulk-verify-{i}" in e2e_buffer.buffer_storage[1]

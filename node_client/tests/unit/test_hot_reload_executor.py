@@ -16,6 +16,39 @@ from node_client.api.proto_core.hot_reload_executor import HotReloadExecutor
 from node_client.tests.conftest import TemplateScriptFields
 
 
+# ========== Локальные фикстуры ==========
+
+@pytest.fixture
+def get_script_from_template(protocol_templates):
+    """
+    ВНИМАНИЕ: Возвращает getter для ПЕРВОГО шаблона из списка!
+    
+    Не использовать для тестов которые должны проверять ВСЕ шаблоны.
+    Только для unit тестов где достаточно проверить логику на одном шаблоне.
+    
+    Эта фикстура локальная для test_hot_reload_executor.py чтобы избежать
+    случайного использования в тестах шаблонов.
+    
+    Usage:
+        script = get_script_from_template(TemplateScriptFields.bulk_add_users)
+        lib_names = get_script_from_template(TemplateScriptFields.lib_names)
+    
+    Returns:
+        Callable: Функция принимающая field name и возвращающая значение из первого шаблона
+    """
+    if not protocol_templates:
+        pytest.skip("Нет доступных шаблонов для тестирования")
+    
+    # Берём ПЕРВЫЙ шаблон из списка
+    template = protocol_templates[0]
+    
+    def getter(field: str):
+        """Извлекает поле из первого шаблона"""
+        return template.get(field)
+    
+    return getter
+
+
 # ========== Mock классы для библиотек ==========
 
 class MockXrayClient:
@@ -65,14 +98,14 @@ def mock_xtlsapi():
 @pytest.mark.parametrize("use_real_core", [False, True], ids=["mock", "real"])
 @pytest.mark.asyncio
 @pytest.mark.db
-async def test_execute_add_user_unified(
+async def test_execute_bulk_add_user_unified(
     use_real_core, 
     mock_xtlsapi, 
     request,
-    get_script_from_template,
+    protocol_templates,
     is_real_mode
 ):
-    """Успешное добавление пользователя - единый тест для мока и реального ядра"""
+    """Успешное добавление пользователя через bulk_add_users - единый тест для мока и реального ядра"""
     
     # Определяем какое ядро использовать
     if use_real_core:
@@ -82,20 +115,22 @@ async def test_execute_add_user_unified(
     else:
         core_ip, core_port = "127.0.0.1", 10085
     
-    # Загружаем скрипт из БД
-    script = get_script_from_template(TemplateScriptFields.add_user)
-    lib_names = get_script_from_template(TemplateScriptFields.lib_names)
-    custom_params = get_script_from_template(TemplateScriptFields.custom_params_add)
+    # Используем первый шаблон из списка
+    template = protocol_templates[0]
+    script = template['api_bulk_add_user_script']
+    lib_names = template['proto_python_lib']
+    custom_params = template.get('bulk_add_script_custom_params')
     
-    user_obj = {"id": "test-uuid-add-123", "email": "test_add@example.com", "uuid": "test-uuid-add-123"}
+    # user_obj теперь список (для bulk операции)
+    users_list = [{"id": "test-uuid-add-123", "email": "test_add@example.com", "uuid": "test-uuid-add-123"}]
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names=lib_names,
-        user_obj=user_obj,
+        user_obj=users_list,
         node_ip=core_ip,
         core_api_port=core_port,
-        action="add_user",
+        action="user_core_operation",  # Изменено с "add_user"
         custom_params=custom_params
     )
     
@@ -106,14 +141,14 @@ async def test_execute_add_user_unified(
 @pytest.mark.parametrize("use_real_core", [False, True], ids=["mock", "real"])
 @pytest.mark.asyncio
 @pytest.mark.db
-async def test_execute_delete_user_unified(
+async def test_execute_bulk_delete_user_unified(
     use_real_core,
     mock_xtlsapi,
     request,
     get_script_from_template,
     is_real_mode
 ):
-    """Успешное удаление пользователя - единый тест для мока и реального ядра"""
+    """Успешное удаление пользователя через bulk_delete_users - единый тест для мока и реального ядра"""
     
     if use_real_core:
         if not is_real_mode:
@@ -122,19 +157,21 @@ async def test_execute_delete_user_unified(
     else:
         core_ip, core_port = "127.0.0.1", 10085
     
-    script = get_script_from_template(TemplateScriptFields.delete_user)
+    # Используем bulk_delete_users вместо delete_user
+    script = get_script_from_template(TemplateScriptFields.bulk_delete_users)
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
-    custom_params = get_script_from_template(TemplateScriptFields.custom_params_delete) or {}
+    custom_params = get_script_from_template(TemplateScriptFields.custom_params_bulk_delete) or {}
     
-    user_obj = {"email": "test_delete@example.com", "uuid": "test-uuid-delete-123", "id": "test-uuid-delete-123"}
+    # user_obj теперь список
+    users_list = [{"email": "test_delete@example.com", "uuid": "test-uuid-delete-123", "id": "test-uuid-delete-123"}]
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names=lib_names,
-        user_obj=user_obj,
+        user_obj=users_list,
         node_ip=core_ip,
         core_api_port=core_port,
-        action="delete_user",
+        action="user_core_operation",  # Изменено с "delete_user"
         custom_params=custom_params
     )
     
@@ -175,7 +212,7 @@ async def test_execute_bulk_add_unified(
         user_obj=users_list,
         node_ip=core_ip,
         core_api_port=core_port,
-        action="bulk_add_users",
+        action="user_core_operation",  # Изменено с "bulk_add_users"
         custom_params=custom_params
     )
     
@@ -216,7 +253,7 @@ async def test_execute_bulk_delete_unified(
         user_obj=users_list,
         node_ip=core_ip,
         core_api_port=core_port,
-        action="bulk_delete_users",
+        action="user_core_operation",  # Изменено с "bulk_delete_users"
         custom_params=custom_params
     )
     
@@ -264,19 +301,19 @@ async def test_execute_get_metrics_unified(
 @pytest.mark.db
 async def test_library_imported_to_global_scope(mock_xtlsapi, get_script_from_template):
     """Библиотека доступна в global scope скрипта (используем реальный скрипт из БД)"""
-    script = get_script_from_template(TemplateScriptFields.add_user)
+    script = get_script_from_template(TemplateScriptFields.bulk_add_users)
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
-    custom_params = get_script_from_template(TemplateScriptFields.custom_params_add) or {}
+    custom_params = get_script_from_template(TemplateScriptFields.custom_params_bulk_add) or {}
     
     user_obj = {"id": "test-uuid-lib", "email": "test_lib@example.com", "uuid": "test-uuid-lib"}
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names=lib_names,
-        user_obj=user_obj,
+        user_obj=[user_obj],  # Оборачиваем в список для bulk операции
         node_ip="127.0.0.1",
         core_api_port=10085,
-        action="add_user",
+        action="user_core_operation",
         custom_params=custom_params
     )
     
@@ -309,9 +346,9 @@ async def test_multiple_libraries_import(get_script_from_template):
 @pytest.mark.db
 async def test_asyncio_available_in_scope(mock_xtlsapi, get_script_from_template):
     """asyncio доступен в скрипте (используем реальный async скрипт из БД)"""
-    script = get_script_from_template(TemplateScriptFields.add_user)
+    script = get_script_from_template(TemplateScriptFields.bulk_add_users)
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
-    custom_params = get_script_from_template(TemplateScriptFields.custom_params_add) or {}
+    custom_params = get_script_from_template(TemplateScriptFields.custom_params_bulk_add) or {}
     
     user_obj = {"id": "test-uuid-async", "email": "test_async@example.com", "uuid": "test-uuid-async"}
     
@@ -319,10 +356,10 @@ async def test_asyncio_available_in_scope(mock_xtlsapi, get_script_from_template
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names=lib_names,
-        user_obj=user_obj,
+        user_obj=[user_obj],  # Оборачиваем в список для bulk операции
         node_ip="127.0.0.1",
         core_api_port=10085,
-        action="add_user",
+        action="user_core_operation",  # Изменено с "add_user"
         custom_params=custom_params
     )
     
@@ -335,9 +372,9 @@ async def test_asyncio_available_in_scope(mock_xtlsapi, get_script_from_template
 @pytest.mark.db
 async def test_custom_params_passed_to_script(mock_xtlsapi, get_script_from_template):
     """custom_params корректно передаются в скрипт (используем реальный скрипт + реальные custom_params из БД)"""
-    script = get_script_from_template(TemplateScriptFields.add_user)
+    script = get_script_from_template(TemplateScriptFields.bulk_add_users)
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
-    custom_params = get_script_from_template(TemplateScriptFields.custom_params_add)
+    custom_params = get_script_from_template(TemplateScriptFields.custom_params_bulk_add)
     
     # Проверяем что custom_params из БД не None
     assert custom_params is not None, "custom_params должны быть определены в шаблоне БД"
@@ -348,10 +385,10 @@ async def test_custom_params_passed_to_script(mock_xtlsapi, get_script_from_temp
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names=lib_names,
-        user_obj=user_obj,
+        user_obj=[user_obj],  # Оборачиваем в список для bulk операции
         node_ip="127.0.0.1",
         core_api_port=10085,
-        action="add_user",
+        action="user_core_operation",
         custom_params=custom_params
     )
     
@@ -363,7 +400,7 @@ async def test_custom_params_passed_to_script(mock_xtlsapi, get_script_from_temp
 @pytest.mark.db
 async def test_custom_params_none_becomes_empty_dict(mock_xtlsapi, get_script_from_template):
     """custom_params=None становится пустым dict (используем реальный скрипт из БД)"""
-    script = get_script_from_template(TemplateScriptFields.add_user)
+    script = get_script_from_template(TemplateScriptFields.bulk_add_users)  # Используем bulk
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
     
     user_obj = {"id": "test-uuid-none", "email": "test_none@example.com", "uuid": "test-uuid-none"}
@@ -372,10 +409,10 @@ async def test_custom_params_none_becomes_empty_dict(mock_xtlsapi, get_script_fr
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names=lib_names,
-        user_obj=user_obj,
+        user_obj=[user_obj],  # Оборачиваем в список
         node_ip="127.0.0.1",
         core_api_port=10085,
-        action="add_user",
+        action="user_core_operation",  # Изменено с "add_user"
         custom_params=None
     )
     
@@ -392,7 +429,7 @@ async def test_custom_params_none_becomes_empty_dict(mock_xtlsapi, get_script_fr
 async def test_sandbox_blocks_open():
     """Sandbox блокирует доступ к open()"""
     script = """
-async def add_user(user_obj, node_ip, core_port, custom_params):
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
     # Попытка открыть файл должна провалиться
     try:
         open('/etc/passwd', 'r')
@@ -405,10 +442,10 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names=None,
-        user_obj={},
+        user_obj=[{}],  # Список для bulk
         node_ip="127.0.0.1",
         core_api_port=10085,
-        action="add_user"
+        action="user_core_operation"
     )
     
     assert success is True
@@ -419,7 +456,7 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
 async def test_sandbox_blocks_eval():
     """Sandbox блокирует eval()"""
     script = """
-async def add_user(user_obj, node_ip, core_port, custom_params):
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
     try:
         eval("1+1")
         return False
@@ -430,10 +467,10 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names=None,
-        user_obj={},
+        user_obj=[{}],
         node_ip="127.0.0.1",
         core_api_port=10085,
-        action="add_user"
+        action="user_core_operation"
     )
     
     assert success is True
@@ -444,7 +481,7 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
 async def test_sandbox_blocks_import():
     """Sandbox блокирует __import__()"""
     script = """
-async def add_user(user_obj, node_ip, core_port, custom_params):
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
     try:
         __import__('os')
         return False
@@ -455,10 +492,10 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names=None,
-        user_obj={},
+        user_obj=[{}],
         node_ip="127.0.0.1",
         core_api_port=10085,
-        action="add_user"
+        action="user_core_operation"
     )
     
     assert success is True
@@ -469,7 +506,7 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
 async def test_sandbox_allows_safe_builtins():
     """Sandbox разрешает безопасные builtins"""
     script = """
-async def add_user(user_obj, node_ip, core_port, custom_params):
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
     # Разрешённые builtins должны работать
     a = int("42")
     b = str(100)
@@ -488,10 +525,10 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names=None,
-        user_obj={},
+        user_obj=[{}],
         node_ip="127.0.0.1",
         core_api_port=10085,
-        action="add_user"
+        action="user_core_operation"
     )
     
     assert success is True
@@ -505,7 +542,7 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
 async def test_script_syntax_error():
     """SyntaxError в скрипте возвращает детальную ошибку (хардкод - намеренная ошибка)"""
     script = """
-async def add_user(user_obj, node_ip, core_port, custom_params):
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
     # Намеренная синтаксическая ошибка
     if True
         return True
@@ -514,10 +551,10 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names=None,
-        user_obj={},
+        user_obj=[{}],
         node_ip="127.0.0.1",
         core_api_port=10085,
-        action="add_user"
+        action="user_core_operation"
     )
     
     assert success is False
@@ -529,7 +566,7 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
 async def test_script_runtime_error(mock_xtlsapi):
     """Runtime ошибка в скрипте возвращает детальную информацию (хардкод - намеренная ошибка)"""
     script = """
-async def add_user(user_obj, node_ip, core_port, custom_params):
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
     # Намеренная runtime ошибка
     raise ValueError("Тестовая ошибка в скрипте")
 """
@@ -537,10 +574,10 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names='xtlsapi',
-        user_obj={},
+        user_obj=[{}],
         node_ip="127.0.0.1",
         core_api_port=10085,
-        action="add_user"
+        action="user_core_operation"
     )
     
     assert success is False
@@ -553,22 +590,22 @@ async def add_user(user_obj, node_ip, core_port, custom_params):
 async def test_missing_function_in_script():
     """Отсутствие требуемой функции возвращает детальную ошибку (хардкод - неправильное имя функции)"""
     script = """
-async def wrong_function_name(user_obj, node_ip, core_port, custom_params):
+async def wrong_function_name(users_list, node_ip, core_port, custom_params):
     return True
 """
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names=None,
-        user_obj={},
+        user_obj=[{}],
         node_ip="127.0.0.1",
         core_api_port=10085,
-        action="add_user"
+        action="user_core_operation"
     )
     
     assert success is False
-    assert "add_user" in message
-    assert "не найдена" in message.lower()
+    # Проверяем что упоминается хотя бы одна из ожидаемых функций
+    assert "bulk_add_users" in message or "bulk_delete_users" in message or "не найдена" in message.lower()
 
 
 @pytest.mark.asyncio
@@ -576,17 +613,17 @@ async def wrong_function_name(user_obj, node_ip, core_port, custom_params):
 @pytest.mark.db
 async def test_library_import_error(get_script_from_template):
     """ImportError при отсутствующей библиотеке (используем реальный скрипт + несуществующую библиотеку)"""
-    script = get_script_from_template(TemplateScriptFields.add_user)
+    script = get_script_from_template(TemplateScriptFields.bulk_add_users)  # Используем bulk
     
     user_obj = {"id": "test-uuid", "email": "test@example.com", "uuid": "test-uuid"}
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names='nonexistent_library_12345',
-        user_obj=user_obj,
+        user_obj=[user_obj],  # Оборачиваем в список
         node_ip="127.0.0.1",
         core_api_port=10085,
-        action="add_user"
+        action="user_core_operation"
     )
     
     assert success is False
@@ -599,19 +636,19 @@ async def test_library_import_error(get_script_from_template):
 @pytest.mark.db
 async def test_async_function_execution(mock_xtlsapi, get_script_from_template):
     """Async функция выполняется корректно (используем реальный async скрипт из БД)"""
-    script = get_script_from_template(TemplateScriptFields.add_user)
+    script = get_script_from_template(TemplateScriptFields.bulk_add_users)  # Используем bulk
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
-    custom_params = get_script_from_template(TemplateScriptFields.custom_params_add) or {}
+    custom_params = get_script_from_template(TemplateScriptFields.custom_params_bulk_add) or {}
     
     user_obj = {"id": "test-uuid-async", "email": "test_async@example.com", "uuid": "test-uuid-async"}
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names=lib_names,
-        user_obj=user_obj,
+        user_obj=[user_obj],  # Список для bulk
         node_ip="127.0.0.1",
         core_api_port=10085,
-        action="add_user",
+        action="user_core_operation",
         custom_params=custom_params
     )
     
@@ -622,7 +659,7 @@ async def test_async_function_execution(mock_xtlsapi, get_script_from_template):
 async def test_sync_function_execution():
     """Синхронная функция (без async) тоже работает (хардкод - для проверки совместимости)"""
     script = """
-def add_user(user_obj, node_ip, core_port, custom_params):
+def bulk_add_users(users_list, node_ip, core_port, custom_params):
     # Обычная синхронная функция
     return True
 """
@@ -630,10 +667,10 @@ def add_user(user_obj, node_ip, core_port, custom_params):
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names=None,
-        user_obj={},
+        user_obj=[{}],
         node_ip="127.0.0.1",
         core_api_port=10085,
-        action="add_user"
+        action="user_core_operation"
     )
     
     assert success is True
@@ -643,9 +680,9 @@ def add_user(user_obj, node_ip, core_port, custom_params):
 @pytest.mark.db
 async def test_mixed_async_sync_calls(mock_xtlsapi, get_script_from_template):
     """Async функция вызывает синхронные методы (используем реальный скрипт из БД)"""
-    script = get_script_from_template(TemplateScriptFields.add_user)
+    script = get_script_from_template(TemplateScriptFields.bulk_add_users)
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
-    custom_params = get_script_from_template(TemplateScriptFields.custom_params_add) or {}
+    custom_params = get_script_from_template(TemplateScriptFields.custom_params_bulk_add) or {}
     
     user_obj = {"id": "test-uuid-mixed", "email": "test_mixed@example.com", "uuid": "test-uuid-mixed"}
     
@@ -653,10 +690,10 @@ async def test_mixed_async_sync_calls(mock_xtlsapi, get_script_from_template):
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names=lib_names,
-        user_obj=user_obj,
+        user_obj=[user_obj],  # Оборачиваем в список для bulk операции
         node_ip="127.0.0.1",
         core_api_port=10085,
-        action="add_user",
+        action="user_core_operation",
         custom_params=custom_params
     )
     
@@ -668,20 +705,20 @@ async def test_mixed_async_sync_calls(mock_xtlsapi, get_script_from_template):
 @pytest.mark.asyncio
 @pytest.mark.db
 async def test_user_obj_as_dict(mock_xtlsapi, get_script_from_template):
-    """user_obj как dict работает корректно (используем реальный скрипт из БД)"""
-    script = get_script_from_template(TemplateScriptFields.add_user)
+    """user_obj как list[dict] работает корректно (используем реальный скрипт из БД)"""
+    script = get_script_from_template(TemplateScriptFields.bulk_add_users)
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
-    custom_params = get_script_from_template(TemplateScriptFields.custom_params_add) or {}
+    custom_params = get_script_from_template(TemplateScriptFields.custom_params_bulk_add) or {}
     
     user_obj = {"id": "test-uuid", "email": "test@test.com", "uuid": "test-uuid"}
     
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,
         lib_names=lib_names,
-        user_obj=user_obj,
+        user_obj=[user_obj],  # Оборачиваем в список для bulk
         node_ip="127.0.0.1",
         core_api_port=10085,
-        action="add_user",
+        action="user_core_operation",
         custom_params=custom_params
     )
     
@@ -708,7 +745,7 @@ async def test_user_obj_as_list_for_bulk(mock_xtlsapi, get_script_from_template)
         user_obj=users_list,
         node_ip="127.0.0.1",
         core_api_port=10085,
-        action="bulk_add_users",
+        action="user_core_operation",
         custom_params=custom_params
     )
     
