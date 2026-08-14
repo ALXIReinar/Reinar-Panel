@@ -158,6 +158,8 @@ class TestTrafficSyncScheduler:
         Создаём 3 ноды:
         - 2 активные с metrics_port → должны попасть
         - 1 без metrics_port → НЕ должна попасть
+        
+        ПЕРЕИСПОЛЬЗУЕМ существующий протокол из seed_data (через real_parser_scripts).
         """
         # Arrange
         arq_ctx['arq_redis'] = arq_pool
@@ -170,25 +172,22 @@ class TestTrafficSyncScheduler:
                 RETURNING id
             """, "192.168.1.200", "10.0.0.200", 8200, "multi-test-node", "Multi Test Node", True)
             
-            # Получаем парсер
+            # Получаем существующий парсер и протокол из seed_data
             parser = list(real_parser_scripts.values())[0]
             tmp_id = parser['id']
             
-            # Создаём протокол
+            # Получаем существующий протокол из БД (вместо создания нового)
             proto_id = await conn.fetchval("""
-                INSERT INTO protocols (tmp_id, name)
-                VALUES ($1, $2)
-                RETURNING id
-            """, tmp_id, "Multi Test Protocol")
+                SELECT id FROM protocols WHERE tmp_id = $1 LIMIT 1
+            """, tmp_id)
             
-            # Обновляем proto_template для метрик
-            await conn.execute("""
-                UPDATE proto_templates
-                SET metrics_parser_code = $1,
-                    metrics_command = 'xray api statsquery',
-                    api_metrics_script = 'python metrics.py'
-                WHERE id = $2
-            """, parser['metrics_parser_code'], tmp_id)
+            if proto_id is None:
+                # Если протокол не существует, создаём его (только для изолированных тестов)
+                proto_id = await conn.fetchval("""
+                    INSERT INTO protocols (tmp_id, name)
+                    VALUES ($1, $2)
+                    RETURNING id
+                """, tmp_id, f"Test Protocol {tmp_id}")
             
             # Создаём 3 виртуальные ноды
             vnode1 = await conn.fetchval("""

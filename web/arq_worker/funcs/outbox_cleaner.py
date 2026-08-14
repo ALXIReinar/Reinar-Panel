@@ -40,7 +40,7 @@ async def retry_stuck_core_proto_actions(ctx: dict, db: PgSql = None, arq: ArqRe
             # Перезаписываем операцию на самую свежую (т.к. БД отсортировала по ASC)
             final_states[sub_id]['operation'] = ev['operation']
             # Сохраняем event_id, чтобы воркер закрыл и этот ack тоже
-            final_states[sub_id]['event_ids'].append(ev['event_id'])
+            final_states[sub_id]['event_id'].append(ev['event_id'])
 
         "2. Разделяем юзеров на две независимые пачки"
         add_batch = [u for u in final_states.values() if u['operation'] == CoreProtoActions.add]
@@ -82,7 +82,7 @@ async def retry_stuck_core_proto_actions(ctx: dict, db: PgSql = None, arq: ArqRe
                     vnode['required_user_data_obj'],
                     vnode['constant_user_data_obj'],
                 )
-                log_event(f'\033[35m[ARQ Cron]\033[0m Ретрай операции в vpn-ядро протокола | node_proto_id: \033[32m{vnode['node_proto_id']}\033[0m; operation: \033[36m{vnode["operation"]}\033[0m', job_id=job.job_id)
+                log_event(f'\033[35m[ARQ Cron]\033[0m Ретрай операции в vpn-ядро протокола | node_proto_id: \033[32m{vnode['node_proto_id']}\033[0m; operation: \033[36m{operation}\033[0m', job_id=job.job_id)
             "3. Кидаем на одну ноду 2 пачки"
             await dispatch_job(add_batch, CoreProtoActions.add)
             await dispatch_job(delete_batch, CoreProtoActions.delete)

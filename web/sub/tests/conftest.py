@@ -70,8 +70,6 @@ async def db_seed(db_pool):
             raise RuntimeError(
                 "proto_templates пуста! Запустите: python -m web.db.seed_data"
             )
-            VALUES (1, 'pending'), (2, 'success'), (3, 'expired')
-        """)
     
     return {"db_cleaned": True}
 
@@ -243,36 +241,27 @@ async def physical_node_seed(db_pool):
 
 @pytest.fixture
 async def proto_template_seed(db_pool):
-    """Создаёт тестовые шаблоны протоколов"""
+    """
+    Загружает первый активный шаблон протокола из БД
+    
+    Вместо создания нового шаблона, используем существующий из seed_data.
+    """
     async with db_pool.acquire() as conn:
         tmp_id = await conn.fetchval(
             """
-            INSERT INTO proto_templates (
-                title, url_tmp, status, is_accepted, 
-                reload_core_command, sub_prepare_script,
-                proto_python_lib, api_add_user_script, api_delete_user_script,
-                flatten_json_users_key, flatten_user_identifier_key,
-                add_script_custom_params, delete_script_custom_params,
-                required_user_data_obj, constant_user_data_obj
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-            RETURNING id
-            """,
-            "TestProtocol Template",
-            "https://example.com/proto_template",
-            1,
-            True,
-            "systemctl reload test-proto",
-            "#!/bin/bash\necho 'test'",
-            "vless",
-            "python /opt/add_user.py",
-            "python /opt/delete_user.py",
-            "inbounds.0.settings.clients",
-            "email",
-            '{}',
-            '{}',
-            '{"id": "{USER_UUID}", "email": "{USER_TG_USERNAME}"}',  # required_user_data_obj
-            '{"level": 0, "alterId": 0}'  # constant_user_data_obj
+            SELECT id 
+            FROM proto_templates 
+            WHERE is_accepted = true 
+            ORDER BY id 
+            LIMIT 1
+            """
         )
+        
+        if not tmp_id:
+            raise RuntimeError(
+                "Не найдено ни одного активного шаблона в proto_templates! "
+                "Запустите: python -m web.db.seed_data"
+            )
         
         return {"tmp_id": tmp_id}
 
@@ -346,15 +335,23 @@ async def user_seed(db_pool):
 async def virtual_node_seed(db_pool, physical_node_seed, proto_template_seed):
     """Создаёт тестовые виртуальные ноды (nodes_protocols)"""
     async with db_pool.acquire() as conn:
+        # Используем существующий протокол из seed_data
         proto_id = await conn.fetchval(
             """
-            INSERT INTO protocols (tmp_id, name)
-            VALUES ($1, $2)
-            RETURNING id
+            SELECT id 
+            FROM protocols 
+            WHERE tmp_id = $1 
+            ORDER BY id 
+            LIMIT 1
             """,
-            proto_template_seed["tmp_id"],
-            "Test Protocol"
+            proto_template_seed["tmp_id"]
         )
+        
+        if not proto_id:
+            raise RuntimeError(
+                f"Не найдено протокола для tmp_id={proto_template_seed['tmp_id']} в protocols! "
+                f"Запустите: python -m web.db.seed_data"
+            )
         
         vnode_id_1 = await conn.fetchval(
             """
@@ -457,34 +454,35 @@ async def sub_infrastructure_seed(db_pool, db_seed):
             RETURNING id
         """, "192.168.1.101", "10.0.0.101", 8101, "arq-test-node-inactive", "ARQ Inactive Node", False)
 
-        # 3. Создаём шаблон протокола
+        # 3. Используем существующий шаблон протокола из seed_data
         tmp_id = await conn.fetchval("""
-            INSERT INTO proto_templates (
-                title, url_tmp, status, is_accepted, 
-                reload_core_command, sub_prepare_script,
-                proto_python_lib, api_add_user_script, api_delete_user_script,
-                api_bulk_add_user_script, api_bulk_delete_user_script,
-                flatten_json_users_key, flatten_user_identifier_key,
-                add_script_custom_params, delete_script_custom_params,
-                bulk_add_script_custom_params, bulk_delete_script_custom_params,
-                required_user_data_obj, constant_user_data_obj
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-            RETURNING id
-        """, "ARQ Test Template", "https://test.com", 1, True,
-            "systemctl reload test", "#!/bin/bash", "vless",
-            "python add.py", "python del.py",
-            "python bulk_add.py", "python bulk_del.py",
-            "clients", "email", '{}', '{}', '{}', '{}',
-            '{"id": "{USER_UUID}", "email": "{USER_TG_USERNAME}"}',
-            '{"level": 0}'
-        )
+            SELECT id 
+            FROM proto_templates 
+            WHERE is_accepted = true 
+            ORDER BY id 
+            LIMIT 1
+        """)
+        
+        if not tmp_id:
+            raise RuntimeError(
+                "Не найдено активных шаблонов в proto_templates! "
+                "Запустите: python -m web.db.seed_data"
+            )
 
-        # 4. Создаём протокол
+        # 4. Используем существующий протокол из seed_data (связанный с tmp_id)
         proto_id = await conn.fetchval("""
-            INSERT INTO protocols (tmp_id, name)
-            VALUES ($1, $2)
-            RETURNING id
-        """, tmp_id, "ARQ Test Protocol")
+            SELECT id 
+            FROM protocols 
+            WHERE tmp_id = $1 
+            ORDER BY id 
+            LIMIT 1
+        """, tmp_id)
+        
+        if not proto_id:
+            raise RuntimeError(
+                f"Не найдено протокола для tmp_id={tmp_id} в protocols! "
+                f"Запустите: python -m web.db.seed_data"
+            )
 
         # 5. Создаём виртуальные ноды
         # 5.1. Активная виртуальная нода на активной физической ноде (user_visible=true)
@@ -566,97 +564,10 @@ async def real_parser_scripts(db_pool):
         """)
         
         if not parsers:
-            # БД пустая, вставляем реальный парсер xray
-            parser_code = '''def parse(raw_metrics):
-    """Универсальный парсер метрик для Xray"""
-    
-    def _parse_plain_text(text):
-        """Fallback парсер для plain text формата"""
-        lines = text.strip().split('\\n')
-        traffic_map = defaultdict(int)
-        
-        for line in lines:
-            if '>>>' not in line:
-                continue
-            
-            parts = line.split('>>>')
-            if len(parts) >= 2:
-                username = parts[1]
-                numbers = re.findall(r'\\d+', line)
-                if numbers:
-                    traffic_map[username] += int(numbers[-1])
-        
-        return [
-            {'user_sub_id': int(u), 'total_mb_used': mb}
-            for u, mb in traffic_map.items()
-        ], []
-    
-    if isinstance(raw_metrics, str):
-        try:
-            json_obj = json.loads(raw_metrics)
-        except json.JSONDecodeError:
-            return _parse_plain_text(raw_metrics)
-    else:
-        json_obj = raw_metrics
-    
-    traffic_map = defaultdict(int)
-    troubles = []
-    
-    stats_list = json_obj.get('stat', [])
-    if not stats_list:
-        return [], []
-    
-    for user in stats_list:
-        name = user.get('name', '')
-        if not name or 'user>>>' not in name:
-            troubles.append(user)
-            continue
-        
-        parts = name.split('>>>')
-        if len(parts) < 2:
-            troubles.append(user)
-            continue
-        
-        user_sub_id = int(parts[1])
-        traffic_bytes = int(user.get('value', 0))
-        traffic_mb = traffic_bytes // 1024 // 1024
-        
-        traffic_map[user_sub_id] += traffic_mb
-    
-    users_traffics = [
-        {'user_sub_id': username, 'total_mb_used': used_mb} 
-        for username, used_mb in traffic_map.items()
-    ]
-    
-    return users_traffics, troubles
-'''
-            
-            tmp_id = await conn.fetchval("""
-                INSERT INTO proto_templates (
-                    title, url_tmp, status, is_accepted,
-                    reload_core_command, sub_prepare_script,
-                    proto_python_lib, metrics_parser_code,
-                    api_add_user_script, api_delete_user_script,
-                    flatten_json_users_key, flatten_user_identifier_key,
-                    metrics_command, api_metrics_script
-                )
-                VALUES (
-                    'vless_tcp_sni_based', 'https://example.com', 1, true,
-                    'systemctl reload xray', '#!/bin/bash',
-                    'xtlsapi', $1,
-                    'python add.py', 'python del.py',
-                    'clients', 'email',
-                    'xray api statsquery', 'python metrics.py'
-                )
-                RETURNING id
-            """, parser_code)
-            
-            # Перечитываем
-            parsers = await conn.fetch("""
-                SELECT id, title, metrics_parser_code, sub_required_libs, proto_python_lib
-                FROM proto_templates
-                WHERE metrics_parser_code IS NOT NULL
-            """)
+            raise RuntimeError(
+                "Не найдено парсеров метрик в proto_templates! "
+                "Запустите: python -m web.db.seed_data"
+            )
         
         return {p['title']: dict(p) for p in parsers}
 
@@ -1153,34 +1064,35 @@ async def pointed_bulk_seed(db_pool, db_seed):
             RETURNING id
         """, "192.168.1.101", "10.0.0.101", 8101, "pointed-node-inactive", "Pointed Inactive Node", False)
         
-        # 3. Создаём шаблон протокола
+        # 3. Используем существующий шаблон протокола из seed_data
         tmp_id = await conn.fetchval("""
-            INSERT INTO proto_templates (
-                title, url_tmp, status, is_accepted,
-                reload_core_command, sub_prepare_script,
-                proto_python_lib, api_add_user_script, api_delete_user_script,
-                api_bulk_add_user_script, api_bulk_delete_user_script,
-                flatten_json_users_key, flatten_user_identifier_key,
-                add_script_custom_params, delete_script_custom_params,
-                bulk_add_script_custom_params, bulk_delete_script_custom_params,
-                required_user_data_obj, constant_user_data_obj
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-            RETURNING id
-        """, "Pointed Test Template", "https://pointed.test.com", 1, True,
-            "systemctl reload pointed", "#!/bin/bash", "vless",
-            "python add.py", "python del.py",
-            "python bulk_add.py", "python bulk_del.py",
-            "clients", "email", '{}', '{}', '{}', '{}',
-            '{"id": "{USER_UUID}", "email": "{USER_TG_USERNAME}"}',
-            '{"level": 0}'
-        )
+            SELECT id 
+            FROM proto_templates 
+            WHERE is_accepted = true 
+            ORDER BY id 
+            LIMIT 1
+        """)
         
-        # 4. Создаём протокол
+        if not tmp_id:
+            raise RuntimeError(
+                "Не найдено активных шаблонов в proto_templates! "
+                "Запустите: python -m web.db.seed_data"
+            )
+        
+        # 4. Используем существующий протокол из seed_data (связанный с tmp_id)
         proto_id = await conn.fetchval("""
-            INSERT INTO protocols (tmp_id, name)
-            VALUES ($1, $2)
-            RETURNING id
-        """, tmp_id, "Pointed Test Protocol")
+            SELECT id 
+            FROM protocols 
+            WHERE tmp_id = $1 
+            ORDER BY id 
+            LIMIT 1
+        """, tmp_id)
+        
+        if not proto_id:
+            raise RuntimeError(
+                f"Не найдено протокола для tmp_id={tmp_id} в protocols! "
+                f"Запустите: python -m web.db.seed_data"
+            )
         
         # 5. Создаём виртуальные ноды
         # 5.1. Активная виртуальная нода 10

@@ -1,24 +1,16 @@
-"""
-Экспорт актуальных seed данных из test-postgresql в seed_data.json
-Запуск: python web/db/export_seed_from_db.py
-"""
+
 import json
 import asyncio
 from pathlib import Path
 from datetime import datetime
 from asyncpg import create_pool
 
-# Настройки test-postgresql (из переменных окружения или дефолтные)
-TEST_POOL_SETTINGS = {
-    'host': 'localhost',
-    'port': 5432,
-    'user': 'postgres',
-}
+from web.config_dir.config import pool_settings
 
 
 async def export_seed_data():
     """Экспортирует актуальные данные из test-postgresql"""
-    pool = await create_pool(**TEST_POOL_SETTINGS)
+    pool = await create_pool(**pool_settings)
     
     try:
         async with pool.acquire() as conn:
@@ -137,8 +129,7 @@ def datetime_converter(o):
 
 async def main():
     print("🔄 Экспорт seed данных из test-postgresql...")
-    print(f"   Подключение: {TEST_POOL_SETTINGS['host']}:{TEST_POOL_SETTINGS['port']}")
-    
+
     try:
         seed_data = await export_seed_data()
     except Exception as e:

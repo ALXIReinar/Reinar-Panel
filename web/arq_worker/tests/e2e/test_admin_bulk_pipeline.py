@@ -12,7 +12,6 @@ from unittest.mock import MagicMock
 
 from web.arq_worker.funcs.admin_actions import admin_request_bulk_action_users
 from web.arq_worker.funcs.bulk_action_on_core_proto import bulk_action_users_by_node
-from web.arq_worker.funcs.traffic_reset import bulk_add_users_into_single_node
 
 pytestmark = pytest.mark.asyncio
 
@@ -27,28 +26,26 @@ class TestAdminBulkPipeline:
         Flow:
         1. Админка создаёт outbox
         2. admin_request_bulk_action_users ставит задачи в ARQ
-        3. bulk_add_users_into_single_node выполняется
+        3. bulk_action_users_by_node (operation=ADD) выполняется
         4. Outbox очищается
         """
         # Arrange: подготовка данных пользователя
         user3 = arq_test_seed['user3_active_for_add']
-        users_input = [{
-            'user_sub_id': user3['order_active'],
-            'sub_plan_id': arq_test_seed['plan_id'],
-            'uuid': user3['uuid']
-        }]
         
         # Outbox уже создан в arq_test_seed (operation=1 для ADD)
         
-        # Проверяем outbox ДО выполнения
+        # Получаем outbox event_ids для передачи в функцию
         async with db_pool.acquire() as conn:
             outbox_before = await conn.fetch("""
-                SELECT * FROM sub_nodes_outbox
+                SELECT id, * FROM sub_nodes_outbox
                 WHERE user_sub_id = $1 AND operation = 1
                 ORDER BY node_proto_id
             """, user3['order_active'])
         
         assert len(outbox_before) == 2, "Должно быть 2 записи в outbox (на 2 ноды)"
+        
+        # Извлекаем event_ids из outbox
+        outbox_event_ids = [row['id'] for row in outbox_before]
         
         # Mock для arq.enqueue_job чтобы захватить параметры
         enqueued_jobs = []
@@ -67,48 +64,49 @@ class TestAdminBulkPipeline:
         arq_ctx['aio_http'].status = 200
         arq_ctx['aio_http'].json_data = {'success': True}
         
-        # Act 1: Вызываем admin_request_bulk_action_users
+        # Act 1: Вызываем admin_request_bulk_action_users с event_ids
         await admin_request_bulk_action_users(
             arq_ctx,
-            'add',       # action
-            users_input  # users
+            'add',            # action
+            outbox_event_ids  # outbox_event_ids (list[int])
         )
         
         # Assert 1: Проверяем что задачи поставлены в ARQ
         assert len(enqueued_jobs) == 2, "Должно быть 2 задачи (на 2 ноды)"
         
-        # Проверяем что обе задачи для bulk_add_users_into_single_node
+        # Проверяем что обе задачи для bulk_action_users_by_node с operation=1 (ADD)
         for job_data in enqueued_jobs:
-            assert job_data['args'][0] == 'bulk_add_users_into_single_node'
+            assert job_data['args'][0] == 'bulk_action_users_by_node'
+            assert job_data['args'][8] == 1, "operation должна быть 1 (ADD)"
         
         # Act 2: Выполняем bulk операции вручную (имитация ARQ worker)
         for job_data in enqueued_jobs:
             args = job_data['args']
             
             # Извлекаем параметры из enqueue_job
-            result = await bulk_add_users_into_single_node(
+            result = await bulk_action_users_by_node(
                 ctx=arq_ctx,
                 node_proto_id=args[1],      # node_proto_id
                 private_ip=args[2],          # private_ip
                 api_port=args[3],            # api_port
                 metrics_port=args[4],        # metrics_port
                 proto_python_lib=args[5],    # proto_python_lib
-                api_add_user_script=args[6], # api_add_user_script
-                bulk_add_script_custom_params=args[7], # custom_params
-                users=args[8],               # users
-                reload_core_command=args[9], # reload_core_command
-                config_file_path=args[10],   # config_file_path
-                flatten_json_users_key=args[11], # flatten_json_users_key
-                flatten_user_identifier_key=args[12], # flatten_user_identifier_key
-                required_user_data_obj={"id": "{USER_UUID}", "email": "{USER_SUB_ID}"},
-                constant_user_data_obj={"level": 0},
+                api_bulk_action_script=args[6], # api_bulk_action_script
+                bulk_action_script_custom_params=args[7], # custom_params
+                operation=args[8],           # operation
+                users=args[9],               # users
+                reload_core_command=args[10], # reload_core_command
+                config_file_path=args[11],   # config_file_path
+                user_injectors=args[12],     # user_injectors
+                required_user_data_obj=args[13], # required_user_data_obj
+                constant_user_data_obj=args[14], # constant_user_data_obj
                 current_attempt=1
             )
             
             assert result['success'] is True
         
-        # Assert 2: Проверяем что HTTP POST был вызван для каждой ноды
-        assert len(arq_ctx['aio_http'].post_calls) == 2
+        # Assert 2: Проверяем что HTTP PUT был вызван для каждой ноды
+        assert len(arq_ctx['aio_http'].put_calls) == 2
         
         # Assert 3: Проверяем что outbox очищен после успеха
         async with db_pool.acquire() as conn:
@@ -126,23 +124,21 @@ class TestAdminBulkPipeline:
         """
         # Arrange
         user4 = arq_test_seed['user4_active_for_delete']
-        users_input = [{
-            'user_sub_id': user4['order_active'],
-            'sub_plan_id': arq_test_seed['plan_id'],
-            'uuid': user4['uuid']
-        }]
         
         # Outbox уже создан в arq_test_seed (operation=2 для DELETE)
         
-        # Проверяем outbox ДО выполнения
+        # Получаем outbox event_ids для передачи в функцию
         async with db_pool.acquire() as conn:
             outbox_before = await conn.fetch("""
-                SELECT * FROM sub_nodes_outbox
+                SELECT id, * FROM sub_nodes_outbox
                 WHERE user_sub_id = $1 AND operation = 2
                 ORDER BY node_proto_id
             """, user4['order_active'])
         
         assert len(outbox_before) == 2, "Должно быть 2 записи в outbox (на 2 ноды)"
+        
+        # Извлекаем event_ids из outbox
+        outbox_event_ids = [row['id'] for row in outbox_before]
         
         # Mock для arq.enqueue_job
         enqueued_jobs = []
@@ -161,18 +157,19 @@ class TestAdminBulkPipeline:
         arq_ctx['aio_http'].status = 200
         arq_ctx['aio_http'].json_data = {'success': True}
         
-        # Act 1: Вызываем admin_request_bulk_action_users
+        # Act 1: Вызываем admin_request_bulk_action_users с event_ids
         await admin_request_bulk_action_users(
             arq_ctx,
-            'delete',    # action
-            users_input  # users
+            'delete',         # action
+            outbox_event_ids  # outbox_event_ids (list[int])
         )
         
         # Assert 1: Проверяем что задачи поставлены в ARQ
         assert len(enqueued_jobs) == 2, "Должно быть 2 задачи (на 2 ноды)"
         
         for job_data in enqueued_jobs:
-            assert job_data['args'][0] == 'bulk_delete_users_from_single_node'
+            assert job_data['args'][0] == 'bulk_action_users_by_node'
+            assert job_data['args'][8] == 2, "operation должна быть 2 (DELETE)"
         
         # Act 2: Выполняем bulk операции вручную
         for job_data in enqueued_jobs:
@@ -187,18 +184,20 @@ class TestAdminBulkPipeline:
                 proto_python_lib=args[5],
                 api_bulk_action_script=args[6],
                 bulk_action_script_custom_params=args[7],
-                users=args[8],
-                reload_core_command=args[9],
-                config_file_path=args[10],
-                flatten_json_users_key=args[11],
-                flatten_user_identifier_key=args[12],
+                operation=args[8],
+                users=args[9],
+                reload_core_command=args[10],
+                config_file_path=args[11],
+                user_injectors=args[12],
+                required_user_data_obj=args[13],
+                constant_user_data_obj=args[14],
                 current_attempt=1
             )
             
             assert result['success'] is True
         
-        # Assert 2: Проверяем что HTTP DELETE был вызван
-        assert len(arq_ctx['aio_http'].delete_calls) == 2
+        # Assert 2: Проверяем что HTTP PUT был вызван
+        assert len(arq_ctx['aio_http'].put_calls) == 2
         
         # Assert 3: Проверяем что outbox очищен
         async with db_pool.acquire() as conn:
@@ -221,11 +220,16 @@ class TestAdminBulkPipeline:
         """
         # Arrange: используем user3 который привязан к 2 нодам
         user3 = arq_test_seed['user3_active_for_add']
-        users_input = [{
-            'user_sub_id': user3['order_active'],
-            'sub_plan_id': arq_test_seed['plan_id'],
-            'uuid': user3['uuid']
-        }]
+        
+        # Получаем outbox event_ids
+        async with db_pool.acquire() as conn:
+            outbox_records = await conn.fetch("""
+                SELECT id FROM sub_nodes_outbox
+                WHERE user_sub_id = $1 AND operation = 1
+                ORDER BY node_proto_id
+            """, user3['order_active'])
+        
+        outbox_event_ids = [row['id'] for row in outbox_records]
         
         # Mock для arq.enqueue_job
         enqueued_jobs = []
@@ -243,11 +247,11 @@ class TestAdminBulkPipeline:
         arq_ctx['arq_redis'].enqueue_job = mock_enqueue_job
         arq_ctx['aio_http'].status = 200
         
-        # Act: Вызываем admin_request_bulk_action_users
+        # Act: Вызываем admin_request_bulk_action_users с event_ids
         await admin_request_bulk_action_users(
             arq_ctx,
-            'add',       # action
-            users_input  # users
+            'add',            # action
+            outbox_event_ids  # outbox_event_ids (list[int])
         )
         
         # Assert 1: Проверяем что задачи созданы для обеих нод
@@ -260,7 +264,7 @@ class TestAdminBulkPipeline:
         
         # Проверяем что каждая задача содержит пользователя
         for job_data in enqueued_jobs:
-            users_list = job_data['args'][8]  # users параметр
+            users_list = job_data['args'][9]  # users параметр на позиции 9
             assert len(users_list) == 1
             assert users_list[0]['uuid'] == user3['uuid']
             assert users_list[0]['user_sub_id'] == user3['order_active']
@@ -269,22 +273,22 @@ class TestAdminBulkPipeline:
         for job_data in enqueued_jobs:
             args = job_data['args']
             
-            await bulk_add_users_into_single_node(
+            await bulk_action_users_by_node(
                 ctx=arq_ctx,
                 node_proto_id=args[1],
                 private_ip=args[2],
                 api_port=args[3],
                 metrics_port=args[4],
                 proto_python_lib=args[5],
-                api_add_user_script=args[6],
-                bulk_add_script_custom_params=args[7],
-                users=args[8],
-                reload_core_command=args[9],
-                config_file_path=args[10],
-                flatten_json_users_key=args[11],
-                flatten_user_identifier_key=args[12],
-                required_user_data_obj={"id": "{USER_UUID}"},
-                constant_user_data_obj={},
+                api_bulk_action_script=args[6],
+                bulk_action_script_custom_params=args[7],
+                operation=args[8],
+                users=args[9],
+                reload_core_command=args[10],
+                config_file_path=args[11],
+                user_injectors=args[12],
+                required_user_data_obj=args[13],
+                constant_user_data_obj=args[14],
                 current_attempt=1
             )
         
@@ -368,17 +372,14 @@ class TestAdminBulkPipeline:
                  "uuid-invisible-test", "b64-invisible-test")
             
             # Создаём outbox для невидимой ноды (должен быть проигнорирован)
-            await conn.execute("""
+            outbox_id = await conn.fetchval("""
                 INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
                 VALUES ($1, $2, 1, $3)
+                RETURNING id
             """, "uuid-invisible-test", order_invisible, 
                 arq_test_seed['vnode_id_invisible'])
         
-        users_input = [{
-            'user_sub_id': order_invisible,
-            'sub_plan_id': invisible_plan_id,  # Используем новый plan_id
-            'uuid': "uuid-invisible-test"
-        }]
+        outbox_event_ids = [outbox_id]
         
         # Mock для arq.enqueue_job
         enqueued_jobs = []
@@ -391,11 +392,11 @@ class TestAdminBulkPipeline:
         
         arq_ctx['arq_redis'].enqueue_job = mock_enqueue_job
         
-        # Act: Вызываем admin_request_bulk_action_users
+        # Act: Вызываем admin_request_bulk_action_users с event_ids
         await admin_request_bulk_action_users(
             arq_ctx,
-            'add',       # action
-            users_input  # users
+            'add',            # action
+            outbox_event_ids  # outbox_event_ids (list[int])
         )
         
         # Assert: Проверяем что задачи НЕ поставлены (нода отфильтрована в SQL)

@@ -64,6 +64,8 @@ class SubscriptionQueries:
             SELECT us.uuid, us.id, $2, vsp.node_proto_id
             FROM user_subs us
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = us.sub_plan_id
+            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
+            JOIN nodes n ON n.id = np.node_id AND n.is_active = true
             WHERE us.is_active = true AND us.id = $1
             RETURNING id AS event_id, user_sub_id, user_uuid, node_proto_id
         ),
@@ -89,6 +91,7 @@ class SubscriptionQueries:
         JOIN protocols p ON p.id = np.proto_id
         JOIN proto_templates pt ON p.tmp_id = pt.id 
         LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id
-        JOIN insert_outbox io ON io.node_proto_id = np.id 
+        JOIN insert_outbox io ON io.node_proto_id = np.id
+        WHERE np.user_visible = true
         '''
         return await self.conn.fetch(query, user_sub_id, operation)

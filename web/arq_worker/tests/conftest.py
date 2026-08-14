@@ -191,12 +191,22 @@ class FakeAiohttpSession:
         
         # Spy attributes
         self.post_calls = []
+        self.put_calls = []
         self.delete_calls = []
         self.get_calls = []
 
     def post(self, url: str, *args, **kwargs):
         """POST request spy"""
         self.post_calls.append({'url': url, 'args': args, 'kwargs': kwargs})
+        
+        if self.raise_error:
+            raise ClientError("Simulated connection error")
+        
+        return FakeAiohttpContext(self.json_data, self.status)
+
+    def put(self, url: str, *args, **kwargs):
+        """PUT request spy"""
+        self.put_calls.append({'url': url, 'args': args, 'kwargs': kwargs})
         
         if self.raise_error:
             raise ClientError("Simulated connection error")
@@ -286,36 +296,27 @@ async def physical_node_seed(db_pool):
 
 @pytest.fixture
 async def proto_template_seed(db_pool):
-    """Создаёт тестовые шаблоны протоколов"""
+    """
+    Загружает первый активный шаблон протокола из БД
+    
+    Вместо создания нового шаблона, используем существующий из seed_data.
+    """
     async with db_pool.acquire() as conn:
         tmp_id = await conn.fetchval(
             """
-            INSERT INTO proto_templates (
-                title, url_tmp, status, is_accepted, 
-                reload_core_command, sub_prepare_script,
-                proto_python_lib, api_add_user_script, api_delete_user_script,
-                flatten_json_users_key, flatten_user_identifier_key,
-                add_script_custom_params, delete_script_custom_params,
-                required_user_data_obj, constant_user_data_obj
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-            RETURNING id
-            """,
-            "TestProtocol Template",
-            "https://example.com/proto_template",
-            1,
-            True,
-            "systemctl reload test-proto",
-            "#!/bin/bash\necho 'test'",
-            "vless",
-            "python /opt/add_user.py",
-            "python /opt/delete_user.py",
-            "inbounds.0.settings.clients",
-            "email",
-            '{}',
-            '{}',
-            '{"id": "{USER_UUID}", "email": "{USER_TG_USERNAME}"}',  # required_user_data_obj
-            '{"level": 0, "alterId": 0}'  # constant_user_data_obj
+            SELECT id 
+            FROM proto_templates 
+            WHERE is_accepted = true 
+            ORDER BY id 
+            LIMIT 1
+            """
         )
+        
+        if not tmp_id:
+            raise RuntimeError(
+                "Не найдено ни одного активного шаблона в proto_templates! "
+                "Запустите: python -m web.db.seed_data"
+            )
         
         return {"tmp_id": tmp_id}
 
@@ -389,15 +390,23 @@ async def user_seed(db_pool):
 async def virtual_node_seed(db_pool, physical_node_seed, proto_template_seed):
     """Создаёт тестовые виртуальные ноды (nodes_protocols)"""
     async with db_pool.acquire() as conn:
+        # Используем существующий протокол из seed_data
         proto_id = await conn.fetchval(
             """
-            INSERT INTO protocols (tmp_id, name)
-            VALUES ($1, $2)
-            RETURNING id
+            SELECT id 
+            FROM protocols 
+            WHERE tmp_id = $1 
+            ORDER BY id 
+            LIMIT 1
             """,
-            proto_template_seed["tmp_id"],
-            "Test Protocol"
+            proto_template_seed["tmp_id"]
         )
+        
+        if not proto_id:
+            raise RuntimeError(
+                f"Не найдено протокола для tmp_id={proto_template_seed['tmp_id']} в protocols! "
+                f"Запустите: python -m web.db.seed_data"
+            )
         
         vnode_id_1 = await conn.fetchval(
             """
@@ -498,34 +507,35 @@ async def arq_test_seed(db_pool, db_seed):
             RETURNING id
         """, "192.168.1.101", "10.0.0.101", 8101, "arq-test-node-inactive", "ARQ Inactive Node", False)
         
-        # 3. Создаём шаблон протокола
+        # 3. Используем существующий шаблон протокола из seed_data
         tmp_id = await conn.fetchval("""
-            INSERT INTO proto_templates (
-                title, url_tmp, status, is_accepted, 
-                reload_core_command, sub_prepare_script,
-                proto_python_lib, api_add_user_script, api_delete_user_script,
-                api_bulk_add_user_script, api_bulk_delete_user_script,
-                flatten_json_users_key, flatten_user_identifier_key,
-                add_script_custom_params, delete_script_custom_params,
-                bulk_add_script_custom_params, bulk_delete_script_custom_params,
-                required_user_data_obj, constant_user_data_obj
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-            RETURNING id
-        """, "ARQ Test Template", "https://test.com", 1, True,
-            "systemctl reload test", "#!/bin/bash", "vless",
-            "python add.py", "python del.py",
-            "python bulk_add.py", "python bulk_del.py",
-            "clients", "email", '{}', '{}', '{}', '{}',
-            '{"id": "{USER_UUID}", "email": "{USER_TG_USERNAME}"}',
-            '{"level": 0}'
-        )
+            SELECT id 
+            FROM proto_templates 
+            WHERE is_accepted = true 
+            ORDER BY id 
+            LIMIT 1
+        """)
         
-        # 4. Создаём протокол
+        if not tmp_id:
+            raise RuntimeError(
+                "Не найдено активных шаблонов в proto_templates! "
+                "Запустите: python -m web.db.seed_data"
+            )
+        
+        # 4. Используем существующий протокол из seed_data (связанный с tmp_id)
         proto_id = await conn.fetchval("""
-            INSERT INTO protocols (tmp_id, name)
-            VALUES ($1, $2)
-            RETURNING id
-        """, tmp_id, "ARQ Test Protocol")
+            SELECT id 
+            FROM protocols 
+            WHERE tmp_id = $1 
+            ORDER BY id 
+            LIMIT 1
+        """, tmp_id)
+        
+        if not proto_id:
+            raise RuntimeError(
+                f"Не найдено протокола для tmp_id={tmp_id} в protocols! "
+                f"Запустите: python -m web.db.seed_data"
+            )
         
         # 5. Создаём виртуальные ноды
         # 5.1. Активная виртуальная нода на активной физической ноде (user_visible=true)
@@ -824,6 +834,7 @@ async def arq_test_seed(db_pool, db_seed):
             # User 1: Soft-deleted
             "user1_deleted": {
                 "user_id": user1_id,
+                "user_sub_id": user1_order1,  # ID первой подписки
                 "uuid": "uuid-deleted-user-sub1",  # Берём uuid из первой подписки
                 "tg_username": "deleted_user",
                 "orders": [user1_order1, user1_order2]
@@ -832,6 +843,7 @@ async def arq_test_seed(db_pool, db_seed):
             # User 2: Живой без активных подписок
             "user2_inactive_subs": {
                 "user_id": user2_id,
+                "user_sub_id": user2_orders[0],  # ID первой подписки
                 "uuid": "uuid-inactive-user-sub1",  # Берём uuid из первой подписки
                 "tg_username": "inactive_subs_user",
                 "orders": user2_orders
@@ -840,6 +852,7 @@ async def arq_test_seed(db_pool, db_seed):
             # User 3: Живой с активной подпиской для ADD
             "user3_active_for_add": {
                 "user_id": user3_id,
+                "user_sub_id": user3_order_active,  # ID активной подписки
                 "uuid": "uuid-active-add-user",
                 "tg_username": "active_add_user",
                 "order_inactive_1": user3_order1,
@@ -850,6 +863,7 @@ async def arq_test_seed(db_pool, db_seed):
             # User 4: Живой с активной подпиской для DELETE
             "user4_active_for_delete": {
                 "user_id": user4_id,
+                "user_sub_id": user4_order_active,  # ID активной подписки
                 "uuid": "uuid-active-delete-user",
                 "tg_username": "active_delete_user",
                 "order_active": user4_order_active
@@ -2658,34 +2672,35 @@ async def pointed_bulk_seed(db_pool, db_seed):
             RETURNING id
         """, "192.168.1.101", "10.0.0.101", 8101, "pointed-node-inactive", "Pointed Inactive Node", False)
         
-        # 3. Создаём шаблон протокола
+        # 3. Используем существующий шаблон протокола из seed_data
         tmp_id = await conn.fetchval("""
-            INSERT INTO proto_templates (
-                title, url_tmp, status, is_accepted,
-                reload_core_command, sub_prepare_script,
-                proto_python_lib, api_add_user_script, api_delete_user_script,
-                api_bulk_add_user_script, api_bulk_delete_user_script,
-                flatten_json_users_key, flatten_user_identifier_key,
-                add_script_custom_params, delete_script_custom_params,
-                bulk_add_script_custom_params, bulk_delete_script_custom_params,
-                required_user_data_obj, constant_user_data_obj
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-            RETURNING id
-        """, "Pointed Test Template", "https://pointed.test.com", 1, True,
-            "systemctl reload pointed", "#!/bin/bash", "vless",
-            "python add.py", "python del.py",
-            "python bulk_add.py", "python bulk_del.py",
-            "clients", "email", '{}', '{}', '{}', '{}',
-            '{"id": "{USER_UUID}", "email": "{USER_TG_USERNAME}"}',
-            '{"level": 0}'
-        )
+            SELECT id 
+            FROM proto_templates 
+            WHERE is_accepted = true 
+            ORDER BY id 
+            LIMIT 1
+        """)
         
-        # 4. Создаём протокол
+        if not tmp_id:
+            raise RuntimeError(
+                "Не найдено активных шаблонов в proto_templates! "
+                "Запустите: python -m web.db.seed_data"
+            )
+        
+        # 4. Используем существующий протокол из seed_data (связанный с tmp_id)
         proto_id = await conn.fetchval("""
-            INSERT INTO protocols (tmp_id, name)
-            VALUES ($1, $2)
-            RETURNING id
-        """, tmp_id, "Pointed Test Protocol")
+            SELECT id 
+            FROM protocols 
+            WHERE tmp_id = $1 
+            ORDER BY id 
+            LIMIT 1
+        """, tmp_id)
+        
+        if not proto_id:
+            raise RuntimeError(
+                f"Не найдено протокола для tmp_id={tmp_id} в protocols! "
+                f"Запустите: python -m web.db.seed_data"
+            )
         
         # 5. Создаём виртуальные ноды
         # 5.1. Активная виртуальная нода 10

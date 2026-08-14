@@ -274,7 +274,8 @@ class TestParseNodeOutputRealParser:
         Реальный парсер обрабатывает JSON dict от xtlsapi.
         """
         # Arrange
-        parser = real_parser_scripts['vless_tcp_sni_based']
+        # Используем любой доступный парсер из БД
+        parser = list(real_parser_scripts.values())[0]
         stdout = sample_xray_outputs['json_dict_clean']
         
         # Act
@@ -306,7 +307,8 @@ class TestParseNodeOutputRealParser:
         но есть uplink с большим значением.
         """
         # Arrange
-        parser = real_parser_scripts['vless_tcp_sni_based']
+        # Используем любой доступный парсер из БД
+        parser = list(real_parser_scripts.values())[0]
         stdout = sample_xray_outputs['json_string_from_cli']
         
         # Act
@@ -338,7 +340,8 @@ class TestParseNodeOutputRealParser:
         Записи без value обрабатываются как 0 bytes.
         """
         # Arrange
-        parser = real_parser_scripts['vless_tcp_sni_based']
+        # Используем любой доступный парсер из БД
+        parser = list(real_parser_scripts.values())[0]
         stdout = sample_xray_outputs['with_troubles']
         
         # Act
@@ -370,7 +373,8 @@ class TestParseNodeOutputRealParser:
         Реальный парсер обрабатывает пустой список статистики.
         """
         # Arrange
-        parser = real_parser_scripts['vless_tcp_sni_based']
+        # Используем любой доступный парсер из БД
+        parser = list(real_parser_scripts.values())[0]
         stdout = sample_xray_outputs['empty_stats']
         
         # Act

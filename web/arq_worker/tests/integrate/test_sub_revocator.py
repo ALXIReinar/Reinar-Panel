@@ -5,7 +5,7 @@ revoke_sub_plan_by_expire:
 1. Находит истёкшие подписки через get_and_lock_expired_subs_grouped_by_node()
 2. АТОМАРНО выключает их (is_active=false, status=expired)
 3. Группирует пользователей по нодам
-4. Ставит задачи bulk_delete_users_from_single_node в ARQ
+4. Ставит задачи bulk_action_users_by_node (operation=DELETE) в ARQ
 
 Критические SQL фильтры:
 - is_active = true (только активные подписки)
@@ -216,11 +216,12 @@ class TestRevokeSubPlanByExpire:
     
     async def test_revoke_enqueues_bulk_delete_jobs(self, arq_ctx, arq_pool, revoke_seed, db_pool):
         """
-        Проверяем что задачи bulk_delete_users_from_single_node поставлены в ARQ.
+        Проверяем что задачи bulk_action_users_by_node (operation=DELETE) поставлены в ARQ.
         
         Проверяем:
         - Задачи существуют в Redis
         - Количество задач соответствует количеству нод
+        - operation=2 (DELETE)
         """
         # Arrange
         arq_ctx['arq_redis'] = arq_pool

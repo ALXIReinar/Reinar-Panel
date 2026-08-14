@@ -14,7 +14,7 @@ class TestBulkOperationsArqEnqueue:
     
     async def test_bulk_add_enqueued_to_real_arq(self, arq_pool, arq_test_seed):
         """
-        Проверяем что bulk_add_users_into_single_node действительно попадает в Redis.
+        Проверяем что bulk_action_users_by_node (operation=ADD) действительно попадает в Redis.
         
         Используем реальный arq_pool для проверки.
         """
@@ -22,26 +22,25 @@ class TestBulkOperationsArqEnqueue:
         user3 = arq_test_seed['user3_active_for_add']
         users = [{
             'uuid': user3['uuid'],
-            'tg_username': user3['tg_username'],
-            'order_id': user3['order_active'],
-            'sub_node_id': arq_test_seed['vnode_id_10']
+            'user_sub_id': user3['order_active'],
+            'event_id': 1
         }]
         
         # Act
         job = await arq_pool.enqueue_job(
-            'bulk_add_users_into_single_node',
+            'bulk_action_users_by_node',
             arq_test_seed['vnode_id_10'],  # node_proto_id
             "10.0.0.100",  # private_ip
             8100,  # api_port
             9090,  # metrics_port
             "vless",  # proto_python_lib
-            "python add.py",  # api_add_user_script
-            {},  # bulk_add_script_custom_params
+            "python add.py",  # api_bulk_action_script
+            {},  # bulk_action_script_custom_params
+            1,  # operation (1=ADD)
             users,  # users
             "systemctl reload test",  # reload_core_command
             "/etc/config.json",  # config_file_path
-            "clients",  # flatten_json_users_key
-            "email",  # flatten_user_identifier_key
+            [],  # user_injectors
             {"id": "{USER_UUID}"},  # required_user_data_obj
             {"level": 0},  # constant_user_data_obj
             1,  # current_attempt
@@ -55,13 +54,13 @@ class TestBulkOperationsArqEnqueue:
         # Проверяем что задача действительно в Redis (через Job.info())
         job_info = await job.info()
         assert job_info is not None
-        assert job_info.function == 'bulk_add_users_into_single_node'
+        assert job_info.function == 'bulk_action_users_by_node'
         assert job_info.enqueue_time is not None
     
     
     async def test_bulk_delete_enqueued_to_real_arq(self, arq_pool, arq_test_seed):
         """
-        Проверяем что bulk_delete_users_from_single_node действительно попадает в Redis.
+        Проверяем что bulk_action_users_by_node (operation=DELETE) действительно попадает в Redis.
         
         Используем реальный arq_pool для проверки.
         """
@@ -69,26 +68,27 @@ class TestBulkOperationsArqEnqueue:
         user4 = arq_test_seed['user4_active_for_delete']
         users = [{
             'uuid': user4['uuid'],
-            'tg_username': user4['tg_username'],
-            'order_id': user4['order_active'],
-            'sub_node_id': arq_test_seed['vnode_id_10']
+            'user_sub_id': user4['order_active'],
+            'event_id': 2
         }]
         
         # Act
         job = await arq_pool.enqueue_job(
-            'bulk_delete_users_from_single_node',
+            'bulk_action_users_by_node',
             arq_test_seed['vnode_id_10'],  # node_proto_id
             "10.0.0.100",  # private_ip
             8100,  # api_port
             9090,  # metrics_port
             "vless",  # proto_python_lib
-            "python bulk_del.py",  # api_bulk_delete_user_script
-            {},  # bulk_delete_script_custom_params
+            "python bulk_del.py",  # api_bulk_action_script
+            {},  # bulk_action_script_custom_params
+            2,  # operation (2=DELETE)
             users,  # users
             "systemctl reload test",  # reload_core_command
             "/etc/config.json",  # config_file_path
-            "clients",  # flatten_json_users_key
-            "email",  # flatten_user_identifier_key
+            [],  # user_injectors
+            {"id": "{USER_UUID}"},  # required_user_data_obj
+            {"level": 0},  # constant_user_data_obj
             1,  # current_attempt
         )
         
@@ -100,7 +100,7 @@ class TestBulkOperationsArqEnqueue:
         # Проверяем что задача действительно в Redis (через Job.info())
         job_info = await job.info()
         assert job_info is not None
-        assert job_info.function == 'bulk_delete_users_from_single_node'
+        assert job_info.function == 'bulk_action_users_by_node'
         assert job_info.enqueue_time is not None
     
     
@@ -114,14 +114,13 @@ class TestBulkOperationsArqEnqueue:
         user3 = arq_test_seed['user3_active_for_add']
         users = [{
             'uuid': user3['uuid'],
-            'tg_username': user3['tg_username'],
-            'order_id': user3['order_active'],
-            'sub_node_id': arq_test_seed['vnode_id_10']
+            'user_sub_id': user3['order_active'],
+            'event_id': 3
         }]
         
         # Act - откладываем на 120 секунд
         job = await arq_pool.enqueue_job(
-            'bulk_add_users_into_single_node',
+            'bulk_action_users_by_node',
             arq_test_seed['vnode_id_10'],
             "10.0.0.100",
             8100,
@@ -129,11 +128,11 @@ class TestBulkOperationsArqEnqueue:
             "vless",
             "python add.py",
             {},
+            1,  # operation (1=ADD)
             users,
             "systemctl reload test",
             "/etc/config.json",
-            "clients",
-            "email",
+            [],  # user_injectors
             {"id": "{USER_UUID}"},
             {"level": 0},
             2,  # current_attempt = 2 (второй retry)
@@ -146,7 +145,7 @@ class TestBulkOperationsArqEnqueue:
         # Проверяем что задача в очереди (через Job.info())
         job_info = await job.info()
         assert job_info is not None
-        assert job_info.function == 'bulk_add_users_into_single_node'
+        assert job_info.function == 'bulk_action_users_by_node'
         
         # Проверяем что задача успешно поставлена в очередь с _defer_by
         # (детальная проверка defer_until требует доступа к Redis напрямую)

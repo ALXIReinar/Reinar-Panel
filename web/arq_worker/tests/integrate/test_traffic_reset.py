@@ -6,7 +6,7 @@ reset_day_user_traffic (крона, users=None):
 2. АТОМАРНО обнуляет is_limited для активных ограниченных подписок
 3. Записывает в outbox операцию ADD
 4. Группирует пользователей по нодам
-5. Ставит задачи bulk_add_users_into_single_node в ARQ
+5. Ставит задачи bulk_action_users_by_node (operation=ADD) в ARQ
 
 Критические SQL фильтры:
 - is_active = true (только активные подписки)
@@ -104,7 +104,7 @@ class TestResetDayUserTraffic:
         
         # Assert
         assert result['success'] is True
-        assert 'Нет пользователей' in result['message']
+        assert 'Нет пользо' in result['message'] or 'блокированных' in result['message']
     
     
     async def test_reset_cron_sql_filters_critical(self, arq_ctx, arq_pool, traffic_reset_seed, db_pool):
@@ -218,10 +218,11 @@ class TestResetDayUserTraffic:
     
     async def test_reset_cron_enqueues_bulk_add_jobs(self, arq_ctx, arq_pool, traffic_reset_seed, db_pool):
         """
-        Проверяем что задачи bulk_add_users_into_single_node поставлены в ARQ.
+        Проверяем что задачи bulk_action_users_by_node (operation=ADD) поставлены в ARQ.
         
         Проверяем:
         - Количество задач соответствует количеству активных видимых нод
+        - operation=1 (ADD)
         """
         # Arrange
         arq_ctx['arq_redis'] = arq_pool

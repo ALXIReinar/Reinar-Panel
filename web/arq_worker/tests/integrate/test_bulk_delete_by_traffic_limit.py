@@ -4,8 +4,10 @@ Integration тесты для bulk_delete_by_traffic_limit (уровень 3 tas
 Тестируем:
 - Получение виртуальных нод по outbox_event_ids
 - Группировку пользователей по нодам
-- Постановку задач bulk_delete_users_from_single_node в ARQ
+- Постановку задач bulk_action_users_by_node с operation=DELETE в ARQ
 - Фильтрацию неактивных/невидимых нод
+
+Функция bulk_delete_by_traffic_limit вызывает bulk_action_users_by_node с operation=2 (DELETE).
 """
 import pytest
 from unittest.mock import MagicMock
@@ -39,7 +41,7 @@ class TestBulkDeleteByTrafficLimit:
                     INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
                     VALUES ($1, $2, 2, $3)
                     RETURNING id
-                """, user3['uuid'], user3['order_active'], vnode_id)
+                """, user3['uuid'], user3['user_sub_id'], vnode_id)
                 outbox_ids.append(outbox_id)
         
         # Mock для arq.enqueue_job
@@ -53,7 +55,9 @@ class TestBulkDeleteByTrafficLimit:
                 'kwargs': kwargs,
                 'job': job_mock,
                 'function_name': args[0],
-                'node_proto_id': args[1] if len(args) > 1 else None
+                'node_proto_id': args[1] if len(args) > 1 else None,
+                'operation': args[8] if len(args) > 8 else None,  # operation параметр
+                'users': args[9] if len(args) > 9 else None  # users параметр
             })
             return job_mock
         
@@ -72,16 +76,18 @@ class TestBulkDeleteByTrafficLimit:
         # Проверяем что задачи поставлены в ARQ
         assert len(enqueued_jobs) == 2, "Должно быть 2 задачи (по одной на каждую ноду)"
         
-        # Проверяем что все задачи для bulk_delete_users_from_single_node
+        # Проверяем что все задачи для bulk_action_users_by_node с operation=2
         for job_data in enqueued_jobs:
-            assert job_data['function_name'] == 'bulk_delete_users_from_single_node'
+            assert job_data['function_name'] == 'bulk_action_users_by_node', "Должна быть вызвана bulk_action_users_by_node"
             assert job_data['node_proto_id'] in [arq_test_seed['vnode_id_10'], arq_test_seed['vnode_id_11']]
+            assert job_data['operation'] == 2, "operation должна быть 2 (DELETE)"
             
             # Проверяем параметры задачи
-            users_list = job_data['args'][8]  # users параметр
+            users_list = job_data['users']
             assert len(users_list) == 1, "Должен быть 1 пользователь на ноде"
             assert users_list[0]['uuid'] == user3['uuid']
-            assert users_list[0]['user_sub_id'] == user3['order_active']
+            assert users_list[0]['user_sub_id'] == user3['user_sub_id']
+            assert 'event_id' in users_list[0], "Должен быть event_id"
     
     
     async def test_bulk_delete_by_traffic_limit_multiple_nodes(self, mock_arq_ctx, arq_test_seed, db_pool):
@@ -105,7 +111,7 @@ class TestBulkDeleteByTrafficLimit:
                     INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
                     VALUES ($1, $2, 2, $3)
                     RETURNING id
-                """, user3['uuid'], user3['order_active'], vnode_id)
+                """, user3['uuid'], user3['user_sub_id'], vnode_id)
                 outbox_ids.append(outbox_id)
             
             # User4 только на vnode_10
@@ -113,7 +119,7 @@ class TestBulkDeleteByTrafficLimit:
                 INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
                 VALUES ($1, $2, 2, $3)
                 RETURNING id
-            """, user4['uuid'], user4['order_active'], arq_test_seed['vnode_id_10'])
+            """, user4['uuid'], user4['user_sub_id'], arq_test_seed['vnode_id_10'])
             outbox_ids.append(outbox_id)
         
         # Mock для arq.enqueue_job
@@ -125,7 +131,7 @@ class TestBulkDeleteByTrafficLimit:
             enqueued_jobs.append({
                 'args': args,
                 'node_proto_id': args[1],
-                'users': args[8]
+                'users': args[9]  # users на позиции 9
             })
             return job_mock
         

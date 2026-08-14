@@ -9,7 +9,7 @@ import pytest
 # ВАЖНО: Отключаем db_seed для unit-тестов (они не требуют БД)
 pytestmark = pytest.mark.usefixtures()
 
-from web.arq_worker.funcs.action_on_user_core_proto import resolve_user_template
+from web.arq_worker.funcs.metrics_collector import resolve_user_template
 
 
 class TestResolveUserTemplate:

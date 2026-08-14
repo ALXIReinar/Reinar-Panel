@@ -167,23 +167,25 @@ async def insert_proto_templates(
         
         if existing_id:
             template_id = existing_id
-            print(f"  Шаблон '{template_data['title']}' уже существует (id={template_id})")
-        else:
-            # Вставляем шаблон и получаем его ID
-            columns = list(template_data.keys())
-            placeholders = [f"${i+1}" for i in range(len(columns))]
-            values = [template_data[col] for col in columns]
+            print(f"  Шаблон '{template_data['title']}' уже существует, будет обновлён (id={template_id})")
+
+        # Вставляем шаблон и получаем его ID
+        columns = list(template_data.keys())
+        placeholders = [f"${i+1}" for i in range(len(columns))]
+        values = [template_data[col] for col in columns]
+
+        query = f"""
+            INSERT INTO proto_templates ({', '.join(columns)})
+            VALUES ({', '.join(placeholders)})
+            ON CONFLICT (title) DO UPDATE
+            SET {', '.join([f"{c} = excluded.{c}" for c in columns])}
+            RETURNING id
+        """
             
-            query = f"""
-                INSERT INTO proto_templates ({', '.join(columns)})
-                VALUES ({', '.join(placeholders)})
-                RETURNING id
-            """
-            
-            template_id = await conn.fetchval(query, *values)
-            inserted_templates += 1
-            print(f"  Шаблон '{template_data['title']}' вставлен (id={template_id})")
-        
+        template_id = await conn.fetchval(query, *values)
+        inserted_templates += 1
+        print(f"  Шаблон '{template_data['title']}' вставлен (id={template_id})")
+
         # Вставляем template_spec_params
         for param in spec_params:
             # Заменяем tmp_id на реальный template_id
