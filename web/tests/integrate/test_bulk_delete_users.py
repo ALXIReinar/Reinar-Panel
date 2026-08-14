@@ -285,7 +285,7 @@ class TestBulkDeleteOutboxAndArq:
     
     @pytest.mark.asyncio
     async def test_bulk_delete_calls_arq_with_delete_action(self, client, users_with_subs_for_delete, mock_arq):
-        """Удаление вызывает ARQ с action='delete'"""
+        """Удаление вызывает ARQ с action='delete' и передаёт event_ids"""
         user_ids = users_with_subs_for_delete["active_unlim_user_ids"]
         
         response = await client.request(
@@ -304,15 +304,11 @@ class TestBulkDeleteOutboxAndArq:
         assert call_args[0][0] == "admin_request_bulk_action_users"
         assert call_args[0][1] == "delete"
         
-        # Второй аргумент - массив пользователей
-        users_for_arq = call_args[0][2]
-        assert len(users_for_arq) == 2
-        
-        # Проверяем структуру
-        for user in users_for_arq:
-            assert "user_sub_id" in user
-            assert "sub_plan_id" in user
-            assert "uuid" in user
+        # Второй аргумент - массив event_ids (list[int])
+        event_ids = call_args[0][2]
+        assert isinstance(event_ids, list)
+        assert len(event_ids) == 2
+        assert all(isinstance(eid, int) for eid in event_ids)
     
     @pytest.mark.asyncio
     async def test_bulk_delete_empty_list_no_arq_call(self, client, mock_arq):

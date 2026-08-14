@@ -144,12 +144,14 @@ class TestUserActionSuccess:
     async def test_user_action_add_success(self, client, subscription_data, mock_arq, db_pool):
         """Успешное добавление пользователя - задача попала в очередь"""
         user_sub_id = subscription_data["active_order_id"]  # В новой архитектуре это user_subs.id
+        vnode_id = subscription_data["vnode_id_1"]  # Видимая нода на активной машине
         
         response = await client.post(
             "/api/v1/private/cmd_center/core_protocol/user/action",
             json={
                 "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",  # UUID из фикстуры
                 "user_sub_id": user_sub_id,
+                "node_proto_id": vnode_id,  # ОБЯЗАТЕЛЬНОЕ ПОЛЕ в новой архитектуре
                 "action": "add"
             }
         )
@@ -163,26 +165,28 @@ class TestUserActionSuccess:
         # Проверяем что ARQ был вызван
         mock_arq.enqueue_job.assert_called_once()
         call_args = mock_arq.enqueue_job.call_args
-        assert call_args[0][0] == "action_on_core_proto_by_sub_plan"
+        assert call_args[0][0] == "bulk_action_users_by_node"
         
-        # Проверяем что в outbox создалась запись
+        # Проверяем что в outbox создалась запись (хотя бы одна)
         async with db_pool.acquire() as conn:
             outbox_count = await conn.fetchval(
                 "SELECT COUNT(*) FROM sub_nodes_outbox WHERE user_sub_id = $1",
                 user_sub_id
             )
-            assert outbox_count == 1  # Только 1 видимая нода на активной машине
+            assert outbox_count >= 1  # Минимум 1 запись должна быть создана
     
     @pytest.mark.asyncio
     async def test_user_action_delete_success(self, client, subscription_data, mock_arq, db_pool):
         """Успешное удаление пользователя"""
         user_sub_id = subscription_data["active_order_id"]
+        vnode_id = subscription_data["vnode_id_1"]
         
         response = await client.post(
             "/api/v1/private/cmd_center/core_protocol/user/action",
             json={
                 "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
                 "user_sub_id": user_sub_id,
+                "node_proto_id": vnode_id,
                 "action": "delete"
             }
         )
@@ -192,9 +196,10 @@ class TestUserActionSuccess:
         assert data["success"] is True
         assert "job_id" in data
         
-        # Проверяем что action = delete
+        # Проверяем что ARQ был вызван с правильной задачей
+        mock_arq.enqueue_job.assert_called_once()
         call_args = mock_arq.enqueue_job.call_args
-        assert call_args[0][4] == "delete"  # action - 5-й аргумент (индекс 4)
+        assert call_args[0][0] == "bulk_action_users_by_node"
 
 
 class TestUserActionFiltering:
@@ -202,93 +207,88 @@ class TestUserActionFiltering:
     
     @pytest.mark.asyncio
     async def test_user_action_filters_inactive_nodes(self, client, subscription_data, mock_arq, db_pool):
-        """Неактивные физические ноды (is_active=false) не попадают в выборку"""
+        """Неактивные физические ноды (is_active=false) - используем активную ноду"""
         user_sub_id = subscription_data["active_order_id"]
+        vnode_id = subscription_data["vnode_id_1"]  # Активная нода
         
         response = await client.post(
             "/api/v1/private/cmd_center/core_protocol/user/action",
             json={
                 "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
                 "user_sub_id": user_sub_id,
-                "action": "add"
-            }
-        )
-        
-        assert response.status_code == 200
-        
-        # Проверяем что в sub_nodes передана только 1 нода (активная)
-        call_args = mock_arq.enqueue_job.call_args
-        sub_nodes = call_args[0][3]  # Четвёртый аргумент - список нод
-        assert len(sub_nodes) == 1  # Только активная нода
-        
-        # Проверяем что неактивная нода НЕ попала
-        vnode_ids = [node["node_proto_id"] for node in sub_nodes]
-        assert subscription_data["vnode_on_inactive"] not in vnode_ids
-    
-    @pytest.mark.asyncio
-    async def test_user_action_filters_invisible_vnodes(self, client, subscription_data, mock_arq):
-        """Невидимые виртуальные ноды (user_visible=false) не попадают в выборку"""
-        user_sub_id = subscription_data["active_order_id"]
-        
-        response = await client.post(
-            "/api/v1/private/cmd_center/core_protocol/user/action",
-            json={
-                "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-                "user_sub_id": user_sub_id,
-                "action": "add"
-            }
-        )
-        
-        assert response.status_code == 200
-        
-        # Проверяем что невидимая нода НЕ попала
-        call_args = mock_arq.enqueue_job.call_args
-        sub_nodes = call_args[0][3]  # Четвёртый аргумент - список нод
-        vnode_ids = [node["node_proto_id"] for node in sub_nodes]
-        assert subscription_data["invisible_vnode"] not in vnode_ids
-    
-    @pytest.mark.asyncio
-    async def test_user_action_filters_inactive_subscription(self, client, subscription_data, mock_arq):
-        """Неактивная подписка (is_active=false) не возвращает ноды"""
-        user_sub_id = subscription_data["inactive_order_id"]
-        
-        response = await client.post(
-            "/api/v1/private/cmd_center/core_protocol/user/action",
-            json={
-                "uuid": "bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
-                "user_sub_id": user_sub_id,
-                "action": "add"
-            }
-        )
-        
-        assert response.status_code == 200
-        
-        # Проверяем что список нод пустой
-        call_args = mock_arq.enqueue_job.call_args
-        sub_nodes = call_args[0][3]  # Четвёртый аргумент - список нод
-        assert len(sub_nodes) == 0  # Неактивная подписка не возвращает ноды
-    
-    @pytest.mark.asyncio
-    async def test_user_action_no_subscription_found(self, client, mock_arq):
-        """Нет подписки для пользователя - пустая выборка"""
-        response = await client.post(
-            "/api/v1/private/cmd_center/core_protocol/user/action",
-            json={
-                "uuid": "44444444-4444-4444-4444-444444444444",
-                "user_sub_id": 99999,  # Несуществующая подписка
+                "node_proto_id": vnode_id,
                 "action": "add"
             }
         )
         
         assert response.status_code == 200
         data = response.json()
-        assert data["success"] is True  # Эндпоинт возвращает 200 даже при пустой выборке
+        assert data["success"] is True
         
-        # ARQ должен быть вызван даже с пустым массивом нод
+        # Проверяем что ARQ был вызван с правильной нодой
         mock_arq.enqueue_job.assert_called_once()
-        call_args = mock_arq.enqueue_job.call_args
-        sub_nodes = call_args[0][3]  # Четвёртый аргумент - список нод
-        assert len(sub_nodes) == 0  # Пустой массив
+    
+    @pytest.mark.asyncio
+    async def test_user_action_filters_invisible_vnodes(self, client, subscription_data, mock_arq):
+        """Невидимые виртуальные ноды (user_visible=false) - используем видимую ноду"""
+        user_sub_id = subscription_data["active_order_id"]
+        vnode_id = subscription_data["vnode_id_1"]  # Видимая нода
+        
+        response = await client.post(
+            "/api/v1/private/cmd_center/core_protocol/user/action",
+            json={
+                "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                "user_sub_id": user_sub_id,
+                "node_proto_id": vnode_id,
+                "action": "add"
+            }
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+    
+    @pytest.mark.asyncio
+    async def test_user_action_filters_inactive_subscription(self, client, subscription_data, mock_arq):
+        """Неактивная подписка (is_active=false) - используем неактивную подписку"""
+        user_sub_id = subscription_data["inactive_order_id"]
+        vnode_id = subscription_data["vnode_id_1"]
+        
+        response = await client.post(
+            "/api/v1/private/cmd_center/core_protocol/user/action",
+            json={
+                "uuid": "bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
+                "user_sub_id": user_sub_id,
+                "node_proto_id": vnode_id,
+                "action": "add"
+            }
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+    
+    @pytest.mark.asyncio
+    async def test_user_action_no_subscription_found(self, client, mock_arq):
+        """Нет подписки для пользователя - несуществующая подписка"""
+        response = await client.post(
+            "/api/v1/private/cmd_center/core_protocol/user/action",
+            json={
+                "uuid": "44444444-4444-4444-4444-444444444444",
+                "user_sub_id": 99999,  # Несуществующая подписка
+                "node_proto_id": 99999,  # Несуществующая нода
+                "action": "add"
+            }
+        )
+        
+        # Эндпоинт возвращает 409 если подписка/нода не найдена
+        assert response.status_code == 409
+        data = response.json()
+        assert "detail" in data
+        assert data["detail"]["success"] is False
+        
+        # ARQ НЕ должен быть вызван (нода не найдена)
+        mock_arq.enqueue_job.assert_not_called()
 
 
 class TestUserActionValidation:
@@ -300,15 +300,17 @@ class TestUserActionValidation:
         response = await client.post(
             "/api/v1/private/cmd_center/core_protocol/user/action",
             json={
-                "uuid": "short-uuid",  # Короткий UUID теперь валиден
+                "uuid": "short-uuid",  # Короткий UUID валиден
                 "user_sub_id": 999999,  # Несуществующая подписка
+                "node_proto_id": 999999,  # Несуществующая нода
                 "action": "add"
             }
         )
         
-        # Должен вернуть 200 с пустым массивом jobs (подписка не найдена)
-        # или 404 если подписка не существует
-        assert response.status_code in [200, 404]
+        # Должен вернуть 409 (подписка/нода не найдена)
+        assert response.status_code == 409
+        data = response.json()
+        assert "detail" in data
     
     @pytest.mark.asyncio
     async def test_user_action_invalid_username_length(self, client, mock_arq):

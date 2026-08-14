@@ -1,5 +1,5 @@
 """
-Unit-тесты для web.api.users.handlers.put_to_arq_bg
+Unit-тесты для web.api.users.handlers.put_to_arq_bg_bulk
 Проверяют правильность маппинга действий и вызовов ARQ
 """
 import pytest
@@ -13,18 +13,15 @@ class TestPutToArqBgActionMapping:
     
     @pytest.mark.asyncio
     async def test_activate_maps_to_add(self):
-        """'activate' превращается в action='add' для ARQ"""
+        """'activate' превращается в action='add' для ARQ и передаёт event_ids"""
         mock_arq = AsyncMock()
         mock_job = MagicMock()
         mock_job.job_id = "job-activate-123"
         mock_arq.enqueue_job.return_value = mock_job
         
-        users = [
-            {"order_id": 1, "sub_plan_id": 1, "user_id": 1},
-            {"order_id": 2, "sub_plan_id": 1, "user_id": 2}
-        ]
+        event_ids = [101, 102]
         
-        job_id = await put_to_arq_bg_bulk(mock_arq, users, "activate")
+        job_id = await put_to_arq_bg_bulk(mock_arq, event_ids, "activate")
         
         # Проверяем что вызвался правильный метод
         mock_arq.enqueue_job.assert_called_once()
@@ -34,66 +31,66 @@ class TestPutToArqBgActionMapping:
         assert call_args[0][0] == "admin_request_bulk_action_users"
         # Второй аргумент - action='add'
         assert call_args[0][1] == "add"
-        # Третий аргумент - массив пользователей
-        assert call_args[0][2] == users
+        # Третий аргумент - массив event_ids
+        assert call_args[0][2] == event_ids
         
         # Проверяем что вернулся job_id
         assert job_id == "job-activate-123"
     
     @pytest.mark.asyncio
     async def test_deactivate_maps_to_delete(self):
-        """'deactivate' превращается в action='delete' для ARQ"""
+        """'deactivate' превращается в action='delete' для ARQ и передаёт event_ids"""
         mock_arq = AsyncMock()
         mock_job = MagicMock()
         mock_job.job_id = "job-deactivate-456"
         mock_arq.enqueue_job.return_value = mock_job
         
-        users = [
-            {"order_id": 3, "sub_plan_id": 2, "user_id": 3},
-        ]
+        event_ids = [201]
         
-        job_id = await put_to_arq_bg_bulk(mock_arq, users, "deactivate")
+        job_id = await put_to_arq_bg_bulk(mock_arq, event_ids, "deactivate")
         
         mock_arq.enqueue_job.assert_called_once()
         call_args = mock_arq.enqueue_job.call_args
         
         assert call_args[0][0] == "admin_request_bulk_action_users"
         assert call_args[0][1] == "delete"  # deactivate → delete
-        assert call_args[0][2] == users
+        assert call_args[0][2] == event_ids
         assert job_id == "job-deactivate-456"
     
     @pytest.mark.asyncio
     async def test_add_stays_add(self):
-        """'add' остаётся action='add' для ARQ"""
+        """'add' остаётся action='add' для ARQ и передаёт event_ids"""
         mock_arq = AsyncMock()
         mock_job = MagicMock()
         mock_job.job_id = "job-add-789"
         mock_arq.enqueue_job.return_value = mock_job
         
-        users = [{"order_id": 4, "sub_plan_id": 1, "user_id": 4}]
+        event_ids = [301, 302, 303]
         
-        job_id = await put_to_arq_bg_bulk(mock_arq, users, "add")
+        job_id = await put_to_arq_bg_bulk(mock_arq, event_ids, "add")
         
         call_args = mock_arq.enqueue_job.call_args
         assert call_args[0][0] == "admin_request_bulk_action_users"
         assert call_args[0][1] == "add"
+        assert call_args[0][2] == event_ids
         assert job_id == "job-add-789"
     
     @pytest.mark.asyncio
     async def test_delete_stays_delete(self):
-        """'delete' остаётся action='delete' для ARQ"""
+        """'delete' остаётся action='delete' для ARQ и передаёт event_ids"""
         mock_arq = AsyncMock()
         mock_job = MagicMock()
         mock_job.job_id = "job-delete-101"
         mock_arq.enqueue_job.return_value = mock_job
         
-        users = [{"order_id": 5, "sub_plan_id": 2, "user_id": 5}]
+        event_ids = [401]
         
-        job_id = await put_to_arq_bg_bulk(mock_arq, users, "delete")
+        job_id = await put_to_arq_bg_bulk(mock_arq, event_ids, "delete")
         
         call_args = mock_arq.enqueue_job.call_args
         assert call_args[0][0] == "admin_request_bulk_action_users"
         assert call_args[0][1] == "delete"
+        assert call_args[0][2] == event_ids
         assert job_id == "job-delete-101"
 
 
@@ -102,39 +99,36 @@ class TestPutToArqBgResetTraffic:
     
     @pytest.mark.asyncio
     async def test_reset_traffic_uses_correct_task(self):
-        """'reset_traffic' вызывает reset_day_user_traffic"""
+        """'reset_traffic' вызывает reset_day_user_traffic с event_ids"""
         mock_arq = AsyncMock()
         mock_job = MagicMock()
         mock_job.job_id = "job-reset-202"
         mock_arq.enqueue_job.return_value = mock_job
         
-        users = [
-            {"order_id": 6, "sub_plan_id": 1, "user_id": 6},
-            {"order_id": 7, "sub_plan_id": 1, "user_id": 7}
-        ]
+        event_ids = [501, 502]
         
-        job_id = await put_to_arq_bg_bulk(mock_arq, users, "reset_traffic")
+        job_id = await put_to_arq_bg_bulk(mock_arq, event_ids, "reset_traffic")
         
         mock_arq.enqueue_job.assert_called_once()
         call_args = mock_arq.enqueue_job.call_args
         
         # Для reset_traffic вызывается другая задача
         assert call_args[0][0] == "reset_day_user_traffic"
-        # Первый аргумент - массив пользователей (без action)
-        assert call_args[0][1] == users
+        # Первый аргумент - массив event_ids (без action)
+        assert call_args[0][1] == event_ids
         assert job_id == "job-reset-202"
     
     @pytest.mark.asyncio
-    async def test_reset_traffic_with_empty_users(self):
-        """reset_traffic с пустым массивом пользователей"""
+    async def test_reset_traffic_with_empty_event_ids(self):
+        """reset_traffic с пустым массивом event_ids"""
         mock_arq = AsyncMock()
         mock_job = MagicMock()
         mock_job.job_id = "job-reset-empty"
         mock_arq.enqueue_job.return_value = mock_job
         
-        users = []
+        event_ids = []
         
-        job_id = await put_to_arq_bg_bulk(mock_arq, users, "reset_traffic")
+        job_id = await put_to_arq_bg_bulk(mock_arq, event_ids, "reset_traffic")
         
         call_args = mock_arq.enqueue_job.call_args
         assert call_args[0][0] == "reset_day_user_traffic"
@@ -147,66 +141,60 @@ class TestPutToArqBgParameterOrder:
     
     @pytest.mark.asyncio
     async def test_admin_request_bulk_action_users_parameter_order(self):
-        """Параметры передаются в правильном порядке: task_name, action, users"""
+        """Параметры передаются в правильном порядке: task_name, action, event_ids"""
         mock_arq = AsyncMock()
         mock_job = MagicMock()
         mock_job.job_id = "job-order-test"
         mock_arq.enqueue_job.return_value = mock_job
         
-        users = [{"order_id": 8, "sub_plan_id": 3, "user_id": 8}]
+        event_ids = [601, 602]
         
-        await put_to_arq_bg_bulk(mock_arq, users, "activate")
+        await put_to_arq_bg_bulk(mock_arq, event_ids, "activate")
         
         # Проверяем что позиционные аргументы переданы в правильном порядке
         call_args = mock_arq.enqueue_job.call_args[0]
         assert len(call_args) == 3
         assert call_args[0] == "admin_request_bulk_action_users"  # task_name
         assert call_args[1] == "add"  # action
-        assert call_args[2] == users  # users list
+        assert call_args[2] == event_ids  # event_ids list
     
     @pytest.mark.asyncio
     async def test_reset_day_user_traffic_parameter_order(self):
-        """reset_day_user_traffic получает только users (без action)"""
+        """reset_day_user_traffic получает только event_ids (без action)"""
         mock_arq = AsyncMock()
         mock_job = MagicMock()
         mock_job.job_id = "job-reset-order"
         mock_arq.enqueue_job.return_value = mock_job
         
-        users = [{"order_id": 9, "sub_plan_id": 1, "user_id": 9}]
+        event_ids = [701, 702, 703]
         
-        await put_to_arq_bg_bulk(mock_arq, users, "reset_traffic")
+        await put_to_arq_bg_bulk(mock_arq, event_ids, "reset_traffic")
         
-        # Проверяем что передан только task_name и users
+        # Проверяем что передан только task_name и event_ids
         call_args = mock_arq.enqueue_job.call_args[0]
         assert len(call_args) == 2
         assert call_args[0] == "reset_day_user_traffic"  # task_name
-        assert call_args[1] == users  # users list (без action!)
+        assert call_args[1] == event_ids  # event_ids list (без action!)
     
     @pytest.mark.asyncio
-    async def test_users_data_structure(self):
-        """Проверяем что структура данных пользователей сохраняется"""
+    async def test_event_ids_data_structure(self):
+        """Проверяем что event_ids передаются как list[int]"""
         mock_arq = AsyncMock()
         mock_job = MagicMock()
         mock_job.job_id = "job-structure-test"
         mock_arq.enqueue_job.return_value = mock_job
         
-        # Используем реалистичные данные
-        users = [
-            {"order_id": 10, "sub_plan_id": 2, "user_id": 10},
-            {"order_id": 11, "sub_plan_id": 3, "user_id": 11},
-            {"order_id": 12, "sub_plan_id": 2, "user_id": 12}
-        ]
+        # Используем реалистичные event_ids
+        event_ids = [801, 802, 803]
         
-        await put_to_arq_bg_bulk(mock_arq, users, "deactivate")
+        await put_to_arq_bg_bulk(mock_arq, event_ids, "deactivate")
         
-        # Проверяем что данные пользователей не изменились
+        # Проверяем что event_ids не изменились
         call_args = mock_arq.enqueue_job.call_args[0]
-        passed_users = call_args[2]
+        passed_event_ids = call_args[2]
         
-        assert passed_users == users
-        assert len(passed_users) == 3
-        # Проверяем что все поля на месте
-        for user in passed_users:
-            assert "order_id" in user
-            assert "sub_plan_id" in user
-            assert "user_id" in user
+        assert passed_event_ids == event_ids
+        assert len(passed_event_ids) == 3
+        # Проверяем что все элементы int
+        assert all(isinstance(eid, int) for eid in passed_event_ids)
+

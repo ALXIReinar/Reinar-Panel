@@ -183,6 +183,11 @@ async def add_user(
         operation=body.action
     )
 
+    "Если SQL фильтрация "
+    if not vnode:
+        log_event(f'\033[35m[Node Command Center]\033[0m Не удалось отправить пользователя на вставку | node_proto_id: \033[33m{body.node_proto_id}\033[0m; action: \033[35m{body.action}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
+        raise HTTPException(status_code=409, detail={'success': False, 'message': 'Эта виртуальная нода находится на выключенной физической ноде. Или такой виртуальной ноды не существует. Вставка невозможна'})
+
     "Апи бульк формата. Так что формат соблюдаем"
     users = [{"user_sub_id": body.user_sub_id, "uuid": body.uuid, "event_id": vnode['event_id']}]
     action_script_custom_params = {
@@ -206,6 +211,6 @@ async def add_user(
         vnode['required_user_data_obj'],
         vnode['constant_user_data_obj'],
     )
-    log_event(f'\033[35m[Node Command Center]\033[0m Отправили в фон \033[34m{body.action}\033[0m на ноду | node_proto_id: \033[33m{body.node_proto_id}\033[0m; users: \033[32m{vnode["users"]}\033[0m; job_id: \033[31m{job.job_id}\033[0m')
+    log_event(f'\033[35m[Node Command Center]\033[0m Отправили в фон \033[34m{body.action}\033[0m на ноду | node_proto_id: \033[33m{body.node_proto_id}\033[0m; uuid: \033[32m{body.uuid}\033[0m; job_id: \033[31m{job.job_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
 
     return {'success': True, 'message': 'Пользователь обрабатывается в фоновой очереди', 'job_id': job.job_id}

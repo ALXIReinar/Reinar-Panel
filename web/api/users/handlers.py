@@ -82,5 +82,5 @@ async def put_to_arq_bg_single(arq: ArqRedis, nodes_pack: list, action: Literal[
             log_event(f'\033[35m[User Subs Editor]\033[0m Отправили в фон \033[34m{action}\033[0m на ноду | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m; users: \033[32m{vnode["users"]}\033[0m; job_id: \033[31m{job.job_id}\033[0m')
             return job.job_id
 
-    job_ids = await asyncio.gather(*(worker(vnode) for vnode in nodes_pack if vnode['users'] > 0))
+    job_ids = await asyncio.gather(*(worker(vnode) for vnode in nodes_pack if len(vnode['users']) > 0))
     return job_ids

@@ -57,20 +57,9 @@ async def test_create_protocol_duplicate(client: AsyncClient, db_seed, proto_tem
 # ==================== GET /private/protocols/all ====================
 
 @pytest.mark.asyncio
-async def test_get_all_protocols_empty(client: AsyncClient, db_seed, proto_template_seed):
-    """Получение пустого списка протоколов"""
-    response = await client.get("/api/v1/private/protocols/all")
-    
-    assert response.status_code == 200
-    data = response.json()
-    assert "protocols" in data
-    assert data["protocols"] == []
-
-
-@pytest.mark.asyncio
 async def test_get_all_protocols_multiple(client: AsyncClient, db_seed, proto_template_seed):
-    """Получение списка с несколькими протоколами"""
-    # Создаём несколько протоколов
+    """Получение списка с несколькими протоколами (включая seed_data)"""
+    # Создаём несколько тестовых протоколов
     protocols_data = [
         {"name": "WireGuard", "tmp_id": proto_template_seed["tmp_id"]},
         {"name": "OpenVPN", "tmp_id": proto_template_seed["tmp_id"]},
@@ -80,13 +69,20 @@ async def test_get_all_protocols_multiple(client: AsyncClient, db_seed, proto_te
     for proto in protocols_data:
         await client.post("/api/v1/private/protocols/create", json=proto)
     
-    # Получаем все протоколы
+    # Получаем все протоколы (seed_data + наши тестовые)
     response = await client.get("/api/v1/private/protocols/all")
     
     assert response.status_code == 200
     data = response.json()
     assert "protocols" in data
-    assert len(data["protocols"]) == 3
+    # Должно быть минимум 3 наших протокола + seed_data
+    assert len(data["protocols"]) >= 3
+    
+    # Проверяем что наши тестовые протоколы присутствуют
+    protocol_names = {proto["name"] for proto in data["protocols"]}
+    assert "WireGuard" in protocol_names
+    assert "OpenVPN" in protocol_names
+    assert "Shadowsocks" in protocol_names
     
     # Проверяем структуру данных
     first_proto = data["protocols"][0]
@@ -100,14 +96,16 @@ async def test_get_all_protocols_multiple(client: AsyncClient, db_seed, proto_te
 @pytest.mark.asyncio
 async def test_get_all_protocols_pagination(client: AsyncClient, db_seed, proto_template_seed):
     """Проверка пагинации (offset/limit)"""
-    # Создаём 5 протоколов
+    # Создаём 5 тестовых протоколов
+    created_proto_ids = []
     for i in range(5):
-        await client.post(
+        resp = await client.post(
             "/api/v1/private/protocols/create",
-            json={"name": f"Protocol_{i}", "tmp_id": proto_template_seed["tmp_id"]}
+            json={"name": f"PaginationTest_{i}", "tmp_id": proto_template_seed["tmp_id"]}
         )
+        created_proto_ids.append(resp.json()["proto_id"])
     
-    # Запрос с limit=2, offset=0
+    # Запрос с limit=2, offset=0 (первые 2 из ВСЕХ protocols, включая seed_data)
     response = await client.get("/api/v1/private/protocols/all?limit=2&offset=0")
     assert response.status_code == 200
     data = response.json()
@@ -119,11 +117,15 @@ async def test_get_all_protocols_pagination(client: AsyncClient, db_seed, proto_
     data = response.json()
     assert len(data["protocols"]) == 2
     
-    # Запрос с limit=2, offset=4 (последний протокол)
-    response = await client.get("/api/v1/private/protocols/all?limit=2&offset=4")
+    # Запрос со всеми нашими протоколами через фильтр tmp_id (чтобы исключить seed_data)
+    response = await client.get(f"/api/v1/private/protocols/all?tmp_id={proto_template_seed['tmp_id']}")
     assert response.status_code == 200
     data = response.json()
-    assert len(data["protocols"]) == 1
+    assert len(data["protocols"]) == 5
+    
+    # Проверяем что вернулись именно наши протоколы
+    returned_ids = {proto["proto_id"] for proto in data["protocols"]}
+    assert returned_ids == set(created_proto_ids)
 
 
 @pytest.mark.asyncio

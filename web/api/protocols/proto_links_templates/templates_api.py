@@ -5,7 +5,7 @@ from starlette.requests import Request
 
 from web.data.postgres import PgSqlDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
-from web.schemas.templates_schema import AddTmpSchema, UpdateTmpSchema, GetTmpSchema
+from web.schemas.templates_schema import AddTmpSchema, UpdateTmpSchema, GetTmpSchema, EditUserInjectorsSchema
 from web.utils.logger_config import log_event
 
 router = APIRouter(tags=['Proto Templates'])
@@ -14,37 +14,9 @@ router = APIRouter(tags=['Proto Templates'])
 
 @router.get('/all')
 async def get_all_templates(params: GetTmpSchema, request: Request, db: PgSqlDep, _: JWTCookieDep):
-    """
-    Получить список всех шаблонов конфиг-ссылок
-
-    Фронт был бы весьма благодарен за структуру
-    ```
-    "spec_params": {
-      tmp_id: [
-          {"key": "pbk", "id": 1},
-          {"key": "flow", "id": 2}
-      ]
-    }
-    ```
-    Текущая:
-    ```
-    "spec_params": [
-      {
-        "id": 1,
-        "key": "pbk",
-        "tmp_id": 1
-      },
-      {
-        "id": 2,
-        "key": "flow",
-        "tmp_id": 1
-      }
-    ]
-    ```
-    """
     templates = await db.proto_templates.get_all(params.last_id, params.sort_by, params.limit)
-    log_event(f'Отдали список шаблонов | tmp_len: \033[32m{len(templates["templates"])}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
-    return {'success': True, **templates}
+    log_event(f'Отдали список шаблонов | tmp_len: \033[32m{len(templates)}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    return {'success': True, 'templates': templates}
 
 
 @router.get('/{tmp_id}')
@@ -58,8 +30,8 @@ async def get_tmp_by_id(
         log_event(f'Шаблон не найден | tmp_id: \033[31m{tmp_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
         raise HTTPException(status_code=404, detail='Шаблон не найден')
     
-    log_event(f'Отдали шаблон | tmp_id: \033[32m{tmp_id}\033[0m; spec_params_count: {len(result["spec_params"])}; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
-    return {'success': True, 'template': result}
+    log_event(f'Отдали шаблон | tmp_id: \033[32m{tmp_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    return {'success': True, **result}
 
 
 @router.post('/create')
@@ -88,19 +60,13 @@ async def update_template(tmp_id: int, body: UpdateTmpSchema, request: Request, 
         reload_core_command=body.reload_core_command,
         required_user_data_obj=body.required_user_data_obj,
         constant_user_data_obj=body.constant_user_data_obj,
-        api_add_user_script=body.api_add_user_script,
-        api_delete_user_script=body.api_delete_user_script,
         proto_python_lib=body.proto_python_lib,
-        flatten_json_users_key=body.flatten_json_users_key,
-        flatten_user_identifier_key=body.flatten_user_identifier_key,
         sub_prepare_script=body.sub_prepare_script,
         sub_required_libs=body.sub_required_libs,
         api_bulk_delete_user_script=body.api_bulk_delete_user_script,
         api_bulk_add_user_script=body.api_bulk_add_user_script,
         metrics_parser_code=body.metrics_parser_code,
         metrics_command=body.metrics_command,
-        add_script_custom_params=body.add_script_custom_params,
-        delete_script_custom_params=body.delete_script_custom_params,
         bulk_delete_script_custom_params=body.bulk_delete_script_custom_params,
         bulk_add_script_custom_params=body.bulk_add_script_custom_params,
         api_metrics_script=body.api_metrics_script,
@@ -114,6 +80,18 @@ async def update_template(tmp_id: int, body: UpdateTmpSchema, request: Request, 
     log_event(f'Шаблон обновлён | tmp_id: \033[32m{tmp_id}\033[0m; body: \033[37m{repr(body)}\033[0m; admin_id: \033[32m{request.state.admin_id}\033[0m', request=request)
     return {'success': True, 'message': message}
 
+
+@router.put('/{tmp_id}/user_injectors')
+async def update_user_injectors(tmp_id: int, body: EditUserInjectorsSchema, db: PgSqlDep, request: Request, _: JWTCookieDep):
+    log_event(f'Изменение инжекторов шаблона | state_injectors_len: \033[33m{len(body.user_injectors)}\033[0m; tmp_id: \033[35m{tmp_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+
+    res = await db.proto_templates.edit_user_injectors(tmp_id, body.user_injectors)
+    if not res:
+        log_event(f'Не удалось обновить инжекторы шаблона. Не существует! | state_injectors_len: \033[35m{len(body.user_injectors)}\033[0m; tmp_id: \033[34m{tmp_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m')
+        raise HTTPException(status_code=404, detail={'success': False, 'message': "Шаблон с таким tmp_id не существует"})
+
+    log_event(f'Обновили инжекторы шаблона! | state_injectors_len: \033[33m{len(body.user_injectors)}\033[0m; tmp_id: \033[36m{tmp_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    return {'success': True, 'message': 'Инжекторы обновлены'}
 
 @router.delete('/{tmp_id}')
 async def delete_template(tmp_id: int, request: Request, db: PgSqlDep, _: JWTCookieDep):

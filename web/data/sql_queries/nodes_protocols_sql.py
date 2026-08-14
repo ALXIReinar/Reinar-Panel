@@ -190,7 +190,9 @@ class NodesProtocolsQueries:
         query = '''
         WITH outbox_insert AS (
             INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id) 
-            VALUES ($1, $2, $3, $4)
+            SELECT $1, $2, $3, $4
+            FROM nodes_protocols np
+            JOIN nodes n ON n.id = np.node_id AND n.is_active = true
             RETURNING id, node_proto_id
         ),
         pre_agg_user_injectors AS (
@@ -208,7 +210,7 @@ class NodesProtocolsQueries:
         SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib, pt.api_bulk_add_user_script,
                pt.api_bulk_delete_user_script, pt.reload_core_command, np.config_path, pt.required_user_data_obj,
                pt.constant_user_data_obj, pt.bulk_delete_script_custom_params, pt.bulk_add_script_custom_params, oi.id AS event_id,
-               COALESCE(aui.user_injectors, '[]'::json)
+               COALESCE(aui.user_injectors, '[]'::json) AS user_injectors
         FROM nodes_protocols np
         JOIN protocols p ON np.proto_id = p.id
         JOIN nodes n ON np.node_id = n.id AND n.is_active = true
@@ -217,4 +219,4 @@ class NodesProtocolsQueries:
         JOIN outbox_insert oi ON oi.node_proto_id = np.id
         WHERE np.id = $4
         '''
-        return await self.conn.fetch(query, user_uuid, user_sub_id, CoreProtoActions.name2id[operation], node_proto_id)
+        return await self.conn.fetchrow(query, user_uuid, user_sub_id, CoreProtoActions.name2id[operation], node_proto_id)

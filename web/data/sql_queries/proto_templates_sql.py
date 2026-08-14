@@ -1,6 +1,8 @@
 from asyncpg import Connection, UniqueViolationError
 from asyncpg.exceptions import ForeignKeyViolationError
 
+from web.schemas.templates_schema import UserInjector
+
 
 class ProtoTemplatesQueries:
     def __init__(self, conn: Connection):
@@ -37,41 +39,68 @@ class ProtoTemplatesQueries:
             where_clause = 'WHERE ' + ' AND '.join(where_conditions)
         
         query = f"""
-        SELECT pt.id, pt.title, pt.url_tmp, pt.status, pt.is_accepted, pt.proto_python_lib
+        WITH specs AS (
+            SELECT tmp_id, 
+                   json_agg(
+                        json_build_object(
+                            'spec_key_id', id,
+                            'key_name', key
+                        )
+                   ) AS spec_params
+            FROM template_spec_params
+            GROUP BY tmp_id
+        )
+        SELECT pt.id, pt.title, pt.url_tmp, pt.status, pt.is_accepted, pt.proto_python_lib,
+                COALESCE(s.spec_params, '[]'::json) AS spec_params
         FROM proto_templates pt
+        LEFT JOIN specs s ON pt.id = s.tmp_id
         {where_clause}
-        ORDER BY id {sort_by}
+        ORDER BY pt.id {sort_by}
         LIMIT $1
         """
         
-        # Выполняем запрос
-        tmp_preview = await self.conn.fetch(query, *params)
-        
-        # Для каждого шаблона достаём свои spec-params
-        if not tmp_preview:
-            return {'templates': [], 'spec_params': []}
-        
-        spec_query = """
-        SELECT tsp.id, tsp.key, tsp.tmp_id FROM template_spec_params tsp
-        JOIN (SELECT * FROM UNNEST($1::integer[]) AS tmp_id) t_ids ON t_ids.tmp_id = tsp.tmp_id
-        """
-        
-        ids = [rec['id'] for rec in tmp_preview]
-        spec_params = await self.conn.fetch(spec_query, ids)
-        return {'templates': tmp_preview, 'spec_params': spec_params}
+        tmps = await self.conn.fetch(query, *params)
+        return tmps
 
 
 
     async def get_by_id(self, tmp_id: int, spec_only: bool):
         """Получить шаблон по ID с привязанными spec параметрами"""
         template_query = """
-        SELECT id, title, url_tmp, status, is_accepted, reload_core_command, required_user_data_obj, constant_user_data_obj,
-               api_add_user_script, api_delete_user_script, proto_python_lib, flatten_json_users_key, flatten_user_identifier_key,
-               sub_prepare_script, sub_required_libs, api_bulk_delete_user_script, metrics_parser_code, metrics_command,
-               add_script_custom_params, delete_script_custom_params, bulk_delete_script_custom_params, api_metrics_script,
-               api_bulk_add_user_script, bulk_add_script_custom_params, description, process_user_item_script, process_user_libs
-        FROM proto_templates 
-        WHERE id = $1
+        WITH specs AS (
+            SELECT tmp_id, 
+                   json_agg(
+                        json_build_object(
+                            'spec_key_id', id,
+                            'key_name', key
+                        )
+                   ) AS spec_params
+            FROM template_spec_params WHERE tmp_id = $1
+            GROUP BY tmp_id
+        ),
+        user_injectors AS (
+            SELECT tmp_id, 
+                    json_agg(
+                        json_build_object(
+                            'extractor_script', extractor_script,
+                            'flatten_array_cursor', flatten_array_cursor,
+                            'libs', libs
+                        )
+                    ) AS user_injectors
+            FROM templates_users_extractors
+            WHERE tmp_id = $1
+            GROUP BY tmp_id
+        
+        )
+        SELECT pt.id, pt.title, pt.url_tmp, pt.status, pt.is_accepted, pt.reload_core_command, pt.required_user_data_obj, pt.constant_user_data_obj,
+               pt.proto_python_lib, pt.sub_prepare_script, pt.sub_required_libs, pt.api_bulk_delete_user_script, pt.metrics_parser_code, pt.metrics_command,
+               pt.bulk_delete_script_custom_params, pt.api_metrics_script, pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, pt.description,
+               COALESCE(s.spec_params, '[]'::json) AS spec_params,
+               COALESCE(ui.user_injectors, '[]'::json) AS user_injectors
+        FROM proto_templates pt
+        LEFT JOIN specs s ON pt.id = s.tmp_id
+        LEFT JOIN user_injectors ui ON ui.tmp_id = pt.id
+        WHERE pt.id = $1
         """
         spec_params_query = "SELECT id, key FROM template_spec_params WHERE tmp_id = $1"
 
@@ -84,8 +113,7 @@ class ProtoTemplatesQueries:
         if not template:
             return None
 
-        spec_params = await self.conn.fetch(spec_params_query, tmp_id)
-        return {'template': template, 'spec_params': spec_params}
+        return {'template': template}
 
 
     async def create(self, title: str) -> tuple[int, str, int | None]:
@@ -115,19 +143,13 @@ class ProtoTemplatesQueries:
         reload_core_command: str | None = None,
         required_user_data_obj: dict | None = None,
         constant_user_data_obj: dict | None = None,
-        api_add_user_script: str | None = None,
-        api_delete_user_script: str | None = None,
         proto_python_lib: str | None = None,
-        flatten_json_users_key: str | None = None,
-        flatten_user_identifier_key: str | None = None,
         sub_prepare_script: str | None = None,
         sub_required_libs: str | None = None,
         api_bulk_delete_user_script: str | None = None,
         api_bulk_add_user_script: str | None = None,
         metrics_parser_code: str | None = None,
         metrics_command: str | None = None,
-        add_script_custom_params: dict | None = None,
-        delete_script_custom_params: dict | None = None,
         bulk_delete_script_custom_params: dict | None = None,
         bulk_add_script_custom_params: dict | None = None,
         api_metrics_script: str | None = None,
@@ -169,29 +191,9 @@ class ProtoTemplatesQueries:
             params.append(constant_user_data_obj)
             param_idx += 1
 
-        if api_add_user_script is not None:
-            updates.append(f"api_add_user_script = ${param_idx}")
-            params.append(api_add_user_script)
-            param_idx += 1
-
-        if api_delete_user_script is not None:
-            updates.append(f"api_delete_user_script = ${param_idx}")
-            params.append(api_delete_user_script)
-            param_idx += 1
-
         if proto_python_lib is not None:
             updates.append(f"proto_python_lib = ${param_idx}")
             params.append(proto_python_lib)
-            param_idx += 1
-
-        if flatten_json_users_key is not None:
-            updates.append(f"flatten_json_users_key = ${param_idx}")
-            params.append(flatten_json_users_key)
-            param_idx += 1
-
-        if flatten_user_identifier_key is not None:
-            updates.append(f"flatten_user_identifier_key = ${param_idx}")
-            params.append(flatten_user_identifier_key)
             param_idx += 1
 
         if sub_prepare_script is not None:
@@ -222,16 +224,6 @@ class ProtoTemplatesQueries:
         if metrics_command is not None:
             updates.append(f"metrics_command = ${param_idx}")
             params.append(metrics_command)
-            param_idx += 1
-
-        if add_script_custom_params is not None:
-            updates.append(f"add_script_custom_params = ${param_idx}")
-            params.append(add_script_custom_params)
-            param_idx += 1
-
-        if delete_script_custom_params is not None:
-            updates.append(f"delete_script_custom_params = ${param_idx}")
-            params.append(delete_script_custom_params)
             param_idx += 1
 
         if bulk_delete_script_custom_params is not None:
@@ -288,3 +280,38 @@ class ProtoTemplatesQueries:
         except ForeignKeyViolationError:
             "RESTRICT на удаление шаблона, если есть ссылающиеся записи"
             return 409, 'Невозможно удалить: шаблон используется виртуальными нодами или spec параметрами'
+
+
+    async def edit_user_injectors(self, tmp_id: int, injs_state: list[UserInjector]):
+        """
+        Обновить user_injectors шаблона (удалить старые и вставить новые).
+        
+        Returns:
+            True - успех
+            False - шаблон не существует (ForeignKeyViolationError)
+        """
+        # Сначала удаляем все старые инжекторы
+        delete_query = 'DELETE FROM templates_users_extractors WHERE tmp_id = $1'
+        await self.conn.execute(delete_query, tmp_id)
+        
+        # Если список пустой - просто возвращаем успех (все инжекторы удалены)
+        if not injs_state:
+            # Проверяем что шаблон существует
+            template_exists = await self.conn.fetchval(
+                'SELECT EXISTS(SELECT 1 FROM proto_templates WHERE id = $1)',
+                tmp_id
+            )
+            return template_exists
+        
+        # Вставляем новые инжекторы
+        insert_query = '''
+        INSERT INTO templates_users_extractors (tmp_id, flatten_array_cursor, extractor_script, libs)
+        SELECT $1, t.flatten_ac, t.extractor_script, t.libs
+        FROM UNNEST($2::varchar[], $3::text[], $4::varchar[]) AS t(flatten_ac, extractor_script, libs)
+        '''
+        try:
+            arr_cursors, extractors, libs = zip(*[(inj.flatten_array_cursor, inj.extractor_script, inj.libs) for inj in injs_state])
+            await self.conn.execute(insert_query, tmp_id, arr_cursors, extractors, libs)
+            return True
+        except ForeignKeyViolationError:
+            return False

@@ -72,4 +72,10 @@ def generate_link_from_json(tmp_link: str, node_config_json: str | dict, spec_ke
         safe_query,
         safe_fragment
     ))
+    
+    # 5. Если в исходном шаблоне был fragment (#), но он пустой, urlunsplit удалит #
+    # Нужно вернуть # в конец URL для корректного формата ссылки
+    if '{{node___title}}' in tmp_link and not safe_fragment and not final_url.endswith('#'):
+        final_url += '#'
+    
     return True, final_url

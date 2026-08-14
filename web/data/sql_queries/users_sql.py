@@ -242,31 +242,34 @@ class UsersQueries:
             -- Обязательные поля для возврата ins/del запросов
             RETURNING id AS user_sub_id, uuid, sub_plan_id 
         ),
-        -- 2. Собираем outbox набор
-        outbox_pack AS (
-            SELECT sc.uuid, sc.user_sub_id, vsp.node_proto_id
+        -- 2. Собираем outbox набор с сохранением sub_plan_id
+        outbox_with_metadata AS (
+            SELECT sc.uuid, sc.user_sub_id, sc.sub_plan_id, vsp.node_proto_id
             FROM sub_changes sc
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = sc.sub_plan_id
+            JOIN nodes_protocols np ON vsp.node_proto_id = np.id AND np.user_visible = true
+            JOIN nodes n ON n.id = np.node_id AND n.is_active = true
         ),
-        -- 3. Фиксируем операцию удаления в outbox (двухэтапный ack)
         insert_outbox AS (
             INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
             SELECT uuid, user_sub_id, $1, node_proto_id
-            FROM outbox_pack
+            FROM outbox_with_metadata
             RETURNING id AS event_id, user_sub_id, user_uuid, node_proto_id
         ),
-        -- 4.1. Пре-агрегация впн-пользователей. Максимум 10 записей
+        -- 4.1. Пре-агрегация впн-пользователей с sub_plan_id. Максимум 10 записей
         pre_agg_users AS (
-            SELECT node_proto_id,
+            SELECT owm.node_proto_id,
                    json_agg(
                         json_build_object(
-                            'event_id', event_id,
-                            'uuid', user_uuid,
-                            'user_sub_id', user_sub_id
+                            'event_id', io.event_id,
+                            'uuid', io.user_uuid,
+                            'user_sub_id', io.user_sub_id,
+                            'sub_plan_id', owm.sub_plan_id
                         )
                    ) AS users
-            FROM insert_outbox
-            GROUP BY node_proto_id
+            FROM insert_outbox io
+            JOIN outbox_with_metadata owm ON io.user_sub_id = owm.user_sub_id AND io.node_proto_id = owm.node_proto_id
+            GROUP BY owm.node_proto_id
         ),
         -- 4.2. Пре агрегация инжекторов. До 2000-3000 записей, так что последняя
         pre_agg_user_injectors AS (
@@ -404,6 +407,12 @@ class UsersQueries:
                 traf_ud_mb, inf_traf, b64_ids, uuids, inf_exp,
                 traf_ld_mb, traf_u_mb, traf_l_mb, user_id
             )
-            log_event(f'Добавили новую подписку пользователю | user_sub_ids: \033[34m{[x['user_sub_id'] for x in add_sub_ids]}\033[0m; user_id: \033[32m{user_id}\033[0m')
+            # Извлекаем user_sub_id из JSON поля 'users' (массив пользователей на нодах)
+            added_user_sub_ids = set([
+                user['user_sub_id']
+                for node in add_sub_ids
+                for user in node['users']
+            ])
+            log_event(f'Добавили новую подписку пользователю | user_sub_ids: \033[34m{added_user_sub_ids}\033[0m; user_id: \033[32m{user_id}\033[0m')
 
         return deleted_subs, add_sub_ids, upd_sub_ids

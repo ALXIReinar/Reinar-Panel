@@ -7,11 +7,24 @@ from datetime import datetime, timezone
 
 
 @pytest.fixture
-async def user_with_subs(db_pool, sub_plan_seed):
+async def user_with_subs(db_pool, sub_plan_seed, virtual_node_seed):
     """
-    Создаём пользователя с одной активной подпиской для тестирования обновлений
+    Создаём пользователя с одной активной подпиской для тестирования обновлений.
+    Также привязываем виртуальную ноду к плану подписки для работы outbox.
     """
     async with db_pool.acquire() as conn:
+        # Привязываем виртуальную ноду к планам подписки (нужно для edit_user_subs)
+        await conn.execute(
+            "INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id) VALUES ($1, $2)",
+            virtual_node_seed["vnode_id_1"],
+            sub_plan_seed["plan_id_1"]
+        )
+        await conn.execute(
+            "INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id) VALUES ($1, $2)",
+            virtual_node_seed["vnode_id_1"],
+            sub_plan_seed["plan_id_2"]
+        )
+        
         # Создаём тестового пользователя
         user_id = await conn.fetchval(
             """
@@ -56,6 +69,7 @@ async def user_with_subs(db_pool, sub_plan_seed):
             "order_id": order_id,
             "plan_id": sub_plan_seed["plan_id_1"],
             "plan_id_2": sub_plan_seed["plan_id_2"],
+            "vnode_id": virtual_node_seed["vnode_id_1"],
         }
 
 

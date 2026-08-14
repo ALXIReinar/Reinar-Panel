@@ -3,7 +3,7 @@ import os
 from starlette.requests import Request
 
 "ВАЖНО: Устанавливаем переменную окружения ДО любых импортов из web/"
-os.environ['ENV_LOCAL_TEST_FILE'] = 'web/.env.api.test'
+os.environ['ENV_FILE'] = 'web/.env.api.test'
 
 import asyncpg
 import httpx
@@ -52,9 +52,10 @@ async def db_seed(db_pool):
     
     Выполняет:
     1. TRUNCATE только пользовательских таблиц (НЕ ТРОГАЕМ шаблоны и справочники!)
-    2. Справочники и шаблоны должны быть заранее залиты через seed_data.py
-    3. Создаёт тестового админа
-    4. Создаёт софт-удалённых пользователей для проверки фильтрации
+    2. Удаляет тестовые шаблоны (title ILIKE '%test%')
+    3. Справочники и шаблоны из seed_data должны быть заранее залиты через seed_data.py
+    4. Создаёт тестового админа
+    5. Создаёт софт-удалённых пользователей для проверки фильтрации
     
     Возвращает:
         dict: {"admin_id", "admin_login", "admin_pass", "deleted_user_ids"}
@@ -82,7 +83,30 @@ async def db_seed(db_pool):
             RESTART IDENTITY CASCADE
         """)
         
-        # 2. Справочники уже должны быть залиты через seed_data.py
+        # 2. Очищаем whitelist_commands для тестов remote_execute
+        # Whitelist будет пересоздан в тестах с нужными командами
+        await conn.execute("TRUNCATE TABLE whitelist_commands RESTART IDENTITY")
+        
+        # 3. Удаляем ТОЛЬКО тестовые protocols и шаблоны (созданные в тестах)
+        # seed_data шаблоны начинаются с 'xray-' или 'singbox-'
+        # Сначала удаляем тестовые protocols (привязанные к тестовым шаблонам)
+        await conn.execute("""
+            DELETE FROM protocols 
+            WHERE tmp_id IN (
+                SELECT id FROM proto_templates 
+                WHERE title NOT ILIKE 'xray-%' 
+                AND title NOT ILIKE 'singbox-%'
+            )
+        """)
+        
+        # Затем удаляем сами тестовые шаблоны
+        await conn.execute("""
+            DELETE FROM proto_templates 
+            WHERE title NOT ILIKE 'xray-%' 
+            AND title NOT ILIKE 'singbox-%'
+        """)
+        
+        # 3. Справочники уже должны быть залиты через seed_data.py
         # Проверяем что они есть
         statuses_count = await conn.fetchval("SELECT COUNT(*) FROM templates_statuses")
         if statuses_count == 0:
@@ -90,20 +114,20 @@ async def db_seed(db_pool):
                 "templates_statuses пуста! Запустите: python -m web.db.seed_data"
             )
         
-        templates_count = await conn.fetchval("SELECT COUNT(*) FROM proto_templates")
+        templates_count = await conn.fetchval("SELECT COUNT(*) FROM proto_templates WHERE title NOT ILIKE '%test%'")
         if templates_count == 0:
             raise RuntimeError(
                 "proto_templates пуста! Запустите: python -m web.db.seed_data"
             )
 
-        # 3. Создаём тестового админа
+        # 4. Создаём тестового админа
         admin_id = await conn.fetchval(
             "INSERT INTO admins (login, passw) VALUES ($1, $2) RETURNING id",
             test_admin_login,
             encryption.hash(test_admin_pass)
         )
 
-        # 4. Создаём софт-удалённых пользователей (константы для проверки фильтрации)
+        # 5. Создаём софт-удалённых пользователей (константы для проверки фильтрации)
         # Гарантирует что все SQL запросы корректно игнорируют is_deleted = true
         deleted_user_1_id = await conn.fetchval("""
             INSERT INTO users (tg_id, tg_username, is_deleted)
@@ -324,39 +348,40 @@ async def physical_node_seed(db_pool, db_seed):
 async def proto_template_seed(db_pool, db_seed):
     """
     Создаёт тестовые шаблоны протоколов для теста.
+    Использует префикс 'test-' в title для идентификации.
     
     Возвращает:
         dict: {"tmp_id": int, "tmp_id_2": int}
     """
     async with db_pool.acquire() as conn:
-        # Создаём первый тестовый шаблон протокола
+        # Создаём первый тестовый шаблон протокола (полный набор полей)
         tmp_id = await conn.fetchval(
             """
             INSERT INTO proto_templates (
                 title, url_tmp, status, is_accepted, 
                 reload_core_command, sub_prepare_script,
-                proto_python_lib, api_add_user_script, api_delete_user_script,
-                flatten_json_users_key, flatten_user_identifier_key,
-                add_script_custom_params, delete_script_custom_params
+                proto_python_lib, api_bulk_add_user_script, api_bulk_delete_user_script,
+                bulk_add_script_custom_params, bulk_delete_script_custom_params,
+                required_user_data_obj, constant_user_data_obj
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             RETURNING id
             """,
-            "TestProtocol Template",
+            "test-TestProtocol-1",  # Префикс test- для идентификации тестовых шаблонов
             "https://example.com/proto_template",
             1,
             True,
             "systemctl reload test-proto",
             "#!/bin/bash\necho 'test'",
             "vless",  # proto_python_lib
-            "python /opt/add_user.py",  # api_add_user_script
-            "python /opt/delete_user.py",  # api_delete_user_script
-            "inbounds.0.settings.clients",  # flatten_json_users_key
-            "email",  # flatten_user_identifier_key
-            '{}',  # add_script_custom_params (пустой JSON)
-            '{}'   # delete_script_custom_params (пустой JSON)
+            "python /opt/add_user.py",  # api_bulk_add_user_script
+            "python /opt/delete_user.py",  # api_bulk_delete_user_script
+            '{}',  # bulk_add_script_custom_params
+            '{}',  # bulk_delete_script_custom_params
+            '{}',  # required_user_data_obj
+            '{}'   # constant_user_data_obj
         )
         
-        # Создаём второй шаблон для разнообразия
+        # Создаём второй шаблон для разнообразия (минимальный набор полей)
         tmp_id_2 = await conn.fetchval(
             """
             INSERT INTO proto_templates (
@@ -365,7 +390,7 @@ async def proto_template_seed(db_pool, db_seed):
             ) VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id
             """,
-            "AnotherTemplate",
+            "test-AnotherTemplate-2",  # Префикс test-
             "https://example.com/another_template",
             1,
             True,

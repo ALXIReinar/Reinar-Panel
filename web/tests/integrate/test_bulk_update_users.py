@@ -141,8 +141,8 @@ class TestBulkUpdateActivate:
         data = response.json()
         assert data["success"] is True
         assert data["affected_count"] == 2
-        assert "arq_job_id" in data
-        assert data["arq_job_id"] == "test-job-12345"
+        assert "arq_job_ids" in data  # Исправлено: arq_job_ids вместо arq_job_id
+        assert data["arq_job_ids"] == "test-job-12345"
         
         # Проверяем что подписки активированы в БД
         async with db_pool.acquire() as conn:
@@ -187,7 +187,7 @@ class TestBulkUpdateActivate:
     
     @pytest.mark.asyncio
     async def test_activate_calls_arq_with_correct_action(self, client, users_with_subs, mock_arq):
-        """Активация вызывает ARQ с action='add'"""
+        """Активация вызывает ARQ с action='add' и передаёт event_ids"""
         user_ids = users_with_subs["inactive_user_ids"]
         
         response = await client.put(
@@ -208,16 +208,11 @@ class TestBulkUpdateActivate:
         assert call_args[0][0] == "admin_request_bulk_action_users"
         assert call_args[0][1] == "add"  # action переведён в 'add'
         
-        # Второй аргумент - массив пользователей
-        users_for_arq = call_args[0][2]
-        assert len(users_for_arq) == 2
-        
-        # Проверяем структуру: каждый элемент имеет user_sub_id, sub_plan_id, uuid
-        for user in users_for_arq:
-            assert "user_sub_id" in user
-            assert "sub_plan_id" in user
-            assert "uuid" in user
-            assert user["sub_plan_id"] == users_with_subs["sub_plan_id"]
+        # Второй аргумент - массив event_ids (list[int])
+        event_ids = call_args[0][2]
+        assert isinstance(event_ids, list)
+        assert len(event_ids) == 2
+        assert all(isinstance(eid, int) for eid in event_ids)
 
 
 class TestBulkUpdateDeactivate:
@@ -284,7 +279,7 @@ class TestBulkUpdateDeactivate:
     
     @pytest.mark.asyncio
     async def test_deactivate_calls_arq_with_delete_action(self, client, users_with_subs, mock_arq):
-        """Деактивация вызывает ARQ с action='delete'"""
+        """Деактивация вызывает ARQ с action='delete' и передаёт event_ids"""
         user_ids = users_with_subs["active_user_ids"]
         
         response = await client.put(
@@ -304,6 +299,12 @@ class TestBulkUpdateDeactivate:
         # Должен вызываться admin_request_bulk_action_users с action='delete'
         assert call_args[0][0] == "admin_request_bulk_action_users"
         assert call_args[0][1] == "delete"
+        
+        # Второй аргумент - массив event_ids (list[int])
+        event_ids = call_args[0][2]
+        assert isinstance(event_ids, list)
+        assert len(event_ids) == 2
+        assert all(isinstance(eid, int) for eid in event_ids)
 
 
 class TestBulkUpdateResetTraffic:
@@ -337,7 +338,7 @@ class TestBulkUpdateResetTraffic:
     
     @pytest.mark.asyncio
     async def test_reset_traffic_calls_correct_arq_task(self, client, users_with_subs, mock_arq):
-        """Сброс трафика вызывает специальную ARQ задачу reset_day_user_traffic"""
+        """Сброс трафика вызывает специальную ARQ задачу reset_day_user_traffic с event_ids"""
         user_id = users_with_subs["traffic_user_id"]
         
         response = await client.put(
@@ -357,9 +358,11 @@ class TestBulkUpdateResetTraffic:
         # Для reset_traffic должна вызываться другая задача
         assert call_args[0][0] == "reset_day_user_traffic"
         
-        # Первый аргумент - массив пользователей
-        users_for_arq = call_args[0][1]
-        assert len(users_for_arq) == 1
+        # Первый аргумент - массив event_ids (list[int])
+        event_ids = call_args[0][1]
+        assert isinstance(event_ids, list)
+        assert len(event_ids) == 1
+        assert isinstance(event_ids[0], int)
 
 
 class TestBulkUpdateValidation:

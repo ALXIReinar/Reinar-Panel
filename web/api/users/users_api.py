@@ -141,12 +141,14 @@ async def edit_user_sub(user_id: int, body: UserSubsUpdateSchema, request: Reque
         'success': True,
         'updated_subs_ids': users_sub_ids_upd,
         'added_subs_ids': [
-            {'user_sub_id': us_add['user_sub_id'], 'sub_plan_id': us_add['sub_plan_id']}
-            for us_add in users_subs_add
+            {'user_sub_id': user['user_sub_id'], 'sub_plan_id': user['sub_plan_id']}
+            for node in users_subs_add
+            for user in node['users']
         ],
         'deleted_subs_ids': [
-            {'user_sub_id': us_del['user_sub_id'], 'sub_plan_id': us_del['sub_plan_id']}
-            for us_del in user_subs_del
+            {'user_sub_id': user['user_sub_id'], 'sub_plan_id': user['sub_plan_id']}
+            for node in user_subs_del
+            for user in node['users']
         ],
         'add_jobs': add_jobs,
         'del_jobs': del_jobs,

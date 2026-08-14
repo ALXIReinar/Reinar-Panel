@@ -20,19 +20,13 @@ class UpdateTmpSchema(BaseModel):
     reload_core_command: str | None = Field(None, min_length=2, max_length=256, description='Команда перезагрузки ядра')
     required_user_data_obj: dict | None = Field(None, description='Обязательные данные пользователя с маркерами')
     constant_user_data_obj: dict | None = Field(None, description='Константные данные пользователя')
-    api_add_user_script: str | None = Field(None, description='Python скрипт для добавления пользователя через API')
-    api_delete_user_script: str | None = Field(None, description='Python скрипт для удаления пользователя через API')
     proto_python_lib: str | None = Field(None, max_length=32, description='Библиотека для hot-reload (grpcio, requests)')
-    flatten_json_users_key: str | None = Field(None, max_length=1024, description='Путь до массива clients (flatten-json)')
-    flatten_user_identifier_key: str | None = Field(None, max_length=128, description='Путь до параметра-идентификатора пользователя в clients (flatten-json)')
     sub_prepare_script: str | None = Field(None, description='Скрипт подготовки подписки')
     sub_required_libs: list[str] | str | None = Field(None, description='Требуемые библиотеки для подписки')
     api_bulk_delete_user_script: str | None = Field(None, description='Python скрипт для bulk удаления пользователей')
     api_bulk_add_user_script: str | None = Field(None, description='Python скрипт для bulk добавления пользователей')
     metrics_parser_code: str | None = Field(None, description='Код парсера метрик')
     metrics_command: str | None = Field(None, description='Команда получения метрик')
-    add_script_custom_params: dict | None = Field(None, description='Кастомные параметры для add скрипта')
-    delete_script_custom_params: dict | None = Field(None, description='Кастомные параметры для delete скрипта')
     bulk_delete_script_custom_params: dict | None = Field(None, description='Кастомные параметры для bulk delete скрипта')
     bulk_add_script_custom_params: dict | None = Field(None, description='Кастомные параметры для bulk add скрипта')
     api_metrics_script: str | None = Field(None, description='Python скрипт для получения метрик через API')
@@ -62,6 +56,29 @@ class UpdateTmpSchema(BaseModel):
             return ','.join(v)
         return v
 
+
+class EditUserInjectorsSchema(BaseModel):
+    user_injectors: list["UserInjector"] = Field(description='State инжекторов шаблона. Передавать Итоговое состояние ВСЕХ инжекторов, если произошло хотя бы одно изменение')
+
+
+class UserInjector(BaseModel):
+    flatten_array_cursor: str = Field(max_length=1024)
+    extractor_script: str
+    libs: list[str] | str | None = Field(None, description='Требуемые библиотеки для подписки')
+
+    @field_validator('libs', mode='after')
+    @classmethod
+    def libs_validator(cls, v):
+        if isinstance(v, list):
+            return ','.join(v)
+        return v
+
+    @field_validator('extractor_script', mode='after')
+    @classmethod
+    def extractor_script_validator(cls, v):
+        if ('def transform(' not in v) or ('return' not in v) or ('async' in v):
+            raise ValueError('Extractor Script должен быть: функцией transform( def transform(user_obj): ), принимать ровно один аргумент, должен быть синхронным(not async) и содержать return')
+        return v
 
 class DeleteTmpSchema(BaseModel):
     tmp_id: int = Field(..., gt=0, description='ID шаблона')
