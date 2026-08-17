@@ -3,7 +3,8 @@ import os
 from starlette.requests import Request
 
 "ВАЖНО: Устанавливаем переменную окружения ДО любых импортов из web/"
-os.environ['ENV_FILE'] = 'web/.env.api.test'
+cur_env_file = os.getenv('ENV_FILE')
+os.environ['ENV_FILE'] = cur_env_file or 'web/.env.api.test'
 
 import asyncpg
 import httpx

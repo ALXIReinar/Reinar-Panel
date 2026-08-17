@@ -454,13 +454,23 @@ mkdir -p "$SUB_DIR/sub_logs"
 chmod -R 777 "$SUB_DIR/sub_logs"
 echo -e "${GREEN}✓${NC} Директории логов подготовлены"
 
-# Создание .env для docker-compose (только для standalone mode)
+# Создание .env для docker-compose в зависимости от режима
 if [ "$CADDY_MODE" = "standalone" ]; then
-    echo -e "\n${YELLOW}Создание .env для Docker Compose...${NC}"
+    echo -e "\n${YELLOW}Создание .env для Docker Compose (standalone mode)...${NC}"
     ENV_COMPOSE_FILE="$SUB_DIR/.env"
     
     cat > "$ENV_COMPOSE_FILE" <<ENVEOF
 SUB_DOMAIN=${SUB_DOMAIN}
+SUB_PORT=${SUB_PORT}
+ENVEOF
+    
+    echo -e "${GREEN}✓${NC} .env создан: $ENV_COMPOSE_FILE"
+else
+    # Shared mode - только SUB_PORT для healthcheck
+    echo -e "\n${YELLOW}Создание .env для Docker Compose (shared mode)...${NC}"
+    ENV_COMPOSE_FILE="$SUB_DIR/.env"
+    
+    cat > "$ENV_COMPOSE_FILE" <<ENVEOF
 SUB_PORT=${SUB_PORT}
 ENVEOF
     

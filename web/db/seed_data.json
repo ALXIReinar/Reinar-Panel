@@ -367,10 +367,12 @@
       "proto_python_lib": "xtlsapi",
       "sub_prepare_script": "def prepare_sub(user_uuid: str, config_link: str):\n    # 1. Заменяем плейсхолдер user_uuid (не используем .format() из-за многострочного JSON)\n    json_str = config_link.replace(\"{user_uuid}\", user_uuid)\n    \n    # 2. Кодируем JSON в Base64\n    b64_config = base64.b64encode(json_str.encode(\"utf-8\")).decode(\"utf-8\")\n    \n    # 3. Возвращаем готовую ссылку\n    return f\"vmess://{b64_config}\"\n",
       "sub_required_libs": "base64",
-      "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vmess-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
+      "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vmess-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
       "metrics_parser_code": "def parse(raw_metrics):\n    \"\"\"\n    Универсальный парсер метрик для Xray\n    \n    Принимает:\n    - JSON string от CLI (xray api statsquery)\n    - JSON dict от xtlsapi  \n    - Plain text (fallback)\n    - Пустой список (нет метрик)\n    \n    Возвращает: tuple(list[dict], list[dict])\n        - users_traffics: [{'user_sub_id': 1, 'total_mb_used': 1024}, ...]\n        - troubles: список проблемных записей\n    \"\"\"\n    \n    def _parse_plain_text(text):\n        \"\"\"Fallback парсер для plain text формата\"\"\"\n        lines = text.strip().split('\\\\n')\n        traffic_map = defaultdict(int)\n        \n        for line in lines:\n            if '>>>' not in line:\n                continue\n            \n            parts = line.split('>>>')\n            if len(parts) >= 2:\n                username = parts[1]\n                numbers = re.findall(r'\\\\d+', line)\n                if numbers:\n                    traffic_map[username] += int(numbers[-1])\n        \n        return [\n            {'user_sub_id': int(u), 'total_mb_used': mb}\n            for u, mb in traffic_map.items()\n        ], []\n    \n    # Обработка пустого списка (нет трафика)\n    if isinstance(raw_metrics, list) and len(raw_metrics) == 0:\n        return [], []\n    \n    if isinstance(raw_metrics, str):\n        try:\n            json_obj = json.loads(raw_metrics)\n        except json.JSONDecodeError:\n            return _parse_plain_text(raw_metrics)\n    else:\n        json_obj = raw_metrics\n    \n    traffic_map = defaultdict(int)\n    troubles = []\n    \n    stats_list = json_obj.get('stat', [])\n    if not stats_list:\n        return [], []\n    \n    for user in stats_list:\n        name = user.get('name', '')\n        if not name or 'user>>>' not in name:\n            troubles.append(user)\n            continue\n        \n        parts = name.split('>>>')\n        if len(parts) < 2:\n            troubles.append(user)\n            continue\n        \n        user_sub_id= int(parts[1])\n        traffic_bytes = int(user.get('value', 0))\n        traffic_mb = traffic_bytes // 1024 // 1024\n        \n        traffic_map[user_sub_id] += traffic_mb\n    \n    users_traffics = [\n        {'user_sub_id': username, 'total_mb_used': used_mb} \n        for username, used_mb in traffic_map.items()\n    ]\n    \n    return users_traffics, troubles\n    ",
       "metrics_command": "xray api statsquery --server=127.0.0.1:{} -pattern \"user>>>\" -reset",
-      "bulk_delete_script_custom_params": {},
+      "bulk_delete_script_custom_params": {
+        "inbound_tag": "vmess-inbound"
+      },
       "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
       "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vmess-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            _id = u.get('id')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                    alter_id=0,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
       "bulk_add_script_custom_params": {
@@ -383,7 +385,7 @@
       "templates_users_extractors": [
         {
           "flatten_array_cursor": "inbounds___0___settings___clients",
-          "extractor_script": "id",
+          "extractor_script": "def transform(user_obj: dict) -> dict:\n    \"\"\"VMESS\"\"\"\n    return {\n        \"id\": user_obj[\"user_uuid\"],\n        \"email\": user_obj[\"user_sub_id\"],\n        \"alterId\": user_obj.get(\"alterId\", 0),\n    }",
           "libs": null,
           "tmp_id": "proto_templates_CURRENT"
         }
@@ -405,10 +407,12 @@
       "proto_python_lib": "xtlsapi",
       "sub_prepare_script": "def prepare_sub(user_uuid: str, config_link: str):\n    # 1. Заменяем плейсхолдер user_uuid (не используем .format() из-за многострочного JSON)\n    json_str = config_link.replace(\"{user_uuid}\", user_uuid)\n    \n    # 2. Кодируем JSON в Base64\n    b64_config = base64.b64encode(json_str.encode(\"utf-8\")).decode(\"utf-8\")\n    \n    # 3. Возвращаем готовую ссылку\n    return f\"vmess://{b64_config}\"\n",
       "sub_required_libs": "base64",
-      "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vmess-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
+      "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vmess-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
       "metrics_parser_code": "def parse(raw_metrics):\n    \"\"\"\n    Универсальный парсер метрик для Xray\n    \n    Принимает:\n    - JSON string от CLI (xray api statsquery)\n    - JSON dict от xtlsapi  \n    - Plain text (fallback)\n    - Пустой список (нет метрик)\n    \n    Возвращает: tuple(list[dict], list[dict])\n        - users_traffics: [{'user_sub_id': 1, 'total_mb_used': 1024}, ...]\n        - troubles: список проблемных записей\n    \"\"\"\n    \n    def _parse_plain_text(text):\n        \"\"\"Fallback парсер для plain text формата\"\"\"\n        lines = text.strip().split('\\\\n')\n        traffic_map = defaultdict(int)\n        \n        for line in lines:\n            if '>>>' not in line:\n                continue\n            \n            parts = line.split('>>>')\n            if len(parts) >= 2:\n                username = parts[1]\n                numbers = re.findall(r'\\\\d+', line)\n                if numbers:\n                    traffic_map[username] += int(numbers[-1])\n        \n        return [\n            {'user_sub_id': int(u), 'total_mb_used': mb}\n            for u, mb in traffic_map.items()\n        ], []\n    \n    # Обработка пустого списка (нет трафика)\n    if isinstance(raw_metrics, list) and len(raw_metrics) == 0:\n        return [], []\n    \n    if isinstance(raw_metrics, str):\n        try:\n            json_obj = json.loads(raw_metrics)\n        except json.JSONDecodeError:\n            return _parse_plain_text(raw_metrics)\n    else:\n        json_obj = raw_metrics\n    \n    traffic_map = defaultdict(int)\n    troubles = []\n    \n    stats_list = json_obj.get('stat', [])\n    if not stats_list:\n        return [], []\n    \n    for user in stats_list:\n        name = user.get('name', '')\n        if not name or 'user>>>' not in name:\n            troubles.append(user)\n            continue\n        \n        parts = name.split('>>>')\n        if len(parts) < 2:\n            troubles.append(user)\n            continue\n        \n        user_sub_id= int(parts[1])\n        traffic_bytes = int(user.get('value', 0))\n        traffic_mb = traffic_bytes // 1024 // 1024\n        \n        traffic_map[user_sub_id] += traffic_mb\n    \n    users_traffics = [\n        {'user_sub_id': username, 'total_mb_used': used_mb} \n        for username, used_mb in traffic_map.items()\n    ]\n    \n    return users_traffics, troubles\n    ",
       "metrics_command": "xray api statsquery --server=127.0.0.1:{} -pattern \"user>>>\" -reset",
-      "bulk_delete_script_custom_params": {},
+      "bulk_delete_script_custom_params": {
+        "inbound_tag": "vmess-inbound"
+      },
       "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
       "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vmess-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            _id = u.get('id')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                    alter_id=0,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
       "bulk_add_script_custom_params": {
@@ -421,7 +425,7 @@
       "templates_users_extractors": [
         {
           "flatten_array_cursor": "inbounds___0___settings___clients",
-          "extractor_script": "id",
+          "extractor_script": "def transform(user_obj: dict) -> dict:\n    \"\"\"VMESS\"\"\"\n    return {\n        \"id\": user_obj[\"user_uuid\"],\n        \"email\": user_obj[\"user_sub_id\"],\n        \"alterId\": user_obj.get(\"alterId\", 0),\n    }",
           "libs": null,
           "tmp_id": "proto_templates_CURRENT"
         }
@@ -443,10 +447,12 @@
       "proto_python_lib": "xtlsapi",
       "sub_prepare_script": "def prepare_sub(user_uuid: str, config_link: str):\n    # 1. Заменяем плейсхолдер user_uuid (не используем .format() из-за многострочного JSON)\n    json_str = config_link.replace(\"{user_uuid}\", user_uuid)\n    \n    # 2. Кодируем JSON в Base64\n    b64_config = base64.b64encode(json_str.encode(\"utf-8\")).decode(\"utf-8\")\n    \n    # 3. Возвращаем готовую ссылку\n    return f\"vmess://{b64_config}\"\n",
       "sub_required_libs": "base64",
-      "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vmess-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
+      "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vmess-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
       "metrics_parser_code": "def parse(raw_metrics):\n    \"\"\"\n    Универсальный парсер метрик для Xray\n    \n    Принимает:\n    - JSON string от CLI (xray api statsquery)\n    - JSON dict от xtlsapi  \n    - Plain text (fallback)\n    - Пустой список (нет метрик)\n    \n    Возвращает: tuple(list[dict], list[dict])\n        - users_traffics: [{'user_sub_id': 1, 'total_mb_used': 1024}, ...]\n        - troubles: список проблемных записей\n    \"\"\"\n    \n    def _parse_plain_text(text):\n        \"\"\"Fallback парсер для plain text формата\"\"\"\n        lines = text.strip().split('\\\\n')\n        traffic_map = defaultdict(int)\n        \n        for line in lines:\n            if '>>>' not in line:\n                continue\n            \n            parts = line.split('>>>')\n            if len(parts) >= 2:\n                username = parts[1]\n                numbers = re.findall(r'\\\\d+', line)\n                if numbers:\n                    traffic_map[username] += int(numbers[-1])\n        \n        return [\n            {'user_sub_id': int(u), 'total_mb_used': mb}\n            for u, mb in traffic_map.items()\n        ], []\n    \n    # Обработка пустого списка (нет трафика)\n    if isinstance(raw_metrics, list) and len(raw_metrics) == 0:\n        return [], []\n    \n    if isinstance(raw_metrics, str):\n        try:\n            json_obj = json.loads(raw_metrics)\n        except json.JSONDecodeError:\n            return _parse_plain_text(raw_metrics)\n    else:\n        json_obj = raw_metrics\n    \n    traffic_map = defaultdict(int)\n    troubles = []\n    \n    stats_list = json_obj.get('stat', [])\n    if not stats_list:\n        return [], []\n    \n    for user in stats_list:\n        name = user.get('name', '')\n        if not name or 'user>>>' not in name:\n            troubles.append(user)\n            continue\n        \n        parts = name.split('>>>')\n        if len(parts) < 2:\n            troubles.append(user)\n            continue\n        \n        user_sub_id= int(parts[1])\n        traffic_bytes = int(user.get('value', 0))\n        traffic_mb = traffic_bytes // 1024 // 1024\n        \n        traffic_map[user_sub_id] += traffic_mb\n    \n    users_traffics = [\n        {'user_sub_id': username, 'total_mb_used': used_mb} \n        for username, used_mb in traffic_map.items()\n    ]\n    \n    return users_traffics, troubles\n    ",
       "metrics_command": "xray api statsquery --server=127.0.0.1:{} -pattern \"user>>>\" -reset",
-      "bulk_delete_script_custom_params": {},
+      "bulk_delete_script_custom_params": {
+        "inbound_tag": "vmess-inbound"
+      },
       "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
       "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vmess-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            _id = u.get('id')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                    alter_id=0,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
       "bulk_add_script_custom_params": {
@@ -464,7 +470,7 @@
       "templates_users_extractors": [
         {
           "flatten_array_cursor": "inbounds___0___settings___clients",
-          "extractor_script": "id",
+          "extractor_script": "def transform(user_obj: dict) -> dict:\n    \"\"\"VMESS\"\"\"\n    return {\n        \"id\": user_obj[\"user_uuid\"],\n        \"email\": user_obj[\"user_sub_id\"],\n        \"alterId\": user_obj.get(\"alterId\", 0),\n    }",
           "libs": null,
           "tmp_id": "proto_templates_CURRENT"
         }
@@ -486,10 +492,12 @@
       "proto_python_lib": "xtlsapi",
       "sub_prepare_script": "def prepare_sub(user_uuid: str, config_link: str):\n    # 1. Заменяем плейсхолдер user_uuid (не используем .format() из-за многострочного JSON)\n    json_str = config_link.replace(\"{user_uuid}\", user_uuid)\n    \n    # 2. Кодируем JSON в Base64\n    b64_config = base64.b64encode(json_str.encode(\"utf-8\")).decode(\"utf-8\")\n    \n    # 3. Возвращаем готовую ссылку\n    return f\"vmess://{b64_config}\"\n",
       "sub_required_libs": "base64",
-      "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vmess-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
+      "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vmess-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
       "metrics_parser_code": "def parse(raw_metrics):\n    \"\"\"\n    Универсальный парсер метрик для Xray\n    \n    Принимает:\n    - JSON string от CLI (xray api statsquery)\n    - JSON dict от xtlsapi  \n    - Plain text (fallback)\n    - Пустой список (нет метрик)\n    \n    Возвращает: tuple(list[dict], list[dict])\n        - users_traffics: [{'user_sub_id': 1, 'total_mb_used': 1024}, ...]\n        - troubles: список проблемных записей\n    \"\"\"\n    \n    def _parse_plain_text(text):\n        \"\"\"Fallback парсер для plain text формата\"\"\"\n        lines = text.strip().split('\\\\n')\n        traffic_map = defaultdict(int)\n        \n        for line in lines:\n            if '>>>' not in line:\n                continue\n            \n            parts = line.split('>>>')\n            if len(parts) >= 2:\n                username = parts[1]\n                numbers = re.findall(r'\\\\d+', line)\n                if numbers:\n                    traffic_map[username] += int(numbers[-1])\n        \n        return [\n            {'user_sub_id': int(u), 'total_mb_used': mb}\n            for u, mb in traffic_map.items()\n        ], []\n    \n    # Обработка пустого списка (нет трафика)\n    if isinstance(raw_metrics, list) and len(raw_metrics) == 0:\n        return [], []\n    \n    if isinstance(raw_metrics, str):\n        try:\n            json_obj = json.loads(raw_metrics)\n        except json.JSONDecodeError:\n            return _parse_plain_text(raw_metrics)\n    else:\n        json_obj = raw_metrics\n    \n    traffic_map = defaultdict(int)\n    troubles = []\n    \n    stats_list = json_obj.get('stat', [])\n    if not stats_list:\n        return [], []\n    \n    for user in stats_list:\n        name = user.get('name', '')\n        if not name or 'user>>>' not in name:\n            troubles.append(user)\n            continue\n        \n        parts = name.split('>>>')\n        if len(parts) < 2:\n            troubles.append(user)\n            continue\n        \n        user_sub_id= int(parts[1])\n        traffic_bytes = int(user.get('value', 0))\n        traffic_mb = traffic_bytes // 1024 // 1024\n        \n        traffic_map[user_sub_id] += traffic_mb\n    \n    users_traffics = [\n        {'user_sub_id': username, 'total_mb_used': used_mb} \n        for username, used_mb in traffic_map.items()\n    ]\n    \n    return users_traffics, troubles\n    ",
       "metrics_command": "xray api statsquery --server=127.0.0.1:{} -pattern \"user>>>\" -reset",
-      "bulk_delete_script_custom_params": {},
+      "bulk_delete_script_custom_params": {
+        "inbound_tag": "vmess-inbound"
+      },
       "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
       "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vmess-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            _id = u.get('id')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                    alter_id=0,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
       "bulk_add_script_custom_params": {
@@ -502,7 +510,7 @@
       "templates_users_extractors": [
         {
           "flatten_array_cursor": "inbounds___0___settings___clients",
-          "extractor_script": "id",
+          "extractor_script": "def transform(user_obj: dict) -> dict:\n    \"\"\"VMESS\"\"\"\n    return {\n        \"id\": user_obj[\"user_uuid\"],\n        \"email\": user_obj[\"user_sub_id\"],\n        \"alterId\": user_obj.get(\"alterId\", 0),\n    }",
           "libs": null,
           "tmp_id": "proto_templates_CURRENT"
         }
@@ -611,7 +619,7 @@
         "inbound_tag": "trojan-inbound"
       },
       "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
-      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"trojan-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            _id = u.get('password')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
+      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"trojan-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            _id = u.get('password')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
       "bulk_add_script_custom_params": {
         "inbound_tag": "trojan-inbound"
       },
@@ -631,7 +639,7 @@
       "templates_users_extractors": [
         {
           "flatten_array_cursor": "inbounds___0___settings___clients",
-          "extractor_script": "password",
+          "extractor_script": "def transform(user_obj: dict) -> dict:\n    \"\"\"XRAY_TROJAN\"\"\"\n    return {\n        \"email\": user_obj[\"user_sub_id\"],\n        \"password\": user_obj[\"user_uuid\"],\n    }",
           "libs": null,
           "tmp_id": "proto_templates_CURRENT"
         }
@@ -658,7 +666,7 @@
         "inbound_tag": "trojan-inbound"
       },
       "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
-      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"trojan-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            _id = u.get('password')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
+      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"trojan-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            _id = u.get('password')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
       "bulk_add_script_custom_params": {
         "inbound_tag": "trojan-inbound"
       },
@@ -682,7 +690,7 @@
       "templates_users_extractors": [
         {
           "flatten_array_cursor": "inbounds___0___settings___clients",
-          "extractor_script": "password",
+          "extractor_script": "def transform(user_obj: dict) -> dict:\n    \"\"\"XRAY_TROJAN\"\"\"\n    return {\n        \"email\": user_obj[\"user_sub_id\"],\n        \"password\": user_obj[\"user_uuid\"],\n    }",
           "libs": null,
           "tmp_id": "proto_templates_CURRENT"
         }
@@ -709,7 +717,7 @@
         "inbound_tag": "trojan-inbound"
       },
       "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
-      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"trojan-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            _id = u.get('password')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
+      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"trojan-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            _id = u.get('password')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
       "bulk_add_script_custom_params": {
         "inbound_tag": "trojan-inbound"
       },
@@ -725,7 +733,7 @@
       "templates_users_extractors": [
         {
           "flatten_array_cursor": "inbounds___0___settings___clients",
-          "extractor_script": "password",
+          "extractor_script": "def transform(user_obj: dict) -> dict:\n    \"\"\"XRAY_TROJAN\"\"\"\n    return {\n        \"email\": user_obj[\"user_sub_id\"],\n        \"password\": user_obj[\"user_uuid\"],\n    }",
           "libs": null,
           "tmp_id": "proto_templates_CURRENT"
         }
@@ -752,7 +760,7 @@
         "inbound_tag": "trojan-inbound"
       },
       "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
-      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"trojan-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            _id = u.get('password')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
+      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"trojan-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            _id = u.get('password')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
       "bulk_add_script_custom_params": {
         "inbound_tag": "trojan-inbound"
       },
@@ -768,7 +776,7 @@
       "templates_users_extractors": [
         {
           "flatten_array_cursor": "inbounds___0___settings___clients",
-          "extractor_script": "password",
+          "extractor_script": "def transform(user_obj: dict) -> dict:\n    \"\"\"XRAY_TROJAN\"\"\"\n    return {\n        \"email\": user_obj[\"user_sub_id\"],\n        \"password\": user_obj[\"user_uuid\"],\n    }",
           "libs": null,
           "tmp_id": "proto_templates_CURRENT"
         }
@@ -795,7 +803,7 @@
         "inbound_tag": "trojan-inbound"
       },
       "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
-      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"trojan-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            _id = u.get('password')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
+      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"trojan-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            _id = u.get('password')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
       "bulk_add_script_custom_params": {
         "inbound_tag": "trojan-inbound"
       },
@@ -815,7 +823,7 @@
       "templates_users_extractors": [
         {
           "flatten_array_cursor": "inbounds___0___settings___clients",
-          "extractor_script": "password",
+          "extractor_script": "def transform(user_obj: dict) -> dict:\n    \"\"\"XRAY_TROJAN\"\"\"\n    return {\n        \"email\": user_obj[\"user_sub_id\"],\n        \"password\": user_obj[\"user_uuid\"],\n    }",
           "libs": null,
           "tmp_id": "proto_templates_CURRENT"
         }
@@ -842,7 +850,7 @@
         "inbound_tag": "trojan-inbound"
       },
       "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
-      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"trojan-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            _id = u.get('password')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
+      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"trojan-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            _id = u.get('password')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
       "bulk_add_script_custom_params": {
         "inbound_tag": "trojan-inbound"
       },
@@ -853,7 +861,7 @@
       "templates_users_extractors": [
         {
           "flatten_array_cursor": "inbounds___0___settings___clients",
-          "extractor_script": "password",
+          "extractor_script": "def transform(user_obj: dict) -> dict:\n    \"\"\"XRAY_TROJAN\"\"\"\n    return {\n        \"email\": user_obj[\"user_sub_id\"],\n        \"password\": user_obj[\"user_uuid\"],\n    }",
           "libs": null,
           "tmp_id": "proto_templates_CURRENT"
         }
@@ -882,7 +890,7 @@
         "inbound_tag": "hysteria-inbound"
       },
       "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
-      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"hysteria-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            _id = u.get('auth')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
+      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"hysteria-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            _id = u.get('user_uuid')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
       "bulk_add_script_custom_params": {
         "inbound_tag": "hysteria-inbound"
       },
@@ -893,7 +901,7 @@
       "templates_users_extractors": [
         {
           "flatten_array_cursor": "inbounds___0___settings___users",
-          "extractor_script": "auth",
+          "extractor_script": "def transform(user_obj: dict) -> dict:\n    \"\"\"XRAY_HY2\"\"\"\n    return {\n        \"email\": user_obj[\"user_sub_id\"],\n        \"auth\": user_obj[\"user_uuid\"],\n        \"level\": user_obj.get(\"level\", 0),\n    }",
           "libs": null,
           "tmp_id": "proto_templates_CURRENT"
         }
@@ -922,7 +930,7 @@
         "inbound_tag": "hysteria-inbound"
       },
       "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
-      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"hysteria-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            _id = u.get('auth')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
+      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"hysteria-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            _id = u.get('user_uuid')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
       "bulk_add_script_custom_params": {
         "inbound_tag": "hysteria-inbound"
       },
@@ -933,7 +941,7 @@
       "templates_users_extractors": [
         {
           "flatten_array_cursor": "inbounds___0___settings___users",
-          "extractor_script": "auth",
+          "extractor_script": "def transform(user_obj: dict) -> dict:\n    \"\"\"XRAY_HY2\"\"\"\n    return {\n        \"email\": user_obj[\"user_sub_id\"],\n        \"auth\": user_obj[\"user_uuid\"],\n        \"level\": user_obj.get(\"level\", 0),\n    }",
           "libs": null,
           "tmp_id": "proto_templates_CURRENT"
         }
@@ -958,7 +966,7 @@
       "metrics_command": "xray api statsquery --server=127.0.0.1:{} -pattern \"user>>>\" -reset",
       "bulk_delete_script_custom_params": {},
       "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
-      "api_bulk_add_user_script": null,
+      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"hysteria-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            _id = u.get('user_uuid')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
@@ -1001,7 +1009,7 @@
       "metrics_command": "xray api statsquery --server=127.0.0.1:{} -pattern \"user>>>\" -reset",
       "bulk_delete_script_custom_params": {},
       "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
-      "api_bulk_add_user_script": null,
+      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"hysteria-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            _id = u.get('user_uuid')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
@@ -1044,7 +1052,7 @@
       "metrics_command": "xray api statsquery --server=127.0.0.1:{} -pattern \"user>>>\" -reset",
       "bulk_delete_script_custom_params": {},
       "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
-      "api_bulk_add_user_script": null,
+      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"hysteria-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            _id = u.get('user_uuid')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
@@ -1078,7 +1086,7 @@
       "metrics_command": "xray api statsquery --server=127.0.0.1:{} -pattern \"user>>>\" -reset",
       "bulk_delete_script_custom_params": {},
       "api_metrics_script": "async def get_metrics(node_ip, core_port, custom_params):\n    def _do_collect():\n        client = xtlsapi.XrayClient(node_ip, core_port)\n        return client.stats_query(pattern='user>>>', reset=True)\n    return await asyncio.to_thread(_do_collect)",
-      "api_bulk_add_user_script": null,
+      "api_bulk_add_user_script": "async def bulk_add_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"hysteria-inbound\")\n    client = xtlsapi.XrayClient(node_ip, core_port)\n\n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            _id = u.get('user_uuid')\n            try:\n                client.add_client(\n                    inbound_tag=inbound_tag,\n                    user_id_or_password=_id,\n                    email=email,\n                )\n                success_count += 1\n            except xtlsapi.exceptions.EmailAlreadyExists: \n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск добавления {email}: {e}\")\n        return success_count\n\n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n\n    return {\"success\": success_count, \"failed\": failed_count}",
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
@@ -1134,67 +1142,54 @@
   ],
   "whitelist_commands": [
     {
-      "id": 1,
       "command": "systemctl",
       "is_active": true
     },
     {
-      "id": 2,
       "command": "journalctl",
       "is_active": true
     },
     {
-      "id": 4,
       "command": "ls",
       "is_active": true
     },
     {
-      "id": 5,
       "command": "grep",
       "is_active": true
     },
     {
-      "id": 6,
       "command": "ps",
       "is_active": true
     },
     {
-      "id": 7,
       "command": "netstat",
       "is_active": true
     },
     {
-      "id": 8,
       "command": "ss",
       "is_active": true
     },
     {
-      "id": 9,
       "command": "ip",
       "is_active": true
     },
     {
-      "id": 10,
       "command": "ping",
       "is_active": true
     },
     {
-      "id": 15,
       "command": "cat",
       "is_active": true
     },
     {
-      "id": 23,
       "command": "hostname",
       "is_active": true
     },
     {
-      "id": 24,
       "command": "xray",
       "is_active": true
     },
     {
-      "id": 25,
       "command": "df",
       "is_active": true
     }

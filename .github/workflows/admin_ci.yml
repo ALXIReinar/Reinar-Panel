@@ -37,15 +37,6 @@ jobs:
         env:
           ARTIFACTS_B64: ${{ vars.ARTIFACTS_B64 }}
 
-      - name: Generate RSA keys for tests
-        run: |
-          echo "🔐 Генерация RSA ключей..."
-          mkdir -p web/secrets/test_keys
-          openssl genrsa -out web/secrets/test_keys/private_key.pem 2048
-          openssl rsa -in web/secrets/test_keys/private_key.pem -outform PEM -pubout -out web/secrets/test_keys/public_key.pem
-          chmod 644 web/secrets/test_keys/private_key.pem
-          chmod 644 web/secrets/test_keys/public_key.pem
-
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -105,14 +96,52 @@ jobs:
           chmod 644 web/secrets/test_keys/private_key.pem
           chmod 644 web/secrets/test_keys/public_key.pem
 
-      - name: Setup test environment files
+      - name: Generate passwords and setup environment files
         run: |
+          echo "🔐 Генерация паролей..."
+          PG_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
+          REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
+          
+          echo "📝 Создание web/.env для docker-compose..."
+          cat > web/.env << EOF
+          PG_DB=reinar_db
+          PG_ADMIN=postgres
+          PG_ADMIN_PASSWORD=${PG_PASSWORD}
+          PG_PORT=5432
+          REDIS_PORT=6379
+          ADMIN_PORT=$ADMIN_PORT
+          SUB_PORT=8080
+          SUB_DOMAIN=test.example.com
+          REDIS_PASSWORD=${REDIS_PASSWORD}
+          ADMIN_DOMAIN=test.example.com
+          EOF
+          
           echo "📝 Создание .env.api.test..."
           echo "$ENV_API_TEST_FILE" > web/.env.api.test
-          echo "UVICORN_PORT=$ADMIN_PORT" >> web/.env.api.test
+          cat >> web/.env.api.test << EOF
+          PG_ADMIN=postgres
+          PG_ADMIN_PASSWORD=${PG_PASSWORD}
+          PG_PORT=5432
+          PG_HOST=pg_db
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          REDIS_PASSWORD=${REDIS_PASSWORD}
+          APP_MODE=docker
+          UVICORN_PORT=$ADMIN_PORT
+          EOF
           
           echo "📝 Создание .env.arq.test..."
           echo "$ENV_ARQ_TEST_FILE" > web/arq_worker/.env.arq.test
+          cat >> web/arq_worker/.env.arq.test << EOF
+          PG_USER=postgres
+          PG_PASSWORD=${PG_PASSWORD}
+          PG_PORT=5432
+          PG_HOST=localhost
+          REDIS_HOST=localhost
+          REDIS_PORT=6379
+          REDIS_PASSWORD=${REDIS_PASSWORD}
+          APP_MODE=docker
+          EOF
         env:
           ENV_API_TEST_FILE: ${{ vars.ENV_API_TEST_FILE }}
           ENV_ARQ_TEST_FILE: ${{ vars.ENV_ARQ_TEST_FILE }}

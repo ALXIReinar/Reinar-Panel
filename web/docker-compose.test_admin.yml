@@ -19,9 +19,8 @@ services:
     restart: on-failure
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./secrets/test_dumps:/docker-entrypoint-initdb.d:z
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${PG_PORT}:5432"
 
   redis:
     image: redis:7.2-alpine
@@ -37,7 +36,29 @@ services:
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:${REDIS_PORT}:6379"
+
+  web-db-migrations:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: sh -c "alembic -c web/alembic.ini upgrade head && python web/db/seed_data.py"
+#    command: sh -c "sleep 300 && alembic -c web/alembic.ini upgrade head && python web/db/seed_data.py" # ДЛЯ ДЕБАГА. Позволяет рассмотреть ФС контейнера
+    image: reinar_panel/web_service:latest
+    container_name: web-db-migrations
+    environment:
+      - ENV_FILE=/run/secrets/env.api.test
+    depends_on:
+      pg_db:
+        condition: service_healthy
+    volumes:
+#      - ./:/app/web
+      - ./db:/app/web/db:ro
+    network_mode: host
+    secrets:
+      - env.api.test
+      - private_key.pem
+      - public_key.pem
 
   web-service:
     build: .
@@ -48,9 +69,13 @@ services:
     depends_on:
       pg_db:
         condition: service_healthy
+      web-db-migrations:
+        condition: service_completed_successfully
     environment:
       - ENV_FILE=/run/secrets/env.api.test
     network_mode: host
+    volumes:
+      - ./:/app/web
     secrets:
       - env.api.test
       - private_key.pem

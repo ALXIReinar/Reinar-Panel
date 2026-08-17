@@ -2,7 +2,7 @@ name: Node Client CI
 
 on:
   push:
-    branches: ["main", "dev/node"]
+    branches: ["main", "dev/backend", "dev/node"]
   pull_request:
     branches: ["main", "dev/backend", "dev/master"]
 
@@ -30,26 +30,54 @@ jobs:
       - name: Setup test environment file
         run: |
           echo "📝 Создание .env.node.test..."
-          cat > node_client/.env.node.test <<EOF
-          ${{ vars.ENV_NODE_TEST_FILE }}
 
+          PG_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
+          cat > node_client/.env.node.test <<EOF
+          PYTHONUNBUFFERED=1
+
+          COMMAND_TIMEOUT=30
+          WRITE_BUFFER_INTERVAL=10
+          WRITE_BUFFER_SIZE=5
+          
+          PG_DB=reinar_db
+          PG_PASSWORD=${PG_PASSWORD}
+          PG_USER=postgres
+          PG_PORT=5432
+          PG_HOST=127.0.0.1
+  
           NODE_PORT=${{ vars.NODE_PORT }}
           NODE_NAME=${{ vars.NODE_NAME }}
           ADMIN_PANEL_PRIVATE_IP=${{ vars.ADMIN_PANEL_PRIVATE_IP }}
           EOF
+          
+          cat > node_client/.env <<EOF
+          PG_DB=reinar_db
+          PG_ADMIN=postgres
+          PG_ADMIN_PASSWORD=${PG_PASSWORD}
+          PG_PORT=5431
+          EOF
 
-      - name: Docker Up DB
-        run: docker compose -f node_client/docker-compose.test.yml up --build -d
+      - name: Docker Up DB and Run Migrations
+        run: |
+          echo "🚀 Запуск PostgreSQL и накатывание миграций..."
+          docker compose -f node_client/docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from web-db-migrations
+          
+          echo "✅ Миграции успешно накачены"
+          
+          # Перезапуск pg_db чтобы он продолжил работать после завершения миграций
+          docker compose -f node_client/docker-compose.test.yml up -d pg_db
 
       - name: Check DB
         run: |
-          echo "⏳ Проверка healthcheck PostgreSQL..."
-          for i in {1..12}; do
+          echo "⏳ Проверка доступности PostgreSQL..."
+          for i in {1..6}; do
             if docker exec pg_db pg_isready -U postgres; then
+              echo "✅ PostgreSQL готов"
               exit 0
             fi
-            sleep 5
+            sleep 3
           done
+          echo "❌ PostgreSQL недоступен"
           docker logs pg_db || true
           exit 1
 
@@ -62,7 +90,7 @@ jobs:
         run: pip install -r node_client/requirements.txt
 
       - name: Run Tests
-        run: python -m pytest node_client/tests -v --vpn-core vless --mode real
+        run: python -m pytest node_client/tests -v --protocol * --mode real
 
       - name: Stop test containers
         if: always()

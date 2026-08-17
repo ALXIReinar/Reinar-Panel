@@ -5,12 +5,16 @@ from pathlib import Path
 from datetime import datetime
 from asyncpg import create_pool
 
-from web.config_dir.config import pool_settings
+from web.config_dir.config import pool_settings, env
 
 
 async def export_seed_data():
     """Экспортирует актуальные данные из test-postgresql"""
-    pool = await create_pool(**pool_settings)
+    # Создаём пул подключений
+    admin_pool_settings = pool_settings.copy()
+    admin_pool_settings['user'], admin_pool_settings['password'] = env.pg_admin, env.pg_admin_password
+
+    pool = await create_pool(**admin_pool_settings)
     
     try:
         async with pool.acquire() as conn:
@@ -58,7 +62,12 @@ async def export_seed_data():
             whitelist_commands = await conn.fetch(
                 "SELECT * FROM whitelist_commands ORDER BY id"
             )
-            
+            whitelist_commands_list = []
+            for wc in whitelist_commands:
+                wc = dict(wc)
+                del wc['id']
+                whitelist_commands_list.append(wc)
+
             # Конвертируем в dict
             result = {
                 "templates_statuses": [dict(row) for row in templates_statuses],
@@ -66,7 +75,7 @@ async def export_seed_data():
                 "pay_statuses": [dict(row) for row in pay_statuses],
                 "online_statuses": [dict(row) for row in online_statuses],
                 "sub_nodes_operations": [dict(row) for row in sub_nodes_operations],
-                "whitelist_commands": [dict(row) for row in whitelist_commands],
+                "whitelist_commands": whitelist_commands_list,
             }
             
             # Обрабатываем proto_templates с вложенными данными

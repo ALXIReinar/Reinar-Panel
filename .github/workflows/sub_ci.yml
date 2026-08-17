@@ -2,7 +2,7 @@ name: Sub Service CI
 
 on:
   push:
-    branches: ["main", "dev/sub"]
+    branches: ["main", "dev/backend", "dev/sub"]
   pull_request:
     branches: ["main", "dev/backend", "dev/master"]
 
@@ -83,22 +83,38 @@ jobs:
         env:
           ARTIFACTS_B64: ${{ vars.ARTIFACTS_B64 }}
 
-      - name: Setup test environment file
+      - name: Generate passwords and setup environment files
         run: |
+          echo "� Генерация паролей..."
+          PG_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
+          REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
+          
+          echo "�📝 Создание web/sub/.env для docker-compose..."
+          cat > web/sub/.env << EOF
+          PG_DB=reinar_db
+          PG_ADMIN=postgres
+          PG_ADMIN_PASSWORD=${PG_PASSWORD}
+          PG_PORT=5432
+          REDIS_PORT=6379
+          SUB_PORT=${{ vars.SUB_PORT }}
+          SUB_DOMAIN=test.example.com
+          REDIS_PASSWORD=${REDIS_PASSWORD}
+          EOF
+          
           echo "📝 Создание .env.sub.test..."
           cat > web/sub/.env.sub.test <<EOF
-          PG_USER=test_reinar_user
-          PG_PASSWORD=CAK!uiAGd89_ADhlsanca
-          PG_DB=test_reinar_db
-          PG_HOST=127.0.0.1
+          PG_USER=postgres
+          PG_PASSWORD=${PG_PASSWORD}
+          PG_DB=reinar_db
+          PG_HOST=localhost
           PG_PORT=5432
           PG_MAX_CONNECTIONS=50
           DOMAIN=http://127.0.0.1:8080
           TG_BOT_SERVICE_PRIVATE_IP=127.0.0.1,10.0.0.2
 
-          REDIS_PASSWORD=R'F&scBdorS8@0A-1!
+          REDIS_PASSWORD=${REDIS_PASSWORD}
           REDIS_MAX_CONNECTIONS=50
-          REDIS_HOST=127.0.0.1
+          REDIS_HOST=localhost
           REDIS_PORT=6379
 
           UVICORN_WORKERS=1

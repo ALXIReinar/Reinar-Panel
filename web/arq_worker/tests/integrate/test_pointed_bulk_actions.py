@@ -50,29 +50,31 @@ class TestPointedBulkAction:
         # Проверяем параметры каждого вызова
         calls = mock_arq_ctx['arq_redis'].enqueue_job.call_args_list
         
-        # Первая нода (vnode_id_10)
-        call_1 = calls[0]
-        assert call_1[0][0] == 'bulk_action_users_by_node'  # Имя функции
-        assert call_1[0][1] == pointed_bulk_seed['vnode_id_10']  # node_proto_id
-        assert call_1[0][2] == "10.0.0.100"  # private_ip
+        # Находим вызовы по node_proto_id (порядок не детерминирован в SQL без ORDER BY)
+        call_vnode_10 = [c for c in calls if c[0][1] == pointed_bulk_seed['vnode_id_10']][0]
+        call_vnode_11 = [c for c in calls if c[0][1] == pointed_bulk_seed['vnode_id_11']][0]
+        
+        # Проверяем вызов для vnode_id_10
+        assert call_vnode_10[0][0] == 'bulk_action_users_by_node'  # Имя функции
+        assert call_vnode_10[0][1] == pointed_bulk_seed['vnode_id_10']  # node_proto_id
+        assert call_vnode_10[0][2] == "10.0.0.100"  # private_ip
         # Проверяем наличие api_bulk_action_script (позиция 6) - это теперь код скрипта, не строка вызова
-        assert call_1[0][6] is not None  # api_bulk_action_script
-        assert call_1[0][8] == 1  # operation=1 (ADD)
+        assert call_vnode_10[0][6] is not None  # api_bulk_action_script
+        assert call_vnode_10[0][8] == 1  # operation=1 (ADD)
         
         # Проверяем что в users есть правильный пользователь
-        users_node_10 = call_1[0][9]  # users параметр на позиции 9
+        users_node_10 = call_vnode_10[0][9]  # users параметр на позиции 9
         assert len(users_node_10) == 1
         assert users_node_10[0]['uuid'] == pointed_bulk_seed['user3_uuid']
         assert users_node_10[0]['user_sub_id'] == pointed_bulk_seed['user3_order_active']
         
-        # Вторая нода (vnode_id_11)
-        call_2 = calls[1]
-        assert call_2[0][0] == 'bulk_action_users_by_node'
-        assert call_2[0][1] == pointed_bulk_seed['vnode_id_11']
-        assert call_2[0][6] is not None  # api_bulk_action_script
-        assert call_2[0][8] == 1  # operation=1 (ADD)
+        # Проверяем вызов для vnode_id_11
+        assert call_vnode_11[0][0] == 'bulk_action_users_by_node'
+        assert call_vnode_11[0][1] == pointed_bulk_seed['vnode_id_11']
+        assert call_vnode_11[0][6] is not None  # api_bulk_action_script
+        assert call_vnode_11[0][8] == 1  # operation=1 (ADD)
         
-        users_node_11 = call_2[0][9]
+        users_node_11 = call_vnode_11[0][9]
         assert len(users_node_11) == 1
         assert users_node_11[0]['uuid'] == pointed_bulk_seed['user5_uuid']
     
@@ -106,21 +108,24 @@ class TestPointedBulkAction:
         
         calls = mock_arq_ctx['arq_redis'].enqueue_job.call_args_list
         
-        # Проверяем что вызывается bulk_action_users_by_node с operation=2 (DELETE)
-        call_1 = calls[0]
-        assert call_1[0][0] == 'bulk_action_users_by_node'
-        assert call_1[0][1] == pointed_bulk_seed['vnode_id_10']
-        assert call_1[0][6] is not None  # api_bulk_action_script для DELETE
-        assert call_1[0][8] == 2  # operation=2 (DELETE)
+        # Находим вызовы по node_proto_id (порядок не детерминирован в SQL без ORDER BY)
+        call_vnode_10 = [c for c in calls if c[0][1] == pointed_bulk_seed['vnode_id_10']][0]
+        call_vnode_11 = [c for c in calls if c[0][1] == pointed_bulk_seed['vnode_id_11']][0]
         
-        users_node_10 = call_1[0][9]  # users на позиции 9
+        # Проверяем что вызывается bulk_action_users_by_node с operation=2 (DELETE) для vnode_10
+        assert call_vnode_10[0][0] == 'bulk_action_users_by_node'
+        assert call_vnode_10[0][1] == pointed_bulk_seed['vnode_id_10']
+        assert call_vnode_10[0][6] is not None  # api_bulk_action_script для DELETE
+        assert call_vnode_10[0][8] == 2  # operation=2 (DELETE)
+        
+        users_node_10 = call_vnode_10[0][9]  # users на позиции 9
         assert len(users_node_10) == 1
         assert users_node_10[0]['uuid'] == pointed_bulk_seed['user4_uuid']
         
-        call_2 = calls[1]
-        assert call_2[0][0] == 'bulk_action_users_by_node'
-        assert call_2[0][1] == pointed_bulk_seed['vnode_id_11']
-        assert call_2[0][8] == 2  # operation=2 (DELETE)
+        # Проверяем что вызывается bulk_action_users_by_node с operation=2 (DELETE) для vnode_11
+        assert call_vnode_11[0][0] == 'bulk_action_users_by_node'
+        assert call_vnode_11[0][1] == pointed_bulk_seed['vnode_id_11']
+        assert call_vnode_11[0][8] == 2  # operation=2 (DELETE)
     
     
     async def test_pointed_bulk_empty_outbox_ids(self, mock_arq_ctx, pointed_bulk_seed, db_pool):

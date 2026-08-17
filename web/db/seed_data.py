@@ -6,13 +6,13 @@
 """
 import json
 import asyncio
+import os
 from pathlib import Path
 from typing import Any
 from datetime import datetime
+
+import orjson
 from asyncpg import create_pool, Connection
-
-from web.config_dir.config import pool_settings
-
 
 # Путь к JSON файлу с данными
 SEED_DATA_PATH = Path(__file__).parent / "seed_data.json"
@@ -314,6 +314,30 @@ async def init_data():
     print(f"Загружены seed данные из {SEED_DATA_PATH}")
     
     # Создаём пул подключений
+    async def init(connection: Connection):
+        await connection.set_type_codec(
+            'jsonb',
+            encoder=lambda v: orjson.dumps(v).decode('utf-8'),
+            decoder=orjson.loads,
+            schema='pg_catalog',
+        )
+        await connection.set_type_codec(
+            'json',
+            encoder=lambda v: orjson.dumps(v).decode('utf-8'),
+            decoder=orjson.loads,
+            schema='pg_catalog',
+        )
+
+    pool_settings = dict(
+        user=os.getenv("PG_ADMIN"),
+        database=os.getenv('PG_DB'),
+        password=os.environ.get("PG_ADMIN_PASSWORD"),
+        host=os.getenv("PG_HOST"),
+        port=int(os.getenv('PG_PORT')),
+        command_timeout=60,
+        init=init,
+        max_size=75,  # connections on pool
+    )
     pool = await create_pool(**pool_settings)
     
     try:

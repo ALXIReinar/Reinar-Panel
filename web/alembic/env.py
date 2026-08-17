@@ -1,4 +1,5 @@
 import asyncio
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -6,7 +7,6 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import context
 
-from web.config_dir.config import env
 from web.db.models import Base
 
 config = context.config
@@ -19,7 +19,20 @@ target_metadata = Base.metadata
 def run_migrations_offline() -> None:
     """Офлайн режим (генерация SQL-скриптов без подключения к БД)"""
 
-    url = f"postgresql+asyncpg://{env.pg_admin}:{env.pg_admin_password}@{env.pg_host}:{env.pg_port}/{env.pg_db}"
+    user = os.getenv("PG_ADMIN")
+    database = os.getenv('PG_DB')
+    password = os.environ.get("PG_ADMIN_PASSWORD")
+    host = os.getenv("PG_HOST")
+    port = os.getenv('PG_PORT')
+
+    url = f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{database}"
+    if not any([user, password, host, port, database]):
+
+        "Для удобства в локалке. Если энвс не заданы, то используем Пайдентик сеттингс"
+
+        from web.config_dir.config import env
+        url = f"postgresql+asyncpg://{env.pg_admin}:{env.pg_admin_password}@{env.pg_host}:{env.pg_port}/{env.pg_db}"
+
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -37,8 +50,21 @@ def do_run_migrations(connection):
 
 async def run_async_migrations() -> None:
     """Онлайн режим с поддержкой asyncpg"""
+    user = os.getenv("PG_ADMIN")
+    database = os.getenv('PG_DB')
+    password = os.environ.get("PG_ADMIN_PASSWORD")
+    host = os.getenv("PG_HOST")
+    port = os.getenv('PG_PORT')
+
+    url = f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{database}"
+    if not any([user, password, host, port, database]):
+
+        "Для удобства в локалке. Если энвс не заданы, то используем Пайдентик сеттингс"
+        from web.config_dir.config import env
+        url = f"postgresql+asyncpg://{env.pg_admin}:{env.pg_admin_password}@{env.pg_host}:{env.pg_port}/{env.pg_db}"
+
     connectable = create_async_engine(
-        url=f"postgresql+asyncpg://{env.pg_admin}:{env.pg_admin_password}@{env.pg_host}:{env.pg_port}/{env.pg_db}",
+        url=url,
         poolclass=pool.NullPool,
     )
 
