@@ -157,7 +157,7 @@ jobs:
           echo "IMAGE_TAG=${SHORT_SHA}" >> $GITHUB_ENV
 
       - name: Run tests
-        run: docker compose -f web/sub/docker-compose.test.yml up --abort-on-container-exit --exit-code-from sub-service
+        run: docker compose -f web/sub/docker-compose.test.yml up --exit-code-from sub-service
 
       - name: Stop test containers
         if: always()

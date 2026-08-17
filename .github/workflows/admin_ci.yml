@@ -107,6 +107,8 @@ jobs:
           PG_DB=reinar_db
           PG_ADMIN=postgres
           PG_ADMIN_PASSWORD=${PG_PASSWORD}
+          PG_USER=postgres
+          PG_PASSWORD=${PG_PASSWORD}
           PG_PORT=5432
           REDIS_PORT=6379
           ADMIN_PORT=$ADMIN_PORT

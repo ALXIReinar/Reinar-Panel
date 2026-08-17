@@ -23,7 +23,7 @@ services:
 
   web-db-migrations:
     build:
-      context: ..
+      context: ../web
       dockerfile: Dockerfile
     command: sh -c "alembic -c web/alembic.ini upgrade head && python web/db/seed_data.py"
 #    command: sh -c "sleep 300 && alembic -c web/alembic.ini upgrade head && python web/db/seed_data.py" # ДЛЯ ДЕБАГА. Позволяет рассмотреть ФС контейнера
