@@ -156,8 +156,17 @@ jobs:
           docker tag ${IMAGE_TAG} reinar_panel/web_service:${SHORT_SHA}
           echo "IMAGE_TAG=${SHORT_SHA}" >> $GITHUB_ENV
 
+      - name: Start DB and run migrations
+        run: |
+          echo "🚀 Запуск БД и миграций..."
+          docker compose -f web/sub/docker-compose.test.yml up -d pg_db redis
+          docker compose -f web/sub/docker-compose.test.yml up web-db-migrations
+          echo "✅ Миграции накачены"
+
       - name: Run tests
-        run: docker compose -f web/sub/docker-compose.test.yml up --exit-code-from sub-service
+        run: |
+          echo "🧪 Запуск тестов..."
+          docker compose -f web/sub/docker-compose.test.yml up --abort-on-container-exit --exit-code-from sub-service
 
       - name: Stop test containers
         if: always()

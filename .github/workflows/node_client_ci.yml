@@ -90,7 +90,7 @@ jobs:
         run: pip install -r node_client/requirements.txt
 
       - name: Run Tests
-        run: python -m pytest node_client/tests -v --protocol * --mode real
+        run: python -m pytest node_client/tests -v --protocol * --mode real --ignore=bot --ignore=web
 
       - name: Stop test containers
         if: always()

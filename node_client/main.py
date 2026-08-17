@@ -1,7 +1,6 @@
 import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from fastapi.responses import ORJSONResponse
 
 from node_client.api import main_router
 from node_client.api.middleware import OnlyAdminAccessMiddleware

@@ -3,12 +3,10 @@ import os
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
-from starlette.requests import Request
 
 env_files = (
     os.getenv('ENV_FILE') or
