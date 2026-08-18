@@ -15,6 +15,7 @@
     pytest node_client/tests/integration/test_protocol_templates.py --protocol=singbox -v
     pytest node_client/tests/integration/test_protocol_templates.py --protocol=xray --mode=real -v
 """
+import asyncio
 import sys
 from unittest.mock import MagicMock, patch
 import pytest
@@ -911,6 +912,9 @@ async def test_template_sub_prepare_script_execution(protocol_templates_with_ext
         # 4. Выполняем скрипт с реальными данными из БД
         try:
             result = compiled_func(test_uuid, url_tmp)
+            if asyncio.iscoroutine(result):
+                result = await result
+
         except Exception as e:
             pytest.fail(
                 f"Template '{template['title']}': "

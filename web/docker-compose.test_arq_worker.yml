@@ -38,42 +38,28 @@ services:
     ports:
       - "127.0.0.1:${REDIS_PORT}:6379"
 
-  web-db-migrations:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    command: sh -c "alembic -c web/alembic.ini upgrade head && python web/db/seed_data.py"
-#    command: sh -c "sleep 300 && alembic -c web/alembic.ini upgrade head && python web/db/seed_data.py" # ДЛЯ ДЕБАГА. Позволяет рассмотреть ФС контейнера
-    image: reinar_panel/web_service:latest
-    container_name: web-db-migrations
+  arq-sub-worker:
+    container_name: test_arq-sub-worker
+    build: .
+    image: reinar_panel/web_service:${IMAGE_TAG:-latest}
+    command: >
+      sh -c "alembic -c web/alembic.ini upgrade head &&
+             python web/db/seed_data.py &&
+             python -m pytest web/arq_worker/tests -v"
+    depends_on:
+      pg_db:
+        condition: service_healthy
     environment:
+      - ENV_FILE=/run/secrets/env.arq.test
+
       - PG_DB=test_${PG_DB}
       - PG_ADMIN=${PG_ADMIN}
       - PG_ADMIN_PASSWORD=${PG_ADMIN_PASSWORD}
       - PG_PORT=${PG_PORT}
       - PG_HOST=localhost
-    depends_on:
-      pg_db:
-        condition: service_healthy
+    network_mode: host
     volumes:
-      #- ./secrets/keys:/app/web/secrets/keys:ro
-      - ./:/app/web
       - ./db:/app/web/db:ro
-    network_mode: host
-
-  arq-sub-worker:
-    container_name: test_arq-sub-worker
-    build: .
-    image: reinar_panel/web_service:${IMAGE_TAG:-latest}
-    command: python -m pytest web/arq_worker/tests -v
-    depends_on:
-      pg_db:
-        condition: service_healthy
-      web-db-migrations:
-        condition: service_completed_successfully
-    environment:
-      - ENV_FILE=/run/secrets/env.arq.test
-    network_mode: host
     secrets:
       - env.arq.test
 

@@ -328,12 +328,27 @@ async def init_data():
             schema='pg_catalog',
         )
 
+    user = os.getenv("PG_ADMIN")
+    database = os.getenv('PG_DB')
+    password = os.environ.get("PG_ADMIN_PASSWORD")
+    host = os.getenv("PG_HOST")
+    port = os.getenv('PG_PORT')
+
+    if not any([user, database, password, host, port]):
+        from web.config_dir.config import env
+
+        user = env.pg_admin
+        password = env.pg_admin_password
+        host = env.pg_host
+        port = env.pg_port
+        database = env.pg_db
+
     pool_settings = dict(
-        user=os.getenv("PG_ADMIN"),
-        database=os.getenv('PG_DB'),
-        password=os.environ.get("PG_ADMIN_PASSWORD"),
-        host=os.getenv("PG_HOST"),
-        port=int(os.getenv('PG_PORT')),
+        user=user,
+        database=database,
+        password=password,
+        host=host,
+        port=int(port),
         command_timeout=60,
         init=init,
         max_size=75,  # connections on pool
