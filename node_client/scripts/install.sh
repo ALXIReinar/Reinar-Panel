@@ -211,6 +211,8 @@ NODE_PORT=${NODE_PORT}
 NODE_NAME=${NODE_NAME}
 COMMAND_TIMEOUT=30
 
+PYTHONUNBUFFERED=1
+
 # Write Buffer Settings (батчинг записи конфигов)
 WRITE_BUFFER_INTERVAL=10
 WRITE_BUFFER_SIZE=5
@@ -260,6 +262,7 @@ User=root
 WorkingDirectory=$INSTALL_DIR
 Environment="PATH=$INSTALL_DIR/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="PYTHONPATH=$INSTALL_DIR"
+Environment="ENV_FILE=$INSTALL_DIR/.env.node.prod"
 ExecStart=$INSTALL_DIR/venv/bin/python -m node_client.main
 Restart=always
 RestartSec=10
@@ -287,14 +290,22 @@ echo -e "${GREEN}✓${NC} Автозапуск включен"
 # Запуск сервиса
 echo -e "\n${YELLOW}Запуск сервиса...${NC}"
 systemctl start $SERVICE_NAME
-sleep 2
+sleep 3
 
-# Проверка статуса
+# Проверка статуса с выводом логов при ошибке
 if systemctl is-active --quiet $SERVICE_NAME; then
     echo -e "${GREEN}✓${NC} Сервис успешно запущен"
 else
     echo -e "${RED}✗${NC} Ошибка запуска сервиса"
-    echo "Проверьте логи: journalctl -u $SERVICE_NAME -n 50"
+    echo -e "\n${RED}========== Логи сервиса (последние 50 строк) ==========${NC}"
+    journalctl -u $SERVICE_NAME -n 50 --no-pager || true
+    echo -e "\n${RED}========== Статус сервиса ==========${NC}"
+    systemctl status $SERVICE_NAME --no-pager || true
+    echo -e "\n${BLUE}========== Конфигурация .env.node.prod ==========${NC}"
+    cat $INSTALL_DIR/.env.node.prod || true
+    echo -e "\n${BLUE}========== Структура $INSTALL_DIR ==========${NC}"
+    ls -la $INSTALL_DIR/ || true
+    ls -la $INSTALL_DIR/node_client/ || true
     exit 1
 fi
 
