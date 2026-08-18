@@ -537,6 +537,33 @@ if [ "$CADDY_MODE" = "shared" ]; then
     echo -e "${GREEN}✓${NC} Caddy настроен в shared mode"
 fi
 
+# Проверка доступности Admin Panel сервисов перед запуском Sub Service
+if [ "$DEPLOYMENT_MODE" = "shared" ]; then
+    echo -e "\n${YELLOW}Проверка доступности Admin Panel сервисов...${NC}"
+    
+    # Выводим логи redis-main и pg_db
+    echo -e "\n${RED}========== Логи Redis (redis-main) ==========${NC}"
+    docker compose -f "$INSTALL_DIR/docker-compose.admin.yml" logs --tail=50 redis-main || echo -e "${RED}Контейнер redis-main не найден${NC}"
+    
+    echo -e "\n${RED}========== Логи PostgreSQL (pg_db) ==========${NC}"
+    docker compose -f "$INSTALL_DIR/docker-compose.admin.yml" logs --tail=50 pg_db || echo -e "${RED}Контейнер pg_db не найден${NC}"
+    
+    # Выводим конфиги
+    echo -e "\n${BLUE}========== Конфигурация web/.env ==========${NC}"
+    cat "$INSTALL_DIR/.env" || echo -e "${RED}Файл $INSTALL_DIR/.env не найден${NC}"
+    
+    echo -e "\n${BLUE}========== Конфигурация web/.env.api.prod ==========${NC}"
+    cat "$INSTALL_DIR/.env.api.prod" || echo -e "${RED}Файл $INSTALL_DIR/.env.api.prod не найден${NC}"
+    
+    echo -e "\n${BLUE}========== Конфигурация web/sub/.env ==========${NC}"
+    cat "$SUB_DIR/.env" || echo -e "${RED}Файл $SUB_DIR/.env не найден${NC}"
+    
+    echo -e "\n${BLUE}========== Конфигурация web/sub/.env.sub.prod ==========${NC}"
+    cat "$ENV_SUB_FILE" || echo -e "${RED}Файл $ENV_SUB_FILE не найден${NC}"
+    
+    echo -e "\n${YELLOW}Проверка завершена. Продолжаем запуск Sub Service...${NC}"
+fi
+
 # Перезапуск Docker Compose
 echo -e "\n${YELLOW}Запуск Sub Service...${NC}"
 cd "$SUB_DIR"
