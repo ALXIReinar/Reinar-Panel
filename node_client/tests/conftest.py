@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock, patch
 import time
 
 # ВАЖНО: Устанавливаем переменную окружения ДО любых импортов
-os.environ['ENV_LOCAL_TEST_FILE'] = 'node_client/.env.node.test'
+os.environ['ENV_LOCAL_TEST_FILE'] = os.getenv('ENV_LOCAL_TEST_FILE') or 'node_client/.env.node.test'
 
-from asyncpg import create_pool, Pool, Connection
+from asyncpg import create_pool, Connection
 import httpx
 import orjson
 import pytest
@@ -24,7 +24,6 @@ from node_client.api.proto_core.write_behind_caching_file import ConfigWriteBuff
 
 # Импорты утилит
 from node_client.tests.utils.db_helpers import (
-    load_template_by_protocol, 
     load_templates_by_protocol,  # Новая функция
     load_templates_with_extractors,  # Для тестов шаблонов
     get_all_active_templates
