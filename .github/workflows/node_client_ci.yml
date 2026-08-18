@@ -54,7 +54,7 @@ jobs:
           PG_DB=reinar_db
           PG_ADMIN=postgres
           PG_ADMIN_PASSWORD=${PG_PASSWORD}
-          PG_PORT=5431
+          PG_PORT=5432
           EOF
 
       - name: Docker Up DB and Run Migrations
