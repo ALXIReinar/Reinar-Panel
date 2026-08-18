@@ -120,11 +120,12 @@ jobs:
           echo "$ENV_API_TEST_FILE" > web/.env.api.test
           cat >> web/.env.api.test << EOF
           PG_ADMIN=postgres
+          PG_DB=test_reinar_db
           PG_ADMIN_PASSWORD=${PG_PASSWORD}
           PG_USER=postgres
           PG_PASSWORD=${PG_PASSWORD}
           PG_PORT=5432
-          PG_HOST=pg_db
+          PG_HOST=localhost
           REDIS_HOST=redis
           REDIS_PORT=6379
           REDIS_PASSWORD=${REDIS_PASSWORD}
@@ -139,6 +140,7 @@ jobs:
           PG_PASSWORD=${PG_PASSWORD}
           PG_PORT=5432
           PG_HOST=localhost
+          PG_DB=test_reinar_db
           REDIS_HOST=localhost
           REDIS_PORT=6379
           REDIS_PASSWORD=${REDIS_PASSWORD}
