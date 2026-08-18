@@ -42,7 +42,7 @@ WEB_DIR="$(dirname "$SCRIPT_DIR")"
 # Проверка наличия необходимых файлов
 echo -e "\n${YELLOW}Проверка исходных файлов...${NC}"
 REQUIRED_FILES=("docker-compose.admin.yml" "Dockerfile" "requirements.txt" "main.py")
-REQUIRED_DIRS=("api" "config_dir" "data" "schemas" "utils" "secrets")
+REQUIRED_DIRS=("api" "config_dir" "data" "schemas" "utils")
 
 for file in "${REQUIRED_FILES[@]}"; do
     if [ ! -f "$WEB_DIR/$file" ]; then
