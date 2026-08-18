@@ -253,6 +253,14 @@ else
     echo -e "${GREEN}✓${NC} PG CRUD пароль из переменной окружения"
 fi
 
+# Redis Password
+if [ -z "$REDIS_PASSWORD" ]; then
+    REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-24)
+    echo -e "${GREEN}✓${NC} Redis пароль сгенерирован"
+else
+    echo -e "${GREEN}✓${NC} Redis пароль из переменной окружения"
+fi
+
 # Создание SQL скрипта для инициализации ролей
 echo -e "\n${YELLOW}Создание SQL скрипта инициализации БД...${NC}"
 ENTRYPOINT_DIR="$INSTALL_DIR/db/docker-entrypoint"
@@ -314,7 +322,7 @@ ADMIN_PORT=${ADMIN_PORT}
 ADMIN_DOMAIN=${ADMIN_DOMAIN}
 
 # Redis
-REDIS_PASSWORD=R'F&scBdorS8@0A-1!
+REDIS_PASSWORD=${REDIS_PASSWORD}
 
 # PostgreSQL
 PG_DB=reinar_db
@@ -344,7 +352,7 @@ PG_PORT=5432
 PG_MAX_CONNECTIONS=50
 
 # Redis
-REDIS_PASSWORD=R'F&scBdorS8@0A-1!
+REDIS_PASSWORD=${REDIS_PASSWORD}
 REDIS_MAX_CONNECTIONS=50
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
@@ -415,7 +423,7 @@ PG_PORT=5432
 PG_MAX_CONNECTIONS=50
 
 # Redis (должны совпадать с .env.api.prod)
-REDIS_PASSWORD=R'F&scBdorS8@0A-1!
+REDIS_PASSWORD=${REDIS_PASSWORD}
 REDIS_MAX_CONNECTIONS=50
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379

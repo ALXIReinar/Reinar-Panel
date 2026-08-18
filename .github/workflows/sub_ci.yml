@@ -2,7 +2,7 @@ name: Sub Service CI
 
 on:
   push:
-    branches: ["main", "dev/sub"]
+    branches: ["main", "dev/sub", "dev/backend"]
   pull_request:
     branches: ["main", "dev/backend", "dev/master"]
 
@@ -197,6 +197,7 @@ jobs:
           SUB_SERVICE_DOMAIN: "https://sub.example.com"
           PG_ADMIN_PASSWORD: "AdminPass123"
           PG_CRUD_PASSWORD: "CrudPass123"
+          REDIS_PASSWORD: "RedisPass123"
         run: |
           echo "🚀 Установка Admin Panel..."
           chmod +x ./web/scripts/install.sh
@@ -213,6 +214,7 @@ jobs:
           SUB_PORT: ${{ vars.SUB_PORT }}
           SUB_DOMAIN: "localhost"
           PG_CRUD_PASSWORD: "CrudPass123"
+          REDIS_PASSWORD: "RedisPass123"
           ROBO_SHOP_LOGIN: "TestShopLogin"
           ROBO_PASSW_1: "TestPassword1"
           ROBO_PASSW_2: "TestPassword2"

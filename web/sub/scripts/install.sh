@@ -275,9 +275,36 @@ if [ -z "$PG_CRUD_PASSWORD" ]; then
         exit 1
     fi
     
-    echo -e "${GREEN}✓${NC} Пароль получен"
+    echo -e "${GREEN}✓${NC} Пароль PostgreSQL получен"
 else
-    echo -e "${GREEN}✓${NC} Используется пароль из переменной окружения"
+    echo -e "${GREEN}✓${NC} Используется пароль PostgreSQL из переменной окружения"
+fi
+
+# Получение пароля Redis
+echo -e "\n${YELLOW}Настройка пароля Redis${NC}"
+
+if [ -z "$REDIS_PASSWORD" ]; then
+    # Интерактивный режим
+    if [ "$DEPLOYMENT_MODE" = "shared" ]; then
+        echo -e "${BLUE}Введите пароль Redis из Admin Panel${NC}"
+        echo -e "${BLUE}Найти можно в файле: /opt/vpn-panel/web/.env.api.prod${NC}"
+        echo -e "${BLUE}Строка: REDIS_PASSWORD=...${NC}"
+    else
+        echo -e "${BLUE}Введите пароль Redis с Admin сервера${NC}"
+        echo -e "${BLUE}Пароль должен совпадать с паролем на Admin Panel${NC}"
+    fi
+    
+    read -sp "Пароль Redis: " REDIS_PASSWORD
+    echo
+    
+    if [ -z "$REDIS_PASSWORD" ]; then
+        echo -e "${RED}✗${NC} Пароль не может быть пустым"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}✓${NC} Пароль Redis получен"
+else
+    echo -e "${GREEN}✓${NC} Используется пароль Redis из переменной окружения"
 fi
 
 # Интерактивный выбор домена для Sub Service
@@ -386,7 +413,7 @@ PG_PORT=${PG_PORT}
 PG_MAX_CONNECTIONS=50
 
 # Redis (используется из web admin через WireGuard)
-REDIS_PASSWORD=R'F&scBdorS8@0A-1!
+REDIS_PASSWORD=${REDIS_PASSWORD}
 REDIS_MAX_CONNECTIONS=50
 REDIS_HOST=${REDIS_HOST}
 REDIS_PORT=${REDIS_PORT}
@@ -462,6 +489,7 @@ if [ "$CADDY_MODE" = "standalone" ]; then
     cat > "$ENV_COMPOSE_FILE" <<ENVEOF
 SUB_DOMAIN=${SUB_DOMAIN}
 SUB_PORT=${SUB_PORT}
+REDIS_PASSWORD=${REDIS_PASSWORD}
 ENVEOF
     
     echo -e "${GREEN}✓${NC} .env создан: $ENV_COMPOSE_FILE"
@@ -472,6 +500,7 @@ else
     
     cat > "$ENV_COMPOSE_FILE" <<ENVEOF
 SUB_PORT=${SUB_PORT}
+REDIS_PASSWORD=${REDIS_PASSWORD}
 ENVEOF
     
     echo -e "${GREEN}✓${NC} .env создан: $ENV_COMPOSE_FILE"

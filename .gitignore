@@ -176,3 +176,4 @@ node_modules/
 graphify-out/
 !/web/db/seed_data.json
 *.sql
+check_env_imports.py
