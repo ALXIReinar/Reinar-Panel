@@ -93,7 +93,7 @@ jobs:
         working-directory: ./node_client       # 1. Запираем Pytest внутри папки сервиса
         env:
           PYTHONPATH: ${{ github.workspace }}  # 2. Указываем Python, что корень проекта — это корень репозитория
-        run: python -m pytest node_client/tests --rootdir=node_client --protocol * --mode real
+        run: python -m pytest tests -v --protocol * --mode real
 
       - name: Stop test containers
         if: always()
