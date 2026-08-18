@@ -1,8 +1,5 @@
 import subprocess
-from typing import Annotated
-
 from fastapi import APIRouter, HTTPException
-from fastapi.params import Query
 
 from node_client.api.proto_core.hot_reload_executor import HotReloadExecutor
 from node_client.config import env
