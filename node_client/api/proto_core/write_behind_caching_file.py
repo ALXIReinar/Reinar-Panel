@@ -16,7 +16,6 @@ from starlette.requests import Request
 from node_client.api.proto_core.hot_reload_executor import HotReloadExecutor
 from node_client.config import TMP_DIR, env
 from node_client.logger_config import log_event
-from web.arq_worker.utils.anything import CoreProtoActions
 
 
 class ConfigWriteBuffer:
