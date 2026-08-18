@@ -24,6 +24,7 @@ class UpdateNodeProtoSchema(BaseModel):
     proto_port: int | None = Field(None, ge=1024, le=65535, description="Порт протокола для клиентов")
     sub_node_address: str | None = Field(None, min_length=4, max_length=255, description="Домен протокола в конфиге клиентов")
     user_visible: bool | None = Field(None, description="Видимость для пользователей")
+    constant_node_data_obj: dict | None = Field(None, description='Джсон с любыми данными, которые нужны ноде. Доступен в суперобъекте пользователей в скриптах шаблонов')
 
     @field_validator('proto_port', mode='after')
     @classmethod

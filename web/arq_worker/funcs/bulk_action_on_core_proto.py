@@ -27,6 +27,7 @@ async def bulk_action_users_by_node(
         user_injectors: list[dict],
         required_user_data_obj: dict,
         constant_user_data_obj: dict,
+        constant_node_data_obj: dict,
         current_attempt = 1,
         db: PgSql = None,
         arq: ArqRedis = None,
@@ -42,6 +43,7 @@ async def bulk_action_users_by_node(
             user_sub_id=u['user_sub_id'],
             required_user_data_obj=required_user_data_obj,
             constant_user_data_obj=constant_user_data_obj,
+            constant_node_data_obj=constant_node_data_obj,
         )
         if success:
             vpn_like_users.append(vpn_user)
@@ -121,6 +123,7 @@ async def bulk_action_users_by_node(
             user_injectors,
             required_user_data_obj,
             constant_user_data_obj,
+            constant_node_data_obj,
             current_attempt + 1,            # Инкрементируем попытку
             _defer_by=defer_seconds         # Откладываем выполнение
         )

@@ -28,7 +28,7 @@ class NodesProtocolsQueries:
         SELECT
             np.node_id, np.proto_id, p.name as proto_name, n.ip, n.private_ip, n.api_port, np.sub_node_address, np.proto_port,
             np.metrics_port, n.is_active, np.user_visible, np.title, np.config_link, np.config_path, n.title as node_title,
-            np.created_at
+            np.created_at, np.constant_node_data_obj
         FROM nodes_protocols np
         JOIN nodes n ON np.node_id = n.id
         JOIN protocols p ON np.proto_id = p.id
@@ -59,6 +59,7 @@ class NodesProtocolsQueries:
         proto_port: int | None = None,
         sub_node_address: str | None = None,
         user_visible: bool | None = None,
+        constant_node_data_obj: dict | None = None,
     ) -> tuple[int, str]:
         """
         Универсальное обновление виртуальной ноды
@@ -103,6 +104,11 @@ class NodesProtocolsQueries:
             params.append(user_visible)
             param_idx += 1
 
+        if constant_node_data_obj is not None:
+            updates.append(f"constant_node_data_obj = ${param_idx}")
+            params.append(constant_node_data_obj)
+            param_idx += 1
+
         if not updates:
             return 200, 'Нет полей для обновления'
 
@@ -134,20 +140,10 @@ class NodesProtocolsQueries:
         await self.conn.execute(query, np_id)
 
 
-    async def get_all_nodes_for_metrics(self):
-        query = '''
-        SELECT n.id, n.ip, n.private_ip, n.api_port, np.metrics_port, pt.metrics_command, pt.metrics_parser_code FROM nodes n
-        JOIN nodes_protocols np ON np.node_id = n.id AND np.user_visible = true
-        JOIN protocols p ON np.proto_id = p.id
-        JOIN proto_templates pt ON p.tmp_id = pt.id
-        WHERE n.is_active = true AND np.metrics_port IS NOT NULL
-        '''
-        return await self.conn.fetch(query)
-
-
     async def get_node_for_file_edit(self, node_proto_id: int):
         query = '''
-        SELECT n.node_name, np.title, n.ip, n.private_ip, n.api_port, n.is_active, np.user_visible, np.metrics_port, np.proto_port, np.config_path
+        SELECT n.node_name, np.title, n.ip, n.private_ip, n.api_port, n.is_active, np.user_visible, np.metrics_port, 
+               np.proto_port, np.config_path, np.constant_node_data_obj
         FROM nodes_protocols np 
         JOIN nodes n ON np.node_id = n.id
         WHERE np.id = $1
@@ -157,7 +153,8 @@ class NodesProtocolsQueries:
 
     async def get_proto_tmp_w_spec_params(self, node_proto_id: int) -> tuple:
         tmp_link_query = '''
-        SELECT pt.url_tmp, np.title, np.sub_node_address, n.ip FROM proto_templates pt
+        SELECT pt.url_tmp, np.title, np.sub_node_address, n.ip
+        FROM proto_templates pt
         JOIN protocols p on pt.id = p.tmp_id
         JOIN nodes_protocols np ON np.proto_id = p.id
         JOIN nodes n ON n.id = np.node_id
@@ -210,6 +207,7 @@ class NodesProtocolsQueries:
         SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib, pt.api_bulk_add_user_script,
                pt.api_bulk_delete_user_script, pt.reload_core_command, np.config_path, pt.required_user_data_obj,
                pt.constant_user_data_obj, pt.bulk_delete_script_custom_params, pt.bulk_add_script_custom_params, oi.id AS event_id,
+               np.constant_node_data_obj,
                COALESCE(aui.user_injectors, '[]'::json) AS user_injectors
         FROM nodes_protocols np
         JOIN protocols p ON np.proto_id = p.id

@@ -10,11 +10,12 @@ class TemplateSpecParamsQueries:
 
     async def get_vnode_spec_params(self, node_proto_id: int):
         query = '''
-        SELECT p.tmp_id, tsp.id AS spec_key_id, tsp.key AS key_name, spv.id AS value_id, spv.value FROM nodes_protocoles_spec_params_values spv
+        SELECT p.tmp_id, tsp.id AS spec_key_id, tsp.key AS key_name, spv.id AS value_id, spv.value
+        FROM nodes_protocoles_spec_params_values spv
         JOIN nodes_protocols np ON spv.node_proto_id = np.id
         JOIN protocols p ON p.id = np.proto_id
         JOIN proto_templates pt ON pt.id = p.tmp_id
-        JOIN template_spec_params tsp ON tsp.tmp_id = pt.id AND tsp.id = spv.spec_key_id
+        JOIN template_spec_params tsp ON tsp.tmp_id = pt.id AND tsp.id = spv.spec_key_id -- точно нужен фильтр по айди ключей?
         WHERE spv.node_proto_id = $1
         '''
         return await self.conn.fetch(query, node_proto_id)

@@ -162,6 +162,7 @@ async def bulk_delete_by_traffic_limit(ctx: dict, outbox_event_ids: list, arq: A
                 vnode['user_injectors'],
                 vnode['constant_user_data_obj'],
                 vnode['required_user_data_obj'],
+                vnode['constant_node_data_obj'],
             )
             log_event(f'\033[31m[ARQ Metrics Collector]\033[0m \033[34mTask Chaining, depth: \033[32m3\033[0m бульк delete летит на ноду | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
             log_event(f'\033[31m[ARQ Metrics Collector]\033[0m Фоновая задача запущена | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
@@ -332,6 +333,7 @@ async def create_vpn_like_user(
         user_sub_id,
         required_user_data_obj: dict,
         constant_user_data_obj: dict,
+        constant_node_data_obj: dict,
 ):
     """Собирает готовый объект пользователя для впн-ядра из шаблон-скриптов"""
 
@@ -343,6 +345,7 @@ async def create_vpn_like_user(
     )
     final_user_obj = {
         **required_user_obj,
-        **constant_user_data_obj
+        **constant_user_data_obj,
+        **constant_node_data_obj,
     }
     return True, final_user_obj

@@ -45,6 +45,7 @@ async def action_on_core_proto_by_sub_plan(
                     user_sub_id=user_sub_id,
                     required_user_data_obj=node['required_user_data_obj'],
                     constant_user_data_obj=node['constant_user_data_obj'],
+                    constant_node_data_obj=node['constant_node_data_obj'],
                 )
                 if not ok:
                     log_event(f'Некорректный скрипт обработки объекта пользователя | user_sub_id: \033[31m{user_sub_id}\033[0m; user_uuid: \033[33m{user_uuid}\033[0m; node_proto_id: \033[33m{node["node_proto_id"]}\033[0m', level='CRITICAL')

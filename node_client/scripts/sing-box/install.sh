@@ -49,6 +49,11 @@ rm -rf sing-box.tar.gz "$DIR_NAME"
 CONFIG_DIR="/etc/sing-box/configs"
 mkdir -p "$CONFIG_DIR"
 
+# 7. Ставим xray для метрик
+echo "Ставим xray для сбора метрик"
+bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+
+
 echo "=================================================="
 echo "Ядро Sing-box успешно установлено!"
 echo "Версия:"

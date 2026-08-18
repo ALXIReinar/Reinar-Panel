@@ -46,7 +46,7 @@ class OutboxQueries:
         SELECT pae.node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
                pt.api_bulk_add_user_script,  pt.api_bulk_delete_user_script, pt.reload_core_command, np.config_path,
                pt.required_user_data_obj, pt.constant_user_data_obj, pt.bulk_add_script_custom_params, pt.bulk_delete_script_custom_params,
-               pae.events_timeline,
+               pae.events_timeline, np.constant_node_data_obj,
                COALESCE(aui.user_injectors, '[]'::json) AS user_injectors
         FROM pre_agg_events pae
         JOIN nodes_protocols np ON np.id = pae.node_proto_id AND np.user_visible = true

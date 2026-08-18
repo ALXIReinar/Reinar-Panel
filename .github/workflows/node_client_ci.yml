@@ -2,7 +2,7 @@ name: Node Client CI
 
 on:
   push:
-    branches: ["main", "dev/node", "dev/backend"]
+    branches: ["main", "dev/node"]
   pull_request:
     branches: ["main", "dev/backend", "dev/master"]
 

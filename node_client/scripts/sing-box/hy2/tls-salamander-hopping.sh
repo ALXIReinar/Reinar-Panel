@@ -11,6 +11,7 @@ if [ -z "$TMP_ID" ] || [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$SNI_D
     exit 1
 fi
 
+OBFS_PASS=$(openssl rand -hex 8)
 SINGBOX_BIN="/usr/local/bin/sing-box"
 CONFIG_DIR="/etc/sing-box/configs"
 CONFIG_PATH="$CONFIG_DIR/${TMP_ID}.json"
@@ -61,7 +62,6 @@ INTERNAL_PORT=$(find_free_port 8443)
 METRICS_PORT=$(find_free_port 10085)
 
 # Ищем свободный диапазон для хоппинга
-# shellcheck disable=SC2046
 read RANGE_START RANGE_END <<< $(find_free_port_range)
 
 echo "Выделен внутренний порт для Sing-box: $INTERNAL_PORT"
@@ -103,6 +103,10 @@ cat <<EOF > "$CONFIG_PATH"
         "key_path": "$KEY_PATH",
         "alpn": ["h3"]
       },
+      "obfs": {
+        "type": "salamander",
+        "password": "$OBFS_PASS"
+      },
       "up_mbps": 100,
       "down_mbps": 100
     }
@@ -120,7 +124,7 @@ EOF
 SERVICE_PATH="/etc/systemd/system/sing-box-${TMP_ID}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Sing-box Hysteria2 Hopping Node (TMP_ID: ${TMP_ID})
+Description=Sing-box Hysteria2 Salamander Hopping Node (TMP_ID: ${TMP_ID})
 After=network.target nss-lookup.target
 
 [Service]
@@ -158,7 +162,7 @@ curl -s -X POST "$PANEL_CALLBACK_URL" \
          }'
 
 echo "=================================================="
-echo "Sing-box Hysteria2 с Port Hopping развернута."
+echo "Sing-box Hysteria2 Salamander с Port Hopping развернута."
 echo "Диапазон прыжков: ${RANGE_START}-${RANGE_END}"
 echo "Внутренний порт:  $INTERNAL_PORT"
 echo "=================================================="

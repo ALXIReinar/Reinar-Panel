@@ -287,7 +287,7 @@ class UsersQueries:
         -- 5. Ноды для вставки пользователя (подписки, впн-пользователя)
         SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib, pt.api_bulk_delete_user_script, 
                pt.reload_core_command, np.config_path, pt.bulk_delete_script_custom_params, pt.constant_user_data_obj, pt.required_user_data_obj,
-               pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params,
+               pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, np.constant_node_data_obj,
                pau.users,
                COALESCE(aui.user_injectors, '[]'::json) AS user_injectors
         FROM nodes_protocols np

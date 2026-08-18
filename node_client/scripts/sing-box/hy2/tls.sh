@@ -27,55 +27,18 @@ find_free_port() {
     echo $port
 }
 
-# Функция поиска свободного диапазона портов (размером 100 портов)
-find_free_port_range() {
-    local range_size=100
-    local start_port=20000
-    local max_port=60000
-
-    while [ $start_port -le $max_port ]; do
-        local end_port=$((start_port + range_size - 1))
-        local busy=0
-
-        for p in $(seq $start_port $end_port); do
-            if ss -lntu | awk '{print $4}' | grep -q ":$p$"; then
-                busy=1
-                break
-            fi
-        done
-
-        if [ $busy -eq 0 ]; then
-            echo "$start_port $end_port"
-            return 0
-        fi
-
-        start_port=$((start_port + range_size))
-    done
-
-    # Fallback, если всё занято
-    echo "20000 20099"
-}
 
 # Ищем свободный внутренний порт для сингбокса
 INTERNAL_PORT=$(find_free_port 8443)
 METRICS_PORT=$(find_free_port 10085)
 
-# Ищем свободный диапазон для хоппинга
-# shellcheck disable=SC2046
-read RANGE_START RANGE_END <<< $(find_free_port_range)
-
 echo "Выделен внутренний порт для Sing-box: $INTERNAL_PORT"
-echo "Выделен диапазон портов для Port Hopping: ${RANGE_START}-${RANGE_END}"
-
-# Включаем IP Forwarding и настраиваем NAT PREROUTING для UDP хоппинга
-sysctl -w net.ipv4.ip_forward=1 > /dev/null
-iptables -t nat -A PREROUTING -p udp --dport ${RANGE_START}:${RANGE_END} -j REDIRECT --to-ports ${INTERNAL_PORT}
 
 # Генерация конфига Sing-box
 cat <<EOF > "$CONFIG_PATH"
 {
   "log": {
-    "level": "warn"
+      "level": "warn"
   },
   "experimental": {
     "v2ray_api": {
@@ -120,7 +83,7 @@ EOF
 SERVICE_PATH="/etc/systemd/system/sing-box-${TMP_ID}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Sing-box Hysteria2 Hopping Node (TMP_ID: ${TMP_ID})
+Description=Sing-box Hysteria2 Node (TMP_ID: ${TMP_ID})
 After=network.target nss-lookup.target
 
 [Service]
@@ -158,7 +121,6 @@ curl -s -X POST "$PANEL_CALLBACK_URL" \
          }'
 
 echo "=================================================="
-echo "Sing-box Hysteria2 с Port Hopping развернута."
-echo "Диапазон прыжков: ${RANGE_START}-${RANGE_END}"
-echo "Внутренний порт:  $INTERNAL_PORT"
+echo "Sing-box Hysteria2 развернута."
+echo "Порт:  $INTERNAL_PORT"
 echo "=================================================="

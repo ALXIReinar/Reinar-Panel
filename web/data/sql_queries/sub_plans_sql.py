@@ -191,7 +191,8 @@ class SubPlansQueries:
                         'proto_title', np.title,
                         'config_link', np.config_link,
                         'node_title', n.title,
-                        'node_ip', n.ip
+                        'node_ip', n.ip,
+                        'constant_node_data_obj', np.constant_node_data_obj
                     )
                 ) AS vnodes_json
             FROM vnodes_sub_plans vsp
