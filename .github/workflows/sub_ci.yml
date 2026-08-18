@@ -2,7 +2,7 @@ name: Sub Service CI
 
 on:
   push:
-    branches: ["main", "dev/sub"]
+    branches: ["main", "dev/sub", "dev/backend"]
   pull_request:
     branches: ["main", "dev/backend", "dev/master"]
 
@@ -211,6 +211,7 @@ jobs:
 
       - name: Install Sub Service
         env:
+          CI: "1"
           SUB_PORT: ${{ vars.SUB_PORT }}
           SUB_DOMAIN: "localhost"
           PG_CRUD_PASSWORD: "CrudPass123"

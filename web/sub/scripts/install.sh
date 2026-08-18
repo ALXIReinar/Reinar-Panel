@@ -125,14 +125,49 @@ fi
 echo -e "\n${YELLOW}Настройка доступа к БД и Redis${NC}"
 
 if [ "$DEPLOYMENT_MODE" = "shared" ]; then
-    # Shared mode: используем 10.0.0.1 (локальный WireGuard)
-    echo -e "${BLUE}Shared mode: используются локальные сервисы через WireGuard${NC}"
-    PG_HOST="10.0.0.1"
+    # Shared mode: используем 10.0.0.1 (локальный WireGuard) или 127.0.0.1 (CI без WireGuard)
+    echo -e "${BLUE}Shared mode: используются локальные сервисы${NC}"
+    
+    # В CI или при отсутствии WireGuard используем localhost
+    if [ -n "$CI" ] || ! systemctl is-active --quiet wg-quick@wg0 2>/dev/null; then
+        echo -e "${YELLOW}WireGuard не обнаружен, используем localhost${NC}"
+        PG_HOST="127.0.0.1"
+        REDIS_HOST="127.0.0.1"
+    else
+        echo -e "${GREEN}WireGuard обнаружен, используем приватную сеть${NC}"
+        PG_HOST="10.0.0.1"
+        REDIS_HOST="10.0.0.1"
+    fi
+    
     PG_PORT=5432
-    REDIS_HOST="10.0.0.1"
     REDIS_PORT=6379
-    echo -e "${GREEN}✓${NC} PostgreSQL: ${PG_HOST}:${PG_PORT}"
-    echo -e "${GREEN}✓${NC} Redis: ${REDIS_HOST}:${REDIS_PORT}"
+    
+    # ПРОВЕРКА ДОСТУПНОСТИ в shared mode
+    echo -e "\n${YELLOW}Проверка доступности сервисов (${PG_HOST})...${NC}"
+    
+    # Проверка PostgreSQL
+    echo -e "${BLUE}Проверка PostgreSQL...${NC}"
+    if timeout 3 bash -c "cat < /dev/null > /dev/tcp/$PG_HOST/$PG_PORT" 2>/dev/null; then
+        echo -e "${GREEN}✓${NC} PostgreSQL доступен: ${PG_HOST}:${PG_PORT}"
+    else
+        echo -e "${RED}✗${NC} PostgreSQL недоступен на ${PG_HOST}:${PG_PORT}"
+        echo -e "${YELLOW}Проверьте что Admin Panel запущен${NC}"
+        echo -e "${YELLOW}Логи Admin Panel:${NC}"
+        docker compose -f "$INSTALL_DIR/docker-compose.admin.yml" ps || true
+        exit 1
+    fi
+    
+    # Проверка Redis
+    echo -e "${BLUE}Проверка Redis...${NC}"
+    if timeout 3 bash -c "cat < /dev/null > /dev/tcp/$REDIS_HOST/$REDIS_PORT" 2>/dev/null; then
+        echo -e "${GREEN}✓${NC} Redis доступен: ${REDIS_HOST}:${REDIS_PORT}"
+    else
+        echo -e "${RED}✗${NC} Redis недоступен на ${REDIS_HOST}:${REDIS_PORT}"
+        echo -e "${YELLOW}Проверьте что Admin Panel запущен${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}✓${NC} Все сервисы доступны"
     
 elif [ "$DEPLOYMENT_MODE" = "standalone" ]; then
     # Standalone mode: ПРИНУДИТЕЛЬНАЯ настройка WireGuard
