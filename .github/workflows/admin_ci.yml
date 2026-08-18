@@ -3,7 +3,7 @@ name: Admin CI
 # Запускаем при пуше в main или при создании Pull Request в main
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "dev/backend"]
   pull_request:
     branches: ["main", "dev/master"]
 
