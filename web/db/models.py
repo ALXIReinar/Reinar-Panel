@@ -345,6 +345,7 @@ class NodesProtocols(Base):
     metrics_port: Mapped[Optional[int]] = mapped_column(Integer)
     proto_port: Mapped[Optional[int]] = mapped_column(Integer)
     sub_node_address: Mapped[Optional[str]] = mapped_column(String(255))
+    constant_node_data_obj: Mapped[Optional[dict]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
 
     node: Mapped['Nodes'] = relationship('Nodes', back_populates='nodes_protocols')
     proto: Mapped['Protocols'] = relationship('Protocols', back_populates='nodes_protocols')
