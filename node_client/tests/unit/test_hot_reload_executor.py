@@ -478,7 +478,11 @@ async def bulk_add_users(users_list, node_ip, core_port, custom_params):
 @pytest.mark.asyncio
 @pytest.mark.security
 async def test_sandbox_blocks_import():
-    """Sandbox блокирует __import__()"""
+    """
+    Sandbox блокирует __import__()
+
+    Использование import разрешено, но только с выбранными библиотеками. АСТ анализ даже не позволит исполнить код
+    """
     script = """
 async def bulk_add_users(users_list, node_ip, core_port, custom_params):
     try:
@@ -497,7 +501,7 @@ async def bulk_add_users(users_list, node_ip, core_port, custom_params):
         action="user_core_operation"
     )
     
-    assert success is True
+    assert success is False
 
 
 @pytest.mark.asyncio

@@ -433,7 +433,7 @@ def mock_hot_reload_success():
     """
     mock = AsyncMock(return_value=(True, "Hot-reload успешно выполнен"))
     
-    with patch('node_client.api.proto_core.hot_reload_executor.HotReloadExecutor.execute_action_script', mock):
+    with patch('node_client.api.sandbox.hot_reload_executor.HotReloadExecutor.execute_action_script', mock):
         yield mock
 
 
@@ -446,7 +446,7 @@ def mock_hot_reload_failure():
     """
     mock = AsyncMock(return_value=(False, "Hot-reload провалился"))
     
-    with patch('node_client.api.proto_core.hot_reload_executor.HotReloadExecutor.execute_action_script', mock):
+    with patch('node_client.api.sandbox.hot_reload_executor.HotReloadExecutor.execute_action_script', mock):
         yield mock
 
 
