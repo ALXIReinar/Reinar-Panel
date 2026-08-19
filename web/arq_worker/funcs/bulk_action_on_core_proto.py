@@ -38,7 +38,7 @@ async def bulk_action_users_by_node(
     "1. Формируем готовые объекты-пользователей для списка впн-ядра"
     vpn_like_users = []
     for u in users:
-        success, vpn_user = await create_vpn_like_user(
+        success, vpn_user = create_vpn_like_user(
             user_uuid=u['uuid'],
             user_sub_id=u['user_sub_id'],
             required_user_data_obj=required_user_data_obj,

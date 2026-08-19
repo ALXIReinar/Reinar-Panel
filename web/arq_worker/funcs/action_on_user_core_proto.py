@@ -40,7 +40,7 @@ async def action_on_core_proto_by_sub_plan(
             try:
 
                 "1. Формируем готовый объект-пользователя списка впн-ядра"
-                ok, final_user_obj = await create_vpn_like_user(
+                ok, final_user_obj = create_vpn_like_user(
                     user_uuid=user_uuid,
                     user_sub_id=user_sub_id,
                     required_user_data_obj=node['required_user_data_obj'],

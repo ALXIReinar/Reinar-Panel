@@ -16,11 +16,10 @@
     pytest node_client/tests/integration/test_protocol_templates.py --protocol=xray --mode=real -v
 """
 import asyncio
-import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import pytest
 
-from node_client.api.proto_core.hot_reload_executor import HotReloadExecutor
+from node_client.api.sandbox.hot_reload_executor import HotReloadExecutor
 
 
 # ========== Helper функции ==========

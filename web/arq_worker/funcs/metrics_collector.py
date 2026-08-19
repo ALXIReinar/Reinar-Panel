@@ -328,7 +328,7 @@ async def execute_script(script_text: str, stdout: str | dict, lib_names: str | 
         return False, (None, None), f"Ошибка выполнения скрипта ({type(e).__name__}): {repr(e)}"
 
 
-async def create_vpn_like_user(
+def create_vpn_like_user(
         user_uuid,
         user_sub_id,
         required_user_data_obj: dict,
@@ -336,16 +336,18 @@ async def create_vpn_like_user(
         constant_node_data_obj: dict,
 ):
     """Собирает готовый объект пользователя для впн-ядра из шаблон-скриптов"""
-
-    "1. Подстановка значений в шаблон через плейсхолдеры"
-    required_user_obj = resolve_user_template(
-        template=required_user_data_obj,
-        uuid=user_uuid,
-        user_sub_id=user_sub_id,
-    )
-    final_user_obj = {
-        **required_user_obj,
-        **constant_user_data_obj,
-        **constant_node_data_obj,
-    }
-    return True, final_user_obj
+    try:
+        "1. Подстановка значений в шаблон через плейсхолдеры"
+        required_user_obj = resolve_user_template(
+            template=required_user_data_obj,
+            uuid=user_uuid,
+            user_sub_id=user_sub_id,
+        )
+        final_user_obj = {
+            **required_user_obj,
+            **constant_user_data_obj,
+            **constant_node_data_obj,
+        }
+        return True, final_user_obj
+    except Exception as e:
+        return False, repr(e)

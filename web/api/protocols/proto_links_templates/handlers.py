@@ -52,30 +52,5 @@ def generate_link_from_json(tmp_link: str, node_config_json: str | dict, spec_ke
     }
     # 2. Рендерим сырой URL через Jinja2
     template = Template(tmp_link)
-    raw_url = template.render(context)
-
-    # 3. Разбираем URL на компоненты и безопасно кодируем
-    parsed = urlsplit(raw_url)
-
-    # parse_qsl разбивает строку "a=1&b=2" на список кортежей [('a', '1'), ('b', '2')]
-    # urlencode собирает это обратно в безопасный вид, энкодя все спецсимволы
-    safe_query = urlencode(parse_qsl(parsed.query))
-
-    # quote энкодит только fragment (#MyNode -> #My%20Node)
-    safe_fragment = quote(parsed.fragment)
-
-    # 4. Собираем итоговую ссылку
-    final_url = urlunsplit((
-        parsed.scheme,
-        parsed.netloc,
-        parsed.path,
-        safe_query,
-        safe_fragment
-    ))
-    
-    # 5. Если в исходном шаблоне был fragment (#), но он пустой, urlunsplit удалит #
-    # Нужно вернуть # в конец URL для корректного формата ссылки
-    if '{{node___title}}' in tmp_link and not safe_fragment and not final_url.endswith('#'):
-        final_url += '#'
-    
-    return True, final_url
+    config_url = template.render(context)
+    return True, config_url

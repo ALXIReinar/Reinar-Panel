@@ -1,7 +1,7 @@
 import subprocess
 from fastapi import APIRouter, HTTPException
 
-from node_client.api.proto_core.hot_reload_executor import HotReloadExecutor
+from node_client.api.sandbox.hot_reload_executor import HotReloadExecutor
 from node_client.config import env
 from node_client.schemas.execute_schema import ExecuteResponseSchema, ExecuteCommandSchema, MetricsSchema
 

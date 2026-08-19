@@ -1,23 +1,15 @@
-import asyncio
 import base64
-import importlib
-import json
-import math
-import re
-import traceback
-import urllib.parse
-from collections import defaultdict
+from urllib.parse import urlunsplit, quote, urlsplit, urlencode, parse_qsl
 from typing import Annotated
 
-import flatten_json
-import jmespath
-import orjson
 from fastapi import APIRouter, Response, Path
 from starlette.requests import Request
 
+from web.sub.api.handlers.prepare_func import error_messages_for_client, process2vpn_client_format, create_vpn_like_user
 from web.sub.config_dir.logger_config import log_event
 from web.sub.config_dir.config import env
 from web.sub.data.postgres import PgSqlDep
+from web.sub.sandbox.script_executor import ScriptExecutor
 from web.sub.schemas.sub_robo_schema import SubUrlSchema
 
 router = APIRouter(prefix='/api/v1/public', tags=['Subscriptions Service'])
@@ -45,27 +37,57 @@ async def sub(params: Annotated[SubUrlSchema, Path()], db: PgSqlDep, request: Re
     "Обрабатываем каждую ссылку через кастомный скрипт"
     ready_config_links, errors = [], []
     for proto_user_conf in config_data:
-        res = await executing_link_processing(
+        ok, user_super_obj = create_vpn_like_user(
+            user_uuid=sub_meta['user_uuid'],
+            user_sub_id=sub_meta['user_sub_id'],
+            required_user_data_obj=proto_user_conf['required_user_data_obj'],
+            constant_user_data_obj=proto_user_conf['constant_user_data_obj'],
+            constant_node_data_obj=proto_user_conf['constant_node_data_obj'],
+        )
+        if not ok:
+            log_event(f'Не удалось Сформировать суперобъект из шаблонов | err: {user_super_obj}; node_proto_id: \033[35m{proto_user_conf['node_proto_id']}\033[0m; req_u_data_obj: {proto_user_conf["required_user_data_obj"]}; const_u_data_obj: {proto_user_conf["constant_user_data_obj"]}; const_node_data_obj: {proto_user_conf["constant_node_data_obj"]}', request=request, level='WARNING')
+            errors.append((500, "Не удалось сформировать суперобъект"))
+            continue
+
+        success, res = await ScriptExecutor.executing_link_processing(
             sub_prepare_script=proto_user_conf['sub_prepare_script'],
             required_libs=proto_user_conf['required_libs'],
-            user_uuid=sub_meta['user_uuid'],
+            user_obj=user_super_obj,
             config_link=proto_user_conf['config_link'],
-            user_id=sub_meta['user_id'],
         )
 
         "Исключение при обработке. Или ссылки для пользователя"
-        if not res[0]:
+        if not success:
             log_event(f'Не смогли выдать локацию из подписки | user_id: \033[34m{sub_meta['user_id']}\033[0m; sub_id: \033[33m{sub_meta['sub_plan_id']}\033[0m; node_proto_id: \033[35m{proto_user_conf['node_proto_id']}\033[0m; vnodes_sub_plans_id: {proto_user_conf['sub_node_id']}', request=request, level='CRITICAL')
-            errors.append((res[1], res[2]))
+            errors.append(res)
         else:
-            ready_config_links.append(res[1])
+            "Квотим ссылку, заменяем проблемные для url символы"
+            "1. Разбираем URL на компоненты и безопасно кодируем"
+            parsed = urlsplit(res)
+
+            # parse_qsl разбивает строку "a=1&b=2" на список кортежей [('a', '1'), ('b', '2')]
+            # urlencode собирает это обратно в безопасный вид, энкодит все спецсимволы
+            safe_query = urlencode(parse_qsl(parsed.query))
+
+            # quote энкодит только fragment (#MyNode -> #My%20Node)
+            safe_fragment = quote(parsed.fragment)
+
+            "2. Собираем итоговую ссылку"
+            final_url = urlunsplit((
+                parsed.scheme,
+                parsed.netloc,
+                parsed.path,
+                safe_query,
+                safe_fragment
+            ))
+            ready_config_links.append(final_url)
 
     if errors:
         log_event(f'Не все конфиги удалось обработать | user_uuid: \033[35m{sub_meta['user_uuid']}\033[0m; errors: \033[37m{errors}\033[0m', level='WARNING')
 
     "В случае, если ни одна локация не сгенерировалась"
     if not ready_config_links:
-        ready_config_links = error_messages_for_client('Приносим свои извинения за технические неполадки', 'Мы уже в курсе и решаем эту проблему')
+        ready_config_links = error_messages_for_client('Приносим свои извинения за технические неполадки', 'Мы уже знаем об этом и решаем проблему')
 
     "Готовим ответ для Впн клиента"
     user_traffic, sub_plan_limit = sub_meta['traffic_used_day_mb'], sub_meta['sub_plan_limit']
@@ -83,83 +105,3 @@ async def sub(params: Annotated[SubUrlSchema, Path()], db: PgSqlDep, request: Re
         }
     )
     return response
-
-
-
-def error_messages_for_client(*messages: str):
-    tmp = 'vless://00000000-0000-0000-0000-000000000000@127.0.0.1:443?encryption=none#{}'
-    return [tmp.format(urllib.parse.quote(msg)) for msg in messages]
-
-def process2vpn_client_format(any_obj: str | list[str], description: str = None) -> str:
-    if isinstance(any_obj, list):
-        any_obj = '\n'.join(any_obj)
-    if description is not None:
-        any_obj = f"#note:{urllib.parse.quote(description)}\n{any_obj}"
-    return base64.b64encode(any_obj.encode()).decode()
-
-
-async def executing_link_processing(sub_prepare_script: str, required_libs: str, user_uuid: str, config_link: str, user_id: int):
-    "Обработка строки-списка библиотек"
-    if required_libs is None:
-        lib_names = []
-    else:
-        lib_names = required_libs.split(',')
-    try:
-        # Подгружаем библиотеки пользователя
-        user_libs = {lib_name.strip(): importlib.import_module(lib_name.strip()) for lib_name in lib_names}
-        # Локальное окружение для скрипта
-        local_scope = {}
-        # Доступные либы в окружении исполняемого скрипта
-        global_scope = {
-            **user_libs,
-            "json": json,
-            "asyncio": asyncio,
-            "orjson": orjson,
-            "re": re,
-            "math": math,
-            "defaultdict": defaultdict,
-            "jmespath": jmespath,
-            "flatten_json": flatten_json,
-            # Запрещаем опасные встроенные функции типа open, eval, import
-            "__builtins__": {
-                "int": int, "str": str, "float": float, "list": list, "dict": dict,
-                "set": set, "len": len, "range": range, "round": round, "print": print,
-                "enumerate": enumerate, "zip": zip, "map": map, "filter": filter,
-                "isinstance": isinstance, "type": type, "dir": dir, "all": all, "any": any,
-                "Exception": Exception, "ValueError": ValueError, "KeyError": KeyError,
-                "NameError": NameError, "TypeError": TypeError, "AttributeError": AttributeError
-            }
-        }
-        # Выполняем скрипт
-        exec(sub_prepare_script, global_scope, local_scope)
-
-        "Вызываем функцию из скрипта"
-        parse_func = local_scope.get("prepare_sub")
-        if not parse_func:
-            return False, 500, "Ошибка сервера"
-
-        result = parse_func(user_uuid, config_link)
-
-        "Если async"
-        if asyncio.iscoroutine(result):
-            result = await result
-
-        # Вызываем функцию prepare_sub, которую юзер написал в шаблоне
-        return True, result
-
-
-    except ImportError as e:
-        log_event(f"\033[31mОШИБКА ИМПОРТА БИБЛИОТЕКИ\033[0m\nБиблиотека: {lib_names}\nAction: Sub Link Prepare\nДетали: {str(repr(e))}",level='CRITICAL')
-        return False, 500, "Сервер не смог обработать список локаций в подписке"
-
-    except SyntaxError as e:
-        script_lines = sub_prepare_script.split('\n')
-        error_line = script_lines[e.lineno - 1] if e.lineno and e.lineno <= len(script_lines) else "???"
-
-        log_event(f"\033[31mСИНТАКСИЧЕСКАЯ ОШИБКА В СКРИПТЕ\033[0m\nAction: Sub Link Prepare\nСтрока {e.lineno}: {error_line}\nОшибка: {e.msg}\nПозиция: {' ' * (e.offset - 1) if e.offset else ''}^\n", level='CRITICAL')
-        return False, 500, "Ошибка сервера"
-
-    except Exception as e:
-        tb_str = traceback.format_exc()
-        log_event(f"\033[31mОШИБКА ВЫПОЛНЕНИЯ СКРИПТА\033[0m\nAction: Sub Link Prepare\nБиблиотеки: {lib_names}\nТип ошибки: {type(e).__name__}\nСообщение: {str(e)}\n\nTraceback:\n{tb_str}\n", level='CRITICAL')
-        return False, 500, "Ошибка сервера"

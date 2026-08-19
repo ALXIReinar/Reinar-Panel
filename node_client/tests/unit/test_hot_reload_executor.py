@@ -8,11 +8,10 @@ Unit тесты для HotReloadExecutor с реальными скриптам�
 - Проверяем что скрипты выполняются без ошибок
 - Проверяем детальные сообщения об ошибках для валидации шаблонов
 """
-import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import pytest
 
-from node_client.api.proto_core.hot_reload_executor import HotReloadExecutor
+from node_client.api.sandbox.hot_reload_executor import HotReloadExecutor
 from node_client.tests.conftest import TemplateScriptFields
 
 

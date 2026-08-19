@@ -1,16 +1,21 @@
+import ast
 import asyncio
+import hashlib
 import importlib
 import json
 import math
 import re
 import traceback
 from collections import defaultdict
+from functools import lru_cache
 from typing import Literal, Callable, Any
 
 import flatten_json
 import jmespath
 import orjson
 
+from node_client.api.sandbox.ast_validator import SecurityError, CodeSandboxValidator
+from node_client.config import env
 from node_client.logger_config import log_event
 
 # Принудительная очистка кэша - для библиотек из шаблонов-скриптов
@@ -18,7 +23,19 @@ importlib.invalidate_caches()
 
 class HotReloadExecutor:
     """Выполнение Python скриптов для hot-reload операций"""
+    allowed_packages = {
+        "json",
+        "asyncio",
+        "orjson",
+        "re",
+        "math",
+        "defaultdict",
+        "jmespath",
+        "flatten_json",
+    }
+
     base_globals = {
+        # Доступные модули по умолчанию
         "json": json,
         "asyncio": asyncio,
         "orjson": orjson,
@@ -28,28 +45,43 @@ class HotReloadExecutor:
         "jmespath": jmespath,
         "flatten_json": flatten_json,
     }
+
     safe_builtins = {
         "int": int, "str": str, "float": float, "list": list, "dict": dict,
         "set": set, "len": len, "range": range, "round": round, "print": print,
         "enumerate": enumerate, "zip": zip, "map": map, "filter": filter,
-        "isinstance": isinstance, "type": type, "dir": dir, "all": all, "any": any,
+        "isinstance": isinstance, "all": all, "any": any, "bool": bool,
+        "bytes": bytes, "bytearray": bytearray,
         "Exception": Exception, "ValueError": ValueError, "KeyError": KeyError,
         "NameError": NameError, "TypeError": TypeError, "AttributeError": AttributeError,
     }
 
+    validator = CodeSandboxValidator()
+
     @classmethod
     def _prepare_globals(cls, lib_names: str | None = None) -> dict[str, Any]:
         """Формирует изолированный global_scope для конкретного запуска"""
+
+        if lib_names is None:
+            lib_names = []
+        else:
+            lib_names = lib_names.split(',')
+
         # Shallow copy словарь — это предотвратит кашу при замусоривании скоупа скриптом
         g_scope = cls.base_globals.copy()
         g_scope["__builtins__"] = cls.safe_builtins.copy()
+        # Подменяем __import__ на нашу защиту
+        inner_allowed_packages = cls.allowed_packages.copy()
 
-        if lib_names:
-            for lib in lib_names.split(','):
-                lib_clean = lib.strip()
-                if lib_clean:
-                    g_scope[lib_clean] = importlib.import_module(lib_clean)
+        "Добавляем в g_scope, чтобы были доступны без импорта"
+        for lib in lib_names:
+            lib_clean = lib.strip()
+            if lib_clean:
+                g_scope[lib_clean] = importlib.import_module(lib_clean)
+                inner_allowed_packages.add(lib_clean)
 
+        "Применяем упрощённый импорт в конце, чтобы все нужные либы были доступны ч/з import"
+        g_scope['__builtins__']['__import__'] = cls._create_restricted_import(inner_allowed_packages)
         return g_scope
 
     @classmethod
@@ -59,7 +91,7 @@ class HotReloadExecutor:
             lib_names: str | None,
             node_ip: str,
             core_api_port: int,
-            action: Literal["bulk_delete_users", "bulk_add_users", "get_metrics"],
+            action: Literal["user_core_operation", "get_metrics"],
             custom_params: dict | None = None,
             user_obj: dict | str | list[dict] = None,
 
@@ -83,13 +115,15 @@ class HotReloadExecutor:
             custom_params = {}
 
         try:
+            "Пытаемся получить уже готовый байт код"
+            compiled_code = cls._get_compiled_code(script)
 
             "Создаём локальное окружение для выполнения скрипта"
             local_scope = {}
             global_scope = cls._prepare_globals(lib_names)
 
             # Выполняем скрипт
-            exec(script, global_scope, local_scope)
+            exec(compiled_code, global_scope, local_scope)
 
             "Вызываем функцию из скрипта"
             action_user_func = (
@@ -116,7 +150,11 @@ class HotReloadExecutor:
 
             log_event(f"Hot-reload успешно выполнен для пользователя | user_obj: \033[37m{user_obj}\033[0m")
             return True, result
-            
+
+        except SecurityError as e:
+            log_event(f"ПОПЫТКА ОБХОДА ПЕСОЧНИЦЫ: {str(e)}", level='CRITICAL')
+            return False, f"Ошибка безопасности скрипта: {str(e)}"
+
         except ImportError as e:
             log_event(f"\033[31mОШИБКА ИМПОРТА БИБЛИОТЕКИ\033[0m\nБиблиотека: {lib_names}\nAction: {action}\nДетали: {str(repr(e))}", level='CRITICAL')
             return False, f"Библиотека {lib_names} не найдена. Убедитесь что она установлена в виртуальном окружении."
@@ -136,12 +174,78 @@ class HotReloadExecutor:
             return False, f"Ошибка выполнения скрипта ({type(e).__name__}): {str(e)}"
 
 
+    @staticmethod
+    def _create_restricted_import(allowed_libs: set[str]):
+        """Создает безопасную функцию __import__, разрешающую импорт только из allowed_libs"""
+
+        def restricted_import(name, globals=None, locals=None, fromlist=(), level=0):
+            # Получаем корневое имя пакета (например, 'cryptography' из 'cryptography.hazmat.primitives')
+            root_package = name.split('.')[0]
+
+            if root_package not in allowed_libs:
+                raise ImportError(f"Импорт модуля '{name}' запрещен в песочнице.")
+
+            return __import__(name, globals, locals, fromlist, level)
+
+        return restricted_import
+
+
+    def _validate_and_compile_script(self, script_code: str):
+        """
+        1. Парсит код в AST.
+        2. Проверяет на опасные вызовы (интроспекцию).
+        3. Компилирует код в байткод.
+        """
+        try:
+            parsed_ast = ast.parse(script_code)
+        except SyntaxError as e:
+            raise e
+
+        # Запускаем валидатор безопасности
+        self.validator.visit(parsed_ast)
+
+        # Если проверка прошла успешно — компилируем в байткод
+        return compile(parsed_ast, filename="<db_template>", mode="exec")
+
+
+    @classmethod
+    @lru_cache(maxsize=env.lru_cache_max_size)
+    def _compile_script_cached(cls, script_hash: str, script_code: str):
+        """
+        с LRU-кэшем.
+        Аргумент script_hash нужен как хэшируемый ключ для lru_cache.
+
+        Выполняется ТОЛЬКО ПРИ ПЕРВОМ ВЫЗОВЕ для каждого нового скрипта.
+        При повторных вызовах возвращает скомпилированный Code Object из RAM.
+        """
+        # 1. Парсинг в AST
+        parsed_ast = ast.parse(script_code)
+
+        # 2. Проверка безопасности (AST-валидатор из прошлого ответа)
+        cls.validator.visit(parsed_ast)
+
+        # 3. Компиляция в RAM (файл на диск НЕ пишется!)
+        compiled_code = compile(parsed_ast, filename="<db_template>", mode="exec")
+
+        return compiled_code
+
+    @classmethod
+    def _get_compiled_code(cls, script_code: str):
+        """Публичный интерфейс для получения скомпилированного кода"""
+        # Хэшируем текст скрипта для эффективного поиска в кэше
+        script_hash = hashlib.sha256(script_code.encode("utf-8")).hexdigest()
+
+        # Возвращает результат из кэша (если уже вызывался)
+        return cls._compile_script_cached(script_hash, script_code)
+
     @classmethod
     def get_compiled_func(cls, func_script: str, func_name: str, libs: str | None = None) -> Callable:
         local_scope = {}
         global_scope = cls._prepare_globals(libs)
 
-        exec(func_script, global_scope, local_scope)
+        compiled_code = cls._get_compiled_code(func_script)
+
+        exec(compiled_code, global_scope, local_scope)
 
         "Достаём рабочую функцию"
         compiled_func = local_scope.get(func_name)

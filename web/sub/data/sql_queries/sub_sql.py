@@ -13,7 +13,7 @@ class SubscriptionQueries:
         query_sub_meta = '''
         SELECT 
             us.sub_plan_id, sp.title, sp.description, (COALESCE(us.traffic_limit_day, us.used_mb_limit, 0)) AS sub_plan_limit, us.user_id, us.uuid AS user_uuid,
-            COALESCE(us.traffic_used_day_mb, us.used_mb) AS traffic_used_day_mb, 
+            COALESCE(us.traffic_used_day_mb, us.used_mb) AS traffic_used_day_mb, us.id AS user_sub_id,
             (CASE WHEN us.infinite_expire = true THEN null ELSE us.expire_date END) AS expire_date
         FROM users u
         JOIN user_subs us ON us.user_id = u.id
@@ -35,10 +35,12 @@ class SubscriptionQueries:
             return None, []
 
         query_locations = '''
-        SELECT pt.sub_prepare_script, pt.sub_required_libs as required_libs, np.config_link, np.id AS node_proto_id, vsp.id AS sub_node_id
+        SELECT pt.sub_prepare_script, pt.sub_required_libs as required_libs, np.config_link, np.id AS node_proto_id, 
+               vsp.id AS sub_node_id, pt.required_user_data_obj, pt.constant_user_data_obj, np.constant_node_data_obj
         FROM sub_plans sp
         JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = sp.id
         JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
+        JOIN nodes n ON np.node_id = n.id AND n.is_active = true
         JOIN protocols p ON p.id = np.proto_id
         JOIN proto_templates pt ON p.tmp_id = pt.id
         WHERE sp.id = $1
