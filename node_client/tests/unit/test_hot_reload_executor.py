@@ -753,3 +753,992 @@ async def test_user_obj_as_list_for_bulk(mock_xtlsapi, get_script_from_template)
     )
     
     assert success is True
+
+
+# ========== Группа 8: AST Validator (безопасность) ==========
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_ast_blocks_subclasses_introspection():
+    """AST блокирует попытку получить __subclasses__"""
+    script = """
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    # Попытка получить все подклассы object для обхода sandbox
+    return object.__subclasses__()
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is False
+    assert "безопасности" in message.lower() or "SecurityError" in message
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_ast_blocks_class_introspection():
+    """AST блокирует __class__ для обхода sandbox"""
+    script = """
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    # Классический обход через __class__.__bases__[0].__subclasses__()
+    x = []
+    return x.__class__.__bases__[0].__subclasses__()
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is False
+    assert "безопасности" in message.lower() or "__class__" in message
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_ast_blocks_globals_access():
+    """AST блокирует доступ к __globals__"""
+    script = """
+def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    # Попытка получить globals для доступа к builtins
+    return bulk_add_users.__globals__
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is False
+    assert "безопасности" in message.lower() or "__globals__" in message
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_ast_blocks_code_object_access():
+    """AST блокирует __code__ для дизассемблирования"""
+    script = """
+def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    # Попытка получить code object функции
+    return bulk_add_users.__code__
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is False
+    assert "безопасности" in message.lower() or "__code__" in message
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_ast_blocks_mro_access():
+    """AST блокирует __mro__ для обхода иерархии классов"""
+    script = """
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    # Попытка получить MRO (Method Resolution Order)
+    return object.__mro__
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is False
+    assert "безопасности" in message.lower() or "__mro__" in message
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_ast_blocks_dict_access():
+    """AST блокирует __dict__ для доступа к атрибутам"""
+    script = """
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    # Попытка получить __dict__ объекта
+    class Foo:
+        pass
+    return Foo().__dict__
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is False
+    assert "безопасности" in message.lower() or "__dict__" in message
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_ast_blocks_bases_access():
+    """AST блокирует __bases__ для обхода иерархии"""
+    script = """
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    # Попытка получить базовые классы
+    return object.__bases__
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is False
+    assert "безопасности" in message.lower() or "__bases__" in message
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_ast_blocks_closure_access():
+    """AST блокирует __closure__ для доступа к замыканиям"""
+    script = """
+def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    # Попытка получить closure
+    def inner():
+        return users_list
+    return inner.__closure__
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is False
+    assert "безопасности" in message.lower() or "__closure__" in message
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_ast_allows_safe_dunder_attrs():
+    """AST разрешает безопасные __name__ и __doc__"""
+    script = """
+def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    '''Docstring for testing'''
+    # Безопасные dunder атрибуты должны работать
+    module_name = __name__
+    module_doc = __doc__
+    
+    # Проверяем что они доступны
+    assert module_name is not None
+    assert isinstance(module_name, str)
+    return True
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is True
+
+
+# ========== Группа 9: LRU Cache для компиляции ==========
+
+@pytest.mark.asyncio
+@pytest.mark.cache
+async def test_lru_cache_reuses_compiled_code():
+    """LRU cache переиспользует скомпилированный байткод"""
+    import time
+    
+    script = """
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    return True
+"""
+    
+    # Первый вызов - компиляция + выполнение
+    start1 = time.perf_counter()
+    success1, _ = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    time1 = time.perf_counter() - start1
+    
+    # Второй вызов - только выполнение (из кэша)
+    start2 = time.perf_counter()
+    success2, _ = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    time2 = time.perf_counter() - start2
+    
+    assert success1 is True
+    assert success2 is True
+    # Второй вызов должен быть быстрее (нет компиляции)
+    # Разница может быть минимальной для простого скрипта
+    assert time2 <= time1 * 2  # Достаточно мягкое условие
+
+
+@pytest.mark.asyncio
+@pytest.mark.cache
+async def test_lru_cache_different_scripts():
+    """Разные скрипты компилируются отдельно"""
+    script1 = """
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    return 1
+"""
+    script2 = """
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    return 2
+"""
+    
+    with patch.object(HotReloadExecutor, '_compile_script_cached', wraps=HotReloadExecutor._compile_script_cached) as mock_compile:
+        success1, msg1 = await HotReloadExecutor.execute_action_script(
+            script=script1,
+            lib_names=None,
+            user_obj=[{}],
+            node_ip="127.0.0.1",
+            core_api_port=10085,
+            action="user_core_operation"
+        )
+        
+        success2, msg2 = await HotReloadExecutor.execute_action_script(
+            script=script2,
+            lib_names=None,
+            user_obj=[{}],
+            node_ip="127.0.0.1",
+            core_api_port=10085,
+            action="user_core_operation"
+        )
+        
+        # Оба скрипта скомпилировались отдельно (разные хэши)
+        assert mock_compile.call_count == 2
+        assert success1 is True
+        assert success2 is True
+        assert msg1 == 1
+        assert msg2 == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.cache
+async def test_script_hash_consistency():
+    """Хэш скрипта детерминирован (одинаковый код → одинаковый хэш)"""
+    import hashlib
+    
+    script = "async def bulk_add_users(users_list, node_ip, core_port, custom_params): return True"
+    
+    hash1 = hashlib.sha256(script.encode("utf-8")).hexdigest()
+    hash2 = hashlib.sha256(script.encode("utf-8")).hexdigest()
+    
+    assert hash1 == hash2
+    assert len(hash1) == 64  # SHA256 хэш
+
+
+@pytest.mark.asyncio
+@pytest.mark.cache
+async def test_lru_cache_respects_whitespace_changes():
+    """LRU cache различает скрипты с разными пробелами"""
+    script1 = "async def bulk_add_users(u,n,c,p): return True"
+    script2 = "async def bulk_add_users(u, n, c, p): return True"  # Лишний пробел
+    
+    with patch.object(HotReloadExecutor, '_compile_script_cached', wraps=HotReloadExecutor._compile_script_cached) as mock_compile:
+        await HotReloadExecutor.execute_action_script(script1, None, [{}], "127.0.0.1", 10085, "user_core_operation")
+        await HotReloadExecutor.execute_action_script(script2, None, [{}], "127.0.0.1", 10085, "user_core_operation")
+        
+        # Разные скрипты (даже с минимальными отличиями)
+        assert mock_compile.call_count == 2
+
+
+# ========== Группа 10: Restricted Import ==========
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_restricted_import_allows_whitelisted_libs():
+    """Restricted import разрешает whitelisted библиотеки"""
+    script = """
+import json
+import re
+import math
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    data = json.dumps({"test": 123})
+    pattern = re.compile(r"\\d+")
+    result = math.sqrt(16)
+    assert data == '{"test": 123}'
+    assert result == 4.0
+    return True
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_restricted_import_blocks_os():
+    """Restricted import блокирует os"""
+    script = """
+import os
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    return os.getcwd()
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is False
+    # Проверяем что песочница заблокировала импорт
+    assert "запрещен" in message.lower() or "forbidden" in message.lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_restricted_import_blocks_sys():
+    """Restricted import блокирует sys"""
+    script = """
+import sys
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    return sys.version
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is False
+    assert "запрещен" in message.lower() or "forbidden" in message.lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_restricted_import_blocks_subprocess():
+    """Restricted import блокирует subprocess"""
+    script = """
+import subprocess
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    return subprocess.run(['ls'])
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is False
+    assert "запрещен" in message.lower() or "forbidden" in message.lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_restricted_import_blocks_socket():
+    """Restricted import блокирует socket для предотвращения сетевых атак"""
+    script = """
+import socket
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    s = socket.socket()
+    return True
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is False
+    assert "запрещен" in message.lower() or "forbidden" in message.lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_restricted_import_nested_module():
+    """Restricted import работает с вложенными модулями из allowed_libs"""
+    script = """
+from json import dumps, loads
+from re import compile as re_compile
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    data = dumps({"key": "value"})
+    parsed = loads(data)
+    pattern = re_compile(r"test")
+    
+    assert parsed["key"] == "value"
+    return True
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_restricted_import_as_alias():
+    """Restricted import с алиасами (from X import Y as Z)"""
+    script = """
+from json import dumps as json_dumps
+from re import compile as re_compile
+from math import sqrt as square_root
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    data = json_dumps({"test": 1})
+    pattern = re_compile(r"\\d+")
+    result = square_root(25)
+    
+    assert result == 5.0
+    return True
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_restricted_import_dynamic_lib_from_template(mock_xtlsapi):
+    """lib_names из шаблона добавляется в allowed и доступен через import"""
+    script = """
+from xtlsapi import XrayClient
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    # XrayClient должен быть доступен т.к. xtlsapi в lib_names
+    client = XrayClient(node_ip, core_port)
+    assert client.host == node_ip
+    return True
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names='xtlsapi',  # Добавляется в allowed
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_restricted_import_multiple_dynamic_libs(mock_xtlsapi):
+    """Несколько динамических библиотек из lib_names"""
+    script = """
+from xtlsapi import XrayClient
+import jmespath
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    client = XrayClient(node_ip, core_port)
+    data = jmespath.search('key', {'key': 'value'})
+    assert data == 'value'
+    return True
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names='xtlsapi,jmespath',  # Несколько библиотек
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.security
+async def test_restricted_import_blocks_nested_dangerous_module():
+    """Restricted import блокирует опасные вложенные модули"""
+    script = """
+from os.path import exists
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    return exists('/etc/passwd')
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is False
+    assert "запрещен" in message.lower() or "forbidden" in message.lower()
+
+
+# ========== Группа 11: get_compiled_func ==========
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_get_compiled_func_returns_callable():
+    """get_compiled_func возвращает вызываемую функцию"""
+    script = """
+def my_parser(data):
+    return data.upper()
+"""
+    
+    func = HotReloadExecutor.get_compiled_func(script, "my_parser")
+    
+    assert callable(func)
+    result = func("hello")
+    assert result == "HELLO"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_get_compiled_func_with_libs():
+    """get_compiled_func работает с библиотеками"""
+    script = """
+import json
+def my_parser(data):
+    return json.dumps(data)
+"""
+    
+    func = HotReloadExecutor.get_compiled_func(script, "my_parser", libs="json")
+    result = func({"key": "value"})
+    
+    assert '"key"' in result
+    assert '"value"' in result
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_get_compiled_func_raises_on_missing_function():
+    """get_compiled_func выбрасывает ValueError если функция не найдена"""
+    script = """
+def other_func():
+    return True
+"""
+    
+    with pytest.raises(ValueError, match="не найдена"):
+        HotReloadExecutor.get_compiled_func(script, "missing_func")
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_get_compiled_func_async_function():
+    """get_compiled_func работает с async функциями"""
+    script = """
+async def async_parser(data):
+    return f"async: {data}"
+"""
+    
+    func = HotReloadExecutor.get_compiled_func(script, "async_parser")
+    
+    assert callable(func)
+    result = await func("test")
+    assert result == "async: test"
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_get_compiled_func_with_multiple_libs():
+    """get_compiled_func с несколькими библиотеками"""
+    script = """
+import json
+import re
+def my_parser(data):
+    pattern = re.compile(r"\\d+")
+    return json.dumps({"data": data, "has_digits": bool(pattern.search(data))})
+"""
+    
+    func = HotReloadExecutor.get_compiled_func(script, "my_parser", libs="json,re")
+    result = func("test123")
+    
+    assert "test123" in result
+    assert "true" in result.lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_get_compiled_func_uses_lru_cache():
+    """get_compiled_func использует LRU cache"""
+    import time
+    
+    script = """
+def simple_func():
+    return 42
+"""
+    
+    # Первый вызов - компиляция
+    start1 = time.perf_counter()
+    func1 = HotReloadExecutor.get_compiled_func(script, "simple_func")
+    time1 = time.perf_counter() - start1
+    assert func1() == 42
+    
+    # Второй вызов - из кэша (должен быть быстрее)
+    start2 = time.perf_counter()
+    func2 = HotReloadExecutor.get_compiled_func(script, "simple_func")
+    time2 = time.perf_counter() - start2
+    assert func2() == 42
+    
+    # Второй вызов должен быть не медленнее первого
+    assert time2 <= time1 * 2  # Достаточно мягкое условие
+
+
+# ========== Группа 12: Edge Cases ==========
+
+@pytest.mark.asyncio
+@pytest.mark.edge_case
+async def test_empty_script():
+    """Пустой скрипт возвращает ошибку"""
+    success, message = await HotReloadExecutor.execute_action_script(
+        script="",
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is False
+    assert "не найдена" in message.lower() or "ошибка" in message.lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.edge_case
+async def test_script_with_only_comments():
+    """Скрипт только с комментариями"""
+    script = """
+# Comment 1
+# Comment 2
+# Comment 3
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is False
+    assert "не найдена" in message.lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.edge_case
+async def test_very_long_script():
+    """Очень длинный скрипт (проверка производительности кэша)"""
+    # Генерируем скрипт с 10000 строк комментариев
+    comments = "\n".join([f"# Line {i}" for i in range(10000)])
+    script = f"{comments}\nasync def bulk_add_users(users_list, node_ip, core_port, custom_params): return True"
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.edge_case
+async def test_unicode_in_script():
+    """Юникод символы в скрипте"""
+    script = """
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    msg = "Добавлен пользователь 用户 👤 🚀"
+    emoji = "✅"
+    chinese = "你好"
+    assert len(msg) > 0
+    assert emoji == "✅"
+    return True
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.edge_case
+async def test_script_modifies_global_scope():
+    """Скрипт не должен загрязнять global scope между вызовами"""
+    script1 = """
+GLOBAL_VAR = "script1"
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    return GLOBAL_VAR
+"""
+    
+    script2 = """
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    try:
+        return GLOBAL_VAR  # Не должна существовать из script1
+    except NameError:
+        return "isolated"
+"""
+    
+    success1, msg1 = await HotReloadExecutor.execute_action_script(
+        script=script1,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    success2, msg2 = await HotReloadExecutor.execute_action_script(
+        script=script2,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success1 is True
+    assert msg1 == "script1"
+    assert success2 is True
+    assert msg2 == "isolated"  # Изоляция работает!
+
+
+@pytest.mark.asyncio
+@pytest.mark.edge_case
+async def test_script_with_special_characters():
+    """Скрипт со специальными символами в строках"""
+    script = r"""
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    special = "Test\n\t\r\"'\\string"
+    regex = r"\d+\.\d+"
+    assert "\n" in special
+    assert r"\d" in regex
+    return True
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.edge_case
+async def test_script_returns_none():
+    """Скрипт возвращающий None считается успешным"""
+    script = """
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    # Функция ничего не возвращает (implicit None)
+    pass
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is True
+    assert message is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.edge_case
+async def test_script_returns_false():
+    """Скрипт возвращающий False обрабатывается корректно"""
+    script = """
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    return False
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is True
+    assert message is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.edge_case
+async def test_script_with_nested_functions():
+    """Скрипт с вложенными функциями"""
+    script = """
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    def helper(x):
+        return x * 2
+    
+    async def async_helper(y):
+        return y + 10
+    
+    result = helper(5)
+    result2 = await async_helper(result)
+    
+    assert result == 10
+    assert result2 == 20
+    return True
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.edge_case
+async def test_script_with_lambda():
+    """Скрипт с lambda функциями"""
+    script = """
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    square = lambda x: x ** 2
+    double = lambda x: x * 2
+    
+    result = square(5)
+    result2 = double(result)
+    
+    assert result == 25
+    assert result2 == 50
+    return True
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.edge_case
+async def test_script_with_comprehensions():
+    """Скрипт с list/dict/set comprehensions"""
+    script = """
+async def bulk_add_users(users_list, node_ip, core_port, custom_params):
+    squares = [x**2 for x in range(5)]
+    even_dict = {x: x**2 for x in range(10) if x % 2 == 0}
+    unique_set = {x % 3 for x in range(10)}
+    
+    assert len(squares) == 5
+    assert even_dict[4] == 16
+    assert len(unique_set) == 3
+    return True
+"""
+    
+    success, message = await HotReloadExecutor.execute_action_script(
+        script=script,
+        lib_names=None,
+        user_obj=[{}],
+        node_ip="127.0.0.1",
+        core_api_port=10085,
+        action="user_core_operation"
+    )
+    
+    assert success is True

@@ -20,7 +20,6 @@ import httpx
 from fastapi import FastAPI
 
 from web.sub.api.sub_api import router
-from web.sub.api.sub_api import executing_link_processing
 
 
 pytestmark = pytest.mark.asyncio
@@ -94,7 +93,7 @@ class TestGetSubEndpoint:
         # Проверяем что есть ссылки с UUID
         assert user_uuid in decoded
         assert "vless://" in decoded
-        assert "test.server.com" in decoded
+        assert "192.168.1.1" in decoded  # IP адрес из mock config
         
         # Проверяем заголовки
         assert 'subscription-userinfo' in response.headers
@@ -262,12 +261,13 @@ class TestGetSubEndpoint:
         # Arrange
         b64_id = sub_api_seed['active_user']['b64_id']
         
-        # Получаем количество видимых нод для плана
+        # Получаем количество видимых нод для плана (с учётом активности физ. ноды)
         async with db_pool.acquire() as conn:
             nodes_count = await conn.fetchval("""
                 SELECT COUNT(DISTINCT vsp.node_proto_id)
                 FROM vnodes_sub_plans vsp
                 JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
+                JOIN nodes n ON np.node_id = n.id AND n.is_active = true
                 WHERE vsp.sub_plan_id = $1
             """, sub_api_seed['plan_id'])
         
@@ -297,101 +297,3 @@ class TestGetSubEndpoint:
         decoded = base64.b64decode(response.content).decode()
         # Должны получить error messages
         assert "00000000-0000-0000-0000-000000000000" in decoded
-
-
-class TestExecutingLinkProcessingIntegration:
-    """Integration тесты для executing_link_processing с реальными скриптами из БД"""
-    
-    async def test_with_real_script_from_db(self, sub_api_seed, db_pool):
-        """
-        Тест с реальным скриптом из БД.
-        
-        Проверяем что скрипт выполняется корректно и возвращает валидную ссылку.
-        """
-        # Arrange - получаем реальный скрипт из БД
-        async with db_pool.acquire() as conn:
-            script_data = await conn.fetchrow("""
-                SELECT pt.sub_prepare_script, pt.sub_required_libs
-                FROM proto_templates pt
-                JOIN protocols p ON p.tmp_id = pt.id
-                WHERE p.id = (
-                    SELECT proto_id FROM nodes_protocols WHERE id = $1
-                )
-            """, sub_api_seed['vnode_id_10'])
-        
-        user_uuid = "test-uuid-real"
-        config_link = "encryption=none&type=tcp"
-        
-        # Act
-        success, result = await executing_link_processing(
-            sub_prepare_script=script_data['sub_prepare_script'],
-            required_libs=script_data['sub_required_libs'],
-            user_uuid=user_uuid,
-            config_link=config_link,
-            user_id=1
-        )
-        
-        # Assert
-        assert success is True
-        assert user_uuid in result
-        assert config_link in result
-        assert result.startswith("vless://")
-    
-    
-    async def test_async_prepare_sub_from_db(self, sub_api_seed, db_pool):
-        """
-        Тест с асинхронным скриптом prepare_sub.
-        
-        Создаём временный async скрипт в БД и проверяем его исполнение.
-        """
-        # Arrange - обновляем скрипт на async версию
-        async_script = '''
-async def prepare_sub(user_uuid, config_link):
-    """Асинхронная версия для тестов"""
-    return f"vless://{user_uuid}@async.server.com:443?{config_link}#AsyncLocation"
-'''
-        
-        async with db_pool.acquire() as conn:
-            await conn.execute("""
-                UPDATE proto_templates
-                SET sub_prepare_script = $1
-                WHERE id = (
-                    SELECT pt.id FROM proto_templates pt
-                    JOIN protocols p ON p.tmp_id = pt.id
-                    WHERE p.id = (
-                        SELECT proto_id FROM nodes_protocols WHERE id = $2
-                    )
-                )
-            """, async_script, sub_api_seed['vnode_id_10'])
-            
-            # Получаем обновлённый скрипт
-            script_data = await conn.fetchrow("""
-                SELECT sub_prepare_script, sub_required_libs
-                FROM proto_templates
-                WHERE id = (
-                    SELECT pt.id FROM proto_templates pt
-                    JOIN protocols p ON p.tmp_id = pt.id
-                    WHERE p.id = (
-                        SELECT proto_id FROM nodes_protocols WHERE id = $1
-                    )
-                )
-            """, sub_api_seed['vnode_id_10'])
-        
-        user_uuid = "async-test-uuid"
-        config_link = "type=ws&path=/api"
-        
-        # Act
-        success, result = await executing_link_processing(
-            sub_prepare_script=script_data['sub_prepare_script'],
-            required_libs=script_data['sub_required_libs'],
-            user_uuid=user_uuid,
-            config_link=config_link,
-            user_id=2
-        )
-        
-        # Assert
-        assert success is True
-        assert user_uuid in result
-        assert "async.server.com" in result
-        assert "AsyncLocation" in result
-

@@ -3,6 +3,7 @@ from urllib.parse import urlunsplit, quote, urlsplit, urlencode, parse_qsl
 from typing import Annotated
 
 from fastapi import APIRouter, Response, Path
+from pydantic import IPvAnyAddress
 from starlette.requests import Request
 
 from web.sub.api.handlers.prepare_func import error_messages_for_client, process2vpn_client_format, create_vpn_like_user
@@ -72,10 +73,58 @@ async def sub(params: Annotated[SubUrlSchema, Path()], db: PgSqlDep, request: Re
             # quote энкодит только fragment (#MyNode -> #My%20Node)
             safe_fragment = quote(parsed.fragment)
 
+            "1.1. Обрабатываем netloc через punycode (если это домен)"
+            # TODO: Подумать, может, можно брать node___title и node___address в самом конце и подставлять прямо на этом этапе??
+            # Такая обработка выглядит болезненно и ненадёжно
+            netloc = parsed.netloc
+            if netloc:
+                # Извлекаем хост из netloc (может содержать порт: host:port или user@host:port)
+                # Для простоты обрабатываем весь netloc через punycode если это не IP
+                from pydantic import IPvAnyAddress
+                
+                # Пытаемся извлечь хост из netloc
+                if '@' in netloc:
+                    # Формат: user@host:port
+                    user_part, host_port = netloc.rsplit('@', 1)
+                else:
+                    user_part = None
+                    host_port = netloc
+                
+                # Разделяем хост и порт
+                if ':' in host_port and not host_port.startswith('['):  # IPv6 в квадратных скобках не трогаем
+                    host, port = host_port.rsplit(':', 1)
+                else:
+                    host = host_port
+                    port = None
+                
+                # Проверяем является ли хост IP адресом
+                try:
+                    IPvAnyAddress(host.strip('[]'))  # IPv6 может быть в []
+                    # Это IP - оставляем как есть
+                    safe_netloc = netloc
+                except ValueError:
+                    # Это домен - применяем punycode
+                    try:
+                        safe_host = host.encode('idna').decode('ascii')
+                    except (UnicodeError, UnicodeDecodeError):
+                        # На случай странных символов используем quote
+                        safe_host = quote(host)
+                    
+                    # Собираем netloc обратно
+                    if port:
+                        safe_netloc = f"{safe_host}:{port}"
+                    else:
+                        safe_netloc = safe_host
+                    
+                    if user_part:
+                        safe_netloc = f"{user_part}@{safe_netloc}"
+            else:
+                safe_netloc = netloc
+
             "2. Собираем итоговую ссылку"
             final_url = urlunsplit((
                 parsed.scheme,
-                parsed.netloc,
+                safe_netloc,
                 parsed.path,
                 safe_query,
                 safe_fragment

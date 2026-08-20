@@ -160,20 +160,14 @@ class NodesProtocolsQueries:
         JOIN nodes n ON n.id = np.node_id
         WHERE np.id = $1
         '''
-        query_spec_params = '''
-        SELECT tsp.key, npspv.value FROM nodes_protocoles_spec_params_values npspv
-        JOIN template_spec_params tsp ON tsp.id = npspv.spec_key_id
-        WHERE npspv.node_proto_id = $1        
-        '''
+
         "Ищем в БД"
         tmp_record = await self.conn.fetchrow(tmp_link_query, node_proto_id)
-        spec_params = await self.conn.fetch(query_spec_params, node_proto_id)
 
         "Обрабатываем в нужный формат"
         config_link_tmp, node_title, node_ip_or_domain = tmp_record['url_tmp'], tmp_record['title'], tmp_record['sub_node_address'] or tmp_record['ip']
-        spec_params = {rec['key']: rec['value'] for rec in spec_params}
 
-        return config_link_tmp, spec_params, node_ip_or_domain, node_title
+        return config_link_tmp, node_ip_or_domain, node_title
 
 
     async def update_config_link(self, node_proto_id: int, sub_ready_link: str):

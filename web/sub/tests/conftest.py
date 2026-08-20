@@ -49,7 +49,6 @@ async def db_seed(db_pool):
             TRUNCATE TABLE 
                 sessions_admins, 
                 admins, 
-                nodes_protocoles_spec_params_values,
                 nodes_protocols, 
                 nodes, 
                 remote_execute_history,
@@ -635,6 +634,7 @@ async def sub_api_seed(db_pool, sub_infrastructure_seed):
     Создаёт тестовые данные для проверки GET /sub/{b64_id} эндпоинта.
 
     ПЕРЕИСПОЛЬЗУЕТ инфраструктуру из sub_infrastructure_seed (ноды, протоколы, план).
+    Использует РЕАЛЬНЫЙ sub_prepare_script из БД (не модифицирует его).
     Создаёт ОТДЕЛЬНЫХ пользователей с tg_id 600001-600005 для изоляции.
 
     Критические SQL фильтры в get_sub_links():
@@ -644,42 +644,94 @@ async def sub_api_seed(db_pool, sub_infrastructure_seed):
     - us.expire_date > now() (не истёкшие)
     - np.user_visible = true (только видимые ноды)
     """
+    from web.sub.tests.utils.prepare_sub_helpers import generate_constant_node_data_obj
+    
     async with db_pool.acquire() as conn:
         # Получаем plan_id из sub_infrastructure_seed
         plan_id = sub_infrastructure_seed['plan_id']
         vnode_id_10 = sub_infrastructure_seed['vnode_id_10']
         vnode_id_11 = sub_infrastructure_seed['vnode_id_11']
 
-        # Обновляем proto_template чтобы добавить реальный sub_prepare_script
-        await conn.execute("""
-            UPDATE proto_templates
-            SET sub_prepare_script = $1,
-                sub_required_libs = NULL
-            WHERE id = (
-                SELECT pt.id FROM proto_templates pt
-                JOIN protocols p ON p.tmp_id = pt.id
-                WHERE p.id = (
-                    SELECT proto_id FROM nodes_protocols WHERE id = $2
-                )
+        # Получаем шаблон и генерируем constant_node_data_obj для каждой ноды
+        template_data = await conn.fetchrow("""
+            SELECT pt.sub_prepare_script
+            FROM proto_templates pt
+            JOIN protocols p ON p.tmp_id = pt.id
+            WHERE p.id = (
+                SELECT proto_id FROM nodes_protocols WHERE id = $1
             )
-        """, '''
-def prepare_sub(user_uuid, config_link):
-    """Простой скрипт для тестов"""
-    return f"vless://{user_uuid}@test.server.com:443?{config_link}#TestLocation"
-''', vnode_id_10)
-
-        # Добавляем config_link для нод
+        """, vnode_id_10)
+        
+        if not template_data or not template_data['sub_prepare_script']:
+            raise RuntimeError(
+                f"Шаблон для vnode_id={vnode_id_10} не имеет sub_prepare_script! "
+                f"Запустите: python -m web.db.seed_data"
+            )
+        
+        # Генерируем constant_node_data_obj из скрипта
+        constant_node_data_obj = generate_constant_node_data_obj(template_data['sub_prepare_script'])
+        
+        # Устанавливаем constant_node_data_obj для обеих нод
+        # asyncpg автоматически конвертирует Python dict в JSONB
+        for vnode_id in [vnode_id_10, vnode_id_11]:
+            await conn.execute("""
+                UPDATE nodes_protocols
+                SET constant_node_data_obj = $1
+                WHERE id = $2
+            """, constant_node_data_obj, vnode_id)
+        
+        # ВАЖНО: config_link НЕ устанавливаем вручную!
+        # Он должен генерироваться через generate_link_from_json из url_tmp + node_config
+        # Либо можно сгенерировать правильный config_link здесь
+        
+        # Для тестов нам нужен ПОЛНЫЙ config_link (результат рендеринга url_tmp)
+        # Генерируем его через render_config_link_for_test
+        from web.sub.tests.utils.prepare_sub_helpers import (
+            extract_jinja_placeholders,
+            generate_mock_node_config,
+            render_config_link_for_test
+        )
+        
+        # Получаем url_tmp
+        url_tmp = await conn.fetchval("""
+            SELECT pt.url_tmp
+            FROM proto_templates pt
+            JOIN protocols p ON p.tmp_id = pt.id
+            WHERE p.id = (SELECT proto_id FROM nodes_protocols WHERE id = $1)
+        """, vnode_id_10)
+        
+        # Генерируем mock конфиги для обеих нод
+        placeholders = extract_jinja_placeholders(url_tmp)
+        mock_config = generate_mock_node_config(placeholders)
+        
+        # Рендерим config_link для vnode_10
+        config_link_10 = render_config_link_for_test(
+            url_tmp=url_tmp,
+            node_config_json=mock_config,
+            node_address="192.168.1.100",
+            node_title="VNode 10 Active"
+        )
+        
+        # Рендерим config_link для vnode_11
+        config_link_11 = render_config_link_for_test(
+            url_tmp=url_tmp,
+            node_config_json=mock_config,
+            node_address="192.168.1.101",
+            node_title="VNode 11 Active"
+        )
+        
+        # Устанавливаем отрендеренные config_link
         await conn.execute("""
             UPDATE nodes_protocols
             SET config_link = $1
             WHERE id = $2
-        """, "encryption=none&type=tcp&security=tls", vnode_id_10)
-
+        """, config_link_10, vnode_id_10)
+        
         await conn.execute("""
             UPDATE nodes_protocols
             SET config_link = $1
             WHERE id = $2
-        """, "encryption=none&type=ws&path=/api", vnode_id_11)
+        """, config_link_11, vnode_id_11)
 
         # ========== СОЗДАЁМ ПОЛЬЗОВАТЕЛЕЙ ДЛЯ ПРОВЕРКИ SQL ФИЛЬТРОВ ==========
 
@@ -1471,3 +1523,120 @@ async def pointed_bulk_seed(db_pool, db_seed):
             # User 10 (удалённый пользователь)
             "outbox_user10_deleted": outbox_user10_deleted,
         }
+
+
+# ========== Sub Prepare Script Testing Fixtures ==========
+
+@pytest.fixture(scope="function")
+async def sub_prepare_infrastructure(db_pool):
+    """
+    Создаёт инфраструктуру для тестирования prepare_sub скриптов (function scope).
+    
+    Процесс:
+    1. Загружает все шаблоны с sub_prepare_script из БД
+    2. Для каждого шаблона:
+       - Извлекает используемые ключи из скрипта (через regex)
+       - Генерирует constant_node_data_obj на основе префиксов (sub_link_, node_)
+       - Создаёт физическую ноду (одну для всех)
+       - Создаёт/получает протокол для шаблона
+       - Создаёт nodes_protocols с заполненным constant_node_data_obj
+    3. Возвращает dict {template_id: node_proto_data}
+    
+    Returns:
+        dict: {
+            template_id: {
+                'template': dict,  # Полный шаблон из proto_templates
+                'node_proto_id': int,  # ID в nodes_protocols
+                'constant_node_data_obj': dict,  # Сгенерированный constant_node_data_obj
+                'node_address': str,  # IP физической ноды
+                'node_title': str,  # Название физической ноды
+            }
+        }
+    """
+    from web.sub.tests.utils.prepare_sub_helpers import generate_constant_node_data_obj
+    
+    async with db_pool.acquire() as conn:
+        # 1. Загружаем все шаблоны с sub_prepare_script
+        templates = await conn.fetch("""
+            SELECT 
+                id, title, url_tmp, sub_prepare_script, sub_required_libs,
+                required_user_data_obj, constant_user_data_obj, proto_python_lib
+            FROM proto_templates
+            WHERE sub_prepare_script IS NOT NULL 
+              AND is_accepted = true
+            ORDER BY id
+        """)
+        
+        if not templates:
+            raise RuntimeError(
+                "Не найдено шаблонов с sub_prepare_script! "
+                "Запустите: python -m web.db.seed_data"
+            )
+        
+        # 2. Создаём или получаем физическую ноду
+        node_id = await conn.fetchval("""
+            SELECT id FROM nodes WHERE ip = $1
+        """, "192.168.1.100")
+        
+        if not node_id:
+            node_id = await conn.fetchval("""
+                INSERT INTO nodes (ip, private_ip, api_port, node_name, title, is_active)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING id
+            """, "192.168.1.100", "10.0.0.100", 8100, 
+                "sub-prepare-test-node", "Sub Prepare Test Node", True)
+        
+        result = {}
+        
+        # 3. Обрабатываем каждый шаблон
+        for template in templates:
+            template_dict = dict(template)
+            
+            # 3.1. Генерируем constant_node_data_obj из скрипта
+            const_node_data = generate_constant_node_data_obj(template['sub_prepare_script'])
+            
+            # 3.2. Получаем или создаём протокол для этого шаблона
+            proto_id = await conn.fetchval("""
+                SELECT id FROM protocols WHERE tmp_id = $1 LIMIT 1
+            """, template['id'])
+            
+            if not proto_id:
+                # Создаём новый протокол
+                proto_id = await conn.fetchval("""
+                    INSERT INTO protocols (name, tmp_id)
+                    VALUES ($1, $2)
+                    RETURNING id
+                """, f"test-proto-{template['title']}", template['id'])
+            
+            # 3.3. Создаём или обновляем nodes_protocols с constant_node_data_obj
+            import orjson
+            node_proto_id = await conn.fetchval("""
+                INSERT INTO nodes_protocols (
+                    node_id, proto_id, title, sub_node_address, 
+                    metrics_port, config_path, user_visible, constant_node_data_obj
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                ON CONFLICT (config_path, node_id) 
+                DO UPDATE SET constant_node_data_obj = EXCLUDED.constant_node_data_obj
+                RETURNING id
+            """, 
+                node_id,
+                proto_id,
+                f"VN-{template['id']}",  # Короткое название (VN = VNode)
+                f"vnode-{template['id']}.test.com",
+                5566 + template['id'],
+                f"/etc/config-{template['id']}.json",
+                True,
+                orjson.dumps(const_node_data).decode()  # asyncpg expects JSON string
+            )
+            
+            # 3.4. Сохраняем данные для теста
+            result[template['id']] = {
+                'template': template_dict,
+                'node_proto_id': node_proto_id,
+                'constant_node_data_obj': const_node_data,
+                'node_address': '192.168.1.100',
+                'node_title': 'Sub Prepare Test Node',
+            }
+    
+    return result

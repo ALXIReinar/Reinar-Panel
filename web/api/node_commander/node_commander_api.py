@@ -1,4 +1,3 @@
-import asyncio
 from typing import Annotated
 
 from aiohttp import ClientResponseError, ClientError
@@ -7,7 +6,7 @@ from fastapi.params import Query
 from starlette.requests import Request
 
 from web.api.protocols.proto_links_templates.handlers import generate_link_from_json
-from web.config_dir.config import NodeExecAiohttpDep, ArqDep, env
+from web.config_dir.config import NodeExecAiohttpDep, ArqDep
 from web.data.postgres import PgSqlDep
 from web.data.redis_storage import RedisDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
@@ -134,8 +133,8 @@ async def config_file_write(body: WriteConfigSchema, request: Request, db: PgSql
             resp.raise_for_status()
 
         "1. Вытаскиваем ссылку-шаблон, зависимости и описание из БД"
-        config_link_tmp, spec_params, node_ip_or_domain, node_title = await db.nodes_protocols.get_proto_tmp_w_spec_params(body.node_proto_id)
-        success_status, sub_ready_link = generate_link_from_json(config_link_tmp, body.file_content, spec_params, node_ip_or_domain, node_title)
+        config_link_tmp, node_ip_or_domain, node_title = await db.nodes_protocols.get_proto_tmp_w_spec_params(body.node_proto_id)
+        success_status, sub_ready_link = generate_link_from_json(config_link_tmp, body.file_content, node_ip_or_domain, node_title)
         if not success_status:
             log_event(f'Генерация ссылок упала | error_reason: \033[34m{sub_ready_link}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
             raise HTTPException(status_code=409, detail={'success': False, 'message': 'Исключение при генерации ссылки по шаблону', 'err_message': sub_ready_link})

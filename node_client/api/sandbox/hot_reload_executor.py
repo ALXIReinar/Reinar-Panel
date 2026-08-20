@@ -29,7 +29,6 @@ class HotReloadExecutor:
         "orjson",
         "re",
         "math",
-        "defaultdict",
         "jmespath",
         "flatten_json",
     }
@@ -54,6 +53,8 @@ class HotReloadExecutor:
         "bytes": bytes, "bytearray": bytearray,
         "Exception": Exception, "ValueError": ValueError, "KeyError": KeyError,
         "NameError": NameError, "TypeError": TypeError, "AttributeError": AttributeError,
+        "__name__": "__main__",  # Безопасный dunder атрибут
+        "__doc__": None,  # Безопасный dunder атрибут
     }
 
     validator = CodeSandboxValidator()
@@ -78,7 +79,11 @@ class HotReloadExecutor:
             lib_clean = lib.strip()
             if lib_clean:
                 g_scope[lib_clean] = importlib.import_module(lib_clean)
+                # Добавляем полный путь модуля
                 inner_allowed_packages.add(lib_clean)
+                # Также добавляем корневой пакет (для поддержки from X.Y.Z import ...)
+                root_package = lib_clean.split('.')[0]
+                inner_allowed_packages.add(root_package)
 
         "Применяем упрощённый импорт в конце, чтобы все нужные либы были доступны ч/з import"
         g_scope['__builtins__']['__import__'] = cls._create_restricted_import(inner_allowed_packages)
@@ -118,19 +123,21 @@ class HotReloadExecutor:
             "Пытаемся получить уже готовый байт код"
             compiled_code = cls._get_compiled_code(script)
 
-            "Создаём локальное окружение для выполнения скрипта"
-            local_scope = {}
+            "Создаём окружение для выполнения скрипта"
+            # ВАЖНО: передаём global_scope и как globals, и как locals
+            # Это позволяет import работать корректно: импорты попадают в тот же scope
+            # что и определения функций, и функции могут их видеть
             global_scope = cls._prepare_globals(lib_names)
 
-            # Выполняем скрипт
-            exec(compiled_code, global_scope, local_scope)
+            # Выполняем скрипт - импорты и функции попадут в global_scope
+            exec(compiled_code, global_scope, global_scope)
 
             "Вызываем функцию из скрипта"
             action_user_func = (
-                    local_scope.get('bulk_delete_users') or
-                    local_scope.get('bulk_add_users') or
-                    local_scope.get('get_metrics') or
-                    local_scope.get('parse')
+                    global_scope.get('bulk_delete_users') or
+                    global_scope.get('bulk_add_users') or
+                    global_scope.get('get_metrics') or
+                    global_scope.get('parse')
             )
             if not action_user_func:
                 msg = "Ни одна из функций: (bulk_delete_users, bulk_add_users, get_metrics, parse) - не найдена в скрипте"
@@ -156,7 +163,14 @@ class HotReloadExecutor:
             return False, f"Ошибка безопасности скрипта: {str(e)}"
 
         except ImportError as e:
-            log_event(f"\033[31mОШИБКА ИМПОРТА БИБЛИОТЕКИ\033[0m\nБиблиотека: {lib_names}\nAction: {action}\nДетали: {str(repr(e))}", level='CRITICAL')
+            error_msg = str(e)
+            log_event(f"\033[31mОШИБКА ИМПОРТА БИБЛИОТЕКИ\033[0m\nБиблиотека: {lib_names}\nAction: {action}\nДетали: {repr(e)}", level='CRITICAL')
+            
+            # Если это ошибка от restricted_import - возвращаем оригинальное сообщение
+            if "запрещен в песочнице" in error_msg:
+                return False, error_msg
+            
+            # Иначе стандартное сообщение
             return False, f"Библиотека {lib_names} не найдена. Убедитесь что она установлена в виртуальном окружении."
             
         except SyntaxError as e:
@@ -176,7 +190,14 @@ class HotReloadExecutor:
 
     @staticmethod
     def _create_restricted_import(allowed_libs: set[str]):
-        """Создает безопасную функцию __import__, разрешающую импорт только из allowed_libs"""
+        """
+        Создает безопасную функцию __import__, разрешающую импорт только из allowed_libs.
+        
+        Поддерживает:
+        - import module
+        - from module import attr
+        - from module.submodule import attr as alias
+        """
 
         def restricted_import(name, globals=None, locals=None, fromlist=(), level=0):
             # Получаем корневое имя пакета (например, 'cryptography' из 'cryptography.hazmat.primitives')
@@ -185,7 +206,17 @@ class HotReloadExecutor:
             if root_package not in allowed_libs:
                 raise ImportError(f"Импорт модуля '{name}' запрещен в песочнице.")
 
-            return __import__(name, globals, locals, fromlist, level)
+            # Выполняем импорт через встроенный __import__
+            module = __import__(name, globals, locals, fromlist, level)
+            
+            # ВАЖНО: если fromlist не пустой (т.е. это from X import Y),
+            # __import__ возвращает самый глубокий модуль, а не корневой
+            # Например:
+            # - import json → возвращает json
+            # - from json import dumps → возвращает json (с атрибутом dumps)
+            # - from json.encoder import JSONEncoder → возвращает json.encoder
+            
+            return module
 
         return restricted_import
 
@@ -240,17 +271,18 @@ class HotReloadExecutor:
 
     @classmethod
     def get_compiled_func(cls, func_script: str, func_name: str, libs: str | None = None) -> Callable:
-        local_scope = {}
+        # Используем global_scope как для globals так и для locals
+        # чтобы импорты были доступны внутри функций
         global_scope = cls._prepare_globals(libs)
 
         compiled_code = cls._get_compiled_code(func_script)
 
-        exec(compiled_code, global_scope, local_scope)
+        exec(compiled_code, global_scope, global_scope)
 
         "Достаём рабочую функцию"
-        compiled_func = local_scope.get(func_name)
+        compiled_func = global_scope.get(func_name)
         if not compiled_func:
-            msg = f"Функция ней найдена в скрипте | func_name: \033[33m{func_name}\033[0m; \033[36m{func_script[:150]}\033[0m"
+            msg = f"Функция не найдена в скрипте | func_name: \033[33m{func_name}\033[0m; \033[36m{func_script[:150]}\033[0m"
             log_event(msg, level='ERROR')
             raise ValueError(msg)
 

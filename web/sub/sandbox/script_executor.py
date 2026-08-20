@@ -2,17 +2,8 @@ import ast
 import asyncio
 import hashlib
 import importlib
-import json
-import math
-import traceback
 from collections import defaultdict
-import re
 from functools import lru_cache
-from typing import Any
-
-import flatten_json
-import jmespath
-import orjson
 
 from web.sub.config_dir.config import env
 from web.sub.config_dir.logger_config import log_event
@@ -33,7 +24,7 @@ class ScriptExecutor:
         # 1. Формируем список БАЗОВЫХ разрешенных пакетов
         allowed_packages = {
             "json", "asyncio", "orjson", "re", "math",
-            "defaultdict", "jmespath", "flatten_json"
+            "jmespath", "flatten_json"
         }
 
         # Добавляем пакеты из параметров функции
@@ -42,6 +33,7 @@ class ScriptExecutor:
                 clean_lib = lib.strip().split('.')[0]
                 if clean_lib:
                     allowed_packages.add(clean_lib)
+
 
         # 2. ЖЕСТКО ОЧИЩЕННЫЕ Builtins
         # ВАЖНО: Удалены type, dir, vars, eval, exec, globals, locals!
@@ -53,6 +45,8 @@ class ScriptExecutor:
             "bytes": bytes, "bytearray": bytearray,
             "Exception": Exception, "ValueError": ValueError, "KeyError": KeyError,
             "NameError": NameError, "TypeError": TypeError, "AttributeError": AttributeError,
+            "__name__": "__main__",  # Безопасный dunder атрибут
+            "__doc__": None,  # Безопасный dunder атрибут
 
             # Подменяем __import__ на нашу защиту
             "__import__": cls._create_restricted_import(allowed_packages),
@@ -62,27 +56,22 @@ class ScriptExecutor:
             # 3. АНАЛИЗ И КОМПИЛЯЦИЯ (Безопасность на уровне AST)
             compiled_code = cls._get_compiled_code(sub_prepare_script)
 
+            imported_allowed_packages = {allow_pckg.strip(): importlib.import_module(allow_pckg.strip()) for allow_pckg in allowed_packages}
+
             # 4. Формируем изолированный global_scope
             global_scope = {
                 "__builtins__": safe_builtins,
                 # Доступные модули по умолчанию
-                "json": json,
-                "asyncio": asyncio,
-                "orjson": orjson,
-                "re": re,
-                "math": math,
+                **imported_allowed_packages,
                 "defaultdict": defaultdict,
-                "jmespath": jmespath,
-                "flatten_json": flatten_json,
             }
-            local_scope = {}
 
             # 5. ВЫПОЛНЕНИЕ СКОМПИЛИРОВАННОГО КОДА
-            exec(compiled_code, global_scope, local_scope)
+            exec(compiled_code, global_scope, global_scope)
 
-            parse_func = local_scope.get("prepare_sub")
-            if not parse_func or not callable(parse_func):
-                return False, 500, "Функция 'prepare_sub' не найдена в скрипте."
+            parse_func = global_scope.get("prepare_sub")
+            if not parse_func:
+                return False, "Функция 'prepare_sub' не найдена в скрипте."
 
             result = parse_func(user_obj, config_link)
 
@@ -93,13 +82,24 @@ class ScriptExecutor:
 
         except SecurityError as e:
             log_event(f"ПОПЫТКА ОБХОДА ПЕСОЧНИЦЫ: {str(e)}", level='CRITICAL')
-            return False, 403, f"Ошибка безопасности скрипта: {str(e)}"
+            return False, f"Ошибка безопасности скрипта: {str(e)}"
+
+        except ImportError as e:
+            error_msg = str(e)
+            log_event(f"\033[31mОШИБКА ИМПОРТА БИБЛИОТЕКИ\033[0m\nБиблиотека: {required_libs}\nAction: prepare_sub\nДетали: {repr(e)}", level='CRITICAL')
+
+            # Если это ошибка от restricted_import - возвращаем оригинальное сообщение
+            if "запрещен в песочнице" in error_msg:
+                return False, error_msg
+
+            # Иначе стандартное сообщение
+            return False, f"Библиотека {required_libs} не найдена. Убедитесь что она установлена в виртуальном окружении."
 
         except SyntaxError as e:
-            return False, 400, f"Синтаксическая ошибка: {e.msg} (строка {e.lineno})"
+            return False, f"Синтаксическая ошибка: {e.msg} (строка {e.lineno})"
 
         except Exception as e:
-            return False, 500, f"Ошибка выполнения ({type(e).__name__}): {str(e)}"
+            return False, f"Ошибка выполнения ({type(e).__name__}): {str(e)}"
 
     @staticmethod
     def _create_restricted_import(allowed_libs: set[str]):
