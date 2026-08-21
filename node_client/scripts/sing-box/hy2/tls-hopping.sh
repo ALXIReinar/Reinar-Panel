@@ -62,13 +62,13 @@ METRICS_PORT=$(find_free_port 10085)
 
 # Ищем свободный диапазон для хоппинга
 # shellcheck disable=SC2046
+# shellcheck disable=SC2162
 read RANGE_START RANGE_END <<< $(find_free_port_range)
 
 echo "Выделен внутренний порт для Sing-box: $INTERNAL_PORT"
 echo "Выделен диапазон портов для Port Hopping: ${RANGE_START}-${RANGE_END}"
 
 # Включаем IP Forwarding и настраиваем NAT PREROUTING для UDP хоппинга
-sysctl -w net.ipv4.ip_forward=1 > /dev/null
 iptables -t nat -A PREROUTING -p udp --dport ${RANGE_START}:${RANGE_END} -j REDIRECT --to-ports ${INTERNAL_PORT}
 
 # Генерация конфига Sing-box

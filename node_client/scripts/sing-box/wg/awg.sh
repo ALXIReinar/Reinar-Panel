@@ -8,12 +8,13 @@ IP_ADDR=$2
 IP_VERSION=$3
 
 if [ -z "$TMP_ID" ] || [ -z "$IP_ADDR" ] || [ -z "$IP_VERSION" ]; then
-    echo "Ошибка: Необходимы параметры TMP_ID, ip_addr, ip_version!"
-    echo "Использование: bash sing-box-wg-install.sh <tmp_id> <ip_addr> <ip_version>"
+    echo "Ошибка: Необходимы параметры TMP_ID, IPV4_ADDR, IPV6_ADDR!"
+    echo "Использование: bash sing-box-awg-install.sh <tmp_id> <ipv4_addr> <ipv6_addr>"
     exit 1
 fi
 
-SINGBOX_BIN="/usr/local/bin/sing-box"
+# Используем наш кастомный бинарник!
+SINGBOX_BIN="/usr/local/bin/sing-box-awg"
 CONFIG_DIR="/etc/sing-box/configs"
 CONFIG_PATH="$CONFIG_DIR/${TMP_ID}.json"
 PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback"
@@ -29,21 +30,34 @@ find_free_port() {
     echo $port
 }
 
-WG_PORT=$(find_free_port 51820)
+AWG_PORT=$(find_free_port 51820)
 METRICS_PORT=$(find_free_port 10085)
 
-echo "Выделен порт для WireGuard: $WG_PORT"
-echo "Выделен порт для Метрик: $METRICS_PORT"
+echo "Выделен порт для AmneziaWG: $AWG_PORT"
 
-# --- ГЕНЕРАЦИЯ КЛЮЧЕЙ СЕРВЕРА ---
-# sing-box выдает вывод вида:
-# PrivateKey: <base64>
-# PublicKey: <base64>
+# --- 1. ГЕНЕРАЦИЯ КЛЮЧЕЙ СЕРВЕРА ---
 WG_KEYS=$($SINGBOX_BIN generate wg-keypair)
 WG_PRIVATE_KEY=$(echo "$WG_KEYS" | grep PrivateKey | awk '{print $2}')
 WG_PUBLIC_KEY=$(echo "$WG_KEYS" | grep PublicKey | awk '{print $2}')
+NODE_HASH_SALT=$(openssl rand -base64 12)
 
-# Генерация конфига Sing-box
+# --- 2. ГЕНЕРАЦИЯ ПАРАМЕТРОВ ОБФУСКАЦИИ (AWG) ---
+# Генерируем уникальный профиль маскировки для каждой ноды
+JC=$(( RANDOM % 10 + 3 ))           # от 3 до 12
+JMIN=$(( RANDOM % 20 + 40 ))        # от 40 до 59
+JMAX=$(( RANDOM % 300 + 700 ))      # от 700 до 999
+S1=$(( RANDOM % 100 + 15 ))         # от 15 до 114
+S2=$(( RANDOM % 100 + 15 ))         # от 15 до 114
+
+# H1-H4 - большие случайные числа (магические заголовки)
+# Bash RANDOM генерирует от 0 до 32767, комбинируем для получения больших int
+generate_magic() { echo $(( (RANDOM << 15) | RANDOM )); }
+H1=$(generate_magic)
+H2=$(generate_magic)
+H3=$(generate_magic)
+H4=$(generate_magic)
+
+# --- 3. ГЕНЕРАЦИЯ КОНФИГА СИНГБОКСА ---
 cat <<EOF > "$CONFIG_PATH"
 {
   "log": {
@@ -55,7 +69,7 @@ cat <<EOF > "$CONFIG_PATH"
       "stats": {
         "enabled": true,
         "inbounds": [
-          "wg-in"
+          "awg-in"
         ],
         "users": []
       }
@@ -64,15 +78,24 @@ cat <<EOF > "$CONFIG_PATH"
   "inbounds": [
     {
       "type": "wireguard",
-      "tag": "wg-in",
+      "tag": "awg-in",
       "listen": "::",
-      "listen_port": $WG_PORT,
+      "listen_port": $AWG_PORT,
       "system": false,
       "local_address": [
         "$IP_ADDR",
       ],
       "private_key": "$WG_PRIVATE_KEY",
-      "peers": []
+      "peers": [],
+      "jc": $JC,
+      "jmin": $JMIN,
+      "jmax": $JMAX,
+      "s1": $S1,
+      "s2": $S2,
+      "h1": $H1,
+      "h2": $H2,
+      "h3": $H3,
+      "h4": $H4
     }
   ],
   "outbounds": [
@@ -84,11 +107,11 @@ cat <<EOF > "$CONFIG_PATH"
 }
 EOF
 
-# Создание systemd сервиса
+# --- 4. СОЗДАНИЕ SYSTEMD СЕРВИСА ---
 SERVICE_PATH="/etc/systemd/system/sing-box-${TMP_ID}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Sing-box WireGuard Node (TMP_ID: ${TMP_ID})
+Description=Sing-box AmneziaWG Node (TMP_ID: ${TMP_ID})
 After=network.target nss-lookup.target
 
 [Service]
@@ -110,27 +133,26 @@ systemctl daemon-reload
 systemctl enable "sing-box-${TMP_ID}"
 systemctl restart "sing-box-${TMP_ID}"
 
-# --- ОТПРАВКА CALLBACK ---
-# Важно: Мы отправляем WG_PUBLIC_KEY обратно в панель!
-# Панель должна сохранить его в constant_node_data_obj,
-# чтобы клиенты знали, к какому серверу подключаться.
-
+# --- 5. ОТПРАВКА CALLBACK ---
+# Передаем весь комплект обфускации обратно в панель для клиентов
 curl -s -X POST "$PANEL_CALLBACK_URL" \
      -H "Content-Type: application/json" \
      -d '{
            "tmp_id": "'"$TMP_ID"'",
            "config_path": "'"$CONFIG_PATH"'",
-           "proto_port": '"$WG_PORT"',
-           "metrics_port": '"$METRICS_PORT"',
+           "internal_port": '"$AWG_PORT"',
            "status": "installed",
-           "node_type": "singbox_wg",
+           "node_type": "singbox_awg",
            "constant_node_data_obj": {
+               "node_public_key": "'"$WG_PUBLIC_KEY"'",
                "node_ipv'"$IP_VERSION"'_subnet": "'"$IP_ADDR"'",
-               "node_public_key": "'"$WG_PUBLIC_KEY"'"
+               "node_hash_salt": '"$NODE_HASH_SALT"'
            }
          }'
 
 echo "=================================================="
-echo "Sing-box WireGuard развернут."
-echo "Порт WG: $WG_PORT | Public Key: $WG_PUBLIC_KEY"
+echo "AmneziaWG развернут (кастомное ядро)."
+echo "Порт: $AWG_PORT"
+echo "Public Key: $WG_PUBLIC_KEY"
+echo "Обфускация: JC=$JC, JMIN=$JMIN, JMAX=$JMAX"
 echo "=================================================="

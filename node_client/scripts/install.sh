@@ -13,7 +13,6 @@ NC='\033[0m' # No Color
 INSTALL_BASE="/opt/reinar_panel"
 INSTALL_DIR="$INSTALL_BASE/node"
 SERVICE_NAME="reinar-node"
-PYTHON_MIN_VERSION="3.10"
 
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  Reinar Node Client - Установка${NC}"
@@ -109,6 +108,15 @@ if [ -z "$NODE_PORT" ]; then
     NODE_PORT=$USER_PORT
 fi
 
+if [ -z "$CI" ]; then
+  echo -e "${YELLOW} Настройка пересылки пакетов (Необходимо для работы xray, sing-box, e.t.c)"
+
+  echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/99-custom-forwarding.conf
+  echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.d/99-custom-forwarding.conf
+fi
+
+sysctl --system > /dev/null
+
 # Запрос приватного IP админки
 echo -e "\n${YELLOW}Настройка приватной сети${NC}"
 DEFAULT_ADMIN_IP="10.0.0.1"
@@ -134,8 +142,8 @@ echo -e "${GREEN}✓${NC} Python ${PYTHON_VERSION} найден"
 # Проверка версии Python
 PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
 PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
-if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 10 ]); then
-    echo -e "${RED}✗${NC} Требуется Python 3.10 или выше (найден ${PYTHON_VERSION})"
+if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 12 ]); then
+    echo -e "${RED}✗${NC} Требуется Python 3.12 или выше (найден ${PYTHON_VERSION})"
     exit 1
 fi
 

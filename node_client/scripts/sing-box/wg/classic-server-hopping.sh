@@ -20,6 +20,36 @@ PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback"
 
 mkdir -p "$CONFIG_DIR"
 
+
+# Функция поиска свободного диапазона портов (размером 100 портов)
+find_free_port_range() {
+    local range_size=100
+    local start_port=20000
+    local max_port=60000
+
+    while [ $start_port -le $max_port ]; do
+        local end_port=$((start_port + range_size - 1))
+        local busy=0
+
+        for p in $(seq $start_port $end_port); do
+            if ss -lntu | awk '{print $4}' | grep -q ":$p$"; then
+                busy=1
+                break
+            fi
+        done
+
+        if [ $busy -eq 0 ]; then
+            echo "$start_port $end_port"
+            return 0
+        fi
+
+        start_port=$((start_port + range_size))
+    done
+
+    # Fallback, если всё занято
+    echo "20000 20099"
+}
+
 # Функция поиска свободного порта
 find_free_port() {
     local port=$1
@@ -35,6 +65,25 @@ METRICS_PORT=$(find_free_port 10085)
 echo "Выделен порт для WireGuard: $WG_PORT"
 echo "Выделен порт для Метрик: $METRICS_PORT"
 
+# Ищем свободный диапазон для хоппинга
+# shellcheck disable=SC2046
+# shellcheck disable=SC2162
+read RANGE_START RANGE_END <<< $(find_free_port_range)
+
+
+echo "Выделен внутренний порт для Sing-box: $WG_PORT"
+# shellcheck disable=SC1072
+# shellcheck disable=SC1073
+# shellcheck disable=SC1009
+if [ "$IP_VERSION" --eq 4]; then
+  iptables -t nat -A PREROUTING -p udp --dport "${RANGE_START}":"${RANGE_END}" -j REDIRECT --to-ports "${WG_PORT}"
+fi
+
+if [ "$IP_VERSION" --eq 6]; then
+  ip6tables -t nat -A PREROUTING -p udp --dport ${RANGE_START}:${RANGE_END} -j REDIRECT --to-ports ${WG_PORT}
+fi
+echo "Выделен диапазон портов для Port Hopping: ${RANGE_START}-${RANGE_END}"
+
 # --- ГЕНЕРАЦИЯ КЛЮЧЕЙ СЕРВЕРА ---
 # sing-box выдает вывод вида:
 # PrivateKey: <base64>
@@ -42,6 +91,7 @@ echo "Выделен порт для Метрик: $METRICS_PORT"
 WG_KEYS=$($SINGBOX_BIN generate wg-keypair)
 WG_PRIVATE_KEY=$(echo "$WG_KEYS" | grep PrivateKey | awk '{print $2}')
 WG_PUBLIC_KEY=$(echo "$WG_KEYS" | grep PublicKey | awk '{print $2}')
+NODE_HASH_SALT=$(openssl rand -base64 12)
 
 # Генерация конфига Sing-box
 cat <<EOF > "$CONFIG_PATH"
@@ -88,7 +138,7 @@ EOF
 SERVICE_PATH="/etc/systemd/system/sing-box-${TMP_ID}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Sing-box WireGuard Node (TMP_ID: ${TMP_ID})
+Description=Sing-box WireGuard Node Hopping (TMP_ID: ${TMP_ID})
 After=network.target nss-lookup.target
 
 [Service]
@@ -123,10 +173,13 @@ curl -s -X POST "$PANEL_CALLBACK_URL" \
            "proto_port": '"$WG_PORT"',
            "metrics_port": '"$METRICS_PORT"',
            "status": "installed",
-           "node_type": "singbox_wg",
+           "node_type": "singbox_wg_hopping",
            "constant_node_data_obj": {
                "node_ipv'"$IP_VERSION"'_subnet": "'"$IP_ADDR"'",
-               "node_public_key": "'"$WG_PUBLIC_KEY"'"
+               "node_public_key": "'"$WG_PUBLIC_KEY"'",
+               "node_hop_start": '"$RANGE_START"',
+               "node_hop_end": '"$RANGE_END"',
+               "node_hash_salt": '"$NODE_HASH_SALT"'
            }
          }'
 
