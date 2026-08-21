@@ -73,6 +73,33 @@ async def db_seed(db_pool):
     return {"db_cleaned": True}
 
 
+@pytest.fixture(scope="function")
+async def protocol_templates(db_pool):
+    """
+    Загружает ВСЕ активные шаблоны из БД для unit тестов песочницы.
+    
+    Упрощённая версия для sub сервиса - без фильтрации по протоколу.
+    
+    Returns:
+        list[dict]: Список шаблонов со всеми скриптами
+    """
+    async with db_pool.acquire() as conn:
+        templates = await conn.fetch("""
+            SELECT 
+                id, title, sub_prepare_script, sub_required_libs,
+                proto_python_lib, url_tmp, required_user_data_obj,
+                constant_user_data_obj
+            FROM proto_templates
+            WHERE is_accepted = true
+            ORDER BY title
+        """)
+        
+        if not templates:
+            pytest.skip("Нет активных шаблонов в БД. Запустите: python -m web.db.seed_data")
+        
+        return [dict(t) for t in templates]
+
+
 # ========== ARQ Fixtures ==========
 
 # ========== AioHttp Fake Fixtures ==========

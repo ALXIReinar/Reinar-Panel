@@ -140,7 +140,7 @@ async def insert_proto_templates(
     templates: list[dict[str, Any]]
 ) -> None:
     """
-    Вставка шаблонов протоколов с вложенными данными (template_spec_params, protocols, templates_users_extractors).
+    Вставка шаблонов протоколов с вложенными данными (protocols, templates_users_extractors).
     Обрабатывает tmp_id для связи родитель-потомок.
     """
     if not templates:
@@ -155,7 +155,6 @@ async def insert_proto_templates(
         # Конвертируем datetime строки в объекты datetime
         template_data = convert_datetime_strings(template_data)
         # Извлекаем вложенные данные
-        spec_params = template_data.pop("template_spec_params", [])
         protocols = template_data.pop("protocols", [])
         extractors = template_data.pop("templates_users_extractors", [])
         
@@ -186,26 +185,7 @@ async def insert_proto_templates(
         inserted_templates += 1
         print(f"  Шаблон '{template_data['title']}' вставлен (id={template_id})")
 
-        # Вставляем template_spec_params
-        for param in spec_params:
-            # Заменяем tmp_id на реальный template_id
-            param_data = param.copy()
-            param_data.pop("tmp_id", None)
-            param_data["tmp_id"] = template_id
-            
-            # Проверяем существование параметра
-            exists = await conn.fetchval(
-                "SELECT 1 FROM template_spec_params WHERE key = $1 AND tmp_id = $2",
-                param_data["key"], template_id
-            )
-            
-            if not exists:
-                await conn.execute(
-                    "INSERT INTO template_spec_params (key, tmp_id) VALUES ($1, $2)",
-                    param_data["key"], param_data["tmp_id"]
-                )
-                inserted_params += 1
-        
+
         # Вставляем protocols
         for protocol in protocols:
             # Заменяем tmp_id на реальный template_id

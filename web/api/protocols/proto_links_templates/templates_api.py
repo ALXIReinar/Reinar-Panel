@@ -1,6 +1,4 @@
-from typing import Annotated
-
-from fastapi import APIRouter, Query, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from starlette.requests import Request
 
 from web.data.postgres import PgSqlDep
@@ -21,10 +19,10 @@ async def get_all_templates(params: GetTmpSchema, request: Request, db: PgSqlDep
 
 @router.get('/{tmp_id}')
 async def get_tmp_by_id(
-        tmp_id: int, spec_only: Annotated[bool, Query(alias='so')], request: Request, db: PgSqlDep, _: JWTCookieDep
+        tmp_id: int, request: Request, db: PgSqlDep, _: JWTCookieDep
 ):
     """Получить шаблон по ID с привязанными spec параметрами"""
-    result = await db.proto_templates.get_by_id(tmp_id, spec_only)
+    result = await db.proto_templates.get_by_id(tmp_id)
     
     if not result:
         log_event(f'Шаблон не найден | tmp_id: \033[31m{tmp_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')

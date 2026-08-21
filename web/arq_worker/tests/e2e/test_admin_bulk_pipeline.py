@@ -100,6 +100,7 @@ class TestAdminBulkPipeline:
                 user_injectors=args[12],     # user_injectors
                 required_user_data_obj=args[13], # required_user_data_obj
                 constant_user_data_obj=args[14], # constant_user_data_obj
+                constant_node_data_obj=args[15], # constant_node_data_obj
                 current_attempt=1
             )
             
@@ -191,6 +192,7 @@ class TestAdminBulkPipeline:
                 user_injectors=args[12],
                 required_user_data_obj=args[13],
                 constant_user_data_obj=args[14],
+                constant_node_data_obj=args[15],
                 current_attempt=1
             )
             
@@ -289,6 +291,7 @@ class TestAdminBulkPipeline:
                 user_injectors=args[12],
                 required_user_data_obj=args[13],
                 constant_user_data_obj=args[14],
+                constant_node_data_obj=args[15],
                 current_attempt=1
             )
         

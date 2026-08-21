@@ -12,8 +12,8 @@ omit =
     # Конфигурационные файлы
     web/arq_worker/config.py
     web/arq_worker/arq_config.py
-    web/arq_worker/utils/arq_logger_config.py.py
-    
+    web/arq_worker/utils/arq_logger_config.py
+
     # Entry points
     web/arq_worker/main.py
     

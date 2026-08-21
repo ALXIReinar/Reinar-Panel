@@ -62,74 +62,8 @@ async def sub(params: Annotated[SubUrlSchema, Path()], db: PgSqlDep, request: Re
             log_event(f'Не смогли выдать локацию из подписки | user_id: \033[34m{sub_meta['user_id']}\033[0m; sub_id: \033[33m{sub_meta['sub_plan_id']}\033[0m; node_proto_id: \033[35m{proto_user_conf['node_proto_id']}\033[0m; vnodes_sub_plans_id: {proto_user_conf['sub_node_id']}', request=request, level='CRITICAL')
             errors.append(res)
         else:
-            "Квотим ссылку, заменяем проблемные для url символы"
-            "1. Разбираем URL на компоненты и безопасно кодируем"
-            parsed = urlsplit(res)
-
-            # parse_qsl разбивает строку "a=1&b=2" на список кортежей [('a', '1'), ('b', '2')]
-            # urlencode собирает это обратно в безопасный вид, энкодит все спецсимволы
-            safe_query = urlencode(parse_qsl(parsed.query))
-
-            # quote энкодит только fragment (#MyNode -> #My%20Node)
-            safe_fragment = quote(parsed.fragment)
-
-            "1.1. Обрабатываем netloc через punycode (если это домен)"
-            # TODO: Подумать, может, можно брать node___title и node___address в самом конце и подставлять прямо на этом этапе??
-            # Такая обработка выглядит болезненно и ненадёжно
-            netloc = parsed.netloc
-            if netloc:
-                # Извлекаем хост из netloc (может содержать порт: host:port или user@host:port)
-                # Для простоты обрабатываем весь netloc через punycode если это не IP
-                from pydantic import IPvAnyAddress
-                
-                # Пытаемся извлечь хост из netloc
-                if '@' in netloc:
-                    # Формат: user@host:port
-                    user_part, host_port = netloc.rsplit('@', 1)
-                else:
-                    user_part = None
-                    host_port = netloc
-                
-                # Разделяем хост и порт
-                if ':' in host_port and not host_port.startswith('['):  # IPv6 в квадратных скобках не трогаем
-                    host, port = host_port.rsplit(':', 1)
-                else:
-                    host = host_port
-                    port = None
-                
-                # Проверяем является ли хост IP адресом
-                try:
-                    IPvAnyAddress(host.strip('[]'))  # IPv6 может быть в []
-                    # Это IP - оставляем как есть
-                    safe_netloc = netloc
-                except ValueError:
-                    # Это домен - применяем punycode
-                    try:
-                        safe_host = host.encode('idna').decode('ascii')
-                    except (UnicodeError, UnicodeDecodeError):
-                        # На случай странных символов используем quote
-                        safe_host = quote(host)
-                    
-                    # Собираем netloc обратно
-                    if port:
-                        safe_netloc = f"{safe_host}:{port}"
-                    else:
-                        safe_netloc = safe_host
-                    
-                    if user_part:
-                        safe_netloc = f"{user_part}@{safe_netloc}"
-            else:
-                safe_netloc = netloc
-
-            "2. Собираем итоговую ссылку"
-            final_url = urlunsplit((
-                parsed.scheme,
-                safe_netloc,
-                parsed.path,
-                safe_query,
-                safe_fragment
-            ))
-            ready_config_links.append(final_url)
+            "Сохраняем успешно обработанную ссылку для подключения пользователя"
+            ready_config_links.append(res)
 
     if errors:
         log_event(f'Не все конфиги удалось обработать | user_uuid: \033[35m{sub_meta['user_uuid']}\033[0m; errors: \033[37m{errors}\033[0m', level='WARNING')

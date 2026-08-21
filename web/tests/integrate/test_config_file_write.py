@@ -8,67 +8,49 @@ from web.tests.conftest import FakeAiohttpSession
 
 
 @pytest.fixture
-async def vnode_with_template(db_pool, virtual_node_seed, proto_template_seed):
+async def vnode_with_template(db_pool, virtual_node_seed):
     """
-    Виртуальная нода с настроенным шаблоном и spec параметрами
+    Виртуальная нода с настроенным шаблоном из БД (xray-vless-reality-tcp)
+    Использует реальные шаблоны из seed_data вместо хардкода
     """
     vnode_id = virtual_node_seed["vnode_id_1"]
-    tmp_id = proto_template_seed["tmp_id"]
     
     async with db_pool.acquire() as conn:
-        # Устанавливаем config_path для виртуальной ноды
+        # 1. Устанавливаем config_path для виртуальной ноды
         await conn.execute(
             "UPDATE nodes_protocols SET config_path = $1 WHERE id = $2",
             "/etc/xray/config.json", vnode_id
         )
         
-        # Устанавливаем url_tmp в proto_templates (шаблон ссылки)
-        template_url = (
-            "vless://{{user_uuid}}@{{node___address}}:{{inbounds___1___port}}?"
-            "encryption=none&flow={{flow}}&security={{security}}&"
-            "sni={{sni}}&fp={{fp}}&pbk={{pbk}}&sid={{sid}}&type={{network}}#{{node___title}}"
+        # 2. Получаем реальный шаблон из БД (должен быть загружен через seed_data)
+        template_id = await conn.fetchval(
+            "SELECT id FROM proto_templates WHERE title = 'xray-vless-reality-tcp' AND is_accepted = true"
         )
+        
+        if not template_id:
+            raise RuntimeError(
+                "Шаблон 'xray-vless-reality-tcp' не найден в БД. "
+                "Запустите: python -m web.db.seed_data"
+            )
+        
+        # 3. Создаём или получаем протокол с этим шаблоном
+        proto_id = await conn.fetchval(
+            "SELECT id FROM protocols WHERE tmp_id = $1 LIMIT 1",
+            template_id
+        )
+        
+        if not proto_id:
+            # Создаём протокол если его нет
+            proto_id = await conn.fetchval(
+                "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
+                template_id, "Test VLESS Reality TCP"
+            )
+        
+        # 4. Обновляем proto_id виртуальной ноды
         await conn.execute(
-            "UPDATE proto_templates SET url_tmp = $1 WHERE id = $2",
-            template_url, tmp_id
+            "UPDATE nodes_protocols SET proto_id = $1 WHERE id = $2",
+            proto_id, vnode_id
         )
-        
-        # Добавляем spec параметры для виртуальной ноды
-        # Сначала создаём template_spec_params (без description - его нет в таблице)
-        spec_params_data = [
-            "flow",
-            "security",
-            "sni",
-            "fp",
-            "pbk",
-            "sid",
-            "network"
-        ]
-        
-        for key in spec_params_data:
-            spec_key_id = await conn.fetchval(
-                "INSERT INTO template_spec_params (tmp_id, key) VALUES ($1, $2) RETURNING id",
-                tmp_id, key
-            )
-            
-            # Добавляем значения для виртуальной ноды
-            value = {
-                "flow": "xtls-rprx-vision",
-                "security": "reality",
-                "sni": "www.microsoft.com",
-                "fp": "chrome",
-                "pbk": "TEST_PUBLIC_KEY_ABC123",
-                "sid": "709c400f8da05ef4",
-                "network": "tcp"
-            }[key]
-            
-            await conn.execute(
-                """
-                INSERT INTO nodes_protocoles_spec_params_values (node_proto_id, spec_key_id, value)
-                VALUES ($1, $2, $3)
-                """,
-                vnode_id, spec_key_id, value
-            )
     
     return vnode_id
 
@@ -86,16 +68,10 @@ class TestConfigFileWriteSuccess:
             json_data={"success": True}
         )
         
-        # Конфиг-файл для записи
-        config_content = '''
-        {
-            "log": {"loglevel": "warning"},
-            "inbounds": [
-                {"port": 10085, "protocol": "dokodemo-door"},
-                {"port": 443, "protocol": "vless"}
-            ]
-        }
-        '''
+        # Конфиг-файл для записи (используем реальный JSON из utils)
+        import json
+        with open("web/tests/utils/vless-tcp-server-metrics-copy.json", "r", encoding="utf-8") as f:
+            config_content = json.dumps(json.load(f))
         
         response = await client.put(
             "/api/v1/private/cmd_center/config_file/write",
@@ -113,12 +89,13 @@ class TestConfigFileWriteSuccess:
         assert data["message"] == "Конфиг-файл ноды обновился, ссылка переопределена"
         assert "Перезагрузите ядро" in data["tip"]
         
-        # Проверяем что ссылка содержит нужные параметры
+        # Проверяем что ссылка валидная (начинается с vless:// и содержит базовые параметры)
         link = data["sub_ready_link"]
         assert link.startswith("vless://")
-        assert "flow=xtls-rprx-vision" in link
+        assert "encryption=none" in link
         assert "security=reality" in link
-        assert "pbk=TEST_PUBLIC_KEY_ABC123" in link
+        # Проверяем что двойные плейсхолдеры подставились (не должно быть {{...}})
+        assert "{{" not in link
     
     @pytest.mark.asyncio
     async def test_write_config_updates_config_link_in_db(self, client, vnode_with_template, db_pool):
@@ -130,7 +107,10 @@ class TestConfigFileWriteSuccess:
             json_data={"success": True}
         )
         
-        config_content = '{"log": {"loglevel": "info"}, "inbounds": [{"port": 10085}, {"port": 443}]}'
+        # Используем реальный конфиг
+        import json
+        with open("web/tests/utils/vless-tcp-server-metrics-copy.json", "r", encoding="utf-8") as f:
+            config_content = json.dumps(json.load(f))
         
         # Проверяем что config_link пустой ДО записи
         async with db_pool.acquire() as conn:
@@ -158,8 +138,10 @@ class TestConfigFileWriteSuccess:
                 vnode_id
             )
             assert new_link is not None
+            assert new_link != ""
             assert new_link.startswith("vless://")
-            assert "pbk=TEST_PUBLIC_KEY_ABC123" in new_link
+            # Проверяем что это корректная ссылка без двойных плейсхолдеров
+            assert "{{" not in new_link
     
     @pytest.mark.asyncio
     async def test_write_config_with_flatten_key(self, client, vnode_with_template, db_pool):
@@ -171,29 +153,17 @@ class TestConfigFileWriteSuccess:
             json_data={"success": True}
         )
         
-        config_content = '''
-        {
-            "inbounds": [
-                {"port": 10085},
-                {
-                    "port": 443,
-                    "settings": {
-                        "clients": [
-                            {"id": "uuid1", "email": "user1"},
-                            {"id": "uuid2", "email": "user2"}
-                        ]
-                    }
-                }
-            ]
-        }
-        '''
+        # Используем реальный конфиг с clients
+        import json
+        with open("web/tests/utils/vless-tcp-server-metrics-copy.json", "r", encoding="utf-8") as f:
+            config_content = json.dumps(json.load(f))
         
         response = await client.put(
             "/api/v1/private/cmd_center/config_file/write",
             json={
                 "node_proto_id": vnode_id,
                 "file_content": config_content,
-                "flatten_json_users_key": "inbounds.1.settings.clients"
+                "flatten_json_users_key": "inbounds.0.settings.clients"  # vless теперь на позиции 0
             }
         )
         
@@ -298,7 +268,7 @@ class TestConfigFileWriteErrors:
     
     @pytest.mark.asyncio
     async def test_write_config_link_generation_failed(self, client, vnode_with_template, db_pool):
-        """Ошибка генерации ссылки - spec ключ отсутствует в шаблоне (409)"""
+        """Ошибка генерации ссылки - шаблон недоступен или некорректный (409)"""
         vnode_id = vnode_with_template
         
         # Мокируем успешную запись файла на ноду
@@ -306,15 +276,19 @@ class TestConfigFileWriteErrors:
             json_data={"success": True}
         )
         
+        import json
+        with open("web/tests/utils/vless-tcp-server-metrics-copy.json", "r", encoding="utf-8") as f:
+            config_content = json.dumps(json.load(f))
+        
         # Мокируем generate_link_from_json чтобы она вернула ошибку
         with patch('web.api.node_commander.node_commander_api.generate_link_from_json') as mock_generate:
-            mock_generate.return_value = (False, "Spec key: missing_key указан в кастомных параметрах, но отсутствует в ссылке-шаблоне")
+            mock_generate.return_value = (False, "Url конфиг-ссылка не указана в шаблоне")
             
             response = await client.put(
                 "/api/v1/private/cmd_center/config_file/write",
                 json={
                     "node_proto_id": vnode_id,
-                    "file_content": '{"inbounds": [{"port": 10085}, {"port": 443}]}',
+                    "file_content": config_content,
                     "flatten_json_users_key": None
                 }
             )
@@ -324,7 +298,7 @@ class TestConfigFileWriteErrors:
         detail = data.get("detail", data)  # FastAPI оборачивает в "detail"
         assert detail["success"] is False
         assert "Исключение при генерации ссылки по шаблону" in detail["message"]
-        assert "missing_key" in detail["err_message"]
+        assert "Url конфиг-ссылка не указана" in detail["err_message"]
 
 
 class TestConfigFileWriteValidation:

@@ -39,21 +39,8 @@ class ProtoTemplatesQueries:
             where_clause = 'WHERE ' + ' AND '.join(where_conditions)
         
         query = f"""
-        WITH specs AS (
-            SELECT tmp_id, 
-                   json_agg(
-                        json_build_object(
-                            'spec_key_id', id,
-                            'key_name', key
-                        )
-                   ) AS spec_params
-            FROM template_spec_params
-            GROUP BY tmp_id
-        )
-        SELECT pt.id, pt.title, pt.url_tmp, pt.status, pt.is_accepted, pt.proto_python_lib,
-                COALESCE(s.spec_params, '[]'::json) AS spec_params
+        SELECT pt.id, pt.title, pt.url_tmp, pt.status, pt.is_accepted, pt.proto_python_lib
         FROM proto_templates pt
-        LEFT JOIN specs s ON pt.id = s.tmp_id
         {where_clause}
         ORDER BY pt.id {sort_by}
         LIMIT $1
@@ -64,21 +51,10 @@ class ProtoTemplatesQueries:
 
 
 
-    async def get_by_id(self, tmp_id: int, spec_only: bool):
-        """Получить шаблон по ID с привязанными spec параметрами"""
+    async def get_by_id(self, tmp_id: int):
+        """Получить шаблон по ID с привязанными"""
         template_query = """
-        WITH specs AS (
-            SELECT tmp_id, 
-                   json_agg(
-                        json_build_object(
-                            'spec_key_id', id,
-                            'key_name', key
-                        )
-                   ) AS spec_params
-            FROM template_spec_params WHERE tmp_id = $1
-            GROUP BY tmp_id
-        ),
-        user_injectors AS (
+        WITH user_injectors AS (
             SELECT tmp_id, 
                     json_agg(
                         json_build_object(
@@ -95,19 +71,11 @@ class ProtoTemplatesQueries:
         SELECT pt.id, pt.title, pt.url_tmp, pt.status, pt.is_accepted, pt.reload_core_command, pt.required_user_data_obj, pt.constant_user_data_obj,
                pt.proto_python_lib, pt.sub_prepare_script, pt.sub_required_libs, pt.api_bulk_delete_user_script, pt.metrics_parser_code, pt.metrics_command,
                pt.bulk_delete_script_custom_params, pt.api_metrics_script, pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, pt.description,
-               COALESCE(s.spec_params, '[]'::json) AS spec_params,
                COALESCE(ui.user_injectors, '[]'::json) AS user_injectors
         FROM proto_templates pt
-        LEFT JOIN specs s ON pt.id = s.tmp_id
         LEFT JOIN user_injectors ui ON ui.tmp_id = pt.id
         WHERE pt.id = $1
         """
-        spec_params_query = "SELECT id, key FROM template_spec_params WHERE tmp_id = $1"
-
-        "Облегчённый вариант(если в LocalStorage есть template)"
-        if spec_only:
-            spec_params = await self.conn.fetch(spec_params_query, tmp_id)
-            return {'spec_params': spec_params}
 
         template = await self.conn.fetchrow(template_query, tmp_id)
         if not template:
@@ -279,7 +247,7 @@ class ProtoTemplatesQueries:
 
         except ForeignKeyViolationError:
             "RESTRICT на удаление шаблона, если есть ссылающиеся записи"
-            return 409, 'Невозможно удалить: шаблон используется виртуальными нодами или spec параметрами'
+            return 409, 'Невозможно удалить: шаблон используется виртуальными нодами'
 
 
     async def edit_user_injectors(self, tmp_id: int, injs_state: list[UserInjector]):

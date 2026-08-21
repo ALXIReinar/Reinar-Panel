@@ -39,16 +39,16 @@
 
 Настоящее ядро впн-клиента. Должен быть запущен `docker`
 
-> python -m pytest node_client/tests --mode real --protocol * 
+> python -m pytest node_client/tests --mode real --protocol "*"
 
 Если без докера. 
 
-> python -m pytest node_client/tests --mode mock --protocol *
+> python -m pytest node_client/tests --mode mock --protocol "*"
 
 
 ### `Coverage Run`. Рекомендуется запуск с настоящим ядром (нужен `docker`)
 
-> python -m pytest node_client/tests --mode real --protocol * --cov=node_client --cov-config=node_client/.coveragerc --cov-report=html --cov-report=term
+> python -m pytest node_client/tests --mode real --protocol "*" --cov=node_client --cov-config=node_client/.coveragerc --cov-report=html --cov-report=term
 
 ## Bot Service
 

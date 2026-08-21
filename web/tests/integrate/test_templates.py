@@ -29,8 +29,6 @@ async def test_get_all_templates_multiple(client: AsyncClient, proto_template_se
     assert "status" in first_tmp
     assert "is_accepted" in first_tmp
     assert "proto_python_lib" in first_tmp
-    # Теперь spec_params встроены в каждый шаблон
-    assert "spec_params" in first_tmp
 
 
 @pytest.mark.asyncio
@@ -97,16 +95,9 @@ async def test_get_all_templates_limit_boundary(client: AsyncClient, db_seed, db
 # ==================== GET /private/templates/by_id ====================
 
 @pytest.mark.asyncio
-async def test_get_template_by_id_full(client: AsyncClient, proto_template_seed, db_pool):
-    """Успешное получение полных данных шаблона с spec_params (spec_only=false)"""
+async def test_get_template_by_id_full(client: AsyncClient, proto_template_seed):
+    """Успешное получение полных данных шаблона"""
     tmp_id = proto_template_seed["tmp_id"]
-    
-    # Создаём spec параметры для шаблона
-    async with db_pool.acquire() as conn:
-        await conn.execute(
-            "INSERT INTO template_spec_params (key, tmp_id) VALUES ($1, $2), ($3, $4)",
-            "pbk", tmp_id, "flow", tmp_id
-        )
     
     # Получаем полные данные
     response = await client.get(f"/api/v1/private/templates/{tmp_id}?so=false")
@@ -116,40 +107,28 @@ async def test_get_template_by_id_full(client: AsyncClient, proto_template_seed,
     assert data["success"] is True
     assert "template" in data
     
-    # API возвращает template напрямую (без лишней вложенности)
+    # API возвращает template напрямую
     template = data["template"]
     assert template["id"] == tmp_id
     assert template["title"] == "test-TestProtocol-1"
-    
-    # Проверяем spec_params
-    assert "spec_params" in template
-    assert len(template["spec_params"]) == 2
-    spec_keys = [param["key_name"] for param in template["spec_params"]]
-    assert "pbk" in spec_keys
-    assert "flow" in spec_keys
+    assert "url_tmp" in template
+    assert "reload_core_command" in template
 
 
 @pytest.mark.asyncio
-async def test_get_template_by_id_spec_only(client: AsyncClient, proto_template_seed, db_pool):
-    """Облегчённая версия (spec_only=true) - только spec_params"""
+async def test_get_template_by_id_spec_only(client: AsyncClient, proto_template_seed):
+    """Облегчённая версия (spec_only=true) - базовые данные шаблона"""
     tmp_id = proto_template_seed["tmp_id"]
     
-    # Создаём spec параметры
-    async with db_pool.acquire() as conn:
-        await conn.execute(
-            "INSERT INTO template_spec_params (key, tmp_id) VALUES ($1, $2)",
-            "security", tmp_id
-        )
-    
-    # Получаем только spec_params
+    # Получаем базовые данные (spec_only больше не имеет специального поведения)
     response = await client.get(f"/api/v1/private/templates/{tmp_id}?so=true")
     
     assert response.status_code == 200
     data = response.json()
     assert data["success"] is True
-    # spec_only=true возвращает spec_params напрямую (без лишней вложенности)
-    assert "spec_params" in data
-    assert len(data["spec_params"]) >= 1
+    assert "template" in data
+    template = data["template"]
+    assert template["id"] == tmp_id
 
 
 @pytest.mark.asyncio
@@ -205,7 +184,7 @@ async def test_update_template_success(client: AsyncClient, proto_template_seed,
     
     update_data = {
         # НЕ обновляем title - оставляем как есть, чтобы шаблон не попал под очистку
-        "url_tmp": "vless://{user_uuid}@updated.example.com:8443",
+        "url_tmp": "vless://{user_uuid}@{{node___address}}:{{inbounds___0___port}}?encryption=none#{{node___title}}",
         "reload_core_command": "systemctl reload xray-updated",
         "proto_python_lib": "grpcio-updated",
         "required_user_data_obj": {"email": "{email}", "uuid": "{uuid}", "updated": "true"},
@@ -222,7 +201,7 @@ async def test_update_template_success(client: AsyncClient, proto_template_seed,
     assert data["success"] is True
     assert data["message"] == "Шаблон обновлён"
     
-    # Проверяем, что данные действительно обновились в БД (проверяем все кроме title)
+    # Проверяем, что данные действительно обновились в БД
     async with db_pool.acquire() as conn:
         template = await conn.fetchrow(
             """
@@ -233,7 +212,8 @@ async def test_update_template_success(client: AsyncClient, proto_template_seed,
             tmp_id
         )
         assert template is not None
-        assert template["url_tmp"] == "vless://{user_uuid}@updated.example.com:8443"
+        assert "{{node___address}}" in template["url_tmp"]
+        assert "{{node___title}}" in template["url_tmp"]
         assert template["reload_core_command"] == "systemctl reload xray-updated"
         assert template["proto_python_lib"] == "grpcio-updated"
         assert template["required_user_data_obj"]["updated"] == "true"
@@ -258,14 +238,14 @@ async def test_update_template_not_found(client: AsyncClient, db_seed):
 
 @pytest.mark.asyncio
 async def test_update_template_url_validation(client: AsyncClient, proto_template_seed):
-    """Валидация url_tmp: должен содержать {user_uuid}"""
+    """Валидация url_tmp: должен содержать {{node___address}} и {{node___title}}"""
     tmp_id = proto_template_seed["tmp_id"]
     
-    # Пытаемся обновить url_tmp без обязательного плейсхолдера
+    # Пытаемся обновить url_tmp без обязательных плейсхолдеров
     response = await client.put(
         f"/api/v1/private/templates/{tmp_id}",
         json={
-            "url_tmp": "vless://invalid@example.com:443"  # Нет {user_uuid}
+            "url_tmp": "vless://invalid@example.com:443"  # Нет обязательных плейсхолдеров
         }
     )
     
@@ -274,7 +254,7 @@ async def test_update_template_url_validation(client: AsyncClient, proto_templat
     assert "detail" in data
     # Проверяем, что ошибка связана с валидацией url_tmp
     error_msg = str(data["detail"])
-    assert "user_uuid" in error_msg.lower() or "плейсхолдер" in error_msg.lower()
+    assert "node___title" in error_msg or "node___address" in error_msg or "плейсхолдер" in error_msg.lower()
 
 
 # ==================== DELETE /private/templates/delete ====================
@@ -382,13 +362,13 @@ async def test_update_user_injectors_success(client: AsyncClient, proto_template
         )
         assert len(injectors) == 3
         assert injectors[0]["flatten_array_cursor"] == "inbounds___0___settings___clients"
-        assert "def transform" in injectors[0]["extractor_script"]
+        assert "def transform(" in injectors[0]["extractor_script"]
         assert injectors[0]["libs"] is None
         assert injectors[1]["flatten_array_cursor"] == "inbounds___0___settings___users"
-        assert "def transform" in injectors[1]["extractor_script"]
+        assert "def transform(" in injectors[1]["extractor_script"]
         assert injectors[1]["libs"] == "hashlib"
         assert injectors[2]["flatten_array_cursor"] == "inbounds___1___settings___auth"
-        assert "def transform" in injectors[2]["extractor_script"]
+        assert "def transform(" in injectors[2]["extractor_script"]
         assert injectors[2]["libs"] == "json,base64"  # Список преобразуется в строку через запятую
 
 
@@ -432,7 +412,7 @@ async def test_update_user_injectors_replaces_existing(client: AsyncClient, prot
         )
         assert len(injectors) == 1
         assert injectors[0]["flatten_array_cursor"] == "new_cursor"
-        assert "def transform" in injectors[0]["extractor_script"]
+        assert "def transform(" in injectors[0]["extractor_script"]
         assert "new_field" in injectors[0]["extractor_script"]
         assert injectors[0]["libs"] == "json"
 

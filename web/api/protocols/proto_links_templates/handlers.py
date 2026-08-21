@@ -30,18 +30,20 @@ def generate_link_from_json(tmp_link: str, node_config_json: str | dict, node_ip
         # Проверяем, является ли адрес валидным IPv4 или IPv6
         node_ip_or_domain = str(IPvAnyAddress(node_ip_or_domain))
     except ValueError:
-        # Если это не IP, то считаем доменом. Конвертируем в punycode ( IDNA )
+        # Если это не IP, то считаем доменом. Конвертируем в punycode (IDNA)
         try:
             node_ip_or_domain = node_ip_or_domain.encode('idna').decode('ascii')
-        except UnicodeError:
-            # На случай странных символов падем на стандартный quote
-            node_ip_or_domain = quote(node_ip_or_domain)
+        except (UnicodeError, UnicodeDecodeError):
+            # Если punycode провалился - оставляем как есть
+            # Клиент получит ошибку DNS при попытке подключения
+            # ВАЖНО: НЕ используем quote() для hostname - это сломает DNS резолвинг
+            pass
 
     # 1.2. Собираем базовый контекст
     context = {
         **flat_config,
         'node___address': node_ip_or_domain,
-        'node___title': node_title,
+        'node___title': quote(node_title),
     }
     # 2. Рендерим сырой URL через Jinja2
     template = Template(tmp_link)

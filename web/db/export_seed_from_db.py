@@ -28,11 +28,7 @@ async def export_seed_data():
                 "SELECT * FROM proto_templates ORDER BY id"
             )
             
-            # 3. template_spec_params
-            template_spec_params_rows = await conn.fetch(
-                "SELECT * FROM template_spec_params ORDER BY tmp_id, id"
-            )
-            
+
             # 4. protocols
             protocols_rows = await conn.fetch(
                 "SELECT * FROM protocols ORDER BY tmp_id, id"
@@ -86,13 +82,7 @@ async def export_seed_data():
                 # Удаляем id (будет auto-increment при вставке)
                 del template_dict['id']
                 
-                # Находим spec_params для этого шаблона
-                spec_params = [
-                    {"key": dict(param)['key'], "tmp_id": "proto_templates_CURRENT"}
-                    for param in template_spec_params_rows
-                    if dict(param)['tmp_id'] == template_id
-                ]
-                
+
                 # Находим protocols для этого шаблона
                 protocols = [
                     {
@@ -116,8 +106,6 @@ async def export_seed_data():
                     if dict(ext)['tmp_id'] == template_id
                 ]
                 
-                # Добавляем вложенные данные в правильном порядке
-                template_dict['template_spec_params'] = spec_params
                 template_dict['protocols'] = protocols
                 template_dict['templates_users_extractors'] = extractors
                 
@@ -157,11 +145,9 @@ async def main():
     print(f"   🎯 proto_templates: {len(seed_data['proto_templates'])} записей")
     
     # Показываем сколько вложенных данных
-    total_spec_params = sum(len(t['template_spec_params']) for t in seed_data['proto_templates'])
     total_protocols = sum(len(t['protocols']) for t in seed_data['proto_templates'])
     total_extractors = sum(len(t['templates_users_extractors']) for t in seed_data['proto_templates'])
-    
-    print(f"      ├─ template_spec_params: {total_spec_params}")
+
     print(f"      ├─ protocols: {total_protocols}")
     print(f"      └─ templates_users_extractors: {total_extractors}")
     

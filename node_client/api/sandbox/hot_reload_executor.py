@@ -220,25 +220,6 @@ class HotReloadExecutor:
 
         return restricted_import
 
-
-    def _validate_and_compile_script(self, script_code: str):
-        """
-        1. Парсит код в AST.
-        2. Проверяет на опасные вызовы (интроспекцию).
-        3. Компилирует код в байткод.
-        """
-        try:
-            parsed_ast = ast.parse(script_code)
-        except SyntaxError as e:
-            raise e
-
-        # Запускаем валидатор безопасности
-        self.validator.visit(parsed_ast)
-
-        # Если проверка прошла успешно — компилируем в байткод
-        return compile(parsed_ast, filename="<db_template>", mode="exec")
-
-
     @classmethod
     @lru_cache(maxsize=env.lru_cache_max_size)
     def _compile_script_cached(cls, script_hash: str, script_code: str):

@@ -239,3 +239,144 @@ async def test_sub_prepare_infrastructure_fixture(sub_prepare_infrastructure):
               f"constant_node_data_obj has {len(data['constant_node_data_obj'])} keys")
     
     print(f"\n✅ Fixture validated: {len(sub_prepare_infrastructure)} templates loaded")
+
+
+@pytest.mark.asyncio
+@pytest.mark.db
+async def test_sub_prepare_no_double_encoding(sub_prepare_infrastructure):
+    """
+    Проверка: prepare_sub не делает двойное URL кодирование
+    
+    Проверяем что спецсимволы закодированы ОДИН раз:
+    - "+" → "%2B" (не "%252B")
+    - "/" → "%2F" (не "%252F")
+    - "=" → "%3D" (не "%253D")
+    
+    Двойное кодирование происходит когда:
+    1. prepare_sub делает quote() для своих значений
+    2. Потом где-то ещё применяется quote() повторно
+    
+    Результат двойного кодирования: "%2B" превращается в "%252B"
+    (процент закодирован в %25)
+    
+    ВАЖНО: Этот тест НЕ проверяет корректность самих значений,
+    только отсутствие двойного кодирования.
+    """
+    errors = []
+    success_count = 0
+    
+    for template_id, data in sub_prepare_infrastructure.items():
+        template = data['template']
+        constant_node_data_obj = data['constant_node_data_obj']
+        node_address = data['node_address']
+        node_title = data['node_title']
+        
+        try:
+            # 1. Генерируем config_link (как в основном тесте)
+            placeholders = extract_jinja_placeholders(template['url_tmp'])
+            mock_config = generate_mock_node_config(placeholders)
+            
+            config_link = render_config_link_for_test(
+                url_tmp=template['url_tmp'],
+                node_config_json=mock_config,
+                node_address=node_address,
+                node_title=node_title
+            )
+            
+            # 2. Создаём user_super_obj
+            user_uuid = str(uuid_lib.uuid4())
+            user_sub_id = f"test_sub_{template_id}"
+            
+            ok, user_super_obj = create_vpn_like_user(
+                user_uuid=user_uuid,
+                user_sub_id=user_sub_id,
+                required_user_data_obj=template['required_user_data_obj'],
+                constant_user_data_obj=template['constant_user_data_obj'],
+                constant_node_data_obj=constant_node_data_obj,
+            )
+            
+            if not ok:
+                # Пропускаем если не смогли создать user_obj
+                continue
+            
+            # 3. Выполняем prepare_sub
+            success, final_link = await ScriptExecutor.executing_link_processing(
+                sub_prepare_script=template['sub_prepare_script'],
+                required_libs=template['sub_required_libs'],
+                user_obj=user_super_obj,
+                config_link=config_link
+            )
+            
+            if not success:
+                # Пропускаем если prepare_sub провалился
+                # (это проверяется в основном тесте)
+                continue
+            
+            # 4. ПРОВЕРКА: нет двойного кодирования
+            # Паттерны двойного кодирования:
+            # %2X → %252X (например, %2B → %252B)
+            # %3X → %253X (например, %3D → %253D)
+            double_encoded_patterns = [
+                '%252',  # %2X закодирован дважды
+                '%253',  # %3X закодирован дважды
+            ]
+            
+            found_double_encoding = []
+            for pattern in double_encoded_patterns:
+                if pattern in final_link:
+                    # Ищем контекст вокруг паттерна
+                    idx = final_link.find(pattern)
+                    context = final_link[max(0, idx-20):idx+30]
+                    found_double_encoding.append(f"{pattern} in context: ...{context}...")
+            
+            if found_double_encoding:
+                errors.append({
+                    'template': template['title'],
+                    'error_type': 'Double URL Encoding Detected',
+                    'details': found_double_encoding,
+                    'explanation': (
+                        'URL encoding was applied twice. '
+                        'For example: "+" → "%2B" → "%252B" '
+                        '(the percent sign itself got encoded as %25)'
+                    ),
+                    'link_preview': final_link[:300]
+                })
+            else:
+                success_count += 1
+                
+        except Exception as e:
+            # Неожиданная ошибка - записываем но не ронаем тест
+            # (основные ошибки проверяются в test_sub_prepare_script_execution)
+            pass
+    
+    # Формируем отчёт
+    total_tested = len(sub_prepare_infrastructure)
+    
+    print(f"\n{'='*80}")
+    print(f"Double Encoding Check Report")
+    print(f"{'='*80}")
+    print(f"Total templates tested: {total_tested}")
+    print(f"No double encoding: {success_count}")
+    print(f"Double encoding detected: {len(errors)}")
+    print(f"{'='*80}\n")
+    
+    # Выводим errors если есть
+    if errors:
+        print(f"\n❌ DOUBLE ENCODING DETECTED ({len(errors)} templates):")
+        for err in errors:
+            print(f"\n  Template: {err['template']}")
+            print(f"  Error: {err['error_type']}")
+            print(f"  Details:")
+            for detail in err['details']:
+                print(f"    - {detail}")
+            print(f"  Explanation: {err['explanation']}")
+            print(f"  Link preview: {err['link_preview']}")
+        
+        # Провалить тест
+        pytest.fail(
+            f"\n\n{len(errors)}/{total_tested} templates have DOUBLE URL ENCODING!\n"
+            f"This means URL encoding was applied more than once.\n"
+            f"See detailed report above."
+        )
+    
+    print(f"\n✅ All {success_count}/{total_tested} templates: NO double encoding detected!\n")

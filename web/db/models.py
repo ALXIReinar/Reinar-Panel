@@ -177,7 +177,6 @@ class ProtoTemplates(Base):
 
     templates_statuses: Mapped['TemplatesStatuses'] = relationship('TemplatesStatuses', back_populates='proto_templates')
     protocols: Mapped[list['Protocols']] = relationship('Protocols', back_populates='tmp')
-    template_spec_params: Mapped[list['TemplateSpecParams']] = relationship('TemplateSpecParams', back_populates='tmp')
     templates_users_extractors: Mapped[list['TemplatesUsersExtractors']] = relationship('TemplatesUsersExtractors', back_populates='tmp')
 
 
@@ -290,22 +289,6 @@ class Protocols(Base):
     protocols_commands: Mapped[list['ProtocolsCommands']] = relationship('ProtocolsCommands', back_populates='proto')
 
 
-class TemplateSpecParams(Base):
-    __tablename__ = 'template_spec_params'
-    __table_args__ = (
-        ForeignKeyConstraint(['tmp_id'], ['proto_templates.id'], ondelete='CASCADE', name='template_spec_params_tmp_id_fkey'),
-        PrimaryKeyConstraint('id', name='template_spec_params_pkey'),
-        UniqueConstraint('tmp_id', 'key', name='template_spec_params_tmp_id_key_key')
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1), primary_key=True, autoincrement=True)
-    key: Mapped[str] = mapped_column(Text, nullable=False)
-    tmp_id: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-
-    tmp: Mapped['ProtoTemplates'] = relationship('ProtoTemplates', back_populates='template_spec_params')
-    nodes_protocoles_spec_params_values: Mapped[list['NodesProtocolesSpecParamsValues']] = relationship('NodesProtocolesSpecParamsValues', back_populates='spec_key')
-
-
 class TemplatesUsersExtractors(Base):
     __tablename__ = 'templates_users_extractors'
     __table_args__ = (
@@ -349,7 +332,6 @@ class NodesProtocols(Base):
 
     node: Mapped['Nodes'] = relationship('Nodes', back_populates='nodes_protocols')
     proto: Mapped['Protocols'] = relationship('Protocols', back_populates='nodes_protocols')
-    nodes_protocoles_spec_params_values: Mapped[list['NodesProtocolesSpecParamsValues']] = relationship('NodesProtocolesSpecParamsValues', back_populates='node_proto')
     sub_nodes_outbox: Mapped[list['SubNodesOutbox']] = relationship('SubNodesOutbox', back_populates='node_proto')
     vnodes_sub_plans: Mapped[list['VnodesSubPlans']] = relationship('VnodesSubPlans', back_populates='node_proto')
 
@@ -407,24 +389,6 @@ class UserSubs(Base):
     sub_plan: Mapped['SubPlans'] = relationship('SubPlans', back_populates='user_subs')
     user: Mapped['Users'] = relationship('Users', back_populates='user_subs')
     sub_nodes_outbox: Mapped[list['SubNodesOutbox']] = relationship('SubNodesOutbox', back_populates='user_sub')
-
-
-class NodesProtocolesSpecParamsValues(Base):
-    __tablename__ = 'nodes_protocoles_spec_params_values'
-    __table_args__ = (
-        ForeignKeyConstraint(['node_proto_id'], ['nodes_protocols.id'], ondelete='CASCADE', name='nodes_protocoles_spec_params_values_node_proto_id_fkey'),
-        ForeignKeyConstraint(['spec_key_id'], ['template_spec_params.id'], ondelete='RESTRICT', name='nodes_protocoles_spec_params_values_spec_key_id_fkey'),
-        PrimaryKeyConstraint('id', name='nodes_protocoles_spec_params_values_pkey'),
-        UniqueConstraint('spec_key_id', 'node_proto_id', name='nodes_protocoles_spec_params_valu_spec_key_id_node_proto_id_key')
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1), primary_key=True, autoincrement=True)
-    spec_key_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    node_proto_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    value: Mapped[str] = mapped_column(String(512), nullable=False)
-
-    node_proto: Mapped['NodesProtocols'] = relationship('NodesProtocols', back_populates='nodes_protocoles_spec_params_values')
-    spec_key: Mapped['TemplateSpecParams'] = relationship('TemplateSpecParams', back_populates='nodes_protocoles_spec_params_values')
 
 
 class SubNodesOutbox(Base):

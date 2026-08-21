@@ -35,8 +35,8 @@ class UpdateTmpSchema(BaseModel):
     @field_validator('url_tmp')
     @classmethod
     def tmp_url_validator(cls, v):
-        if v is not None and '{user_uuid}' not in v:
-            raise ValueError('Необходимо обязательно указать плейсхолдер {user_uuid}')
+        if v is not None and not all(item in v for item in ['{{node___title}}', '{{node___address}}']):
+            raise ValueError('Обязательные плейсхолдеры не добавлены! ({{node___title}}, {{node___address}})')
         return v
 
     @field_validator('required_user_data_obj')
@@ -76,8 +76,11 @@ class UserInjector(BaseModel):
     @field_validator('extractor_script', mode='after')
     @classmethod
     def extractor_script_validator(cls, v):
-        if ('def transform(' not in v) or ('return' not in v) or ('async' in v):
-            raise ValueError('Extractor Script должен быть: функцией transform( def transform(user_obj): ), принимать ровно один аргумент, должен быть синхронным(not async) и содержать return')
+        # Проверяем что скрипт содержит def transform( и return, но НЕ содержит async
+        if 'def transform(' not in v or 'return' not in v:
+            raise ValueError('Extractor Script должен содержать функцию transform (def transform(user_obj):) с оператором return')
+        if 'async' in v:
+            raise ValueError('Extractor Script должен быть синхронным (не async)')
         return v
 
 class DeleteTmpSchema(BaseModel):

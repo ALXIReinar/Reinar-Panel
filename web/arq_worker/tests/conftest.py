@@ -3,7 +3,7 @@ import os
 from yarl import URL
 
 "ВАЖНО: Устанавливаем переменную окружения ДО любых импортов из web/"
-os.environ['ENV_FILE'] = os.getenv('ENV_FILE') if os.getenv('ENV_FILE') else 'web/arq_worker/.env.arq.test'
+os.environ['ENV_FILE'] = os.getenv('ENV_FILE') or 'web/arq_worker/.env.arq.test'
 
 import asyncpg
 import pytest
@@ -51,8 +51,7 @@ async def db_seed(db_pool):
         await conn.execute("""
             TRUNCATE TABLE 
                 sessions_admins, 
-                admins, 
-                nodes_protocoles_spec_params_values,
+                admins,
                 nodes_protocols, 
                 nodes, 
                 remote_execute_history,
@@ -886,100 +885,7 @@ async def real_parser_scripts(db_pool):
             FROM proto_templates
             WHERE metrics_parser_code IS NOT NULL
         """)
-        
-        if not parsers:
-            # БД пустая, вставляем реальный парсер xray
-            parser_code = '''def parse(raw_metrics):
-    """Универсальный парсер метрик для Xray"""
-    
-    def _parse_plain_text(text):
-        """Fallback парсер для plain text формата"""
-        lines = text.strip().split('\\n')
-        traffic_map = defaultdict(int)
-        
-        for line in lines:
-            if '>>>' not in line:
-                continue
-            
-            parts = line.split('>>>')
-            if len(parts) >= 2:
-                username = parts[1]
-                numbers = re.findall(r'\\d+', line)
-                if numbers:
-                    traffic_map[username] += int(numbers[-1])
-        
-        return [
-            {'user_sub_id': int(u), 'total_mb_used': mb}
-            for u, mb in traffic_map.items()
-        ], []
-    
-    if isinstance(raw_metrics, str):
-        try:
-            json_obj = json.loads(raw_metrics)
-        except json.JSONDecodeError:
-            return _parse_plain_text(raw_metrics)
-    else:
-        json_obj = raw_metrics
-    
-    traffic_map = defaultdict(int)
-    troubles = []
-    
-    stats_list = json_obj.get('stat', [])
-    if not stats_list:
-        return [], []
-    
-    for user in stats_list:
-        name = user.get('name', '')
-        if not name or 'user>>>' not in name:
-            troubles.append(user)
-            continue
-        
-        parts = name.split('>>>')
-        if len(parts) < 2:
-            troubles.append(user)
-            continue
-        
-        user_sub_id = int(parts[1])
-        traffic_bytes = int(user.get('value', 0))
-        traffic_mb = traffic_bytes // 1024 // 1024
-        
-        traffic_map[user_sub_id] += traffic_mb
-    
-    users_traffics = [
-        {'user_sub_id': username, 'total_mb_used': used_mb} 
-        for username, used_mb in traffic_map.items()
-    ]
-    
-    return users_traffics, troubles
-'''
-            
-            tmp_id = await conn.fetchval("""
-                INSERT INTO proto_templates (
-                    title, url_tmp, status, is_accepted,
-                    reload_core_command, sub_prepare_script,
-                    proto_python_lib, metrics_parser_code,
-                    api_add_user_script, api_delete_user_script,
-                    flatten_json_users_key, flatten_user_identifier_key,
-                    metrics_command, api_metrics_script
-                )
-                VALUES (
-                    'vless_tcp_sni_based', 'https://example.com', 1, true,
-                    'systemctl reload xray', '#!/bin/bash',
-                    'xtlsapi', $1,
-                    'python add.py', 'python del.py',
-                    'clients', 'email',
-                    'xray api statsquery', 'python metrics.py'
-                )
-                RETURNING id
-            """, parser_code)
-            
-            # Перечитываем
-            parsers = await conn.fetch("""
-                SELECT id, title, metrics_parser_code, sub_required_libs, proto_python_lib
-                FROM proto_templates
-                WHERE metrics_parser_code IS NOT NULL
-            """)
-        
+
         return {p['title']: dict(p) for p in parsers}
 
 

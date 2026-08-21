@@ -3,8 +3,7 @@ import os
 from starlette.requests import Request
 
 "ВАЖНО: Устанавливаем переменную окружения ДО любых импортов из web/"
-cur_env_file = os.getenv('ENV_FILE')
-os.environ['ENV_FILE'] = cur_env_file or 'web/.env.api.test'
+os.environ['ENV_FILE'] = os.getenv('ENV_FILE') or 'web/.env.api.test'
 
 import asyncpg
 import httpx
@@ -71,7 +70,6 @@ async def db_seed(db_pool):
             TRUNCATE TABLE 
                 sessions_admins, 
                 admins, 
-                nodes_protocoles_spec_params_values,
                 nodes_protocols, 
                 nodes, 
                 remote_execute_history,
