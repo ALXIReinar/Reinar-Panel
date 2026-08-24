@@ -7,7 +7,7 @@ DOMAIN=$4
 
 WS_PATH=$(openssl rand -hex 4)
 
-if [ -z "$TMP_ID" ] || [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ]; then
+if [ -z "$TMP_ID" ] || [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$DOMAIN" ]; then
     echo "Ошибка: Необходимы параметры TMP_ID, CERT_PATH и KEY_PATH!"
     echo "Использование: bash trojan-ws-tls-install.sh <tmp_id> <cert_path> <key_path> <domain>"
     exit 1

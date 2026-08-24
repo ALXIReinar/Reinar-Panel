@@ -19,7 +19,7 @@ JSON Schema определения для валидации extractor outputs
 
 XRAY_VLESS_SCHEMA = {
     "type": "object",
-    "required": ["id", "email", "flow", "level"],
+    "required": ["id", "email", "level"],  # flow НЕ обязателен (есть только в Reality)
     "properties": {
         "id": {
             "type": "string",
@@ -31,7 +31,7 @@ XRAY_VLESS_SCHEMA = {
         },
         "flow": {
             "type": "string",
-            "description": "XTLS flow control (например, xtls-rprx-vision)",
+            "description": "XTLS flow control (только для Reality, опционально для TLS)",
             "enum": ["xtls-rprx-vision", "xtls-rprx-direct", ""]
         },
         "level": {
@@ -103,6 +103,96 @@ XRAY_HY2_SCHEMA = {
 
 # ========== SINGBOX ЯДРО ==========
 
+SINGBOX_VLESS_SCHEMA = {
+    "type": "object",
+    "required": ["uuid", "name"],  # Sing-box использует "uuid" и "name" вместо "id" и "email"
+    "properties": {
+        "uuid": {
+            "type": "string",
+            "description": "UUID пользователя (user_uuid)"
+        },
+        "name": {
+            "type": "string",
+            "description": "Имя пользователя (user_sub_id)"
+        },
+        "flow": {
+            "type": "string",
+            "description": "XTLS flow control (только для Reality, опционально)",
+            "enum": ["xtls-rprx-vision", ""]
+        }
+    },
+    "additionalProperties": False
+}
+
+SINGBOX_VMESS_SCHEMA = {
+    "type": "object",
+    "required": ["uuid", "name"],
+    "properties": {
+        "uuid": {
+            "type": "string",
+            "description": "UUID пользователя (user_uuid)"
+        },
+        "name": {
+            "type": "string",
+            "description": "Имя пользователя (user_sub_id)"
+        },
+        "alterId": {
+            "type": "integer",
+            "description": "VMess alterId (обычно 0)",
+            "minimum": 0
+        }
+    },
+    "additionalProperties": False
+}
+
+SINGBOX_TROJAN_SCHEMA = {
+    "type": "object",
+    "required": ["name", "password"],
+    "properties": {
+        "name": {
+            "type": "string",
+            "description": "Имя пользователя (user_sub_id)"
+        },
+        "password": {
+            "type": "string",
+            "description": "Пароль (user_uuid)"
+        }
+    },
+    "additionalProperties": False
+}
+
+SINGBOX_SHADOWSOCKS_SCHEMA = {
+    "type": "object",
+    "required": ["name", "password"],
+    "properties": {
+        "name": {
+            "type": "string",
+            "description": "Имя пользователя (user_sub_id)"
+        },
+        "password": {
+            "type": "string",
+            "description": "Base64 PSK пользователя"
+        }
+    },
+    "additionalProperties": False
+}
+
+SINGBOX_HY2_SCHEMA = {
+    "type": "object",
+    "required": ["name", "password"],
+    "properties": {
+        "name": {
+            "type": "string",
+            "description": "Имя пользователя (user_sub_id)"
+        },
+        "password": {
+            "type": "string",
+            "description": "Hysteria2 auth (user_uuid)"
+        }
+    },
+    "additionalProperties": False
+}
+
 SINGBOX_WG_SCHEMA = {
     "type": "object",
     "required": ["name", "public_key", "allowed_ips"],
@@ -121,12 +211,24 @@ SINGBOX_WG_SCHEMA = {
         },
         "allowed_ips": {
             "type": "array",
-            "description": "Разрешённые IP адреса для peer",
+            "description": "Разрешённые IP адреса для peer (IPv4/32 или IPv6/128)",
             "items": {
                 "type": "string",
-                "pattern": r"^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$"  # IPv4 CIDR
+                # Паттерн поддерживает IPv4/32 и IPv6/128
+                "pattern": r"^((\d{1,3}\.){3}\d{1,3}/32|([0-9a-fA-F:]+)/128)$"
             },
             "minItems": 1
+        },
+        "reserved": {
+            "type": "array",
+            "description": "WARP reserved bytes (3 байта для обхода ТСПУ блокировок)",
+            "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+            },
+            "minItems": 3,
+            "maxItems": 3
         }
     },
     "additionalProperties": False
@@ -143,12 +245,13 @@ SCHEMA_MAP = {
     ('xray', 'hy2'): XRAY_HY2_SCHEMA,
     
     # SINGBOX ядро
+    ('singbox', 'vless'): SINGBOX_VLESS_SCHEMA,
+    ('singbox', 'vmess'): SINGBOX_VMESS_SCHEMA,
+    ('singbox', 'trojan'): SINGBOX_TROJAN_SCHEMA,
+    ('singbox', 'shadowsocks'): SINGBOX_SHADOWSOCKS_SCHEMA,
+    ('singbox', 'hy2'): SINGBOX_HY2_SCHEMA,
     ('singbox', 'wg'): SINGBOX_WG_SCHEMA,
-    
-    # В будущем добавятся:
-    # ('singbox', 'vless'): SINGBOX_VLESS_SCHEMA,
-    # ('singbox', 'vmess'): SINGBOX_VMESS_SCHEMA,
-    # ('singbox', 'trojan'): SINGBOX_TROJAN_SCHEMA,
+    ('singbox', 'awg'): SINGBOX_WG_SCHEMA,  # AmneziaWG использует ту же схему что и WireGuard
 }
 
 

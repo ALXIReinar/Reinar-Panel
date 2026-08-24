@@ -91,7 +91,12 @@ def generate_constant_node_data_obj(script_code: str) -> dict:
     mock_values = {
         'sub_link_fp': 'chrome',
         'sub_link_grpc_mode': 'multi',
-        'node_public_key': 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop',  # 44 символа base64
+        'node_public_key': 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop',  # 44 символа base64 (reality, trojan)
+        'node_ipv6_subnet': 'fd00::/64',  # Валидная локальная IPv6 подсеть (для WireGuard/AmneziaWG)
+        'node_ipv4_subnet': '10.0.0.0/24',  # Валидная приватная IPv4 подсеть
+        'node_hop_start': 10000,  # Начальный порт для port hopping (WireGuard/AmneziaWG)
+        'node_hop_end': 20000,  # Конечный порт для port hopping
+        'node_hash_salt': 'test_salt_for_wg_keys',  # Salt для генерации WireGuard ключей
     }
     
     # Добавляем все ключи из constant_node_data_obj
@@ -134,6 +139,11 @@ def generate_mock_value(key: str) -> str | int | bool:
     - *___security → str ('tls', 'reality', 'none')
     - *___network → str ('tcp', 'ws', 'grpc', и т.д.)
     - *___path → str ('/api', '/ws', и т.д.)
+    - *___ipv6_subnet → str ('fd00::/64')
+    - *___ipv4_subnet → str ('10.0.0.0/24')
+    - *___public_key / *___pbk → str (base64, 44 символа)
+    - *___hop_start / *___hop_end → int (диапазон портов для hopping)
+    - *___hash_salt → str (salt для WireGuard)
     - остальное → str ('mock_value')
     
     Args:
@@ -145,7 +155,13 @@ def generate_mock_value(key: str) -> str | int | bool:
     key_lower = key.lower()
     
     # Паттерны для определения типа
-    if 'port' in key_lower:
+    if 'hop_start' in key_lower:
+        return 10000  # Начальный порт для hopping
+    elif 'hop_end' in key_lower:
+        return 20000  # Конечный порт для hopping
+    elif 'hash_salt' in key_lower or 'salt' in key_lower:
+        return 'test_salt_for_wg_keys'
+    elif 'port' in key_lower:
         return 443
     elif 'address' in key_lower:
         return '192.168.1.100'
@@ -165,6 +181,10 @@ def generate_mock_value(key: str) -> str | int | bool:
         return 'chrome'
     elif 'public' in key_lower or 'pbk' in key_lower:
         return 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop'
+    elif 'ipv6_subnet' in key_lower or 'ipv6subnet' in key_lower:
+        return 'fd00::/64'  # Валидная локальная IPv6 подсеть (для WireGuard/AmneziaWG)
+    elif 'ipv4_subnet' in key_lower or 'ipv4subnet' in key_lower:
+        return '10.0.0.0/24'  # Валидная приватная IPv4 подсеть
     elif 'sid' in key_lower or 'shortid' in key_lower:
         return '709c400f8da05efa'
     elif 'method' in key_lower:

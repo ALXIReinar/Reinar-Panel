@@ -162,7 +162,7 @@ class ProtoTemplates(Base):
     reload_core_command: Mapped[Optional[str]] = mapped_column(String(128))
     required_user_data_obj: Mapped[Optional[dict]] = mapped_column(JSONB)
     constant_user_data_obj: Mapped[Optional[dict]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
-    proto_python_lib: Mapped[Optional[str]] = mapped_column(String(32))
+    proto_python_lib: Mapped[Optional[str]] = mapped_column(String(512))
     sub_prepare_script: Mapped[Optional[str]] = mapped_column(Text)
     sub_required_libs: Mapped[Optional[str]] = mapped_column(String(512))
     api_bulk_delete_user_script: Mapped[Optional[str]] = mapped_column(Text)
@@ -293,7 +293,8 @@ class TemplatesUsersExtractors(Base):
     __tablename__ = 'templates_users_extractors'
     __table_args__ = (
         ForeignKeyConstraint(['tmp_id'], ['proto_templates.id'], ondelete='CASCADE', name='templates_users_extractors_tmp_id_fkey'),
-        PrimaryKeyConstraint('id', name='templates_users_extractors_pkey')
+        PrimaryKeyConstraint('id', name='templates_users_extractors_pkey'),
+        UniqueConstraint('tmp_id', 'flatten_array_cursor', name='templates_users_extractors_tmp_id_flatten_array_cursor_key')
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1), primary_key=True, autoincrement=True)

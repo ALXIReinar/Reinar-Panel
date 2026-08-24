@@ -82,7 +82,7 @@ async def test_sub_prepare_script_execution(sub_prepare_infrastructure):
             
             # 4. Создаём user_super_obj
             user_uuid = str(uuid_lib.uuid4())
-            user_sub_id = f"test_sub_{template_id}"
+            user_sub_id = template_id  # Используем числовой ID (как в production)
             
             ok, user_super_obj = create_vpn_like_user(
                 user_uuid=user_uuid,
@@ -285,7 +285,7 @@ async def test_sub_prepare_no_double_encoding(sub_prepare_infrastructure):
             
             # 2. Создаём user_super_obj
             user_uuid = str(uuid_lib.uuid4())
-            user_sub_id = f"test_sub_{template_id}"
+            user_sub_id = template_id  # Используем числовой ID (как в production)
             
             ok, user_super_obj = create_vpn_like_user(
                 user_uuid=user_uuid,

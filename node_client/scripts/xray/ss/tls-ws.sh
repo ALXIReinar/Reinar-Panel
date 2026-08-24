@@ -4,15 +4,45 @@ TMP_ID=$1
 CERT_PATH=$2
 KEY_PATH=$3
 DOMAIN=$4
-METHOD=${5:-"2022-blake3-aes-128-gcm"}
 
-HTTP_PATH="/http-$(openssl rand -hex 4)-ss"
+METHOD_CHOICE=${5}
 
-if [ -z "$TMP_ID" ]; then
+
+if [ -z "$TMP_ID" ] || [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$DOMAIN" ]; then
     echo "Ошибка: Не указан TMP_ID!"
-    echo "Использование: bash ss-httpupgrade-install.sh <tmp_id> <cert_path> <key_path> <domain> [method]"
+    echo "Использование: bash ss-ws-install.sh <tmp_id> <cert_path> <key_path> <domain> [method_choice]"
     exit 1
 fi
+
+
+if [ -z "$METHOD_CHOICE" ]; then
+    echo "Выберите метод шифрования SS-2022:"
+    echo "1 - 2022-blake3-aes-128-gcm (быстрый, легкий)"
+    echo "2 - 2022-blake3-aes-256-gcm (максимальная защита)"
+    echo "3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)"
+    read -p "Введите цифру (1-3) [по умолчанию 1]: " METHOD_CHOICE
+fi
+
+# Маппинг цифры в параметры
+case "$METHOD_CHOICE" in
+    2)
+        SS_METHOD="2022-blake3-aes-256-gcm"
+        KEY_LENGTH=32
+        ;;
+    3)
+        SS_METHOD="2022-blake3-chacha20-poly1305"
+        KEY_LENGTH=32
+        ;;
+    *)
+        # Дефолтный fallback на 128-gcm
+        SS_METHOD="2022-blake3-aes-128-gcm"
+        KEY_LENGTH=16
+        ;;
+esac
+
+
+
+
 
 XRAY_BIN="/usr/local/bin/xray"
 CONFIG_DIR="/etc/xray/configs"
@@ -32,11 +62,9 @@ find_free_port() {
 API_PORT=$(find_free_port 10085)
 INBOUND_PORT=$(find_free_port 8080)
 
-if [[ "$METHOD" == *"128"* ]]; then
-    SERVER_PSK=$(openssl rand -base64 16)
-else
-    SERVER_PSK=$(openssl rand -base64 32)
-fi
+WS_PATH="/ws-$(openssl rand -hex 4)-ss"
+SERVER_PSK=$(openssl rand -base64 $KEY_LENGTH)
+
 
 cat <<EOF > "$CONFIG_PATH"
 {
@@ -56,12 +84,13 @@ cat <<EOF > "$CONFIG_PATH"
       "port": $INBOUND_PORT,
       "protocol": "shadowsocks",
       "settings": {
-        "method": "$METHOD",
+        "method": "$SS_METHOD",
         "password": "$SERVER_PSK",
         "network": "tcp,udp",
         "clients": []
       },
       "streamSettings": {
+        "network": "ws",
         "security": "tls",
         "tlsSettings": {
           "serverName": "$DOMAIN",
@@ -72,10 +101,11 @@ cat <<EOF > "$CONFIG_PATH"
             }
           ]
         },
-        "network": "httpupgrade",
-        "httpupgradeSettings": {
-          "path": "$HTTP_PATH",
-          "host": "$DOMAIN"
+        "wsSettings": {
+          "path": "$WS_PATH",
+          "headers": {
+            "Host": "$DOMAIN"
+          }
         }
       },
       "tag": "ss-inbound"
@@ -105,7 +135,7 @@ EOF
 SERVICE_PATH="/etc/systemd/system/xray-${TMP_ID}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Xray Shadowsocks-HTTPUpgrade Node (TMP_ID: ${TMP_ID})
+Description=Xray Shadowsocks-WS Node (TMP_ID: ${TMP_ID})
 After=network.target nss-lookup.target
 
 [Service]
@@ -132,10 +162,13 @@ curl -s -X POST "$PANEL_CALLBACK_URL" \
      -d '{
            "tmp_id": "'"$TMP_ID"'",
            "config_path": "'"$CONFIG_PATH"'",
-           "api_port": '$API_PORT',
-           "inbound_port": '$INBOUND_PORT',
+           "api_port": '"$API_PORT"',
+           "inbound_port": '"$INBOUND_PORT"',
            "status": "installed",
-           "node_type": "shadowsocks_httpupgrade"
+           "node_type": "shadowsocks_ws",
+           "constant_node_data_obj": {
+              "node_method": "'$SS_METHOD'"
+           }
          }'
 
-echo "Shadowsocks-HTTPUpgrade нода $TMP_ID успешно установлена."
+echo "Shadowsocks-WS нода $TMP_ID успешно установлена."
