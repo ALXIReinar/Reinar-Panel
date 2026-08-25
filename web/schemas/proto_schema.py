@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -9,5 +11,6 @@ class ProtocolCreateSchema(BaseModel):
 
 class ProtoPagenSchema(BaseModel):
     tmp_id: int | None = None
-    offset: int = Field(0)
+    proto_id: int | None = None
     limit: int = Field(15, le=15)
+    order_by: Literal["asc", "desc"] = "desc"

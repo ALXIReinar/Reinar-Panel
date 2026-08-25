@@ -1,3 +1,5 @@
+from typing import Literal
+
 from asyncpg import Connection, ForeignKeyViolationError
 
 
@@ -34,21 +36,37 @@ class ProtocolsQueries:
         return 200, '', proto_info
 
 
-    async def get_all_protocols(self, offset: int, limit: int, tmp_id: int | None):
-        sql_params = (limit, offset)
-        tmp_filter = ''
+    async def get_all_protocols(self, order_by: Literal["desc", "asc"], limit: int, proto_id: int | None, tmp_id: int | None):
+        sql_params = [limit]
+        filters = []
+        param_idx = 2
 
-        # Фильтр "Какие протоколы используют этот шаблон"
+        "Фильтр 'Какие протоколы используют этот шаблон'"
         if tmp_id is not None:
-            tmp_filter = 'WHERE tmp_id = $3'
-            sql_params += (tmp_id,)
+            filters.append(f'p.tmp_id = ${param_idx}')
+            sql_params.append(tmp_id)
+            param_idx += 1
 
-        """Получить все протоколы"""
+        "id Based Pagen"
+        if proto_id is not None:
+            ascend_filter = f'p.id > ${param_idx}'
+            if order_by == "desc":
+                ascend_filter = f'p.id < ${param_idx}'
+
+            filters.append(ascend_filter)
+            sql_params.append(proto_id)
+
+        "Собираем конечный фильтр"
+        tmp_filter = ''
+        if filters:
+            tmp_filter = f'WHERE {" AND ".join(filters)}'
+
         query = f"""
         SELECT p.id AS proto_id, p.name, p.created_at, p.tmp_id, pt.title AS tmp_name FROM protocols p
         JOIN proto_templates pt ON pt.id = p.tmp_id
         {tmp_filter}
-        LIMIT $1 OFFSET $2
+        ORDER BY p.id {order_by}
+        LIMIT $1
         """
         return await self.conn.fetch(query, *sql_params)
 

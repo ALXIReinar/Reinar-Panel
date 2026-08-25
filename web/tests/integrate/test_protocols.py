@@ -106,13 +106,14 @@ async def test_get_all_protocols_pagination(client: AsyncClient, db_seed, proto_
         created_proto_ids.append(resp.json()["proto_id"])
     
     # Запрос с limit=2, offset=0 (первые 2 из ВСЕХ protocols, включая seed_data)
-    response = await client.get("/api/v1/private/protocols/all?limit=2&offset=0")
+    response = await client.get("/api/v1/private/protocols/all?limit=2")
     assert response.status_code == 200
     data = response.json()
     assert len(data["protocols"]) == 2
+    last_id = data["protocols"][-1]["proto_id"]
     
     # Запрос с limit=2, offset=2
-    response = await client.get("/api/v1/private/protocols/all?limit=2&offset=2")
+    response = await client.get(f"/api/v1/private/protocols/all?limit=2&proto_id={last_id}")
     assert response.status_code == 200
     data = response.json()
     assert len(data["protocols"]) == 2
@@ -139,7 +140,7 @@ async def test_get_all_protocols_limit_boundary(client: AsyncClient, db_seed, pr
         )
     
     # Запрос с максимальным limit
-    response = await client.get("/api/v1/private/protocols/all?limit=15&offset=0")
+    response = await client.get("/api/v1/private/protocols/all?limit=15")
     assert response.status_code == 200
     data = response.json()
     assert len(data["protocols"]) == 15
@@ -148,7 +149,7 @@ async def test_get_all_protocols_limit_boundary(client: AsyncClient, db_seed, pr
 @pytest.mark.asyncio
 async def test_get_all_protocols_limit_exceeded(client: AsyncClient, db_seed, proto_template_seed):
     """limit > 15 вызывает ошибку валидации (422)"""
-    response = await client.get("/api/v1/private/protocols/all?limit=16&offset=0")
+    response = await client.get("/api/v1/private/protocols/all?limit=16")
     
     assert response.status_code == 422
     data = response.json()
