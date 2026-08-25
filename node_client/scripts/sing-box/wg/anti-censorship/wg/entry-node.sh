@@ -7,14 +7,21 @@ IP_ADDR=$2
 # Пример: fd00:1::1/64
 IP_VERSION=$3
 
-if [ -z "$TMP_ID" ] || [ -z "$IP_ADDR" ] || [ -z "$IP_VERSION" ]; then
-    echo "Ошибка: Необходимы параметры TMP_ID, IPV4_ADDR, IPV6_ADDR!"
-    echo "Использование: bash sing-box-awg-install.sh <tmp_id> <ipv4_addr> <ipv6_addr>"
+EXIT_HOST=$4
+EXIT_PORT=$5
+EXIT_PKEY=$6
+EXIT_SID=$7
+EXIT_UUID=$8
+
+if [ -z "$TMP_ID" ] || [ -z "$IP_ADDR" ] || [ -z "$IP_VERSION" ] || [ -z "$EXIT_PORT" ] || [ -z "$EXIT_HOST" ] || [ -z "$EXIT_SID" ] || [ -z "$EXIT_PKEY" ] || [ -z "$EXIT_UUID" ]; then
+    echo "Ошибка: Необходимы параметры для входной ноды: TMP_ID, IPV_ADDR, IP_VERSION!"
+    echo "Ошибка: Необходимы параметры для оутбаунда выходной ноды: EXIT_HOST, EXIT_PORT, EXIT_SID, EXIT_PKEY, EXIT_UUID!"
+    echo "Использование: bash sing-box-awg-install.sh <tmp_id> <ip_addr> <ip_version>"
     exit 1
 fi
 
 # Используем кастомный бинарник!
-SINGBOX_BIN="/usr/local/bin/sing-box-awg"
+SINGBOX_BIN="/usr/local/bin/sing-box"
 CONFIG_DIR="/etc/sing-box/configs"
 CONFIG_PATH="$CONFIG_DIR/${TMP_ID}.json"
 PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback"
@@ -30,16 +37,16 @@ find_free_port() {
     echo $port
 }
 
-AWG_PORT=$(find_free_port 51820)
+INTERNAL_PORT=$(find_free_port 51820)
 METRICS_PORT=$(find_free_port 10085)
-
-echo "Выделен порт для AmneziaWG: $AWG_PORT"
 
 # --- 1. ГЕНЕРАЦИЯ КЛЮЧЕЙ СЕРВЕРА ---
 WG_KEYS=$($SINGBOX_BIN generate wg-keypair)
 WG_PRIVATE_KEY=$(echo "$WG_KEYS" | grep PrivateKey | awk '{print $2}')
 WG_PUBLIC_KEY=$(echo "$WG_KEYS" | grep PublicKey | awk '{print $2}')
 NODE_HASH_SALT=$(openssl rand -base64 12)
+
+echo "Выделен внутренний порт для Sing-box: $INTERNAL_PORT"
 
 # --- 2. ГЕНЕРАЦИЯ ПАРАМЕТРОВ ОБФУСКАЦИИ (AWG) ---
 # Генерируем уникальный профиль маскировки для каждой ноды
@@ -57,11 +64,11 @@ H2=$(generate_magic)
 H3=$(generate_magic)
 H4=$(generate_magic)
 
-# --- 3. ГЕНЕРАЦИЯ КОНФИГА СИНГБОКСА ---
+# Генерация конфига Sing-box
 cat <<EOF > "$CONFIG_PATH"
 {
   "log": {
-      "level": "warn"
+    "level": "warn"
   },
   "experimental": {
     "v2ray_api": {
@@ -100,18 +107,107 @@ cat <<EOF > "$CONFIG_PATH"
   ],
   "outbounds": [
     {
+      "type": "vless",
+      "tag": "proxy-exit",
+      "server": "$EXIT_HOST",
+      "server_port": $EXIT_PORT,
+      "uuid": "$EXIT_UUID",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.microsoft.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        },
+        "reality": {
+          "enabled": true,
+          "public_key": "$EXIT_PKEY",
+          "short_id": "$EXIT_SID"
+        }
+      }
+    },
+    {
       "type": "direct",
       "tag": "direct"
+    },
+    {
+      "type": "block",
+      "tag": "block"
     }
-  ]
+  ],
+  "route": {
+      "rules": [
+        {
+          "protocol": [
+            "bittorrent"
+          ],
+          "outbound": "block"
+        },
+        {
+          "rule_set": [
+            "geosite-ads",
+            "geosite-malware"
+          ],
+          "outbound": "block"
+        },
+        {
+          "domain_suffix": [
+            ".ru",
+            ".рф",
+            ".su"
+          ],
+          "outbound": "direct"
+        },
+        {
+          "rule_set": [
+            "geosite-ru",
+            "geoip-ru"
+          ],
+          "outbound": "direct"
+        }
+      ],
+      "rule_set": [
+        {
+          "tag": "geosite-ru",
+          "type": "remote",
+          "format": "binary",
+          "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-ru.srs",
+          "download_detour": "direct"
+        },
+        {
+          "tag": "geoip-ru",
+          "type": "remote",
+          "format": "binary",
+          "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-ru.srs",
+          "download_detour": "direct"
+        },
+        {
+          "tag": "geosite-ads",
+          "type": "remote",
+          "format": "binary",
+          "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
+          "download_detour": "direct"
+        },
+        {
+          "tag": "geosite-malware",
+          "type": "remote",
+          "format": "binary",
+          "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-malware.srs",
+          "download_detour": "direct"
+        }
+      ],
+      "final": "proxy-exit",
+      "auto_detect_interface": true
+   }
 }
 EOF
 
-# --- 4. СОЗДАНИЕ SYSTEMD СЕРВИСА ---
+# Создание systemd сервиса
 SERVICE_PATH="/etc/systemd/system/sing-box-${TMP_ID}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Sing-box AmneziaWG Node (TMP_ID: ${TMP_ID})
+Description=Sing box Wireguard Entry Node (TMP_ID: ${TMP_ID})
 After=network.target nss-lookup.target
 
 [Service]
@@ -133,16 +229,15 @@ systemctl daemon-reload
 systemctl enable "sing-box-${TMP_ID}"
 systemctl restart "sing-box-${TMP_ID}"
 
-# --- 5. ОТПРАВКА CALLBACK ---
-# Передаем весь комплект обфускации обратно в панель для клиентов
+# Отправка callback-запроса в панель
 curl -s -X POST "$PANEL_CALLBACK_URL" \
      -H "Content-Type: application/json" \
      -d '{
            "tmp_id": "'"$TMP_ID"'",
            "config_path": "'"$CONFIG_PATH"'",
-           "internal_port": '"$AWG_PORT"',
+           "internal_port": '$INTERNAL_PORT',
            "status": "installed",
-           "node_type": "singbox_awg",
+           "node_type": "singbox_hysteria2_hopping",
            "constant_node_data_obj": {
                "node_public_key": "'"$WG_PUBLIC_KEY"'",
                "node_ipv'"$IP_VERSION"'_subnet": "'"$IP_ADDR"'",

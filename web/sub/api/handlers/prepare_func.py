@@ -1,5 +1,5 @@
 import base64
-from urllib.parse import quote
+from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse, quote
 
 def error_messages_for_client(*messages: str):
     tmp = 'vless://00000000-0000-0000-0000-000000000000@127.0.0.1:443?encryption=none#{}'
@@ -13,7 +13,14 @@ def process2vpn_client_format(any_obj: str | list[str], description: str = None)
     return base64.b64encode(any_obj.encode()).decode()
 
 
+def normalize_url(url: str) -> str:
+    parsed = urlparse(url)
 
+    query_params = parse_qsl(parsed.query, keep_blank_values=True)
+
+    normalized_query = urlencode(query_params, quote_via=quote)
+
+    return urlunparse(parsed._replace(query=normalized_query))
 
 def resolve_user_template(
         template: dict,

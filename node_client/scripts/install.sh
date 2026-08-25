@@ -58,6 +58,7 @@ echo -e "${GREEN}✓${NC} Все необходимые файлы найден�
 
 if [ -z "$CI" ]; then
     echo -e "\nОбновление системы"
+    apt install uuid-runtime
     apt-get update -y && apt-get upgrade -y
 fi
 

@@ -17,7 +17,7 @@ import re
 import pytest
 import uuid as uuid_lib
 
-from web.sub.api.handlers.prepare_func import create_vpn_like_user
+from web.sub.api.handlers.prepare_func import create_vpn_like_user, normalize_url
 from web.sub.sandbox.script_executor import ScriptExecutor
 from web.sub.tests.utils.prepare_sub_helpers import (
     extract_jinja_placeholders,
@@ -118,9 +118,22 @@ async def test_sub_prepare_script_execution(sub_prepare_infrastructure):
                 })
                 continue
             
-            # Теперь output это результат выполнения скрипта (str)
+            # 6.1. Применяем normalize_url() как в production (sub_api.py)
+            # Это кодирует query параметры и защищает от двойного кодирования
+            try:
+                output = normalize_url(output)
+            except Exception as e:
+                errors.append({
+                    'template': template['title'],
+                    'step': 'normalize_url',
+                    'error': f"{type(e).__name__}: {str(e)}",
+                    'raw_output': output[:300]
+                })
+                continue
+            
+            # Теперь output это результат выполнения скрипта (str) + normalize_url
 
-            # 6.1. Проверка что result - строка
+            # 6.2. Проверка что result - строка
             if not isinstance(output, str):
                 errors.append({
                     'template': template['title'],
@@ -130,7 +143,7 @@ async def test_sub_prepare_script_execution(sub_prepare_infrastructure):
                 })
                 continue
             
-            # 6.2. Проверка что нет одиночных фигурных скобок (все плейсхолдеры заменены)
+            # 6.3. Проверка что нет одиночных фигурных скобок (все плейсхолдеры заменены)
             # ВАЖНО: двойные {{ }} в Jinja2 это нормально, проверяем только одиночные { }
             single_brace_pattern = r'(?<!\{)\{(?!\{)[^}]*\}(?!\})'
             unresolved = re.findall(single_brace_pattern, output)
@@ -144,7 +157,7 @@ async def test_sub_prepare_script_execution(sub_prepare_infrastructure):
                 })
                 continue
             
-            # 6.3. Warning: проверка наличия схемы протокола (не критично)
+            # 6.4. Warning: проверка наличия схемы протокола (не критично)
             # Типичные схемы: vless://, vmess://, ss://, trojan://, hysteria2://, и т.д.
             if '://' not in output:
                 warnings.append({
@@ -309,6 +322,14 @@ async def test_sub_prepare_no_double_encoding(sub_prepare_infrastructure):
             
             if not success:
                 # Пропускаем если prepare_sub провалился
+                # (это проверяется в основном тесте)
+                continue
+            
+            # 3.1. Применяем normalize_url() как в production (sub_api.py)
+            try:
+                final_link = normalize_url(final_link)
+            except Exception:
+                # Пропускаем если normalize_url провалился
                 # (это проверяется в основном тесте)
                 continue
             

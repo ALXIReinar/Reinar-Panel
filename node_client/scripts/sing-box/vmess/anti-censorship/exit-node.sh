@@ -5,39 +5,12 @@ CERT_PATH=$2
 KEY_PATH=$3
 DOMAIN=$4
 
-METHOD_CHOICE=${5}
-
 
 if [ -z "$TMP_ID" ] || [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$DOMAIN" ]; then
     echo "Ошибка: Не указан TMP_ID!"
-    echo "Использование: bash ss-ws-install.sh <tmp_id> <cert_path> <key_path> <domain> [method_choice]"
+    echo "Использование: bash ss-ws-install.sh <tmp_id> <cert_path> <key_path> <domain>"
     exit 1
 fi
-
-if [ -z "$METHOD_CHOICE" ]; then
-    echo "Выберите метод шифрования SS-2022:"
-    echo "1 - 2022-blake3-aes-128-gcm (быстрый, легкий)"
-    echo "2 - 2022-blake3-aes-256-gcm (максимальная защита)"
-    echo "3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)"
-    read -p "Введите цифру (1-3) [по умолчанию 1]: " METHOD_CHOICE
-fi
-
-# Маппинг цифры в параметры
-case "$METHOD_CHOICE" in
-    2)
-        SS_METHOD="2022-blake3-aes-256-gcm"
-        KEY_LENGTH=32
-        ;;
-    3)
-        SS_METHOD="2022-blake3-chacha20-poly1305"
-        KEY_LENGTH=32
-        ;;
-    *)
-        # Дефолтный fallback на 128-gcm
-        SS_METHOD="2022-blake3-aes-128-gcm"
-        KEY_LENGTH=16
-        ;;
-esac
 
 SINGBOX_BIN="/usr/local/bin/sing-box"
 CONFIG_DIR="/etc/sing-box/configs"
@@ -54,36 +27,26 @@ find_free_port() {
   echo $port
 }
 
-INTERNAL_PORT=$(find_free_port 8388)
-METRICS_PORT=$(find_free_port 10085)
-SERVER_PSK=$(openssl rand -base64 $KEY_LENGTH)
+INTERNAL_PORT=$(find_free_port 443)
+EXIT_UUID=$(uuidgen)
 
 cat <<EOF > "$CONFIG_PATH"
 {
   "log": {
-      "level": "warn"
-  },
-  "experimental": {
-    "v2ray_api": {
-      "listen": "127.0.0.1:$METRICS_PORT",
-      "stats": {
-        "enabled": true,
-        "inbounds": [
-          "ss-in"
-        ],
-        "users": []
-      }
-    }
+      "level": "info",
+      "timestamp": true
   },
   "inbounds": [
     {
-      "type": "shadowsocks",
-      "tag": "ss-in",
+      "type": "vmess",
+      "tag": "vmess-sys-in",
       "listen": "::",
       "listen_port": $INTERNAL_PORT,
-      "method": "$SS_METHOD",
-      "password": "$SERVER_PSK",
-      "users": [],
+      "users": [
+          "name": "ru-entry-node",
+          "uuid": "$EXIT_UUID",
+          "alterId": 0
+      ],
       "tls": {
         "enabled": true,
         "server_name": "$DOMAIN",
@@ -105,7 +68,7 @@ EOF
 SERVICE_PATH="/etc/systemd/system/sing-box-${TMP_ID}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Sing-box Shadowsocks TLS TCP Node (TMP_ID: ${TMP_ID})
+Description=Sing-box Vmess TLS TCP Exit Node (TMP_ID: ${TMP_ID})
 After=network.target nss-lookup.target
 
 [Service]
@@ -135,10 +98,13 @@ curl -s -X POST "$PANEL_CALLBACK_URL" \
            "api_port": '"$API_POPT"',
            "inbound_port": '"$INBOUND_PORT"',
            "status": "installed",
-           "node_type": "shadowsocks_2022",
-           "constant_node_data_obj": {
-              "node_method": "'$SS_METHOD'"
-           }
+           "node_type": "vmess_tls_tcp"
          }'
 
-echo "Shadowsocks-tcp node $TMP_ID installed successfully."
+echo "=================================================="
+echo "Sing-box Vmess TLS TCP node в качестве EXIT ноды развернута!"
+echo "Порт:  $INTERNAL_PORT"
+echo "Exit нода $TMP_ID установлена. Данные для подключения Entry Ноды"
+echo "- UUID: $EXIT_UUID"
+echo "- EXIT_DOMAIN: $DOMAIN"
+echo "=================================================="

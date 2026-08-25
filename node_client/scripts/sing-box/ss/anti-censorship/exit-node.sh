@@ -83,7 +83,10 @@ cat <<EOF > "$CONFIG_PATH"
       "listen_port": $INTERNAL_PORT,
       "method": "$SS_METHOD",
       "password": "$SERVER_PSK",
-      "users": [],
+      "users": [
+          "name": "entry-user-ru",
+          "password": "$EXIT_USER_PSK"
+      ],
       "tls": {
         "enabled": true,
         "server_name": "$DOMAIN",
@@ -105,7 +108,7 @@ EOF
 SERVICE_PATH="/etc/systemd/system/sing-box-${TMP_ID}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Sing-box Shadowsocks TLS TCP Node (TMP_ID: ${TMP_ID})
+Description=Sing-box Shadowsocks TLS TCP EXIT Node (TMP_ID: ${TMP_ID})
 After=network.target nss-lookup.target
 
 [Service]
@@ -141,4 +144,12 @@ curl -s -X POST "$PANEL_CALLBACK_URL" \
            }
          }'
 
-echo "Shadowsocks-tcp node $TMP_ID installed successfully."
+echo "=================================================="
+echo "Sing-box Shadowsocks-tcp TLS TCP node в качестве EXIT ноды развернута!"
+echo "Порт:  $INTERNAL_PORT"
+echo "Exit нода $TMP_ID установлена. Данные для подключения Entry Ноды"
+# shellcheck disable=SC2028
+echo "- \033[1;33mEXIT_USER_PSK\033[0m(в паре с \033[0;34mSERVER_PSK\033[0m): \033[1;33m$EXIT_USER_PSK\033[0m:\033[0;34m$SERVER_PSK\033[0m"
+echo "- EXIT_METHOD: $SS_METHOD"
+echo "- EXIT_DOMAIN: $DOMAIN"
+echo "=================================================="

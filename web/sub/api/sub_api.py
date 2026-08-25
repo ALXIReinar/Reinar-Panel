@@ -6,7 +6,8 @@ from fastapi import APIRouter, Response, Path
 from pydantic import IPvAnyAddress
 from starlette.requests import Request
 
-from web.sub.api.handlers.prepare_func import error_messages_for_client, process2vpn_client_format, create_vpn_like_user
+from web.sub.api.handlers.prepare_func import error_messages_for_client, process2vpn_client_format, \
+    create_vpn_like_user, normalize_url
 from web.sub.config_dir.logger_config import log_event
 from web.sub.config_dir.config import env
 from web.sub.data.postgres import PgSqlDep
@@ -63,7 +64,8 @@ async def sub(params: Annotated[SubUrlSchema, Path()], db: PgSqlDep, request: Re
             errors.append(res)
         else:
             "Сохраняем успешно обработанную ссылку для подключения пользователя"
-            ready_config_links.append(res)
+            urlencoded_link = normalize_url(res)
+            ready_config_links.append(urlencoded_link)
 
     if errors:
         log_event(f'Не все конфиги удалось обработать | user_uuid: \033[35m{sub_meta['user_uuid']}\033[0m; errors: \033[37m{errors}\033[0m', level='WARNING')
