@@ -15,7 +15,8 @@ from starlette.requests import Request
 
 from node_client.api.sandbox.hot_reload_executor import HotReloadExecutor
 from node_client.config import TMP_DIR, env
-from node_client.logger_config import log_event
+from node_client.utils.json_converters import FileConverter
+from node_client.utils.logger_config import log_event
 
 
 class ConfigWriteBuffer:
@@ -37,13 +38,18 @@ class ConfigWriteBuffer:
         """
         self.max_batch = max_batch
         self.timeout = timeout
-        
+        self.file_converter = FileConverter()
+
         # Хранилище пользователей {node_proto_id: {uuid: user_obj}}
         self.buffer_storage: dict[int, dict[str, dict]] = {}
-        
+
+        # Локал стейт для инжекторов, скриптов сбора/парсинга метрик.
+        # Переносное хранилище между изолированными окружениями скриптов
+        self.local_state: dict[int, dict] = {}
+
         # Метаданные нод {node_proto_id: {filepath, users_path, reload_command, queue_limited}}
         self.node_metadata: dict[int, dict] = {}
-        
+
         # Очереди операций для каждой ноды {node_proto_id: Queue}
         self.node_queues: dict[int, asyncio.Queue] = {}
         
@@ -57,6 +63,7 @@ class ConfigWriteBuffer:
             filepath: str,
             user_injectors: list[dict],
             reload_command: str | None,
+            file_format: int,
     ):
         """
         Регистрирует виртуальную ноду в менеджере
@@ -81,7 +88,7 @@ class ConfigWriteBuffer:
         injectors = []
         try:
             # Проверка существования файла-конфига
-            ok, file_content = await self._read_config(filepath, True)
+            ok, file_content = await self._read_config(filepath, True, file_format)
 
             for inj in user_injectors:
                 # Проверка работоспособности ключа массива для операций в конфиг-файле
@@ -101,6 +108,7 @@ class ConfigWriteBuffer:
         # 1. Сохраняем метаданные
         self.node_metadata[node_proto_id] = {
             'filepath': filepath,
+            'file_format': file_format,
             'injectors': injectors,
             'reload_command': reload_command,
             'queue_limited': True,  # Флаг для контроля лимитов конкретной ноды
@@ -129,7 +137,8 @@ class ConfigWriteBuffer:
         user_obj: dict | str,
         filepath: str,
         user_injectors: list[dict],
-        reload_command: str | None = None,
+        reload_command: str | None,
+        file_format: int,
     ):
         """
         Добавляет пользователя в буфер (O(1))
@@ -175,7 +184,7 @@ class ConfigWriteBuffer:
         # Сценарий 3: Первое обращение к ноде
         # Регистрируем ноду (загружаем существующих пользователей)
         log_event(f"Первое обращение к ноде | node_proto_id: \033[35m{node_proto_id}\033[0m | регистрируем")
-        reg_res, status_code, msg = await self.register_node(node_proto_id, filepath, user_injectors, reload_command)
+        reg_res, status_code, msg = await self.register_node(node_proto_id, filepath, user_injectors, reload_command, file_format)
         if not reg_res:
             log_event(f'Не удалось зарегистрировать ноду | node_proto_id: \033[31m{node_proto_id}\033[0m', level='WARNING')
             return False, status_code, str(msg)
@@ -192,7 +201,8 @@ class ConfigWriteBuffer:
             user_obj: dict,
             filepath: str,
             user_injectors: list[dict],
-            reload_command: str | None
+            reload_command: str | None,
+            file_format: int,
     ):
         """
         Удаляет пользователя из буфера (O(1))
@@ -208,7 +218,7 @@ class ConfigWriteBuffer:
         "Проверяем очередь node_proto_id в буфере"
         if node_proto_id not in self.buffer_storage:
             log_event(f"Попытка удаления из незарегистрированной ноды, пробуем подгрузить её | node_proto_id: \033[33m{node_proto_id}\033[0m", level='WARNING')
-            reg_res, status_code, msg = await self.register_node(node_proto_id, filepath, user_injectors, reload_command)
+            reg_res, status_code, msg = await self.register_node(node_proto_id, filepath, user_injectors, reload_command, file_format)
 
             "Если нет, пытаемся зарегать"
             if not reg_res:
@@ -258,10 +268,11 @@ class ConfigWriteBuffer:
             filepath: str,
             user_injectors: list[dict],
             reload_command: str | None,
-            action: Literal["add", "delete"]
+            action: Literal["add", "delete"],
+            file_format: int,
     ):
         if not self.node_metadata.get(node_proto_id):
-            success, status_code, msg = await self.register_node(node_proto_id, filepath, user_injectors, reload_command)
+            success, status_code, msg = await self.register_node(node_proto_id, filepath, user_injectors, reload_command, file_format)
             if not success:
                 return False, f"Не удалось выполнить действие. err: {msg}"
 
@@ -277,6 +288,7 @@ class ConfigWriteBuffer:
                     filepath=filepath,
                     user_injectors=user_injectors,
                     reload_command=reload_command,
+                    file_format=file_format,
                 )
         else:
             async with self.unlimit_queue(node_proto_id):
@@ -288,6 +300,7 @@ class ConfigWriteBuffer:
                         filepath=filepath,
                         user_injectors=user_injectors,
                         reload_command=reload_command,
+                        file_format=file_format,
                     )
         return True, "Операция выполнена"
 
@@ -392,7 +405,7 @@ class ConfigWriteBuffer:
             await self._write_config_atomic(f"{metadata['filepath']}.state.json", {'users': list(self.buffer_storage[node_id].values())})
 
             "1. Читаем конфиги. Стейт - для формирирован (только для получения структуры)"
-            core_ok, config = await self._read_config(metadata['filepath'], True)
+            core_ok, config = await self._read_config(metadata['filepath'], True, metadata['file_format'])
 
             "2. Прогоняем каждый массив операций для конкретно этого ядра"
             for inj in metadata['injectors']:
@@ -406,7 +419,7 @@ class ConfigWriteBuffer:
 
 
             "4. Атомарно записываем конфиг ядра"
-            await self._write_config_atomic(metadata['filepath'], config)
+            await self._write_config_atomic(metadata['filepath'], config, metadata['file_format'])
 
             "5. Перезагружаем ядро (если нужно)"
             if metadata['reload_command']:
@@ -488,7 +501,7 @@ class ConfigWriteBuffer:
         try:
             # 1. Читаем фарш (state.json) и конфиг
             state_ok, state_users = await self._read_config(state_filepath, False)
-            core_ok, config = await self._read_config(metadata['filepath'], False)
+            core_ok, config = await self._read_config(metadata['filepath'], False, metadata['file_format'])
 
             if not state_ok or not core_ok:
                 log_event(f'\033[36m[Audit]\033[0m Предоставлены неправильные конфигурации. Файлы не найдены; node_proto_id: \033[31m{node_id}\033[0m; node_meta: \033[34m{metadata}\033[0m', level='ERROR')
@@ -551,12 +564,16 @@ class ConfigWriteBuffer:
     # ========== Утилиты для работы с конфиг-файлами ==========
     
     @staticmethod
-    async def _read_config(filepath: str, raise_exc: bool = False) -> tuple[bool, dict]:
-        """Читает конфиг-файл"""
+    async def _read_config(filepath: str, raise_exc: bool = False, file_format: int = 1) -> tuple[bool, dict]:
+        """
+        Читает конфиг-файл
+
+        - file_format: по дефолту JSON(1)
+        """
         try:
             async with aiofiles.open(filepath, mode='r', encoding='utf-8') as f:
                 content = await f.read()
-                return True, orjson.loads(content)
+                return True, FileConverter.any2json(content, file_format)
         except FileNotFoundError:
             log_event(f'Конфиг-файл не найден: "\033[31m{filepath}\033[0m"', level='ERROR')
             if not raise_exc:
@@ -572,8 +589,12 @@ class ConfigWriteBuffer:
             raise
     
     @staticmethod
-    async def _write_config_atomic(filepath: str, config_dict: dict):
-        """Атомарная запись конфига через временный файл"""
+    async def _write_config_atomic(filepath: str, config_dict: dict, file_format: int = 1):
+        """
+        Атомарная запись конфига через временный файл
+
+        - file_format: по дефолту всегда JSON(1)
+        """
         now = time.monotonic()
 
         # Используем только имя файла
@@ -583,8 +604,9 @@ class ConfigWriteBuffer:
         try:
             # 1. Пишем во временный файл
             async with aiofiles.open(tmp_filepath, mode='wb') as f:
-                json_bytes = orjson.dumps(config_dict, option=orjson.OPT_INDENT_2)
-                await f.write(json_bytes)
+
+                content = FileConverter.json2any(config_dict, file_format)
+                await f.write(content)
             
             # 2. Атомарно подменяем старый файл новым. mv в POSIX - один такт процессорного времени, - либо да, либо нет
             os.replace(str(tmp_filepath), filepath)

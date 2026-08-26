@@ -10,7 +10,7 @@ class MetricsQueries:
     async def get_all_nodes_for_metrics_cron(self):
         query = '''
         SELECT np.id, n.ip, n.private_ip, n.api_port, np.metrics_port, pt.metrics_command, pt.api_metrics_script, pt.proto_python_lib,
-               pt.metrics_parser_code, pt.metrics_parser_libs
+               pt.metrics_parser_code, pt.metrics_parser_libs, pt.metrics_parser_code, pt.metrics_parser_libs
         FROM nodes n
         JOIN nodes_protocols np ON np.node_id = n.id AND np.user_visible = true
         JOIN protocols p ON np.proto_id = p.id

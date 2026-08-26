@@ -252,7 +252,13 @@ async def seed_all(conn: Connection, seed_data: dict[str, Any]) -> None:
         conn, "templates_statuses",
         seed_data.get("templates_statuses", []),
     )
-    
+
+    print("2. Поддерживаемые форматы конфиг-файлов шаблонов...")
+    await insert_with_fixed_id(
+        conn, "supported_file_formats",
+        seed_data.get("supported_file_formats", []),
+    )
+
     print("\n2. Статусы платежей...")
     await insert_with_fixed_id(
         conn, "pay_statuses",

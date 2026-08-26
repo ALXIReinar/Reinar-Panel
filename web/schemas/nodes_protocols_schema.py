@@ -17,7 +17,11 @@ class NodeProtocolCreateSchema(BaseModel):
 
 
 class UpdateNodeProtoSchema(BaseModel):
-    """Схема для обновления виртуальной ноды"""
+    """
+    Схема для обновления виртуальной ноды
+
+    - reload_core_command. Если пользователь оставляет значение без изменений, должно быть 0. NULL используется в качестве функционального значения, которое учитывается в обработках!
+    """
     config_path: str | None = Field(None, min_length=1, description="Путь к конфигу протокола")
     title: str | None = Field(None, min_length=1, max_length=30, description="Название виртуальной ноды")
     metrics_port: int | None = Field(None, ge=1024, le=65535, description="Порт для сбора метрик трафика")
@@ -25,6 +29,14 @@ class UpdateNodeProtoSchema(BaseModel):
     sub_node_address: str | None = Field(None, min_length=4, max_length=255, description="Домен протокола в конфиге клиентов")
     user_visible: bool | None = Field(None, description="Видимость для пользователей")
     constant_node_data_obj: dict | None = Field(None, description='Джсон с любыми данными, которые нужны ноде. Доступен в суперобъекте пользователей в скриптах шаблонов')
+    reload_core_command: int | str | None = Field(0, description='Команда перезагрузки ядра(для обновления массива пользователей для подключения к ядру)')
+
+    @field_validator('reload_core_command', mode='before')
+    @classmethod
+    def reload_core_command_validate(cls, v):
+        if isinstance(v, int) and v != 0:
+            raise ValueError('reload_core_command не может быть числом')
+        return v
 
     @field_validator('proto_port', mode='after')
     @classmethod

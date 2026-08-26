@@ -68,6 +68,7 @@ async def update_node_protocol_api(np_id: int, body: UpdateNodeProtoSchema, db: 
         sub_node_address=body.sub_node_address,
         user_visible=body.user_visible,
         constant_node_data_obj=body.constant_node_data_obj,
+        reload_core_command=body.reload_core_command,
     )
 
     "Конфликт портов на сервере"

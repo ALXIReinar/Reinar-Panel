@@ -31,6 +31,7 @@ class UpdateTmpSchema(BaseModel):
     bulk_add_script_custom_params: dict | None = Field(None, description='Кастомные параметры для bulk add скрипта')
     api_metrics_script: str | None = Field(None, description='Python скрипт для получения метрик через API')
     is_accepted: bool | None = Field(None, description='Принят ли шаблон администратором')
+    config_format: int | None = Field(None, ge=1, le=3, description='Поддерживается 3 формата: 1 - json(самый предпочитаемый), 2 - conf, 3 - yml/yaml')
 
     @field_validator('url_tmp')
     @classmethod

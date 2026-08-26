@@ -68,6 +68,7 @@ async def update_template(tmp_id: int, body: UpdateTmpSchema, request: Request, 
         bulk_delete_script_custom_params=body.bulk_delete_script_custom_params,
         bulk_add_script_custom_params=body.bulk_add_script_custom_params,
         api_metrics_script=body.api_metrics_script,
+        config_format=body.config_format,
     )
     
     "Шаблон не найден"

@@ -56,7 +56,8 @@ class TrafficResetQueries:
         -- 6. Финальный джойн. 
         -- Декартово произведение не раздувает записи, экономия ресурсов
         SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, 
-            pt.proto_python_lib, pt.reload_core_command, np.config_path, pt.constant_user_data_obj, 
+            pt.proto_python_lib, COALESCE(np.reload_core_command, pt.reload_core_command) AS reload_core_command, -- Предпочтение индивидуальной команде, фоллбек на шаблонную
+            np.config_path, pt.constant_user_data_obj, pt.config_format,
             pt.required_user_data_obj, pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, np.constant_node_data_obj,
             COALESCE(aui.user_injectors, '[]'::json) AS user_injectors,
             COALESCE(pau.users, '[]'::json) AS users

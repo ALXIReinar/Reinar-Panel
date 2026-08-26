@@ -68,37 +68,28 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[dict], aio_http: Client
         
         async with sem:
             try:
-                "Запрашиваем метрики потребления с нод"
+                "Запрашиваем метрики потребления с нод. Запрос вернёт готовые прибавки трафика"
                 url = f"http://{node['private_ip']}:{node['api_port']}{NodeUris.get_metrics}"
                 # url = f"http://localhost:8100{NodeUris.get_metrics}"
                 json_body = {
+                    'node_proto_id': node['id'],
                     'metrics_port': node['metrics_port'],
                     'command': node['metrics_command'],
                     'metrics_script': node['api_metrics_script'],
                     'core_lib': node['proto_python_lib'],
+                    'metrics_parser_code': node['metrics_parser_code'],
+                    'metrics_parser_libs': node['metrics_parser_libs'],
                 }
-                async with aio_http.post(url, json=json_body, timeout=10.0) as resp:
+                async with aio_http.post(url, json=json_body, timeout=env.node_client_command_timeout) as resp:
                     resp.raise_for_status()
                     resp_data = await resp.json()
                 
-                "Парсим stdout скриптом пользователя"
-                script_res, script_res_pack, err_msg = await execute_script(node['metrics_parser_code'], resp_data['stdout'], node['metrics_parser_libs'])
-
-                "Ошибка в скрипте. Ранняя остановка"
-                if not script_res:
-                    log_event(f'\033[31m[ARQ Metrics Collector]\033[0m Скрипт упал с ошибкой. stdout не удалось обработать | err: {err_msg}; node_proto_id: \033[33m{node["id"]}\033[0m', level='WARNING')
-                    return
-
-                "Трафик пользователей, Проблемные пользователи"
-                parsed_data, troubles = script_res_pack
-                if troubles:
-                    log_event(f'\033[36m[ARQ Metrics Collector]\033[0m Часть stdout не удалось обработать | troubles: {troubles}; node_proto_id: \033[33m{node["id"]}\033[0m', level='WARNING')
-
 
                 "Обновляем трафик, если был"
-                if parsed_data:
+                users_traffic = resp_data['users_traffic']
+                if users_traffic:
                     user_sub_ids, traffic_adds = zip(*tuple(
-                        tuple(user_dict.values()) for user_dict in parsed_data
+                        (user_dict['user_sub_id'], user_dict['total_mb_used']) for user_dict in users_traffic
                     ))
                     async with pool.acquire() as conn:
                         log_event(f'\033[35m[ARQ Metrics Collector]\033[0m Outbox операций по удалению пользователей с ядра | node_proto_id: \033[36m{node["id"]}\033[0m;')
@@ -113,7 +104,7 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[dict], aio_http: Client
                         log_event(f'\033[36m[ARQ Metrics Collector]\033[0m \033[34mTask Chaining, depth: \033[31m1\033[0m Запустили бульк-удаление для пользователей, превысивших лимит трафика | events_len: {len(outbox_event_ids)}', job_id=job.job_id)
 
                     success_count += 1
-                    log_event(f'\033[36m[ARQ Metrics Collector]\033[0m Метрики обновлены | node_proto_id: \033[36m{node["id"]}\033[0m; users_count: \033[32m{len(parsed_data)}\033[0m')
+                    log_event(f'\033[36m[ARQ Metrics Collector]\033[0m Метрики обновлены | node_proto_id: \033[36m{node["id"]}\033[0m; users_count: \033[32m{len(users_traffic)}\033[0m')
                 else:
                     log_event(f'\033[36m[ARQ Metrics Collector]\033[0m Нет данных для обновления | node_proto_id: \033[33m{node["id"]}\033[0m', level='WARNING')
             
@@ -163,6 +154,7 @@ async def bulk_delete_by_traffic_limit(ctx: dict, outbox_event_ids: list, arq: A
                 vnode['constant_user_data_obj'],
                 vnode['required_user_data_obj'],
                 vnode['constant_node_data_obj'],
+                vnode['config_format'],
             )
             log_event(f'\033[31m[ARQ Metrics Collector]\033[0m \033[34mTask Chaining, depth: \033[32m3\033[0m бульк delete летит на ноду | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
             log_event(f'\033[31m[ARQ Metrics Collector]\033[0m Фоновая задача запущена | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)

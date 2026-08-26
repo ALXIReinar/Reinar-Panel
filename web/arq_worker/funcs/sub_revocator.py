@@ -45,6 +45,7 @@ async def revoke_sub_plan_by_expire(ctx: dict, db: PgSql = None, arq: ArqRedis =
                 vnode['required_user_data_obj'],
                 vnode['constant_user_data_obj'],
                 vnode['constant_node_data_obj'],
+                vnode['config_format'],
             )
             log_event(f'\033[31m[ARQ Sub Revoke]\033[0m Фоновая задача запущена | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
 

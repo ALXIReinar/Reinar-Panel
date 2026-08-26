@@ -28,7 +28,7 @@ class NodesProtocolsQueries:
         SELECT
             np.node_id, np.proto_id, p.name as proto_name, n.ip, n.private_ip, n.api_port, np.sub_node_address, np.proto_port,
             np.metrics_port, n.is_active, np.user_visible, np.title, np.config_link, np.config_path, n.title as node_title,
-            np.created_at, np.constant_node_data_obj
+            np.created_at, np.constant_node_data_obj, np.reload_core_command
         FROM nodes_protocols np
         JOIN nodes n ON np.node_id = n.id
         JOIN protocols p ON np.proto_id = p.id
@@ -60,6 +60,7 @@ class NodesProtocolsQueries:
         sub_node_address: str | None = None,
         user_visible: bool | None = None,
         constant_node_data_obj: dict | None = None,
+        reload_core_command: str | int | None = None,
     ) -> tuple[int, str]:
         """
         Универсальное обновление виртуальной ноды
@@ -107,6 +108,11 @@ class NodesProtocolsQueries:
         if constant_node_data_obj is not None:
             updates.append(f"constant_node_data_obj = ${param_idx}")
             params.append(constant_node_data_obj)
+            param_idx += 1
+
+        if reload_core_command != 0:
+            updates.append(f"reload_core_command = ${param_idx}")
+            params.append(reload_core_command)
             param_idx += 1
 
         if not updates:
@@ -199,9 +205,10 @@ class NodesProtocolsQueries:
             GROUP BY tmp_id
         )
         SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib, pt.api_bulk_add_user_script,
-               pt.api_bulk_delete_user_script, pt.reload_core_command, np.config_path, pt.required_user_data_obj,
+               pt.api_bulk_delete_user_script, COALESCE(np.reload_core_command, pt.reload_core_command) AS reload_core_command, -- Предпочтение индивидуальной команде, фоллбек на шаблонную
+               np.config_path, pt.required_user_data_obj,
                pt.constant_user_data_obj, pt.bulk_delete_script_custom_params, pt.bulk_add_script_custom_params, oi.id AS event_id,
-               np.constant_node_data_obj,
+               np.constant_node_data_obj, pt.config_format,
                COALESCE(aui.user_injectors, '[]'::json) AS user_injectors
         FROM nodes_protocols np
         JOIN protocols p ON np.proto_id = p.id

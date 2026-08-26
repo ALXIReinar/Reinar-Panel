@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     arq_max_jobs: int
     arq_job_timeout: int
     action_on_core_proto_limit: int
-
+    node_client_command_timeout: int = os.getenv('NODE_CLIENT_COMMAND_TIMEOUT', 120)
     model_config = SettingsConfigDict(extra='allow', env_file_encoding='utf-8')
 
 @lru_cache

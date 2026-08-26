@@ -16,7 +16,7 @@ import orjson
 
 from node_client.api.sandbox.ast_validator import SecurityError, CodeSandboxValidator
 from node_client.config import env
-from node_client.logger_config import log_event
+from node_client.utils.logger_config import log_event
 
 # Принудительная очистка кэша - для библиотек из шаблонов-скриптов
 importlib.invalidate_caches()
@@ -96,7 +96,7 @@ class HotReloadExecutor:
             lib_names: str | None,
             node_ip: str,
             core_api_port: int,
-            action: Literal["user_core_operation", "get_metrics"],
+            action: Literal["user_core_operation", "get_metrics", "parse_metrics"],
             custom_params: dict | None = None,
             user_obj: dict | str | list[dict] = None,
 
@@ -137,7 +137,7 @@ class HotReloadExecutor:
                     global_scope.get('bulk_delete_users') or
                     global_scope.get('bulk_add_users') or
                     global_scope.get('get_metrics') or
-                    global_scope.get('parse')
+                    global_scope.get('parse_metrics')
             )
             if not action_user_func:
                 msg = "Ни одна из функций: (bulk_delete_users, bulk_add_users, get_metrics, parse) - не найдена в скрипте"
@@ -148,6 +148,7 @@ class HotReloadExecutor:
             args_func_map = {
                 "user_core_operation": (user_obj, node_ip, core_api_port, custom_params), # Подходит для бульк/обычных вставок/удалений
                 "get_metrics": (node_ip, core_api_port, custom_params),
+                "parse_metrics": (custom_params['raw_metrics'], custom_params['vpn_users'], custom_params['local_state']),
             }
             result = action_user_func(*args_func_map[action])
 

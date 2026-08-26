@@ -22,7 +22,12 @@ async def export_seed_data():
             templates_statuses = await conn.fetch(
                 "SELECT * FROM templates_statuses ORDER BY id"
             )
-            
+
+            # 10. sub_nodes_operations
+            supported_file_formats = await conn.fetch(
+                "SELECT * FROM supported_file_formats ORDER BY id"
+            )
+
             # 2. proto_templates
             proto_templates_rows = await conn.fetch(
                 "SELECT * FROM proto_templates ORDER BY id"
@@ -53,7 +58,7 @@ async def export_seed_data():
             sub_nodes_operations = await conn.fetch(
                 "SELECT * FROM sub_nodes_operations ORDER BY id"
             )
-            
+
             # 9. whitelist_commands
             whitelist_commands = await conn.fetch(
                 "SELECT * FROM whitelist_commands ORDER BY id"
@@ -67,6 +72,7 @@ async def export_seed_data():
             # Конвертируем в dict
             result = {
                 "templates_statuses": [dict(row) for row in templates_statuses],
+                "supported_file_formats": [dict(row) for row in supported_file_formats],
                 "proto_templates": [],
                 "pay_statuses": [dict(row) for row in pay_statuses],
                 "online_statuses": [dict(row) for row in online_statuses],

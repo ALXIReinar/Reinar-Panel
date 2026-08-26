@@ -70,7 +70,7 @@ class ProtoTemplatesQueries:
         )
         SELECT pt.id, pt.title, pt.url_tmp, pt.status, pt.is_accepted, pt.reload_core_command, pt.required_user_data_obj, pt.constant_user_data_obj,
                pt.proto_python_lib, pt.sub_prepare_script, pt.sub_required_libs, pt.api_bulk_delete_user_script, pt.metrics_parser_code, pt.metrics_command,
-               pt.bulk_delete_script_custom_params, pt.api_metrics_script, pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, pt.description,
+               pt.bulk_delete_script_custom_params, pt.api_metrics_script, pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, pt.description, pt.config_format,
                COALESCE(ui.user_injectors, '[]'::json) AS user_injectors
         FROM proto_templates pt
         LEFT JOIN user_injectors ui ON ui.tmp_id = pt.id
@@ -121,6 +121,7 @@ class ProtoTemplatesQueries:
         bulk_delete_script_custom_params: dict | None = None,
         bulk_add_script_custom_params: dict | None = None,
         api_metrics_script: str | None = None,
+        config_format: int | None = None,
     ) -> tuple[int, str]:
         """
         Обновить шаблон (универсальный метод для всех полей)
@@ -206,6 +207,11 @@ class ProtoTemplatesQueries:
 
         if api_metrics_script is not None:
             updates.append(f"api_metrics_script = ${param_idx}")
+            params.append(api_metrics_script)
+            param_idx += 1
+
+        if config_format is not None:
+            updates.append(f"config_format = ${param_idx}")
             params.append(api_metrics_script)
             param_idx += 1
 
