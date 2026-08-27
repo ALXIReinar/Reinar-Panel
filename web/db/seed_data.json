@@ -9,20 +9,6 @@
       "name": "Пользовательский"
     }
   ],
-  "supported_file_formats": [
-    {
-      "id": 1,
-      "name": "json"
-    },
-    {
-      "id": 2,
-      "name": "conf"
-    },
-    {
-      "id": 3,
-      "name": "yaml/yml"
-    }
-  ],
   "proto_templates": [
     {
       "title": "xray-vless-reality-tcp",
@@ -56,7 +42,9 @@
       },
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "vless",
@@ -110,7 +98,9 @@
       },
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-xray-vless-reality-grpc",
@@ -159,7 +149,9 @@
       },
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-xray-vless-reality-xhttp",
@@ -205,7 +197,9 @@
       },
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-xray-vless-tls-httpupgrade",
@@ -251,7 +245,9 @@
       },
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-xray-vless-tls-ws",
@@ -297,7 +293,9 @@
       },
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-xray-vmess-tls-ws",
@@ -343,7 +341,9 @@
       },
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-xray-vmess-tls-httpupgrade",
@@ -389,7 +389,9 @@
       },
       "description": "# install script\n\nДля всех ss версии 2022 скрипт установки один и тот же, но с разными параметрами\n\n## Quick Start\n\nУстановит chacha20-poly1305 метод шифрования по умолчанию\n\n`bash ss-2022-install.sh 105`\n\n## Advanced\n\nНастройка метода шифрования. Вы можете выбрать \n\n1. 2022-blake3-aes-128-gcm\n\n> `bash ss-2022-install.sh 106  2022-blake3-aes-128-gcm`\n\n2. 2022-blake3-aes-256-gcm\n\n> `bash ss-2022-install.sh 107  2022-blake3-aes-256-gcm`\n\n3. 2022-blake3-chacha20-poly1305 (default)\n\n> `bash ss-2022-install.sh 105`",
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-xray-vmess-tls-grpc",
@@ -435,7 +437,9 @@
       },
       "description": "# install script\n\nДля всех ss версии 2022 скрипт установки один и тот же, но с разными параметрами\n\n## Quick Start\n\nУстановит chacha20-poly1305 метод шифрования по умолчанию\n\n`bash ss-2022-install.sh 105`\n\n## Advanced\n\nНастройка метода шифрования. Вы можете выбрать \n\n1. 2022-blake3-aes-128-gcm\n\n> `bash ss-2022-install.sh 106  2022-blake3-aes-128-gcm`\n\n2. 2022-blake3-aes-256-gcm\n\n> `bash ss-2022-install.sh 107  2022-blake3-aes-256-gcm`\n\n3. 2022-blake3-chacha20-poly1305 (default)\n\n> `bash ss-2022-install.sh 105`",
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-xray-vmess-tls-tcp",
@@ -479,7 +483,9 @@
       },
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-xray-trojan-reality-tcp",
@@ -523,7 +529,9 @@
       },
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-xray-trojan-reality-grpc",
@@ -567,7 +575,9 @@
       },
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-xray-trojan-tls-httpupgrade",
@@ -611,7 +621,9 @@
       },
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-xray-trojan-tls-ws",
@@ -655,7 +667,9 @@
       },
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-xray-trojan-reality-xhttp",
@@ -699,7 +713,9 @@
       },
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-xray-trojan-tls-tcp",
@@ -745,7 +761,9 @@
       },
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-xray-hy2-tls",
@@ -791,7 +809,9 @@
       },
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-xray-hy2-tls-salamander",
@@ -820,7 +840,7 @@
       },
       "constant_user_data_obj": {},
       "proto_python_lib": null,
-      "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для Hysteria2 с Port Hopping\n    \"\"\"\n    return config_link.format(\n        user_uuid=user_obj['user_uuid'], hop_start=user_obj['sub_link_hop_start'], hop_end=user_obj['sub_link_hop_end']\n    )",
+      "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для Hysteria2 с Port Hopping\n    \"\"\"\n    return config_link.format(\n        user_uuid=user_obj['user_uuid'], hop_start=user_obj['node_hop_start'], hop_end=user_obj['node_hop_end']\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
       "metrics_parser_code": "\ndef parse_metrics(raw_metrics, vpn_users, local_state):\n    \"\"\"\n    Универсальный парсер метрик для Xray\n    \n    Принимает:\n    - JSON string от CLI (xray api statsquery)\n    - JSON dict от xtlsapi  \n    - Plain text (fallback)\n    - Пустой список (нет метрик)\n    \n    Возвращает: tuple(list[dict], list[dict])\n        - users_traffics: [{'user_sub_id': 1, 'total_mb_used': 1024}, ...]\n        - troubles: список проблемных записей\n    \"\"\"\n    \n    def _parse_plain_text(text):\n        \"\"\"Fallback парсер для plain text формата\"\"\"\n        lines = text.strip().split('\\\\n')\n        traffic_map = defaultdict(int)\n        \n        for line in lines:\n            if '>>>' not in line:\n                continue\n            \n            parts = line.split('>>>')\n            if len(parts) >= 2:\n                username = parts[1]\n                numbers = re.findall(r'\\\\d+', line)\n                if numbers:\n                    traffic_map[username] += int(numbers[-1])\n        \n        return [\n            {'user_sub_id': int(u), 'total_mb_used': mb}\n            for u, mb in traffic_map.items()\n        ], []\n    \n    # Обработка пустого списка (нет трафика)\n    if isinstance(raw_metrics, list) and len(raw_metrics) == 0:\n        return [], []\n    \n    if isinstance(raw_metrics, str):\n        try:\n            json_obj = json.loads(raw_metrics)\n        except json.JSONDecodeError:\n            return _parse_plain_text(raw_metrics)\n    else:\n        json_obj = raw_metrics\n    \n    traffic_map = defaultdict(int)\n    troubles = []\n    \n    stats_list = json_obj.get('stat', [])\n    if not stats_list:\n        return [], []\n    \n    for user in stats_list:\n        name = user.get('name', '')\n        if not name or 'user>>>' not in name:\n            troubles.append(user)\n            continue\n        \n        parts = name.split('>>>')\n        if len(parts) < 2:\n            troubles.append(user)\n            continue\n        \n        user_sub_id= int(parts[1])\n        traffic_bytes = int(user.get('value', 0))\n        traffic_mb = traffic_bytes // 1024 // 1024\n        \n        traffic_map[user_sub_id] += traffic_mb\n    \n    users_traffics = [\n        {'user_sub_id': username, 'total_mb_used': used_mb} \n        for username, used_mb in traffic_map.items()\n    ]\n    \n    return users_traffics, troubles\n",
@@ -831,7 +851,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-hy2-tls-hopping",
@@ -866,7 +888,7 @@
       },
       "constant_user_data_obj": {},
       "proto_python_lib": null,
-      "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для Hysteria2 с Port Hopping\n    \"\"\"\n    return config_link.format(\n        user_uuid=user_obj['user_uuid'], hop_start=user_obj['sub_link_hop_start'], hop_end=user_obj['sub_link_hop_end']\n    )",
+      "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для Hysteria2 с Port Hopping\n    \"\"\"\n    return config_link.format(\n        user_uuid=user_obj['user_uuid'], hop_start=user_obj['node_hop_start'], hop_end=user_obj['node_hop_end']\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
       "metrics_parser_code": "\ndef parse_metrics(raw_metrics, vpn_users, local_state):\n    \"\"\"\n    Универсальный парсер метрик для Xray\n    \n    Принимает:\n    - JSON string от CLI (xray api statsquery)\n    - JSON dict от xtlsapi  \n    - Plain text (fallback)\n    - Пустой список (нет метрик)\n    \n    Возвращает: tuple(list[dict], list[dict])\n        - users_traffics: [{'user_sub_id': 1, 'total_mb_used': 1024}, ...]\n        - troubles: список проблемных записей\n    \"\"\"\n    \n    def _parse_plain_text(text):\n        \"\"\"Fallback парсер для plain text формата\"\"\"\n        lines = text.strip().split('\\\\n')\n        traffic_map = defaultdict(int)\n        \n        for line in lines:\n            if '>>>' not in line:\n                continue\n            \n            parts = line.split('>>>')\n            if len(parts) >= 2:\n                username = parts[1]\n                numbers = re.findall(r'\\\\d+', line)\n                if numbers:\n                    traffic_map[username] += int(numbers[-1])\n        \n        return [\n            {'user_sub_id': int(u), 'total_mb_used': mb}\n            for u, mb in traffic_map.items()\n        ], []\n    \n    # Обработка пустого списка (нет трафика)\n    if isinstance(raw_metrics, list) and len(raw_metrics) == 0:\n        return [], []\n    \n    if isinstance(raw_metrics, str):\n        try:\n            json_obj = json.loads(raw_metrics)\n        except json.JSONDecodeError:\n            return _parse_plain_text(raw_metrics)\n    else:\n        json_obj = raw_metrics\n    \n    traffic_map = defaultdict(int)\n    troubles = []\n    \n    stats_list = json_obj.get('stat', [])\n    if not stats_list:\n        return [], []\n    \n    for user in stats_list:\n        name = user.get('name', '')\n        if not name or 'user>>>' not in name:\n            troubles.append(user)\n            continue\n        \n        parts = name.split('>>>')\n        if len(parts) < 2:\n            troubles.append(user)\n            continue\n        \n        user_sub_id= int(parts[1])\n        traffic_bytes = int(user.get('value', 0))\n        traffic_mb = traffic_bytes // 1024 // 1024\n        \n        traffic_map[user_sub_id] += traffic_mb\n    \n    users_traffics = [\n        {'user_sub_id': username, 'total_mb_used': used_mb} \n        for username, used_mb in traffic_map.items()\n    ]\n    \n    return users_traffics, troubles\n",
@@ -877,7 +899,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-hy2-tls-salamander-hopping",
@@ -923,7 +947,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-hy2-tls",
@@ -969,7 +995,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-hy2-tls-salamander",
@@ -1015,7 +1043,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-wg-ipv4",
@@ -1063,7 +1093,9 @@
       "bulk_add_script_custom_params": {},
       "description": "# Для варп версий используется один и тот же скрипт. Конфиги одни и те же, просто сам варп настраивается через инжекторы",
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-wg-ipv6",
@@ -1113,7 +1145,9 @@
       },
       "description": "Выберите метод шифрования перед запуском скриптов\n\n1 - 2022-blake3-aes-128-gcm (быстрый, легкий)\n2 - 2022-blake3-aes-256-gcm (максимальная защита)\n3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)",
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-xray-shadowsocks-tcp",
@@ -1153,7 +1187,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-awg-ipv4",
@@ -1201,7 +1237,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-awg-ipv6",
@@ -1247,7 +1285,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-wg-ipv4-hopping",
@@ -1295,7 +1335,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-wg-ipv6-hopping",
@@ -1341,7 +1383,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-awg-ipv4-hopping",
@@ -1389,7 +1433,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-awg-ipv6-hopping",
@@ -1438,7 +1484,9 @@
       "bulk_add_script_custom_params": {},
       "description": "# Для варп версий используется один и тот же скрипт. Конфиги одни и те же, просто сам варп настраивается через инжекторы",
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-wg-ipv6-warp",
@@ -1487,7 +1535,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-awg-ipv6-warp",
@@ -1536,7 +1586,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-wg-ipv6-hopping-warp",
@@ -1585,7 +1637,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-awg-ipv6-hopping-warp",
@@ -1633,7 +1687,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-wg-ipv4-warp",
@@ -1681,7 +1737,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-awg-ipv4-warp",
@@ -1729,7 +1787,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-wg-ipv4-hopping-warp",
@@ -1777,7 +1837,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-awg-ipv4-hopping-warp",
@@ -1823,7 +1885,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-trojan-tls-ws",
@@ -1869,7 +1933,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-trojan-reality-tcp",
@@ -1915,7 +1981,9 @@
       "bulk_add_script_custom_params": {},
       "description": "# Если вы хотите использовать multi режим grpc. Укажите в конфиг файле \n\"\"\"\n{\n  ...\n  \"inbounds\": [\n   # your GRPC inbound\n    \"multiplex\": {\n      \"enabled\": true\n    }\n  ... \n     }\n  ]\n{\n\"\"\"\n\nМы рекомендуем использовать gun из-за совместимости с любым ядром. \nНапример, пользователь не сможет подключиться с клиента с ядром xray. У xray  и sing-box разные реализации мультиплескирования(multi mode)",
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-trojan-reality-grpc",
@@ -1963,7 +2031,9 @@
       "bulk_add_script_custom_params": {},
       "description": "Выберите метод шифрования перед запуском скриптов\n\n1 - 2022-blake3-aes-128-gcm (быстрый, легкий)\n2 - 2022-blake3-aes-256-gcm (максимальная защита)\n3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)",
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-shadowsocks-tcp",
@@ -2011,7 +2081,9 @@
       "bulk_add_script_custom_params": {},
       "description": "Выберите метод шифрования перед запуском скриптов\n\n1 - 2022-blake3-aes-128-gcm (быстрый, легкий)\n2 - 2022-blake3-aes-256-gcm (максимальная защита)\n3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)",
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-shadowsocks-tls-tcp",
@@ -2059,7 +2131,9 @@
       "bulk_add_script_custom_params": {},
       "description": "Выберите метод шифрования перед запуском скриптов\n\n1 - 2022-blake3-aes-128-gcm (быстрый, легкий)\n2 - 2022-blake3-aes-256-gcm (максимальная защита)\n3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)",
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-shadowsocks-tls-httpupgrade",
@@ -2107,7 +2181,9 @@
       "bulk_add_script_custom_params": {},
       "description": "Выберите метод шифрования перед запуском скриптов\n\n1 - 2022-blake3-aes-128-gcm (быстрый, легкий)\n2 - 2022-blake3-aes-256-gcm (максимальная защита)\n3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)",
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-shadowsocks-tls-ws",
@@ -2157,7 +2233,9 @@
       "bulk_add_script_custom_params": {},
       "description": "Выберите метод шифрования перед запуском скриптов\n\n1 - 2022-blake3-aes-128-gcm (быстрый, легкий)\n2 - 2022-blake3-aes-256-gcm (максимальная защита)\n3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)",
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-shadowsocks-tls-grpc",
@@ -2205,7 +2283,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-vmess-tls-ws",
@@ -2254,7 +2334,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-vmess-tls-grpc",
@@ -2302,7 +2384,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-vmess-tls-tcp",
@@ -2350,7 +2434,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-vmess-tls-httpupgrade",
@@ -2396,7 +2482,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-trojan-tls-httpupgrade",
@@ -2444,7 +2532,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-vless-reality-grpc",
@@ -2492,7 +2582,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-vless-reality-tcp",
@@ -2538,7 +2630,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-vless-tls-httpupgrade",
@@ -2584,7 +2678,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": null,
-      "config_format": 1,
+      "config2json_script": null,
+      "json2config_script": null,
+      "conf_converter_libs": null,
       "protocols": [
         {
           "name": "test-proto-singbox-vless-tls-ws",
@@ -2611,7 +2707,7 @@
       "title": "amneziawg-awg-ipv6-warp",
       "url_tmp": "awg://{user_private_key}@{{node___address}}:{{Interface___ListenPort}}?public_key={server_public_key}&local_address={user_ip}&jc={{Interface___Jc}}&jmin={{Interface___Jmin}}&jmax={{Interface___Jmax}}&s1={{Interface___S1}}&s2={{Interface___S2}}&h1={{Interface___H1}}&h2={{Interface___H2}}&h3={{Interface___H3}}&h4={{Interface___H4}}&reserved={reserved_bytes}&preshared_key={preshared_key}#{{node___title}}",
       "status": 1,
-      "is_accepted": false,
+      "is_accepted": true,
       "reload_core_command": null,
       "required_user_data_obj": {
         "user_uuid": "{USER_UUID}",
@@ -2625,7 +2721,7 @@
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str) -> str:\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress",
       "api_bulk_delete_user_script": null,
-      "metrics_parser_code": "def parse_metrics(raw_metrics, vpn_users, local_state):\n    # 1. Строим быстрый индекс O(1) для поиска sub_id по IPv6 (или публичному ключу)\n    # vpn_users содержит объекты после твоего инжектора\n    def calculate_ipv6(subnet, user_sub_id):\n        ipv6_net = ipaddress.IPv6Network(subnet, strict=False)\n        user_ipv6 = f\"{ipv6_net.network_address + user_sub_id}/128\"\n        return user_ipv6\n\n    def calculate_ipv4(subnet, user_sub_id):\n        ipv4_net = ipaddress.IPv4Network(subnet, strict=False)\n        usable_ips = ipv4_net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        return usable_ips[offset]\n\n    ip_to_subid = {}\n    for user in vpn_users:\n        # Берем IP без маски, например \"fd00:1::42\" из \"fd00:1::42/128\"\n        # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n\n        if user.get('node_ipv6_subnet'):\n            ip = calculate_ipv6(user['node_ipv6_subnet'], user['user_sub_id'])\n        else:\n            ip = calculate_ipv4(user['node_ipv4_subnet'], user['user_sub_id'])\n\n        ip_to_subid[ip] = user['user_sub_id']\n\n    traffic_consuming, troubles = [], []\n\n    # 2. Парсим сырой вывод `awg show awg0 dump`\n    # Формат: pub_key \\t psk \\t endpoint \\t allowed_ips \\t handshake \\t rx \\t tx \\t keepalive\n    lines = raw_metrics.strip().split(\"\\n\")\n    for line in lines[1:]:  # Пропускаем заголовок (если есть) или берем всё\n        if not line.strip(): continue\n\n        parts = line.split(\"\\t\")\n        if len(parts) < 8: continue\n\n        # Берем IP из дампа (обрезаем маску /128)\n        peer_ip = parts[3].split(\"/\")[0]\n        current_rx = int(parts[5])\n        current_tx = int(parts[6])\n\n        # 3. Находим пользователя в нашем индексе\n        sub_id = ip_to_subid.get(peer_ip)\n        if not sub_id:\n            troubles.append((\"не нашли пользователя в ядре\", line))  # Трафик от неизвестного пира (возможно, удаленного)\n\n        # 4. Считаем дельту с помощью local_state\n        state_key = f\"{sub_id}_rx_tx\"\n        last_rx, last_tx = local_state.get(state_key, (0, 0))\n\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n\n        total_delta = delta_rx + delta_tx\n\n        # Записываем результат\n        if total_delta > 0:\n            traffic_consuming.append({\n                \"user_sub_id\": int(sub_id),\n                \"total_mb_used\": total_delta\n            })\n\n        # 5. Обновляем State для следующего вызова!\n        local_state[state_key] = (current_rx, current_tx)\n\n    return traffic_consuming, troubles\n",
+      "metrics_parser_code": "\ndef parse_metrics(raw_metrics, vpn_users, local_state):\n    # 1. Строим быстрый индекс O(1) для поиска sub_id по IPv6 (или публичному ключу)\n    # vpn_users содержит объекты после твоего инжектора\n    def calculate_ipv6(subnet, user_sub_id):\n        ipv6_net = ipaddress.IPv6Network(subnet, strict=False)\n        return ipv6_net.network_address + user_sub_id\n\n    def calculate_ipv4(subnet, user_sub_id):\n        ipv4_net = ipaddress.IPv4Network(subnet, strict=False)\n        usable_ips = ipv4_net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        return usable_ips[offset]\n\n    ip_to_subid = {}\n    for user in vpn_users:\n        # Берем IP без маски, например \"fd00:1::42\" из \"fd00:1::42/128\"\n        # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n\n        if user.get(\"node_ipv6_subnet\"):\n            ip = calculate_ipv6(user[\"node_ipv6_subnet\"], user[\"user_sub_id\"])\n        else:\n            ip = calculate_ipv4(user[\"node_ipv4_subnet\"], user[\"user_sub_id\"])\n\n        ip_to_subid[ip] = user[\"user_sub_id\"]\n\n    traffic_consuming, troubles = [], []\n\n    # 2. Парсим сырой вывод `awg show awg0 dump`\n    # Формат: pub_key \\t psk \\t endpoint \\t allowed_ips \\t handshake \\t rx \\t tx \\t keepalive\n    lines = raw_metrics.strip().split(\"\\n\")\n    for line in lines[1:]:  # Пропускаем заголовок (если есть) или берем всё\n        if not line.strip(): continue\n\n        parts = line.split(\"\\t\")\n        if len(parts) < 8: continue\n\n        # Берем IP из дампа (обрезаем маску /128)\n        peer_ip = parts[3].split(\"/\")[0]\n        current_rx = int(parts[5])\n        current_tx = int(parts[6])\n\n        # 3. Находим пользователя в нашем индексе\n        sub_id = ip_to_subid.get(peer_ip)\n        if not sub_id:\n            troubles.append((\"не нашли пользователя в ядре\", line))  # Трафик от неизвестного пира (возможно, удаленного)\n\n        # 4. Считаем дельту с помощью local_state\n        state_key = f\"{sub_id}_rx_tx\"\n        last_rx, last_tx = local_state.get(state_key, (0, 0))\n\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n\n        total_delta = delta_rx + delta_tx\n\n        # Записываем результат\n        if total_delta > 0:\n            traffic_consuming.append({\n                \"user_sub_id\": int(sub_id),\n                \"total_mb_used\": total_delta // 1048576, # Bytes -> MBytes\n            })\n\n        # 5. Обновляем State для следующего вызова!\n        local_state[state_key] = (current_rx, current_tx)\n\n    return traffic_consuming, troubles\n\n",
       "metrics_command": "awg show awg{} dump",
       "bulk_delete_script_custom_params": {},
       "api_metrics_script": null,
@@ -2633,7 +2729,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": "ipaddress",
-      "config_format": 2,
+      "config2json_script": "def config2json(raw_text):\n    # Жестко задаем схему! Нет пиров? Массив все равно будет. \n    # 1 пир? Он корректно ляжет в массив.\n    result = {\"Interface\": {}, \"Peers\": []}\n    current_section = None\n    \n    for line in raw_text.splitlines():\n        line = line.strip()\n        if not line or line.startswith(('#', ';')): continue\n        \n        if line == '[Interface]':\n            current_section = result[\"Interface\"]\n        elif line == '[Peer]':\n            current_section = {}\n            result[\"Peers\"].append(current_section)\n        elif '=' in line and current_section is not None:\n            k, v = map(str.strip, line.split('=', 1))\n            current_section[k] = v # Тут можно добавить парсинг интов/списков, если нужно\n            \n    return result",
+      "json2config_script": "def json2config(json_obj):\n    lines = [\"[Interface]\"]\n    for k, v in json_obj.get(\"Interface\", {}).items():\n        lines.append(f\"{k} = {v}\")\n    \n    for peer in json_obj.get(\"Peers\", []):\n        lines.append(\"\\n[Peer]\")\n        for k, v in peer.items():\n            lines.append(f\"{k} = {v}\")\n            \n    return (\"\\n\".join(lines) + \"\\n\").encode(\"utf-8\")",
+      "conf_converter_libs": null,
       "protocols": [],
       "templates_users_extractors": [
         {
@@ -2648,7 +2746,7 @@
       "title": "amneziawg-awg-ipv4-warp-hopping",
       "url_tmp": "awg://{user_private_key}@{{node___address}}:{{hop_port}}?public_key={server_public_key}&local_address={user_ip}&jc={{Interface___Jc}}&jmin={{Interface___Jmin}}&jmax={{Interface___Jmax}}&s1={{Interface___S1}}&s2={{Interface___S2}}&h1={{Interface___H1}}&h2={{Interface___H2}}&h3={{Interface___H3}}&h4={{Interface___H4}}&reserved={reserved_bytes}&preshared_key={preshared_key}#{{node___title}}",
       "status": 1,
-      "is_accepted": false,
+      "is_accepted": true,
       "reload_core_command": null,
       "required_user_data_obj": {
         "user_uuid": "{USER_UUID}",
@@ -2656,13 +2754,13 @@
       },
       "constant_user_data_obj": {
         "warp": true,
-        "node_psk_salt": "amneziawg-ipv6-warp"
+        "node_psk_salt": "amneziawg-ipv4-warp-hopping"
       },
       "proto_python_lib": null,
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str) -> str:\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n        hop_port=random.randint(int(user_obj['node_hop_start']), int(user_obj['node_hop_end']))\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress,random",
       "api_bulk_delete_user_script": null,
-      "metrics_parser_code": "def parse_metrics(raw_metrics, vpn_users, local_state):\n    # 1. Строим быстрый индекс O(1) для поиска sub_id по IPv6 (или публичному ключу)\n    # vpn_users содержит объекты после твоего инжектора\n    def calculate_ipv6(subnet, user_sub_id):\n        ipv6_net = ipaddress.IPv6Network(subnet, strict=False)\n        user_ipv6 = f\"{ipv6_net.network_address + user_sub_id}/128\"\n        return user_ipv6\n\n    def calculate_ipv4(subnet, user_sub_id):\n        ipv4_net = ipaddress.IPv4Network(subnet, strict=False)\n        usable_ips = ipv4_net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        return usable_ips[offset]\n\n    ip_to_subid = {}\n    for user in vpn_users:\n        # Берем IP без маски, например \"fd00:1::42\" из \"fd00:1::42/128\"\n        # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n\n        if user.get('node_ipv6_subnet'):\n            ip = calculate_ipv6(user['node_ipv6_subnet'], user['user_sub_id'])\n        else:\n            ip = calculate_ipv4(user['node_ipv4_subnet'], user['user_sub_id'])\n\n        ip_to_subid[ip] = user['user_sub_id']\n\n    traffic_consuming, troubles = [], []\n\n    # 2. Парсим сырой вывод `awg show awg0 dump`\n    # Формат: pub_key \\t psk \\t endpoint \\t allowed_ips \\t handshake \\t rx \\t tx \\t keepalive\n    lines = raw_metrics.strip().split(\"\\n\")\n    for line in lines[1:]:  # Пропускаем заголовок (если есть) или берем всё\n        if not line.strip(): continue\n\n        parts = line.split(\"\\t\")\n        if len(parts) < 8: continue\n\n        # Берем IP из дампа (обрезаем маску /128)\n        peer_ip = parts[3].split(\"/\")[0]\n        current_rx = int(parts[5])\n        current_tx = int(parts[6])\n\n        # 3. Находим пользователя в нашем индексе\n        sub_id = ip_to_subid.get(peer_ip)\n        if not sub_id:\n            troubles.append((\"не нашли пользователя в ядре\", line))  # Трафик от неизвестного пира (возможно, удаленного)\n\n        # 4. Считаем дельту с помощью local_state\n        state_key = f\"{sub_id}_rx_tx\"\n        last_rx, last_tx = local_state.get(state_key, (0, 0))\n\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n\n        total_delta = delta_rx + delta_tx\n\n        # Записываем результат\n        if total_delta > 0:\n            traffic_consuming.append({\n                \"user_sub_id\": int(sub_id),\n                \"total_mb_used\": total_delta\n            })\n\n        # 5. Обновляем State для следующего вызова!\n        local_state[state_key] = (current_rx, current_tx)\n\n    return traffic_consuming, troubles\n",
+      "metrics_parser_code": "\ndef parse_metrics(raw_metrics, vpn_users, local_state):\n    # 1. Строим быстрый индекс O(1) для поиска sub_id по IPv6 (или публичному ключу)\n    # vpn_users содержит объекты после твоего инжектора\n    def calculate_ipv6(subnet, user_sub_id):\n        ipv6_net = ipaddress.IPv6Network(subnet, strict=False)\n        return ipv6_net.network_address + user_sub_id\n\n    def calculate_ipv4(subnet, user_sub_id):\n        ipv4_net = ipaddress.IPv4Network(subnet, strict=False)\n        usable_ips = ipv4_net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        return usable_ips[offset]\n\n    ip_to_subid = {}\n    for user in vpn_users:\n        # Берем IP без маски, например \"fd00:1::42\" из \"fd00:1::42/128\"\n        # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n\n        if user.get(\"node_ipv6_subnet\"):\n            ip = calculate_ipv6(user[\"node_ipv6_subnet\"], user[\"user_sub_id\"])\n        else:\n            ip = calculate_ipv4(user[\"node_ipv4_subnet\"], user[\"user_sub_id\"])\n\n        ip_to_subid[ip] = user[\"user_sub_id\"]\n\n    traffic_consuming, troubles = [], []\n\n    # 2. Парсим сырой вывод `awg show awg0 dump`\n    # Формат: pub_key \\t psk \\t endpoint \\t allowed_ips \\t handshake \\t rx \\t tx \\t keepalive\n    lines = raw_metrics.strip().split(\"\\n\")\n    for line in lines[1:]:  # Пропускаем заголовок (если есть) или берем всё\n        if not line.strip(): continue\n\n        parts = line.split(\"\\t\")\n        if len(parts) < 8: continue\n\n        # Берем IP из дампа (обрезаем маску /128)\n        peer_ip = parts[3].split(\"/\")[0]\n        current_rx = int(parts[5])\n        current_tx = int(parts[6])\n\n        # 3. Находим пользователя в нашем индексе\n        sub_id = ip_to_subid.get(peer_ip)\n        if not sub_id:\n            troubles.append((\"не нашли пользователя в ядре\", line))  # Трафик от неизвестного пира (возможно, удаленного)\n\n        # 4. Считаем дельту с помощью local_state\n        state_key = f\"{sub_id}_rx_tx\"\n        last_rx, last_tx = local_state.get(state_key, (0, 0))\n\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n\n        total_delta = delta_rx + delta_tx\n\n        # Записываем результат\n        if total_delta > 0:\n            traffic_consuming.append({\n                \"user_sub_id\": int(sub_id),\n                \"total_mb_used\": total_delta // 1048576, # Bytes -> MBytes\n            })\n\n        # 5. Обновляем State для следующего вызова!\n        local_state[state_key] = (current_rx, current_tx)\n\n    return traffic_consuming, troubles\n\n",
       "metrics_command": "awg show awg{} dump",
       "bulk_delete_script_custom_params": {},
       "api_metrics_script": null,
@@ -2670,7 +2768,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": "ipaddress",
-      "config_format": 2,
+      "config2json_script": "def config2json(raw_text):\n    # Жестко задаем схему! Нет пиров? Массив все равно будет. \n    # 1 пир? Он корректно ляжет в массив.\n    result = {\"Interface\": {}, \"Peers\": []}\n    current_section = None\n    \n    for line in raw_text.splitlines():\n        line = line.strip()\n        if not line or line.startswith(('#', ';')): continue\n        \n        if line == '[Interface]':\n            current_section = result[\"Interface\"]\n        elif line == '[Peer]':\n            current_section = {}\n            result[\"Peers\"].append(current_section)\n        elif '=' in line and current_section is not None:\n            k, v = map(str.strip, line.split('=', 1))\n            current_section[k] = v # Тут можно добавить парсинг интов/списков, если нужно\n            \n    return result",
+      "json2config_script": "def json2config(json_obj):\n    lines = [\"[Interface]\"]\n    for k, v in json_obj.get(\"Interface\", {}).items():\n        lines.append(f\"{k} = {v}\")\n    \n    for peer in json_obj.get(\"Peers\", []):\n        lines.append(\"\\n[Peer]\")\n        for k, v in peer.items():\n            lines.append(f\"{k} = {v}\")\n            \n    return (\"\\n\".join(lines) + \"\\n\").encode(\"utf-8\")",
+      "conf_converter_libs": null,
       "protocols": [],
       "templates_users_extractors": [
         {
@@ -2685,7 +2785,7 @@
       "title": "amneziawg-awg-ipv4-warp",
       "url_tmp": "awg://{user_private_key}@{{node___address}}:{{Interface___ListenPort}}?public_key={server_public_key}&local_address={user_ip}&jc={{Interface___Jc}}&jmin={{Interface___Jmin}}&jmax={{Interface___Jmax}}&s1={{Interface___S1}}&s2={{Interface___S2}}&h1={{Interface___H1}}&h2={{Interface___H2}}&h3={{Interface___H3}}&h4={{Interface___H4}}&reserved={reserved_bytes}&preshared_key={preshared_key}#{{node___title}}",
       "status": 1,
-      "is_accepted": false,
+      "is_accepted": true,
       "reload_core_command": null,
       "required_user_data_obj": {
         "user_uuid": "{USER_UUID}",
@@ -2693,13 +2793,13 @@
       },
       "constant_user_data_obj": {
         "warp": true,
-        "node_psk_salt": "amneziawg-ipv6-warp"
+        "node_psk_salt": "amneziawg-ipv4-warp"
       },
       "proto_python_lib": null,
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str) -> str:\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress",
       "api_bulk_delete_user_script": null,
-      "metrics_parser_code": "def parse_metrics(raw_metrics, vpn_users, local_state):\n    # 1. Строим быстрый индекс O(1) для поиска sub_id по IPv6 (или публичному ключу)\n    # vpn_users содержит объекты после твоего инжектора\n    def calculate_ipv6(subnet, user_sub_id):\n        ipv6_net = ipaddress.IPv6Network(subnet, strict=False)\n        user_ipv6 = f\"{ipv6_net.network_address + user_sub_id}/128\"\n        return user_ipv6\n\n    def calculate_ipv4(subnet, user_sub_id):\n        ipv4_net = ipaddress.IPv4Network(subnet, strict=False)\n        usable_ips = ipv4_net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        return usable_ips[offset]\n\n    ip_to_subid = {}\n    for user in vpn_users:\n        # Берем IP без маски, например \"fd00:1::42\" из \"fd00:1::42/128\"\n        # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n\n        if user.get('node_ipv6_subnet'):\n            ip = calculate_ipv6(user['node_ipv6_subnet'], user['user_sub_id'])\n        else:\n            ip = calculate_ipv4(user['node_ipv4_subnet'], user['user_sub_id'])\n\n        ip_to_subid[ip] = user['user_sub_id']\n\n    traffic_consuming, troubles = [], []\n\n    # 2. Парсим сырой вывод `awg show awg0 dump`\n    # Формат: pub_key \\t psk \\t endpoint \\t allowed_ips \\t handshake \\t rx \\t tx \\t keepalive\n    lines = raw_metrics.strip().split(\"\\n\")\n    for line in lines[1:]:  # Пропускаем заголовок (если есть) или берем всё\n        if not line.strip(): continue\n\n        parts = line.split(\"\\t\")\n        if len(parts) < 8: continue\n\n        # Берем IP из дампа (обрезаем маску /128)\n        peer_ip = parts[3].split(\"/\")[0]\n        current_rx = int(parts[5])\n        current_tx = int(parts[6])\n\n        # 3. Находим пользователя в нашем индексе\n        sub_id = ip_to_subid.get(peer_ip)\n        if not sub_id:\n            troubles.append((\"не нашли пользователя в ядре\", line))  # Трафик от неизвестного пира (возможно, удаленного)\n\n        # 4. Считаем дельту с помощью local_state\n        state_key = f\"{sub_id}_rx_tx\"\n        last_rx, last_tx = local_state.get(state_key, (0, 0))\n\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n\n        total_delta = delta_rx + delta_tx\n\n        # Записываем результат\n        if total_delta > 0:\n            traffic_consuming.append({\n                \"user_sub_id\": int(sub_id),\n                \"total_mb_used\": total_delta\n            })\n\n        # 5. Обновляем State для следующего вызова!\n        local_state[state_key] = (current_rx, current_tx)\n\n    return traffic_consuming, troubles\n",
+      "metrics_parser_code": "\ndef parse_metrics(raw_metrics, vpn_users, local_state):\n    # 1. Строим быстрый индекс O(1) для поиска sub_id по IPv6 (или публичному ключу)\n    # vpn_users содержит объекты после твоего инжектора\n    def calculate_ipv6(subnet, user_sub_id):\n        ipv6_net = ipaddress.IPv6Network(subnet, strict=False)\n        return ipv6_net.network_address + user_sub_id\n\n    def calculate_ipv4(subnet, user_sub_id):\n        ipv4_net = ipaddress.IPv4Network(subnet, strict=False)\n        usable_ips = ipv4_net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        return usable_ips[offset]\n\n    ip_to_subid = {}\n    for user in vpn_users:\n        # Берем IP без маски, например \"fd00:1::42\" из \"fd00:1::42/128\"\n        # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n\n        if user.get(\"node_ipv6_subnet\"):\n            ip = calculate_ipv6(user[\"node_ipv6_subnet\"], user[\"user_sub_id\"])\n        else:\n            ip = calculate_ipv4(user[\"node_ipv4_subnet\"], user[\"user_sub_id\"])\n\n        ip_to_subid[ip] = user[\"user_sub_id\"]\n\n    traffic_consuming, troubles = [], []\n\n    # 2. Парсим сырой вывод `awg show awg0 dump`\n    # Формат: pub_key \\t psk \\t endpoint \\t allowed_ips \\t handshake \\t rx \\t tx \\t keepalive\n    lines = raw_metrics.strip().split(\"\\n\")\n    for line in lines[1:]:  # Пропускаем заголовок (если есть) или берем всё\n        if not line.strip(): continue\n\n        parts = line.split(\"\\t\")\n        if len(parts) < 8: continue\n\n        # Берем IP из дампа (обрезаем маску /128)\n        peer_ip = parts[3].split(\"/\")[0]\n        current_rx = int(parts[5])\n        current_tx = int(parts[6])\n\n        # 3. Находим пользователя в нашем индексе\n        sub_id = ip_to_subid.get(peer_ip)\n        if not sub_id:\n            troubles.append((\"не нашли пользователя в ядре\", line))  # Трафик от неизвестного пира (возможно, удаленного)\n\n        # 4. Считаем дельту с помощью local_state\n        state_key = f\"{sub_id}_rx_tx\"\n        last_rx, last_tx = local_state.get(state_key, (0, 0))\n\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n\n        total_delta = delta_rx + delta_tx\n\n        # Записываем результат\n        if total_delta > 0:\n            traffic_consuming.append({\n                \"user_sub_id\": int(sub_id),\n                \"total_mb_used\": total_delta // 1048576, # Bytes -> MBytes\n            })\n\n        # 5. Обновляем State для следующего вызова!\n        local_state[state_key] = (current_rx, current_tx)\n\n    return traffic_consuming, troubles\n\n",
       "metrics_command": "awg show awg{} dump",
       "bulk_delete_script_custom_params": {},
       "api_metrics_script": null,
@@ -2707,7 +2807,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": "ipaddress",
-      "config_format": 2,
+      "config2json_script": "def config2json(raw_text):\n    # Жестко задаем схему! Нет пиров? Массив все равно будет. \n    # 1 пир? Он корректно ляжет в массив.\n    result = {\"Interface\": {}, \"Peers\": []}\n    current_section = None\n    \n    for line in raw_text.splitlines():\n        line = line.strip()\n        if not line or line.startswith(('#', ';')): continue\n        \n        if line == '[Interface]':\n            current_section = result[\"Interface\"]\n        elif line == '[Peer]':\n            current_section = {}\n            result[\"Peers\"].append(current_section)\n        elif '=' in line and current_section is not None:\n            k, v = map(str.strip, line.split('=', 1))\n            current_section[k] = v # Тут можно добавить парсинг интов/списков, если нужно\n            \n    return result",
+      "json2config_script": "def json2config(json_obj):\n    lines = [\"[Interface]\"]\n    for k, v in json_obj.get(\"Interface\", {}).items():\n        lines.append(f\"{k} = {v}\")\n    \n    for peer in json_obj.get(\"Peers\", []):\n        lines.append(\"\\n[Peer]\")\n        for k, v in peer.items():\n            lines.append(f\"{k} = {v}\")\n            \n    return (\"\\n\".join(lines) + \"\\n\").encode(\"utf-8\")",
+      "conf_converter_libs": null,
       "protocols": [],
       "templates_users_extractors": [
         {
@@ -2722,7 +2824,7 @@
       "title": "amneziawg-awg-ipv6-warp-hopping",
       "url_tmp": "awg://{user_private_key}@{{node___address}}:{{hop_port}}?public_key={server_public_key}&local_address={user_ip}&jc={{Interface___Jc}}&jmin={{Interface___Jmin}}&jmax={{Interface___Jmax}}&s1={{Interface___S1}}&s2={{Interface___S2}}&h1={{Interface___H1}}&h2={{Interface___H2}}&h3={{Interface___H3}}&h4={{Interface___H4}}&reserved={reserved_bytes}&preshared_key={preshared_key}#{{node___title}}",
       "status": 1,
-      "is_accepted": false,
+      "is_accepted": true,
       "reload_core_command": null,
       "required_user_data_obj": {
         "user_uuid": "{USER_UUID}",
@@ -2730,13 +2832,13 @@
       },
       "constant_user_data_obj": {
         "warp": true,
-        "node_psk_salt": "amneziawg-ipv6-warp"
+        "node_psk_salt": "amneziawg-ipv6-warp-hopping"
       },
       "proto_python_lib": null,
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str) -> str:\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n        hop_port=random.randint(int(user_obj['node_hop_start']), int(user_obj['node_hop_end']))\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress,random",
       "api_bulk_delete_user_script": null,
-      "metrics_parser_code": "def parse_metrics(raw_metrics, vpn_users, local_state):\n    # 1. Строим быстрый индекс O(1) для поиска sub_id по IPv6 (или публичному ключу)\n    # vpn_users содержит объекты после твоего инжектора\n    def calculate_ipv6(subnet, user_sub_id):\n        ipv6_net = ipaddress.IPv6Network(subnet, strict=False)\n        user_ipv6 = f\"{ipv6_net.network_address + user_sub_id}/128\"\n        return user_ipv6\n\n    def calculate_ipv4(subnet, user_sub_id):\n        ipv4_net = ipaddress.IPv4Network(subnet, strict=False)\n        usable_ips = ipv4_net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        return usable_ips[offset]\n\n    ip_to_subid = {}\n    for user in vpn_users:\n        # Берем IP без маски, например \"fd00:1::42\" из \"fd00:1::42/128\"\n        # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n\n        if user.get('node_ipv6_subnet'):\n            ip = calculate_ipv6(user['node_ipv6_subnet'], user['user_sub_id'])\n        else:\n            ip = calculate_ipv4(user['node_ipv4_subnet'], user['user_sub_id'])\n\n        ip_to_subid[ip] = user['user_sub_id']\n\n    traffic_consuming, troubles = [], []\n\n    # 2. Парсим сырой вывод `awg show awg0 dump`\n    # Формат: pub_key \\t psk \\t endpoint \\t allowed_ips \\t handshake \\t rx \\t tx \\t keepalive\n    lines = raw_metrics.strip().split(\"\\n\")\n    for line in lines[1:]:  # Пропускаем заголовок (если есть) или берем всё\n        if not line.strip(): continue\n\n        parts = line.split(\"\\t\")\n        if len(parts) < 8: continue\n\n        # Берем IP из дампа (обрезаем маску /128)\n        peer_ip = parts[3].split(\"/\")[0]\n        current_rx = int(parts[5])\n        current_tx = int(parts[6])\n\n        # 3. Находим пользователя в нашем индексе\n        sub_id = ip_to_subid.get(peer_ip)\n        if not sub_id:\n            troubles.append((\"не нашли пользователя в ядре\", line))  # Трафик от неизвестного пира (возможно, удаленного)\n\n        # 4. Считаем дельту с помощью local_state\n        state_key = f\"{sub_id}_rx_tx\"\n        last_rx, last_tx = local_state.get(state_key, (0, 0))\n\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n\n        total_delta = delta_rx + delta_tx\n\n        # Записываем результат\n        if total_delta > 0:\n            traffic_consuming.append({\n                \"user_sub_id\": int(sub_id),\n                \"total_mb_used\": total_delta\n            })\n\n        # 5. Обновляем State для следующего вызова!\n        local_state[state_key] = (current_rx, current_tx)\n\n    return traffic_consuming, troubles\n",
+      "metrics_parser_code": "\ndef parse_metrics(raw_metrics, vpn_users, local_state):\n    # 1. Строим быстрый индекс O(1) для поиска sub_id по IPv6 (или публичному ключу)\n    # vpn_users содержит объекты после твоего инжектора\n    def calculate_ipv6(subnet, user_sub_id):\n        ipv6_net = ipaddress.IPv6Network(subnet, strict=False)\n        return ipv6_net.network_address + user_sub_id\n\n    def calculate_ipv4(subnet, user_sub_id):\n        ipv4_net = ipaddress.IPv4Network(subnet, strict=False)\n        usable_ips = ipv4_net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        return usable_ips[offset]\n\n    ip_to_subid = {}\n    for user in vpn_users:\n        # Берем IP без маски, например \"fd00:1::42\" из \"fd00:1::42/128\"\n        # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n\n        if user.get(\"node_ipv6_subnet\"):\n            ip = calculate_ipv6(user[\"node_ipv6_subnet\"], user[\"user_sub_id\"])\n        else:\n            ip = calculate_ipv4(user[\"node_ipv4_subnet\"], user[\"user_sub_id\"])\n\n        ip_to_subid[ip] = user[\"user_sub_id\"]\n\n    traffic_consuming, troubles = [], []\n\n    # 2. Парсим сырой вывод `awg show awg0 dump`\n    # Формат: pub_key \\t psk \\t endpoint \\t allowed_ips \\t handshake \\t rx \\t tx \\t keepalive\n    lines = raw_metrics.strip().split(\"\\n\")\n    for line in lines[1:]:  # Пропускаем заголовок (если есть) или берем всё\n        if not line.strip(): continue\n\n        parts = line.split(\"\\t\")\n        if len(parts) < 8: continue\n\n        # Берем IP из дампа (обрезаем маску /128)\n        peer_ip = parts[3].split(\"/\")[0]\n        current_rx = int(parts[5])\n        current_tx = int(parts[6])\n\n        # 3. Находим пользователя в нашем индексе\n        sub_id = ip_to_subid.get(peer_ip)\n        if not sub_id:\n            troubles.append((\"не нашли пользователя в ядре\", line))  # Трафик от неизвестного пира (возможно, удаленного)\n\n        # 4. Считаем дельту с помощью local_state\n        state_key = f\"{sub_id}_rx_tx\"\n        last_rx, last_tx = local_state.get(state_key, (0, 0))\n\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n\n        total_delta = delta_rx + delta_tx\n\n        # Записываем результат\n        if total_delta > 0:\n            traffic_consuming.append({\n                \"user_sub_id\": int(sub_id),\n                \"total_mb_used\": total_delta // 1048576, # Bytes -> MBytes\n            })\n\n        # 5. Обновляем State для следующего вызова!\n        local_state[state_key] = (current_rx, current_tx)\n\n    return traffic_consuming, troubles\n\n",
       "metrics_command": "awg show awg{} dump",
       "bulk_delete_script_custom_params": {},
       "api_metrics_script": null,
@@ -2744,7 +2846,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": "ipaddress",
-      "config_format": 2,
+      "config2json_script": "def config2json(raw_text):\n    # Жестко задаем схему! Нет пиров? Массив все равно будет. \n    # 1 пир? Он корректно ляжет в массив.\n    result = {\"Interface\": {}, \"Peers\": []}\n    current_section = None\n    \n    for line in raw_text.splitlines():\n        line = line.strip()\n        if not line or line.startswith(('#', ';')): continue\n        \n        if line == '[Interface]':\n            current_section = result[\"Interface\"]\n        elif line == '[Peer]':\n            current_section = {}\n            result[\"Peers\"].append(current_section)\n        elif '=' in line and current_section is not None:\n            k, v = map(str.strip, line.split('=', 1))\n            current_section[k] = v # Тут можно добавить парсинг интов/списков, если нужно\n            \n    return result",
+      "json2config_script": "def json2config(json_obj):\n    lines = [\"[Interface]\"]\n    for k, v in json_obj.get(\"Interface\", {}).items():\n        lines.append(f\"{k} = {v}\")\n    \n    for peer in json_obj.get(\"Peers\", []):\n        lines.append(\"\\n[Peer]\")\n        for k, v in peer.items():\n            lines.append(f\"{k} = {v}\")\n            \n    return (\"\\n\".join(lines) + \"\\n\").encode(\"utf-8\")",
+      "conf_converter_libs": null,
       "protocols": [],
       "templates_users_extractors": [
         {
@@ -2759,7 +2863,7 @@
       "title": "amneziawg-awg-ipv6-hopping",
       "url_tmp": "awg://{user_private_key}@{{node___address}}:{{hop_port}}?public_key={server_public_key}&local_address={user_ip}&jc={{Interface___Jc}}&jmin={{Interface___Jmin}}&jmax={{Interface___Jmax}}&s1={{Interface___S1}}&s2={{Interface___S2}}&h1={{Interface___H1}}&h2={{Interface___H2}}&h3={{Interface___H3}}&h4={{Interface___H4}}&reserved={reserved_bytes}&preshared_key={preshared_key}#{{node___title}}",
       "status": 1,
-      "is_accepted": false,
+      "is_accepted": true,
       "reload_core_command": null,
       "required_user_data_obj": {
         "user_uuid": "{USER_UUID}",
@@ -2772,7 +2876,7 @@
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str) -> str:\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n        hop_port=random.randint(int(user_obj['node_hop_start']), int(user_obj['node_hop_end']))\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress,random",
       "api_bulk_delete_user_script": null,
-      "metrics_parser_code": "def parse_metrics(raw_metrics, vpn_users, local_state):\n    # 1. Строим быстрый индекс O(1) для поиска sub_id по IPv6 (или публичному ключу)\n    # vpn_users содержит объекты после твоего инжектора\n    def calculate_ipv6(subnet, user_sub_id):\n        ipv6_net = ipaddress.IPv6Network(subnet, strict=False)\n        user_ipv6 = f\"{ipv6_net.network_address + user_sub_id}/128\"\n        return user_ipv6\n\n    def calculate_ipv4(subnet, user_sub_id):\n        ipv4_net = ipaddress.IPv4Network(subnet, strict=False)\n        usable_ips = ipv4_net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        return usable_ips[offset]\n\n    ip_to_subid = {}\n    for user in vpn_users:\n        # Берем IP без маски, например \"fd00:1::42\" из \"fd00:1::42/128\"\n        # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n\n        if user.get('node_ipv6_subnet'):\n            ip = calculate_ipv6(user['node_ipv6_subnet'], user['user_sub_id'])\n        else:\n            ip = calculate_ipv4(user['node_ipv4_subnet'], user['user_sub_id'])\n\n        ip_to_subid[ip] = user['user_sub_id']\n\n    traffic_consuming, troubles = [], []\n\n    # 2. Парсим сырой вывод `awg show awg0 dump`\n    # Формат: pub_key \\t psk \\t endpoint \\t allowed_ips \\t handshake \\t rx \\t tx \\t keepalive\n    lines = raw_metrics.strip().split(\"\\n\")\n    for line in lines[1:]:  # Пропускаем заголовок (если есть) или берем всё\n        if not line.strip(): continue\n\n        parts = line.split(\"\\t\")\n        if len(parts) < 8: continue\n\n        # Берем IP из дампа (обрезаем маску /128)\n        peer_ip = parts[3].split(\"/\")[0]\n        current_rx = int(parts[5])\n        current_tx = int(parts[6])\n\n        # 3. Находим пользователя в нашем индексе\n        sub_id = ip_to_subid.get(peer_ip)\n        if not sub_id:\n            troubles.append((\"не нашли пользователя в ядре\", line))  # Трафик от неизвестного пира (возможно, удаленного)\n\n        # 4. Считаем дельту с помощью local_state\n        state_key = f\"{sub_id}_rx_tx\"\n        last_rx, last_tx = local_state.get(state_key, (0, 0))\n\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n\n        total_delta = delta_rx + delta_tx\n\n        # Записываем результат\n        if total_delta > 0:\n            traffic_consuming.append({\n                \"user_sub_id\": int(sub_id),\n                \"total_mb_used\": total_delta\n            })\n\n        # 5. Обновляем State для следующего вызова!\n        local_state[state_key] = (current_rx, current_tx)\n\n    return traffic_consuming, troubles\n",
+      "metrics_parser_code": "\ndef parse_metrics(raw_metrics, vpn_users, local_state):\n    # 1. Строим быстрый индекс O(1) для поиска sub_id по IPv6 (или публичному ключу)\n    # vpn_users содержит объекты после твоего инжектора\n    def calculate_ipv6(subnet, user_sub_id):\n        ipv6_net = ipaddress.IPv6Network(subnet, strict=False)\n        return ipv6_net.network_address + user_sub_id\n\n    def calculate_ipv4(subnet, user_sub_id):\n        ipv4_net = ipaddress.IPv4Network(subnet, strict=False)\n        usable_ips = ipv4_net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        return usable_ips[offset]\n\n    ip_to_subid = {}\n    for user in vpn_users:\n        # Берем IP без маски, например \"fd00:1::42\" из \"fd00:1::42/128\"\n        # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n\n        if user.get(\"node_ipv6_subnet\"):\n            ip = calculate_ipv6(user[\"node_ipv6_subnet\"], user[\"user_sub_id\"])\n        else:\n            ip = calculate_ipv4(user[\"node_ipv4_subnet\"], user[\"user_sub_id\"])\n\n        ip_to_subid[ip] = user[\"user_sub_id\"]\n\n    traffic_consuming, troubles = [], []\n\n    # 2. Парсим сырой вывод `awg show awg0 dump`\n    # Формат: pub_key \\t psk \\t endpoint \\t allowed_ips \\t handshake \\t rx \\t tx \\t keepalive\n    lines = raw_metrics.strip().split(\"\\n\")\n    for line in lines[1:]:  # Пропускаем заголовок (если есть) или берем всё\n        if not line.strip(): continue\n\n        parts = line.split(\"\\t\")\n        if len(parts) < 8: continue\n\n        # Берем IP из дампа (обрезаем маску /128)\n        peer_ip = parts[3].split(\"/\")[0]\n        current_rx = int(parts[5])\n        current_tx = int(parts[6])\n\n        # 3. Находим пользователя в нашем индексе\n        sub_id = ip_to_subid.get(peer_ip)\n        if not sub_id:\n            troubles.append((\"не нашли пользователя в ядре\", line))  # Трафик от неизвестного пира (возможно, удаленного)\n\n        # 4. Считаем дельту с помощью local_state\n        state_key = f\"{sub_id}_rx_tx\"\n        last_rx, last_tx = local_state.get(state_key, (0, 0))\n\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n\n        total_delta = delta_rx + delta_tx\n\n        # Записываем результат\n        if total_delta > 0:\n            traffic_consuming.append({\n                \"user_sub_id\": int(sub_id),\n                \"total_mb_used\": total_delta // 1048576, # Bytes -> MBytes\n            })\n\n        # 5. Обновляем State для следующего вызова!\n        local_state[state_key] = (current_rx, current_tx)\n\n    return traffic_consuming, troubles\n\n",
       "metrics_command": "awg show awg{} dump",
       "bulk_delete_script_custom_params": {},
       "api_metrics_script": null,
@@ -2780,7 +2884,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": "ipaddress",
-      "config_format": 2,
+      "config2json_script": "def config2json(raw_text):\n    # Жестко задаем схему! Нет пиров? Массив все равно будет. \n    # 1 пир? Он корректно ляжет в массив.\n    result = {\"Interface\": {}, \"Peers\": []}\n    current_section = None\n    \n    for line in raw_text.splitlines():\n        line = line.strip()\n        if not line or line.startswith(('#', ';')): continue\n        \n        if line == '[Interface]':\n            current_section = result[\"Interface\"]\n        elif line == '[Peer]':\n            current_section = {}\n            result[\"Peers\"].append(current_section)\n        elif '=' in line and current_section is not None:\n            k, v = map(str.strip, line.split('=', 1))\n            current_section[k] = v # Тут можно добавить парсинг интов/списков, если нужно\n            \n    return result",
+      "json2config_script": "def json2config(json_obj):\n    lines = [\"[Interface]\"]\n    for k, v in json_obj.get(\"Interface\", {}).items():\n        lines.append(f\"{k} = {v}\")\n    \n    for peer in json_obj.get(\"Peers\", []):\n        lines.append(\"\\n[Peer]\")\n        for k, v in peer.items():\n            lines.append(f\"{k} = {v}\")\n            \n    return (\"\\n\".join(lines) + \"\\n\").encode(\"utf-8\")",
+      "conf_converter_libs": null,
       "protocols": [],
       "templates_users_extractors": [
         {
@@ -2795,7 +2901,7 @@
       "title": "amneziawg-awg-ipv4",
       "url_tmp": "awg://{user_private_key}@{{node___address}}:{{Interface___ListenPort}}?public_key={server_public_key}&local_address={user_ip}&jc={{Interface___Jc}}&jmin={{Interface___Jmin}}&jmax={{Interface___Jmax}}&s1={{Interface___S1}}&s2={{Interface___S2}}&h1={{Interface___H1}}&h2={{Interface___H2}}&h3={{Interface___H3}}&h4={{Interface___H4}}&reserved={reserved_bytes}&preshared_key={preshared_key}#{{node___title}}",
       "status": 1,
-      "is_accepted": false,
+      "is_accepted": true,
       "reload_core_command": null,
       "required_user_data_obj": {
         "user_uuid": "{USER_UUID}",
@@ -2808,7 +2914,7 @@
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str) -> str:\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress",
       "api_bulk_delete_user_script": null,
-      "metrics_parser_code": "def parse_metrics(raw_metrics, vpn_users, local_state):\n    # 1. Строим быстрый индекс O(1) для поиска sub_id по IPv6 (или публичному ключу)\n    # vpn_users содержит объекты после твоего инжектора\n    def calculate_ipv6(subnet, user_sub_id):\n        ipv6_net = ipaddress.IPv6Network(subnet, strict=False)\n        user_ipv6 = f\"{ipv6_net.network_address + user_sub_id}/128\"\n        return user_ipv6\n\n    def calculate_ipv4(subnet, user_sub_id):\n        ipv4_net = ipaddress.IPv4Network(subnet, strict=False)\n        usable_ips = ipv4_net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        return usable_ips[offset]\n\n    ip_to_subid = {}\n    for user in vpn_users:\n        # Берем IP без маски, например \"fd00:1::42\" из \"fd00:1::42/128\"\n        # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n\n        if user.get('node_ipv6_subnet'):\n            ip = calculate_ipv6(user['node_ipv6_subnet'], user['user_sub_id'])\n        else:\n            ip = calculate_ipv4(user['node_ipv4_subnet'], user['user_sub_id'])\n\n        ip_to_subid[ip] = user['user_sub_id']\n\n    traffic_consuming, troubles = [], []\n\n    # 2. Парсим сырой вывод `awg show awg0 dump`\n    # Формат: pub_key \\t psk \\t endpoint \\t allowed_ips \\t handshake \\t rx \\t tx \\t keepalive\n    lines = raw_metrics.strip().split(\"\\n\")\n    for line in lines[1:]:  # Пропускаем заголовок (если есть) или берем всё\n        if not line.strip(): continue\n\n        parts = line.split(\"\\t\")\n        if len(parts) < 8: continue\n\n        # Берем IP из дампа (обрезаем маску /128)\n        peer_ip = parts[3].split(\"/\")[0]\n        current_rx = int(parts[5])\n        current_tx = int(parts[6])\n\n        # 3. Находим пользователя в нашем индексе\n        sub_id = ip_to_subid.get(peer_ip)\n        if not sub_id:\n            troubles.append((\"не нашли пользователя в ядре\", line))  # Трафик от неизвестного пира (возможно, удаленного)\n\n        # 4. Считаем дельту с помощью local_state\n        state_key = f\"{sub_id}_rx_tx\"\n        last_rx, last_tx = local_state.get(state_key, (0, 0))\n\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n\n        total_delta = delta_rx + delta_tx\n\n        # Записываем результат\n        if total_delta > 0:\n            traffic_consuming.append({\n                \"user_sub_id\": int(sub_id),\n                \"total_mb_used\": total_delta\n            })\n\n        # 5. Обновляем State для следующего вызова!\n        local_state[state_key] = (current_rx, current_tx)\n\n    return traffic_consuming, troubles\n",
+      "metrics_parser_code": "\ndef parse_metrics(raw_metrics, vpn_users, local_state):\n    # 1. Строим быстрый индекс O(1) для поиска sub_id по IPv6 (или публичному ключу)\n    # vpn_users содержит объекты после твоего инжектора\n    def calculate_ipv6(subnet, user_sub_id):\n        ipv6_net = ipaddress.IPv6Network(subnet, strict=False)\n        return ipv6_net.network_address + user_sub_id\n\n    def calculate_ipv4(subnet, user_sub_id):\n        ipv4_net = ipaddress.IPv4Network(subnet, strict=False)\n        usable_ips = ipv4_net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        return usable_ips[offset]\n\n    ip_to_subid = {}\n    for user in vpn_users:\n        # Берем IP без маски, например \"fd00:1::42\" из \"fd00:1::42/128\"\n        # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n\n        if user.get(\"node_ipv6_subnet\"):\n            ip = calculate_ipv6(user[\"node_ipv6_subnet\"], user[\"user_sub_id\"])\n        else:\n            ip = calculate_ipv4(user[\"node_ipv4_subnet\"], user[\"user_sub_id\"])\n\n        ip_to_subid[ip] = user[\"user_sub_id\"]\n\n    traffic_consuming, troubles = [], []\n\n    # 2. Парсим сырой вывод `awg show awg0 dump`\n    # Формат: pub_key \\t psk \\t endpoint \\t allowed_ips \\t handshake \\t rx \\t tx \\t keepalive\n    lines = raw_metrics.strip().split(\"\\n\")\n    for line in lines[1:]:  # Пропускаем заголовок (если есть) или берем всё\n        if not line.strip(): continue\n\n        parts = line.split(\"\\t\")\n        if len(parts) < 8: continue\n\n        # Берем IP из дампа (обрезаем маску /128)\n        peer_ip = parts[3].split(\"/\")[0]\n        current_rx = int(parts[5])\n        current_tx = int(parts[6])\n\n        # 3. Находим пользователя в нашем индексе\n        sub_id = ip_to_subid.get(peer_ip)\n        if not sub_id:\n            troubles.append((\"не нашли пользователя в ядре\", line))  # Трафик от неизвестного пира (возможно, удаленного)\n\n        # 4. Считаем дельту с помощью local_state\n        state_key = f\"{sub_id}_rx_tx\"\n        last_rx, last_tx = local_state.get(state_key, (0, 0))\n\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n\n        total_delta = delta_rx + delta_tx\n\n        # Записываем результат\n        if total_delta > 0:\n            traffic_consuming.append({\n                \"user_sub_id\": int(sub_id),\n                \"total_mb_used\": total_delta // 1048576, # Bytes -> MBytes\n            })\n\n        # 5. Обновляем State для следующего вызова!\n        local_state[state_key] = (current_rx, current_tx)\n\n    return traffic_consuming, troubles\n\n",
       "metrics_command": "awg show awg{} dump",
       "bulk_delete_script_custom_params": {},
       "api_metrics_script": null,
@@ -2816,7 +2922,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": "ipaddress",
-      "config_format": 2,
+      "config2json_script": "def config2json(raw_text):\n    # Жестко задаем схему! Нет пиров? Массив все равно будет. \n    # 1 пир? Он корректно ляжет в массив.\n    result = {\"Interface\": {}, \"Peers\": []}\n    current_section = None\n    \n    for line in raw_text.splitlines():\n        line = line.strip()\n        if not line or line.startswith(('#', ';')): continue\n        \n        if line == '[Interface]':\n            current_section = result[\"Interface\"]\n        elif line == '[Peer]':\n            current_section = {}\n            result[\"Peers\"].append(current_section)\n        elif '=' in line and current_section is not None:\n            k, v = map(str.strip, line.split('=', 1))\n            current_section[k] = v # Тут можно добавить парсинг интов/списков, если нужно\n            \n    return result",
+      "json2config_script": "def json2config(json_obj):\n    lines = [\"[Interface]\"]\n    for k, v in json_obj.get(\"Interface\", {}).items():\n        lines.append(f\"{k} = {v}\")\n    \n    for peer in json_obj.get(\"Peers\", []):\n        lines.append(\"\\n[Peer]\")\n        for k, v in peer.items():\n            lines.append(f\"{k} = {v}\")\n            \n    return (\"\\n\".join(lines) + \"\\n\").encode(\"utf-8\")",
+      "conf_converter_libs": null,
       "protocols": [],
       "templates_users_extractors": [
         {
@@ -2831,7 +2939,7 @@
       "title": "amneziawg-awg-ipv4-hopping",
       "url_tmp": "awg://{user_private_key}@{{node___address}}:{{hop_port}}?public_key={server_public_key}&local_address={user_ip}&jc={{Interface___Jc}}&jmin={{Interface___Jmin}}&jmax={{Interface___Jmax}}&s1={{Interface___S1}}&s2={{Interface___S2}}&h1={{Interface___H1}}&h2={{Interface___H2}}&h3={{Interface___H3}}&h4={{Interface___H4}}&reserved={reserved_bytes}&preshared_key={preshared_key}#{{node___title}}",
       "status": 1,
-      "is_accepted": false,
+      "is_accepted": true,
       "reload_core_command": null,
       "required_user_data_obj": {
         "user_uuid": "{USER_UUID}",
@@ -2844,7 +2952,7 @@
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str) -> str:\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n        hop_port=random.randint(int(user_obj['node_hop_start']), int(user_obj['node_hop_end']))\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress,random",
       "api_bulk_delete_user_script": null,
-      "metrics_parser_code": "def parse_metrics(raw_metrics, vpn_users, local_state):\n    # 1. Строим быстрый индекс O(1) для поиска sub_id по IPv6 (или публичному ключу)\n    # vpn_users содержит объекты после твоего инжектора\n    def calculate_ipv6(subnet, user_sub_id):\n        ipv6_net = ipaddress.IPv6Network(subnet, strict=False)\n        user_ipv6 = f\"{ipv6_net.network_address + user_sub_id}/128\"\n        return user_ipv6\n\n    def calculate_ipv4(subnet, user_sub_id):\n        ipv4_net = ipaddress.IPv4Network(subnet, strict=False)\n        usable_ips = ipv4_net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        return usable_ips[offset]\n\n    ip_to_subid = {}\n    for user in vpn_users:\n        # Берем IP без маски, например \"fd00:1::42\" из \"fd00:1::42/128\"\n        # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n\n        if user.get('node_ipv6_subnet'):\n            ip = calculate_ipv6(user['node_ipv6_subnet'], user['user_sub_id'])\n        else:\n            ip = calculate_ipv4(user['node_ipv4_subnet'], user['user_sub_id'])\n\n        ip_to_subid[ip] = user['user_sub_id']\n\n    traffic_consuming, troubles = [], []\n\n    # 2. Парсим сырой вывод `awg show awg0 dump`\n    # Формат: pub_key \\t psk \\t endpoint \\t allowed_ips \\t handshake \\t rx \\t tx \\t keepalive\n    lines = raw_metrics.strip().split(\"\\n\")\n    for line in lines[1:]:  # Пропускаем заголовок (если есть) или берем всё\n        if not line.strip(): continue\n\n        parts = line.split(\"\\t\")\n        if len(parts) < 8: continue\n\n        # Берем IP из дампа (обрезаем маску /128)\n        peer_ip = parts[3].split(\"/\")[0]\n        current_rx = int(parts[5])\n        current_tx = int(parts[6])\n\n        # 3. Находим пользователя в нашем индексе\n        sub_id = ip_to_subid.get(peer_ip)\n        if not sub_id:\n            troubles.append((\"не нашли пользователя в ядре\", line))  # Трафик от неизвестного пира (возможно, удаленного)\n\n        # 4. Считаем дельту с помощью local_state\n        state_key = f\"{sub_id}_rx_tx\"\n        last_rx, last_tx = local_state.get(state_key, (0, 0))\n\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n\n        total_delta = delta_rx + delta_tx\n\n        # Записываем результат\n        if total_delta > 0:\n            traffic_consuming.append({\n                \"user_sub_id\": int(sub_id),\n                \"total_mb_used\": total_delta\n            })\n\n        # 5. Обновляем State для следующего вызова!\n        local_state[state_key] = (current_rx, current_tx)\n\n    return traffic_consuming, troubles\n",
+      "metrics_parser_code": "\ndef parse_metrics(raw_metrics, vpn_users, local_state):\n    # 1. Строим быстрый индекс O(1) для поиска sub_id по IPv6 (или публичному ключу)\n    # vpn_users содержит объекты после твоего инжектора\n    def calculate_ipv6(subnet, user_sub_id):\n        ipv6_net = ipaddress.IPv6Network(subnet, strict=False)\n        return ipv6_net.network_address + user_sub_id\n\n    def calculate_ipv4(subnet, user_sub_id):\n        ipv4_net = ipaddress.IPv4Network(subnet, strict=False)\n        usable_ips = ipv4_net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        return usable_ips[offset]\n\n    ip_to_subid = {}\n    for user in vpn_users:\n        # Берем IP без маски, например \"fd00:1::42\" из \"fd00:1::42/128\"\n        # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n\n        if user.get(\"node_ipv6_subnet\"):\n            ip = calculate_ipv6(user[\"node_ipv6_subnet\"], user[\"user_sub_id\"])\n        else:\n            ip = calculate_ipv4(user[\"node_ipv4_subnet\"], user[\"user_sub_id\"])\n\n        ip_to_subid[ip] = user[\"user_sub_id\"]\n\n    traffic_consuming, troubles = [], []\n\n    # 2. Парсим сырой вывод `awg show awg0 dump`\n    # Формат: pub_key \\t psk \\t endpoint \\t allowed_ips \\t handshake \\t rx \\t tx \\t keepalive\n    lines = raw_metrics.strip().split(\"\\n\")\n    for line in lines[1:]:  # Пропускаем заголовок (если есть) или берем всё\n        if not line.strip(): continue\n\n        parts = line.split(\"\\t\")\n        if len(parts) < 8: continue\n\n        # Берем IP из дампа (обрезаем маску /128)\n        peer_ip = parts[3].split(\"/\")[0]\n        current_rx = int(parts[5])\n        current_tx = int(parts[6])\n\n        # 3. Находим пользователя в нашем индексе\n        sub_id = ip_to_subid.get(peer_ip)\n        if not sub_id:\n            troubles.append((\"не нашли пользователя в ядре\", line))  # Трафик от неизвестного пира (возможно, удаленного)\n\n        # 4. Считаем дельту с помощью local_state\n        state_key = f\"{sub_id}_rx_tx\"\n        last_rx, last_tx = local_state.get(state_key, (0, 0))\n\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n\n        total_delta = delta_rx + delta_tx\n\n        # Записываем результат\n        if total_delta > 0:\n            traffic_consuming.append({\n                \"user_sub_id\": int(sub_id),\n                \"total_mb_used\": total_delta // 1048576, # Bytes -> MBytes\n            })\n\n        # 5. Обновляем State для следующего вызова!\n        local_state[state_key] = (current_rx, current_tx)\n\n    return traffic_consuming, troubles\n\n",
       "metrics_command": "awg show awg{} dump",
       "bulk_delete_script_custom_params": {},
       "api_metrics_script": null,
@@ -2852,7 +2960,9 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": "ipaddress",
-      "config_format": 2,
+      "config2json_script": "def config2json(raw_text):\n    # Жестко задаем схему! Нет пиров? Массив все равно будет. \n    # 1 пир? Он корректно ляжет в массив.\n    result = {\"Interface\": {}, \"Peers\": []}\n    current_section = None\n    \n    for line in raw_text.splitlines():\n        line = line.strip()\n        if not line or line.startswith(('#', ';')): continue\n        \n        if line == '[Interface]':\n            current_section = result[\"Interface\"]\n        elif line == '[Peer]':\n            current_section = {}\n            result[\"Peers\"].append(current_section)\n        elif '=' in line and current_section is not None:\n            k, v = map(str.strip, line.split('=', 1))\n            current_section[k] = v # Тут можно добавить парсинг интов/списков, если нужно\n            \n    return result",
+      "json2config_script": "def json2config(json_obj):\n    lines = [\"[Interface]\"]\n    for k, v in json_obj.get(\"Interface\", {}).items():\n        lines.append(f\"{k} = {v}\")\n    \n    for peer in json_obj.get(\"Peers\", []):\n        lines.append(\"\\n[Peer]\")\n        for k, v in peer.items():\n            lines.append(f\"{k} = {v}\")\n            \n    return (\"\\n\".join(lines) + \"\\n\").encode(\"utf-8\")",
+      "conf_converter_libs": null,
       "protocols": [],
       "templates_users_extractors": [
         {
@@ -2867,7 +2977,7 @@
       "title": "amneziawg-awg-ipv6",
       "url_tmp": "awg://{user_private_key}@{{node___address}}:{{Interface___ListenPort}}?public_key={server_public_key}&local_address={user_ip}&jc={{Interface___Jc}}&jmin={{Interface___Jmin}}&jmax={{Interface___Jmax}}&s1={{Interface___S1}}&s2={{Interface___S2}}&h1={{Interface___H1}}&h2={{Interface___H2}}&h3={{Interface___H3}}&h4={{Interface___H4}}&reserved={reserved_bytes}&preshared_key={preshared_key}#{{node___title}}",
       "status": 1,
-      "is_accepted": false,
+      "is_accepted": true,
       "reload_core_command": null,
       "required_user_data_obj": {
         "user_uuid": "{USER_UUID}",
@@ -2880,7 +2990,7 @@
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str) -> str:\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress",
       "api_bulk_delete_user_script": null,
-      "metrics_parser_code": "def parse_metrics(raw_metrics, vpn_users, local_state):\n    # 1. Строим быстрый индекс O(1) для поиска sub_id по IPv6 (или публичному ключу)\n    # vpn_users содержит объекты после твоего инжектора\n    def calculate_ipv6(subnet, user_sub_id):\n        ipv6_net = ipaddress.IPv6Network(subnet, strict=False)\n        user_ipv6 = f\"{ipv6_net.network_address + user_sub_id}/128\"\n        return user_ipv6\n\n    def calculate_ipv4(subnet, user_sub_id):\n        ipv4_net = ipaddress.IPv4Network(subnet, strict=False)\n        usable_ips = ipv4_net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        return usable_ips[offset]\n\n    ip_to_subid = {}\n    for user in vpn_users:\n        # Берем IP без маски, например \"fd00:1::42\" из \"fd00:1::42/128\"\n        # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n\n        if user.get('node_ipv6_subnet'):\n            ip = calculate_ipv6(user['node_ipv6_subnet'], user['user_sub_id'])\n        else:\n            ip = calculate_ipv4(user['node_ipv4_subnet'], user['user_sub_id'])\n\n        ip_to_subid[ip] = user['user_sub_id']\n\n    traffic_consuming, troubles = [], []\n\n    # 2. Парсим сырой вывод `awg show awg0 dump`\n    # Формат: pub_key \\t psk \\t endpoint \\t allowed_ips \\t handshake \\t rx \\t tx \\t keepalive\n    lines = raw_metrics.strip().split(\"\\n\")\n    for line in lines[1:]:  # Пропускаем заголовок (если есть) или берем всё\n        if not line.strip(): continue\n\n        parts = line.split(\"\\t\")\n        if len(parts) < 8: continue\n\n        # Берем IP из дампа (обрезаем маску /128)\n        peer_ip = parts[3].split(\"/\")[0]\n        current_rx = int(parts[5])\n        current_tx = int(parts[6])\n\n        # 3. Находим пользователя в нашем индексе\n        sub_id = ip_to_subid.get(peer_ip)\n        if not sub_id:\n            troubles.append((\"не нашли пользователя в ядре\", line))  # Трафик от неизвестного пира (возможно, удаленного)\n\n        # 4. Считаем дельту с помощью local_state\n        state_key = f\"{sub_id}_rx_tx\"\n        last_rx, last_tx = local_state.get(state_key, (0, 0))\n\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n\n        total_delta = delta_rx + delta_tx\n\n        # Записываем результат\n        if total_delta > 0:\n            traffic_consuming.append({\n                \"user_sub_id\": int(sub_id),\n                \"total_mb_used\": total_delta\n            })\n\n        # 5. Обновляем State для следующего вызова!\n        local_state[state_key] = (current_rx, current_tx)\n\n    return traffic_consuming, troubles\n",
+      "metrics_parser_code": "\ndef parse_metrics(raw_metrics, vpn_users, local_state):\n    # 1. Строим быстрый индекс O(1) для поиска sub_id по IPv6 (или публичному ключу)\n    # vpn_users содержит объекты после твоего инжектора\n    def calculate_ipv6(subnet, user_sub_id):\n        ipv6_net = ipaddress.IPv6Network(subnet, strict=False)\n        return ipv6_net.network_address + user_sub_id\n\n    def calculate_ipv4(subnet, user_sub_id):\n        ipv4_net = ipaddress.IPv4Network(subnet, strict=False)\n        usable_ips = ipv4_net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        return usable_ips[offset]\n\n    ip_to_subid = {}\n    for user in vpn_users:\n        # Берем IP без маски, например \"fd00:1::42\" из \"fd00:1::42/128\"\n        # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n\n        if user.get(\"node_ipv6_subnet\"):\n            ip = calculate_ipv6(user[\"node_ipv6_subnet\"], user[\"user_sub_id\"])\n        else:\n            ip = calculate_ipv4(user[\"node_ipv4_subnet\"], user[\"user_sub_id\"])\n\n        ip_to_subid[ip] = user[\"user_sub_id\"]\n\n    traffic_consuming, troubles = [], []\n\n    # 2. Парсим сырой вывод `awg show awg0 dump`\n    # Формат: pub_key \\t psk \\t endpoint \\t allowed_ips \\t handshake \\t rx \\t tx \\t keepalive\n    lines = raw_metrics.strip().split(\"\\n\")\n    for line in lines[1:]:  # Пропускаем заголовок (если есть) или берем всё\n        if not line.strip(): continue\n\n        parts = line.split(\"\\t\")\n        if len(parts) < 8: continue\n\n        # Берем IP из дампа (обрезаем маску /128)\n        peer_ip = parts[3].split(\"/\")[0]\n        current_rx = int(parts[5])\n        current_tx = int(parts[6])\n\n        # 3. Находим пользователя в нашем индексе\n        sub_id = ip_to_subid.get(peer_ip)\n        if not sub_id:\n            troubles.append((\"не нашли пользователя в ядре\", line))  # Трафик от неизвестного пира (возможно, удаленного)\n\n        # 4. Считаем дельту с помощью local_state\n        state_key = f\"{sub_id}_rx_tx\"\n        last_rx, last_tx = local_state.get(state_key, (0, 0))\n\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n\n        total_delta = delta_rx + delta_tx\n\n        # Записываем результат\n        if total_delta > 0:\n            traffic_consuming.append({\n                \"user_sub_id\": int(sub_id),\n                \"total_mb_used\": total_delta // 1048576, # Bytes -> MBytes\n            })\n\n        # 5. Обновляем State для следующего вызова!\n        local_state[state_key] = (current_rx, current_tx)\n\n    return traffic_consuming, troubles\n\n",
       "metrics_command": "awg show awg{} dump",
       "bulk_delete_script_custom_params": {},
       "api_metrics_script": null,
@@ -2888,13 +2998,159 @@
       "bulk_add_script_custom_params": {},
       "description": null,
       "metrics_parser_libs": "ipaddress",
-      "config_format": 2,
+      "config2json_script": "def config2json(raw_text):\n    # Жестко задаем схему! Нет пиров? Массив все равно будет. \n    # 1 пир? Он корректно ляжет в массив.\n    result = {\"Interface\": {}, \"Peers\": []}\n    current_section = None\n    \n    for line in raw_text.splitlines():\n        line = line.strip()\n        if not line or line.startswith(('#', ';')): continue\n        \n        if line == '[Interface]':\n            current_section = result[\"Interface\"]\n        elif line == '[Peer]':\n            current_section = {}\n            result[\"Peers\"].append(current_section)\n        elif '=' in line and current_section is not None:\n            k, v = map(str.strip, line.split('=', 1))\n            current_section[k] = v # Тут можно добавить парсинг интов/списков, если нужно\n            \n    return result",
+      "json2config_script": "def json2config(json_obj):\n    lines = [\"[Interface]\"]\n    for k, v in json_obj.get(\"Interface\", {}).items():\n        lines.append(f\"{k} = {v}\")\n    \n    for peer in json_obj.get(\"Peers\", []):\n        lines.append(\"\\n[Peer]\")\n        for k, v in peer.items():\n            lines.append(f\"{k} = {v}\")\n            \n    return (\"\\n\".join(lines) + \"\\n\").encode(\"utf-8\")",
+      "conf_converter_libs": null,
       "protocols": [],
       "templates_users_extractors": [
         {
           "flatten_array_cursor": "Peers",
           "extractor_script": "from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef transform(user_obj: dict) -> dict:\n    \"\"\"\n    Инжектор WireGuard Peer: IPv6\n    Требует библиотеку `cryptography` в окружении выполнения.\n\n\n    Преимущество перед Ipv4. Нет коллизий. Идеальная математика. Позволяет заложить 64 битный user_sub_id в чистом виде!\n\n\n    Подходящий user_obj(required_user_data_obj + constant_user_data_obj + constant_node_data_obj)\n    - required_user_data_obj: настраивается на уровне шаблона. Всегда фиксированный набор данных пользователя\n    - constant_user_data_obj: настраивается на уровне шаблона. Любые необходимые константы и статика(Например {\"flow\": \"xtls-rprx-vision\"})\n    - constant_node_data_obj: настраивается непосредственно для виртуальной ноды. В user_obj имеет префикс \"node_\"\n\n    Пример для этого инжектора\n    1. Каким должен быть required_user_data_obj?\n    `\n    {\n        \"user_uuid\": \"{USER_UUID}\",\n        \"user_sub_id\": \"{USER_SUB_ID}\"\n    }\n    `\n    2. constant_user_data_obj остаётся пустым - {}\n    3. constant_node_data_obj\n    {\n        'node_hash_salt': 'Your salt',\n        'node_ipv4_subnet': 'fd00:1::/64' # Или другая локальная ipv6 сеть\n    }\n    4. Итоговый user_obj\n    `\n    {\n        'user_sub_id': 145,\n        'user_uuid': 'abcdefab-abcd-efab-cdef-123456890',\n        'node_hash_salt': 'Your salt',\n        'node_ipv4_subnet': 'fd00:1::/64'\n    }\n    `\n    \"\"\"\n    user_sub_id = user_obj[\"user_sub_id\"]\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n\n    raw_uuid = uuid.UUID(user_uuid).bytes\n\n    # 1. Генерация ключей (идентично IPv4)\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n    pub_key_bytes = priv_key.public_key().public_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PublicFormat.Raw\n    )\n    client_pubkey = base64.b64encode(pub_key_bytes).decode(\"utf-8\")\n\n    # 2. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n\n    # 3. Вычисление IPv6 прямым сложением\n    # Ожидаемый формат node_ipv6_subnet: \"fd00:1::/64\"\n    subnet_str = user_obj.get(\"node_ipv6_subnet\", \"fd00:1::/64\")\n    net = ipaddress.IPv6Network(subnet_str, strict=False)\n\n    # net.network_address - это база (fd00:1::)\n    # Прибавляем int напрямую в хостовую часть\n    client_ip = str(net.network_address + int(user_sub_id))\n\n    # 4. WARP\n    reserved_array = [0,0,0]\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    # 4. Сборка объекта (обрати внимание, для одного IP в v6 маска /128)\n    return {\n        \"PublicKey\": client_pubkey,\n        \"PresharedKey\": preshared_key,\n        \"AllowedIps\": [f\"{client_ip}/128\"],\n        \"Reserved\": reserved_array,\n    }",
           "libs": "hashlib,uuid,base64,ipaddress,cryptography",
+          "tmp_id": "proto_templates_CURRENT"
+        }
+      ]
+    },
+    {
+      "title": "hysteria-hy2-tls-salamander-hopping",
+      "url_tmp": "hysteria2://{user_uuid}@{{node___address}}:{hop_start}-{hop_end}?sni={sni}&obfs=salamander&obfs-password={{obfs___salamander___password}}&insecure=0#{{node_title}}",
+      "status": 1,
+      "is_accepted": true,
+      "reload_core_command": "systemctl restart hysteria2",
+      "required_user_data_obj": {
+        "user_uuid": "{USER_UUID}",
+        "user_sub_id": "{USER_SUB_ID}"
+      },
+      "constant_user_data_obj": {},
+      "proto_python_lib": null,
+      "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для Hysteria2 с Port Hopping\n    \"\"\"\n    return config_link.format(\n        user_uuid=user_obj['user_uuid'], hop_start=user_obj['node_hop_start'], hop_end=user_obj['node_hop_end'], sni=user_obj['node_sni'],\n    )",
+      "sub_required_libs": null,
+      "api_bulk_delete_user_script": null,
+      "metrics_parser_code": "def parse_metrics(raw_metrics, vpn_users, local_state):\n    json_obj = orjson.loads(raw_metrics)\n    traffic_consuming = []\n\n    for user_sub_id_str, traffic in json_obj.items():\n        user_sub_id = int(user_sub_id_str)\n\n        # 1. Берем СЫРЫЕ байты из JSON\n        current_tx = traffic.get('tx', 0)\n        current_rx = traffic.get('rx', 0)\n\n        # 2. Достаем предыдущие значения в байтах\n        last_rx, last_tx = local_state.get(user_sub_id, (0, 0))\n\n        # 3. Вычисляем дельту в байтах (учитывая возможный сброс счетчиков при рестарте)\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n\n        total_delta_bytes = delta_rx + delta_tx\n\n        # 4. Переводим дельту в Мегабайты (float для сохранения точности в БД)\n        if total_delta_bytes > 0:\n            total_mb = total_delta_bytes // 1048576  # Bytes -> МBytes\n\n            traffic_consuming.append({\n                \"user_sub_id\": user_sub_id,\n                \"total_mb_used\": total_mb\n            })\n\n        # 5. Обновляем State СЫРЫМИ байтами для следующего тика\n        local_state[user_sub_id] = (current_rx, current_tx)\n\n    return traffic_consuming, []",
+      "metrics_command": null,
+      "bulk_delete_script_custom_params": {},
+      "api_metrics_script": null,
+      "api_bulk_add_user_script": null,
+      "bulk_add_script_custom_params": {},
+      "description": null,
+      "metrics_parser_libs": null,
+      "config2json_script": "def config2json(raw_yaml_text: str) -> dict:\n    \"\"\"\n    Преобразует YAML Hysteria 2 в нормализованный dict (JSON).\n    Гарантирует наличие массива 'users' для работы инжекторов нод-клиента.\n    \"\"\"\n    data = yaml.safe_load(raw_yaml_text) or {}\n\n    # 1. Гарантируем базовую структуру auth\n    if \"auth\" not in data or not isinstance(data[\"auth\"], dict):\n        data[\"auth\"] = {\"type\": \"userpass\"}\n\n    # 2. Достаем словарь пользователей из YAML (или пустой dict, если 0 юзеров)\n    raw_userpass = data[\"auth\"].get(\"userpass\") or {}\n\n    # 3. Преобразуем словарь/список в гарантированный LIST\n    users_list = []\n    if isinstance(raw_userpass, dict):\n        for username, password in raw_userpass.items():\n            users_list.append({\n                \"username\": str(username),\n                \"password\": str(password)\n            })\n    elif isinstance(raw_userpass, list):\n        users_list = raw_userpass\n\n    # 4. Фиксируем ключ \"users\" как LIST (решает проблему 0 элементов!)\n    data[\"auth\"][\"users\"] = users_list\n\n    # Удаляем старый ключ userpass, чтобы не путать структуры\n    if \"userpass\" in data[\"auth\"]:\n        del data[\"auth\"][\"userpass\"]\n\n    return data",
+      "json2config_script": "def json2config(json_obj: dict) -> str:\n    \"\"\"\n    Преобразует внутренний dict (JSON) обратно в валидный YAML для Hysteria 2.\n    \"\"\"\n    config = json_obj.copy()\n\n    if \"auth\" in config and isinstance(config[\"auth\"], dict):\n        # Достаем наш искусственный массив пользователей\n        users_list = config[\"auth\"].pop(\"users\", [])\n\n        # Собираем словарь \"username\": \"password\" для нативной Hysteria 2\n        userpass_map = {}\n        for user in users_list:\n            if isinstance(user, dict):\n                username = str(user.get(\"username\", \"\"))\n                password = str(user.get(\"password\", \"\"))\n                if username:\n                    userpass_map[username] = password\n\n        config[\"auth\"][\"type\"] = \"userpass\"\n        config[\"auth\"][\"userpass\"] = userpass_map\n\n    # Дамп в красиво форматированный YAML\n    return yaml.dump(config, sort_keys=False, allow_unicode=True, default_flow_style=False).encode(\"utf-8\")",
+      "conf_converter_libs": "yaml",
+      "protocols": [],
+      "templates_users_extractors": [
+        {
+          "flatten_array_cursor": "auth___users",
+          "extractor_script": "def transform(user_obj: dict) -> dict:\n    return {\n        \"username\": user_obj['user_sub_id'], \n        \"password\": user_obj[\"user_uuid\"],\n    }\n",
+          "libs": null,
+          "tmp_id": "proto_templates_CURRENT"
+        }
+      ]
+    },
+    {
+      "title": "hysteria-hy2-tls",
+      "url_tmp": "hysteria2://{user_uuid}@{{node___address}}:{proto_port}?sni={sni}&insecure=0#{{node_title}}",
+      "status": 1,
+      "is_accepted": true,
+      "reload_core_command": "systemctl restart hysteria2",
+      "required_user_data_obj": {
+        "user_uuid": "{USER_UUID}",
+        "user_sub_id": "{USER_SUB_ID}"
+      },
+      "constant_user_data_obj": {},
+      "proto_python_lib": null,
+      "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для Hysteria2 с Port Hopping\n    \"\"\"\n    return config_link.format(\n        user_uuid=user_obj['user_uuid'], proto_port=user_obj['node_proto_port'],  sni=user_obj['node_sni'],\n    )",
+      "sub_required_libs": null,
+      "api_bulk_delete_user_script": null,
+      "metrics_parser_code": "def parse_metrics(raw_metrics, vpn_users, local_state):\n    json_obj = orjson.loads(raw_metrics)\n    traffic_consuming = []\n\n    for user_sub_id_str, traffic in json_obj.items():\n        user_sub_id = int(user_sub_id_str)\n\n        # 1. Берем СЫРЫЕ байты из JSON\n        current_tx = traffic.get('tx', 0)\n        current_rx = traffic.get('rx', 0)\n\n        # 2. Достаем предыдущие значения в байтах\n        last_rx, last_tx = local_state.get(user_sub_id, (0, 0))\n\n        # 3. Вычисляем дельту в байтах (учитывая возможный сброс счетчиков при рестарте)\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n\n        total_delta_bytes = delta_rx + delta_tx\n\n        # 4. Переводим дельту в Мегабайты (float для сохранения точности в БД)\n        if total_delta_bytes > 0:\n            total_mb = total_delta_bytes // 1048576  # Bytes -> МBytes\n\n            traffic_consuming.append({\n                \"user_sub_id\": user_sub_id,\n                \"total_mb_used\": total_mb\n            })\n\n        # 5. Обновляем State СЫРЫМИ байтами для следующего тика\n        local_state[user_sub_id] = (current_rx, current_tx)\n\n    return traffic_consuming, []",
+      "metrics_command": null,
+      "bulk_delete_script_custom_params": {},
+      "api_metrics_script": null,
+      "api_bulk_add_user_script": null,
+      "bulk_add_script_custom_params": {},
+      "description": null,
+      "metrics_parser_libs": null,
+      "config2json_script": "def config2json(raw_yaml_text: str) -> dict:\n    \"\"\"\n    Преобразует YAML Hysteria 2 в нормализованный dict (JSON).\n    Гарантирует наличие массива 'users' для работы инжекторов нод-клиента.\n    \"\"\"\n    data = yaml.safe_load(raw_yaml_text) or {}\n\n    # 1. Гарантируем базовую структуру auth\n    if \"auth\" not in data or not isinstance(data[\"auth\"], dict):\n        data[\"auth\"] = {\"type\": \"userpass\"}\n\n    # 2. Достаем словарь пользователей из YAML (или пустой dict, если 0 юзеров)\n    raw_userpass = data[\"auth\"].get(\"userpass\") or {}\n\n    # 3. Преобразуем словарь/список в гарантированный LIST\n    users_list = []\n    if isinstance(raw_userpass, dict):\n        for username, password in raw_userpass.items():\n            users_list.append({\n                \"username\": str(username),\n                \"password\": str(password)\n            })\n    elif isinstance(raw_userpass, list):\n        users_list = raw_userpass\n\n    # 4. Фиксируем ключ \"users\" как LIST (решает проблему 0 элементов!)\n    data[\"auth\"][\"users\"] = users_list\n\n    # Удаляем старый ключ userpass, чтобы не путать структуры\n    if \"userpass\" in data[\"auth\"]:\n        del data[\"auth\"][\"userpass\"]\n\n    return data",
+      "json2config_script": "def json2config(json_obj: dict) -> str:\n    \"\"\"\n    Преобразует внутренний dict (JSON) обратно в валидный YAML для Hysteria 2.\n    \"\"\"\n    config = json_obj.copy()\n\n    if \"auth\" in config and isinstance(config[\"auth\"], dict):\n        # Достаем наш искусственный массив пользователей\n        users_list = config[\"auth\"].pop(\"users\", [])\n\n        # Собираем словарь \"username\": \"password\" для нативной Hysteria 2\n        userpass_map = {}\n        for user in users_list:\n            if isinstance(user, dict):\n                username = str(user.get(\"username\", \"\"))\n                password = str(user.get(\"password\", \"\"))\n                if username:\n                    userpass_map[username] = password\n\n        config[\"auth\"][\"type\"] = \"userpass\"\n        config[\"auth\"][\"userpass\"] = userpass_map\n\n    # Дамп в красиво форматированный YAML\n    return yaml.dump(config, sort_keys=False, allow_unicode=True, default_flow_style=False).encode(\"utf-8\")",
+      "conf_converter_libs": "yaml",
+      "protocols": [],
+      "templates_users_extractors": [
+        {
+          "flatten_array_cursor": "auth___users",
+          "extractor_script": "def transform(user_obj: dict) -> dict:\n    return {\n        \"username\": user_obj['user_sub_id'], \n        \"password\": user_obj[\"user_uuid\"],\n    }\n",
+          "libs": null,
+          "tmp_id": "proto_templates_CURRENT"
+        }
+      ]
+    },
+    {
+      "title": "hysteria-hy2-tls-hopping",
+      "url_tmp": "hysteria2://{user_uuid}@{{node___address}}:{hop_start}-{hop_end}?sni={sni}&insecure=0#{{node_title}}",
+      "status": 1,
+      "is_accepted": true,
+      "reload_core_command": "systemctl restart hysteria2",
+      "required_user_data_obj": {
+        "user_uuid": "{USER_UUID}",
+        "user_sub_id": "{USER_SUB_ID}"
+      },
+      "constant_user_data_obj": {},
+      "proto_python_lib": null,
+      "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для Hysteria2 с Port Hopping\n    \"\"\"\n    return config_link.format(\n        user_uuid=user_obj['user_uuid'], hop_start=user_obj['node_hop_start'], hop_end=user_obj['node_hop_end'], sni=user_obj['node_sni'],\n    )",
+      "sub_required_libs": null,
+      "api_bulk_delete_user_script": null,
+      "metrics_parser_code": "def parse_metrics(raw_metrics, vpn_users, local_state):\n    json_obj = orjson.loads(raw_metrics)\n    traffic_consuming = []\n\n    for user_sub_id_str, traffic in json_obj.items():\n        user_sub_id = int(user_sub_id_str)\n\n        # 1. Берем СЫРЫЕ байты из JSON\n        current_tx = traffic.get('tx', 0)\n        current_rx = traffic.get('rx', 0)\n\n        # 2. Достаем предыдущие значения в байтах\n        last_rx, last_tx = local_state.get(user_sub_id, (0, 0))\n\n        # 3. Вычисляем дельту в байтах (учитывая возможный сброс счетчиков при рестарте)\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n\n        total_delta_bytes = delta_rx + delta_tx\n\n        # 4. Переводим дельту в Мегабайты (float для сохранения точности в БД)\n        if total_delta_bytes > 0:\n            total_mb = total_delta_bytes // 1048576  # Bytes -> МBytes\n\n            traffic_consuming.append({\n                \"user_sub_id\": user_sub_id,\n                \"total_mb_used\": total_mb\n            })\n\n        # 5. Обновляем State СЫРЫМИ байтами для следующего тика\n        local_state[user_sub_id] = (current_rx, current_tx)\n\n    return traffic_consuming, []",
+      "metrics_command": null,
+      "bulk_delete_script_custom_params": {},
+      "api_metrics_script": null,
+      "api_bulk_add_user_script": null,
+      "bulk_add_script_custom_params": {},
+      "description": null,
+      "metrics_parser_libs": null,
+      "config2json_script": "def config2json(raw_yaml_text: str) -> dict:\n    \"\"\"\n    Преобразует YAML Hysteria 2 в нормализованный dict (JSON).\n    Гарантирует наличие массива 'users' для работы инжекторов нод-клиента.\n    \"\"\"\n    data = yaml.safe_load(raw_yaml_text) or {}\n\n    # 1. Гарантируем базовую структуру auth\n    if \"auth\" not in data or not isinstance(data[\"auth\"], dict):\n        data[\"auth\"] = {\"type\": \"userpass\"}\n\n    # 2. Достаем словарь пользователей из YAML (или пустой dict, если 0 юзеров)\n    raw_userpass = data[\"auth\"].get(\"userpass\") or {}\n\n    # 3. Преобразуем словарь/список в гарантированный LIST\n    users_list = []\n    if isinstance(raw_userpass, dict):\n        for username, password in raw_userpass.items():\n            users_list.append({\n                \"username\": str(username),\n                \"password\": str(password)\n            })\n    elif isinstance(raw_userpass, list):\n        users_list = raw_userpass\n\n    # 4. Фиксируем ключ \"users\" как LIST (решает проблему 0 элементов!)\n    data[\"auth\"][\"users\"] = users_list\n\n    # Удаляем старый ключ userpass, чтобы не путать структуры\n    if \"userpass\" in data[\"auth\"]:\n        del data[\"auth\"][\"userpass\"]\n\n    return data",
+      "json2config_script": "def json2config(json_obj: dict) -> str:\n    \"\"\"\n    Преобразует внутренний dict (JSON) обратно в валидный YAML для Hysteria 2.\n    \"\"\"\n    config = json_obj.copy()\n\n    if \"auth\" in config and isinstance(config[\"auth\"], dict):\n        # Достаем наш искусственный массив пользователей\n        users_list = config[\"auth\"].pop(\"users\", [])\n\n        # Собираем словарь \"username\": \"password\" для нативной Hysteria 2\n        userpass_map = {}\n        for user in users_list:\n            if isinstance(user, dict):\n                username = str(user.get(\"username\", \"\"))\n                password = str(user.get(\"password\", \"\"))\n                if username:\n                    userpass_map[username] = password\n\n        config[\"auth\"][\"type\"] = \"userpass\"\n        config[\"auth\"][\"userpass\"] = userpass_map\n\n    # Дамп в красиво форматированный YAML\n    return yaml.dump(config, sort_keys=False, allow_unicode=True, default_flow_style=False).encode(\"utf-8\")",
+      "conf_converter_libs": "yaml",
+      "protocols": [],
+      "templates_users_extractors": [
+        {
+          "flatten_array_cursor": "auth___users",
+          "extractor_script": "def transform(user_obj: dict) -> dict:\n    return {\n        \"username\": user_obj['user_sub_id'], \n        \"password\": user_obj[\"user_uuid\"],\n    }\n",
+          "libs": null,
+          "tmp_id": "proto_templates_CURRENT"
+        }
+      ]
+    },
+    {
+      "title": "hysteria-hy2-tls-salamander",
+      "url_tmp": "hysteria2://{user_uuid}@{{node___address}}:{proto_port}?sni={sni}&obfs=salamander&obfs-password={{obfs___salamander___password}}&insecure=0#{{node_title}}",
+      "status": 1,
+      "is_accepted": true,
+      "reload_core_command": "systemctl restart hysteria2",
+      "required_user_data_obj": {
+        "user_uuid": "{USER_UUID}",
+        "user_sub_id": "{USER_SUB_ID}"
+      },
+      "constant_user_data_obj": {},
+      "proto_python_lib": null,
+      "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для Hysteria2 с Port Hopping\n    \"\"\"\n    return config_link.format(\n        user_uuid=user_obj['user_uuid'], proto_port=user_obj['node_proto_port'],  sni=user_obj['node_sni'],\n    )",
+      "sub_required_libs": null,
+      "api_bulk_delete_user_script": null,
+      "metrics_parser_code": "def parse_metrics(raw_metrics, vpn_users, local_state):\n    json_obj = orjson.loads(raw_metrics)\n    traffic_consuming = []\n\n    for user_sub_id_str, traffic in json_obj.items():\n        user_sub_id = int(user_sub_id_str)\n\n        # 1. Берем СЫРЫЕ байты из JSON\n        current_tx = traffic.get('tx', 0)\n        current_rx = traffic.get('rx', 0)\n\n        # 2. Достаем предыдущие значения в байтах\n        last_rx, last_tx = local_state.get(user_sub_id, (0, 0))\n\n        # 3. Вычисляем дельту в байтах (учитывая возможный сброс счетчиков при рестарте)\n        delta_tx = current_tx - last_tx if current_tx >= last_tx else current_tx\n        delta_rx = current_rx - last_rx if current_rx >= last_rx else current_rx\n\n        total_delta_bytes = delta_rx + delta_tx\n\n        # 4. Переводим дельту в Мегабайты (float для сохранения точности в БД)\n        if total_delta_bytes > 0:\n            total_mb = total_delta_bytes // 1048576  # Bytes -> МBytes\n\n            traffic_consuming.append({\n                \"user_sub_id\": user_sub_id,\n                \"total_mb_used\": total_mb\n            })\n\n        # 5. Обновляем State СЫРЫМИ байтами для следующего тика\n        local_state[user_sub_id] = (current_rx, current_tx)\n\n    return traffic_consuming, []",
+      "metrics_command": null,
+      "bulk_delete_script_custom_params": {},
+      "api_metrics_script": null,
+      "api_bulk_add_user_script": null,
+      "bulk_add_script_custom_params": {},
+      "description": null,
+      "metrics_parser_libs": null,
+      "config2json_script": "def config2json(raw_yaml_text: str) -> dict:\n    \"\"\"\n    Преобразует YAML Hysteria 2 в нормализованный dict (JSON).\n    Гарантирует наличие массива 'users' для работы инжекторов нод-клиента.\n    \"\"\"\n    data = yaml.safe_load(raw_yaml_text) or {}\n\n    # 1. Гарантируем базовую структуру auth\n    if \"auth\" not in data or not isinstance(data[\"auth\"], dict):\n        data[\"auth\"] = {\"type\": \"userpass\"}\n\n    # 2. Достаем словарь пользователей из YAML (или пустой dict, если 0 юзеров)\n    raw_userpass = data[\"auth\"].get(\"userpass\") or {}\n\n    # 3. Преобразуем словарь/список в гарантированный LIST\n    users_list = []\n    if isinstance(raw_userpass, dict):\n        for username, password in raw_userpass.items():\n            users_list.append({\n                \"username\": str(username),\n                \"password\": str(password)\n            })\n    elif isinstance(raw_userpass, list):\n        users_list = raw_userpass\n\n    # 4. Фиксируем ключ \"users\" как LIST (решает проблему 0 элементов!)\n    data[\"auth\"][\"users\"] = users_list\n\n    # Удаляем старый ключ userpass, чтобы не путать структуры\n    if \"userpass\" in data[\"auth\"]:\n        del data[\"auth\"][\"userpass\"]\n\n    return data",
+      "json2config_script": "def json2config(json_obj: dict) -> str:\n    \"\"\"\n    Преобразует внутренний dict (JSON) обратно в валидный YAML для Hysteria 2.\n    \"\"\"\n    config = json_obj.copy()\n\n    if \"auth\" in config and isinstance(config[\"auth\"], dict):\n        # Достаем наш искусственный массив пользователей\n        users_list = config[\"auth\"].pop(\"users\", [])\n\n        # Собираем словарь \"username\": \"password\" для нативной Hysteria 2\n        userpass_map = {}\n        for user in users_list:\n            if isinstance(user, dict):\n                username = str(user.get(\"username\", \"\"))\n                password = str(user.get(\"password\", \"\"))\n                if username:\n                    userpass_map[username] = password\n\n        config[\"auth\"][\"type\"] = \"userpass\"\n        config[\"auth\"][\"userpass\"] = userpass_map\n\n    # Дамп в красиво форматированный YAML\n    return yaml.dump(config, sort_keys=False, allow_unicode=True, default_flow_style=False).encode(\"utf-8\")",
+      "conf_converter_libs": "yaml",
+      "protocols": [],
+      "templates_users_extractors": [
+        {
+          "flatten_array_cursor": "auth___users",
+          "extractor_script": "def transform(user_obj: dict) -> dict:\n    return {\n        \"username\": user_obj['user_sub_id'], \n        \"password\": user_obj[\"user_uuid\"],\n    }\n",
+          "libs": null,
           "tmp_id": "proto_templates_CURRENT"
         }
       ]

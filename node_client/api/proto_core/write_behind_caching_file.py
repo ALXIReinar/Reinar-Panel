@@ -63,7 +63,9 @@ class ConfigWriteBuffer:
             filepath: str,
             user_injectors: list[dict],
             reload_command: str | None,
-            file_format: int,
+            config2json_script: str | None,
+            json2config_script: str | None,
+            conf_converter_libs: str | None,
     ):
         """
         Регистрирует виртуальную ноду в менеджере
@@ -82,17 +84,32 @@ class ConfigWriteBuffer:
                 - flatten_array_cursor (users_path): Flatten-json путь до массива clients
                 - extractor_script (flatten_user_identifier_key): Flatten-json путь до идентификатора пользователя
             reload_command: Команда перезагрузки ядра (если нет hot-reload)
-            user_obj: Объект для валидации flatten_user_identifier_key
+            config2json_script: Скрипт для конвертации конфиг-файла в json структуру для нод клиента. Плюсы - поддержка любого конфига
+            json2config_script: Скрипт для конвертации из джсон структуры в формат файла для впн-ядра
+            conf_converter_libs: Либы для файл-конвертеров
         """
         # 0. Проверяем значения перед сохранением
         injectors = []
         try:
+            # По дефолту используем json формат(не указан в БД = JsonConverter)
+            if config2json_script is None:
+                config_loader = lambda x: orjson.loads(x)
+            else:
+                config_loader = HotReloadExecutor.get_compiled_func(config2json_script, 'config2json', conf_converter_libs)
+
+            if json2config_script is None:
+                config_dumper = lambda x: orjson.dumps(x, option=orjson.OPT_INDENT_2)
+            else:
+                config_dumper = HotReloadExecutor.get_compiled_func(json2config_script, 'json2config', conf_converter_libs)
+
+
             # Проверка существования файла-конфига
-            ok, file_content = await self._read_config(filepath, True, file_format)
+            ok, file_content = await self._read_config(filepath, True)
+            json_content = config_loader(file_content)
 
             for inj in user_injectors:
                 # Проверка работоспособности ключа массива для операций в конфиг-файле
-               self._navigate_to_path(file_content, inj['flatten_array_cursor'])
+               self._navigate_to_path(json_content, inj['flatten_array_cursor'])
                injectors.append({
                    "flatten_array_cursor": inj['flatten_array_cursor'],
 
@@ -108,7 +125,8 @@ class ConfigWriteBuffer:
         # 1. Сохраняем метаданные
         self.node_metadata[node_proto_id] = {
             'filepath': filepath,
-            'file_format': file_format,
+            "config2json_script": config_loader,
+            "json2config_script": config_dumper,
             'injectors': injectors,
             'reload_command': reload_command,
             'queue_limited': True,  # Флаг для контроля лимитов конкретной ноды
@@ -138,7 +156,9 @@ class ConfigWriteBuffer:
         filepath: str,
         user_injectors: list[dict],
         reload_command: str | None,
-        file_format: int,
+        config2json_script: str | None,
+        json2config_script: str | None,
+        conf_converter_libs: str | None,
     ):
         """
         Добавляет пользователя в буфер (O(1))
@@ -156,6 +176,9 @@ class ConfigWriteBuffer:
                 - flatten_array_cursor (users_path): Flatten-json путь до массива clients
                 - extractor_script (flatten_user_identifier_key): Flatten-json путь до идентификатора пользователя
             reload_command: Команда перезагрузки (нужна только при первом обращении)
+            config2json_script: Скрипт для конвертации конфиг-файла в json структуру для нод клиента. Плюсы - поддержка любого конфига
+            json2config_script: Скрипт для конвертации из джсон структуры в формат файла для впн-ядра
+            conf_converter_libs: Либы для файл-конвертеров
         """
         uuid = user_obj['user_uuid']
 
@@ -184,7 +207,9 @@ class ConfigWriteBuffer:
         # Сценарий 3: Первое обращение к ноде
         # Регистрируем ноду (загружаем существующих пользователей)
         log_event(f"Первое обращение к ноде | node_proto_id: \033[35m{node_proto_id}\033[0m | регистрируем")
-        reg_res, status_code, msg = await self.register_node(node_proto_id, filepath, user_injectors, reload_command, file_format)
+        reg_res, status_code, msg = await self.register_node(
+            node_proto_id, filepath, user_injectors, reload_command, config2json_script, json2config_script, conf_converter_libs
+        )
         if not reg_res:
             log_event(f'Не удалось зарегистрировать ноду | node_proto_id: \033[31m{node_proto_id}\033[0m', level='WARNING')
             return False, status_code, str(msg)
@@ -202,7 +227,9 @@ class ConfigWriteBuffer:
             filepath: str,
             user_injectors: list[dict],
             reload_command: str | None,
-            file_format: int,
+            config2json_script: str | None,
+            json2config_script: str | None,
+            conf_converter_libs: str | None,
     ):
         """
         Удаляет пользователя из буфера (O(1))
@@ -214,11 +241,16 @@ class ConfigWriteBuffer:
             users_path: Flatten-json путь до массива clients
             flatten_user_identifier_key: Flatten-json путь до идентификатора пользователя
             reload_command: Команда перезагрузки ядра (если нет hot-reload)
+            config2json_script: Скрипт для конвертации конфиг-файла в json структуру для нод клиента. Плюсы - поддержка любого конфига
+            json2config_script: Скрипт для конвертации из джсон структуры в формат файла для впн-ядра
+            conf_converter_libs: Либы для файл-конвертеров
         """
         "Проверяем очередь node_proto_id в буфере"
         if node_proto_id not in self.buffer_storage:
             log_event(f"Попытка удаления из незарегистрированной ноды, пробуем подгрузить её | node_proto_id: \033[33m{node_proto_id}\033[0m", level='WARNING')
-            reg_res, status_code, msg = await self.register_node(node_proto_id, filepath, user_injectors, reload_command, file_format)
+            reg_res, status_code, msg = await self.register_node(
+                node_proto_id, filepath, user_injectors, reload_command, config2json_script, json2config_script, conf_converter_libs
+            )
 
             "Если нет, пытаемся зарегать"
             if not reg_res:
@@ -269,10 +301,14 @@ class ConfigWriteBuffer:
             user_injectors: list[dict],
             reload_command: str | None,
             action: Literal["add", "delete"],
-            file_format: int,
+            config2json_script: str | None,
+            json2config_script: str | None,
+            conf_converter_libs: str | None,
     ):
         if not self.node_metadata.get(node_proto_id):
-            success, status_code, msg = await self.register_node(node_proto_id, filepath, user_injectors, reload_command, file_format)
+            success, status_code, msg = await self.register_node(
+                node_proto_id, filepath, user_injectors, reload_command, config2json_script, json2config_script, conf_converter_libs
+            )
             if not success:
                 return False, f"Не удалось выполнить действие. err: {msg}"
 
@@ -288,7 +324,9 @@ class ConfigWriteBuffer:
                     filepath=filepath,
                     user_injectors=user_injectors,
                     reload_command=reload_command,
-                    file_format=file_format,
+                    config2json_script=config2json_script,
+                    json2config_script=json2config_script,
+                    conf_converter_libs=conf_converter_libs,
                 )
         else:
             async with self.unlimit_queue(node_proto_id):
@@ -300,7 +338,9 @@ class ConfigWriteBuffer:
                         filepath=filepath,
                         user_injectors=user_injectors,
                         reload_command=reload_command,
-                        file_format=file_format,
+                        config2json_script=config2json_script,
+                        json2config_script=json2config_script,
+                        conf_converter_libs=conf_converter_libs,
                     )
         return True, "Операция выполнена"
 
@@ -319,10 +359,11 @@ class ConfigWriteBuffer:
             "Читаем конфиг. Если его нет, начинаем с чистого листа"
             # Просто список в памяти будет изначально пуст. При сбросах на диск файл появится сам
             ok, state_config = await self._read_config(f"{metadata['filepath']}.state.json", False)
+            state_config = orjson.loads(state_config)
 
             # Получаем массив clients
             if not ok:
-                log_event(f'Конфиг файл не найден! Начинаем с чистого листа! | node_proto_id: \033[33m{node_id}\033[0m', level='WARNING')
+                log_event(f'State Конфиг файл не найден! Начинаем с чистого листа! | node_proto_id: \033[33m{node_id}\033[0m', level='WARNING')
 
             users_arr = state_config.get('users', [])
             
@@ -402,10 +443,13 @@ class ConfigWriteBuffer:
             log_event(f"\033[34m[Write]\033[0m Запись на диск | node_proto_id: \033[32m{node_id}\033[0m | users: \033[34m{len(self.buffer_storage[node_id])}\033[0m")
 
             "0. Бэкап State в файл"
-            await self._write_config_atomic(f"{metadata['filepath']}.state.json", {'users': list(self.buffer_storage[node_id].values())})
+            json_bytes = orjson.dumps({'users': list(self.buffer_storage[node_id].values())}, option=orjson.OPT_INDENT_2)
+            await self._write_config_atomic(f"{metadata['filepath']}.state.json", json_bytes)
 
             "1. Читаем конфиги. Стейт - для формирирован (только для получения структуры)"
-            core_ok, config = await self._read_config(metadata['filepath'], True, metadata['file_format'])
+            core_ok, config = await self._read_config(metadata['filepath'], True)
+            # Конвертация в json формат
+            config = metadata['config2json_script'](config)
 
             "2. Прогоняем каждый массив операций для конкретно этого ядра"
             for inj in metadata['injectors']:
@@ -419,7 +463,9 @@ class ConfigWriteBuffer:
 
 
             "4. Атомарно записываем конфиг ядра"
-            await self._write_config_atomic(metadata['filepath'], config, metadata['file_format'])
+            # Конвертация из json в конифг-формат
+            config = metadata['json2config_script'](config)
+            await self._write_config_atomic(metadata['filepath'], config)
 
             "5. Перезагружаем ядро (если нужно)"
             if metadata['reload_command']:
@@ -501,7 +547,12 @@ class ConfigWriteBuffer:
         try:
             # 1. Читаем фарш (state.json) и конфиг
             state_ok, state_users = await self._read_config(state_filepath, False)
-            core_ok, config = await self._read_config(metadata['filepath'], False, metadata['file_format'])
+            # В json
+            state_users = orjson.loads(state_users)
+
+            core_ok, config = await self._read_config(metadata['filepath'], False)
+            # в Json
+            config = metadata['config2json_script'](config)
 
             if not state_ok or not core_ok:
                 log_event(f'\033[36m[Audit]\033[0m Предоставлены неправильные конфигурации. Файлы не найдены; node_proto_id: \033[31m{node_id}\033[0m; node_meta: \033[34m{metadata}\033[0m', level='ERROR')
@@ -564,32 +615,30 @@ class ConfigWriteBuffer:
     # ========== Утилиты для работы с конфиг-файлами ==========
     
     @staticmethod
-    async def _read_config(filepath: str, raise_exc: bool = False, file_format: int = 1) -> tuple[bool, dict]:
+    async def _read_config(filepath: str, raise_exc: bool = False) -> tuple[bool, str]:
         """
         Читает конфиг-файл
-
-        - file_format: по дефолту JSON(1)
         """
         try:
             async with aiofiles.open(filepath, mode='r', encoding='utf-8') as f:
                 content = await f.read()
-                return True, FileConverter.any2json(content, file_format)
+                return True, content
         except FileNotFoundError:
             log_event(f'Конфиг-файл не найден: "\033[31m{filepath}\033[0m"', level='ERROR')
             if not raise_exc:
-                return False, {}
+                return False, ''
 
             raise
 
         except orjson.JSONDecodeError as e:
             log_event(f'Ошибка парсинга JSON в "\033[31m{filepath}\033[0m"; error: \033[34m{e}\033[0m', level='ERROR')
             if not raise_exc:
-                return False, {}
+                return False, ''
 
             raise
     
     @staticmethod
-    async def _write_config_atomic(filepath: str, config_dict: dict, file_format: int = 1):
+    async def _write_config_atomic(filepath: str, bytes_content: bytes):
         """
         Атомарная запись конфига через временный файл
 
@@ -604,9 +653,7 @@ class ConfigWriteBuffer:
         try:
             # 1. Пишем во временный файл
             async with aiofiles.open(tmp_filepath, mode='wb') as f:
-
-                content = FileConverter.json2any(config_dict, file_format)
-                await f.write(content)
+                await f.write(bytes_content)
             
             # 2. Атомарно подменяем старый файл новым. mv в POSIX - один такт процессорного времени, - либо да, либо нет
             os.replace(str(tmp_filepath), filepath)
@@ -623,7 +670,7 @@ class ConfigWriteBuffer:
     def _navigate_to_path(config: dict, flatten_path: str) -> list:
         """
         Навигация по flatten-json пути до массива
-        
+
         Args:
             config: Конфиг-словарь
             flatten_path: Путь типа "inbounds___1___settings___clients"

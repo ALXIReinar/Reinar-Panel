@@ -1,14 +1,4 @@
 import asyncio
-import importlib
-import json
-import math
-import re
-import traceback
-from collections import defaultdict
-
-import flatten_json
-import jmespath
-import orjson
 from aiohttp import ClientResponseError, ClientSession
 from arq import ArqRedis
 from asyncpg import Pool
@@ -83,7 +73,6 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[dict], aio_http: Client
                 async with aio_http.post(url, json=json_body, timeout=env.node_client_command_timeout) as resp:
                     resp.raise_for_status()
                     resp_data = await resp.json()
-                
 
                 "Обновляем трафик, если был"
                 users_traffic = resp_data['users_traffic']
@@ -154,7 +143,9 @@ async def bulk_delete_by_traffic_limit(ctx: dict, outbox_event_ids: list, arq: A
                 vnode['constant_user_data_obj'],
                 vnode['required_user_data_obj'],
                 vnode['constant_node_data_obj'],
-                vnode['config_format'],
+                vnode['json2config_script'],
+                vnode['config2json_script'],
+                vnode['conf_converter_libs'],
             )
             log_event(f'\033[31m[ARQ Metrics Collector]\033[0m \033[34mTask Chaining, depth: \033[32m3\033[0m бульк delete летит на ноду | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
             log_event(f'\033[31m[ARQ Metrics Collector]\033[0m Фоновая задача запущена | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
@@ -226,98 +217,6 @@ def resolve_user_template(
             resolved[key] = value
 
     return resolved
-
-
-
-
-async def execute_script(script_text: str, stdout: str | dict, lib_names: str | None) -> tuple[bool, tuple, str]:
-    """
-    Выполняет динамический код парсера.
-    В скрипте должна быть определена функция parse(data)
-
-    WARNING. Возможна миграция обработки сырых метрик на нод-клиент
-    Current: нод-клиент отдаёт сырой выход из get_metrics скрипта. Он обрабатывается на саб-сервисе/МС фона
-
-    Args:
-    1. stdout.
-    - str. Сырой json от команды сбора метрик трафика с впн-ядра
-    - dict. Объект пользователя для вставки в список пользователей в впн ядре
-
-    :returns При Обработке метрик трафика
-        Happy case: True, (user_statistics, troubles), 'Plug Message'
-        Other Exception cases: False, (None, None), 'Err Reason'
-
-    :returns При обработке объекта пользователя для списка пользователей в впн-ядре
-        Happy case: True, Dict, 'Plug Message'
-        Other Exception cases: False, (None, None), 'Err Reason'
-    """
-    "Обработка строки-списка библиотек"
-    if lib_names is None:
-        lib_names = []
-    else:
-        lib_names = lib_names.split(',')
-    try:
-        # Подгружаем библиотеки пользователя
-        user_libs = {lib_name.strip(): importlib.import_module(lib_name.strip()) for lib_name in lib_names}
-        # Локальное окружение для скрипта
-        local_scope = {}
-        # Доступные либы в окружении исполняемого скрипта
-        global_scope = {
-            **user_libs,
-            "json": json,
-            "asyncio": asyncio,
-            "orjson": orjson,
-            "re": re,
-            "math": math,
-            "defaultdict": defaultdict,
-            "jmespath": jmespath,
-            "flatten_json": flatten_json,
-            # Запрещаем опасные встроенные функции типа open, eval, import
-            "__builtins__": {
-                "int": int, "str": str, "float": float, "list": list, "dict": dict,
-                "set": set, "len": len, "range": range, "round": round, "print": print,
-                "enumerate": enumerate, "zip": zip, "map": map, "filter": filter,
-                "isinstance": isinstance, "type": type, "dir": dir, "all": all, "any": any,
-                "Exception": Exception, "ValueError": ValueError, "KeyError": KeyError,
-                "NameError": NameError, "TypeError": TypeError, "AttributeError": AttributeError
-            }
-        }
-        # Выполняем скрипт
-        exec(script_text, global_scope, local_scope)
-
-        "Вызываем функцию из скрипта"
-        parse_func = (
-            local_scope.get("parse") or
-            local_scope.get("process_user_item")
-        )
-        if not parse_func:
-            return False, (None, None), "функция parse не найдена в скрипте!"
-
-        result = parse_func(stdout)
-
-        "Если async"
-        if asyncio.iscoroutine(result):
-            result = await result
-
-        log_event(f"Успешно Обработали stdout сбора метрик")
-        return True, result, 'Успешно Обработали stdout сбора метрик'
-
-    except ImportError as e:
-        log_event(f"\033[31mОШИБКА ИМПОРТА БИБЛИОТЕКИ\033[0m\nБиблиотека: {lib_names}\nAction: Parse Metrics\nДетали: {str(repr(e))}",level='CRITICAL')
-        return False, (None, None), f"Библиотека {lib_names} не найдена. Убедитесь что она установлена в виртуальном окружении."
-
-    except SyntaxError as e:
-        script_lines = script_text.split('\n')
-        error_line = script_lines[e.lineno - 1] if e.lineno and e.lineno <= len(script_lines) else "???"
-
-        log_event(f"\033[31mСИНТАКСИЧЕСКАЯ ОШИБКА В СКРИПТЕ\033[0m\nAction: Parse Metrics\nСтрока {e.lineno}: {error_line}\nОшибка: {e.msg}\nПозиция: {' ' * (e.offset - 1) if e.offset else ''}^\n", level='CRITICAL')
-
-        return False, (None, None), f"Синтаксическая ошибка в скрипте: {e.msg} (строка {e.lineno})"
-
-    except Exception as e:
-        tb_str = traceback.format_exc()
-        log_event(f"\033[31mОШИБКА ВЫПОЛНЕНИЯ СКРИПТА\033[0m\nAction: Parse Metrics\nБиблиотеки: {lib_names}\nТип ошибки: {type(e).__name__}\nСообщение: {str(e)}\n\nTraceback:\n{tb_str}\n", level='CRITICAL')
-        return False, (None, None), f"Ошибка выполнения скрипта ({type(e).__name__}): {repr(e)}"
 
 
 def create_vpn_like_user(

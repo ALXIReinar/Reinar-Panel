@@ -28,7 +28,9 @@ async def bulk_action_users_by_node(
         required_user_data_obj: dict,
         constant_user_data_obj: dict,
         constant_node_data_obj: dict,
-        config_format: str,
+        json2config_script: str,
+        config2json_script: str,
+        conf_converter_libs: str,
         current_attempt = 1,
         db: PgSql = None,
         arq: ArqRedis = None,
@@ -68,7 +70,9 @@ async def bulk_action_users_by_node(
         'user_injectors': user_injectors,
         'custom_params': bulk_action_script_custom_params,
         'action': operation,
-        'file_format': config_format,
+        'json2config_script': json2config_script,
+        'config2json_script': config2json_script,
+        'conf_converter_libs': conf_converter_libs,
     }
     try:
         "2. Отправляем запрос на ноду, для изменений в впн-ядре"
@@ -126,7 +130,9 @@ async def bulk_action_users_by_node(
             required_user_data_obj,
             constant_user_data_obj,
             constant_node_data_obj,
-            config_format,
+            json2config_script,
+            config2json_script,
+            conf_converter_libs,
             current_attempt + 1,            # Инкрементируем попытку
             _defer_by=defer_seconds         # Откладываем выполнение
         )

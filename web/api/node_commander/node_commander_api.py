@@ -210,6 +210,9 @@ async def add_user(
         vnode['required_user_data_obj'],
         vnode['constant_user_data_obj'],
         vnode['constant_node_data_obj'],
+        vnode['json2config_script'],
+        vnode['config2json_script'],
+        vnode['conf_converter_libs'],
     )
     log_event(f'\033[35m[Node Command Center]\033[0m Отправили в фон \033[34m{body.action}\033[0m на ноду | node_proto_id: \033[33m{body.node_proto_id}\033[0m; uuid: \033[32m{body.uuid}\033[0m; job_id: \033[31m{job.job_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
 

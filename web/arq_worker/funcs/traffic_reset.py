@@ -59,7 +59,9 @@ async def reset_day_user_traffic(
                 vnode['required_user_data_obj'],
                 vnode['constant_user_data_obj'],
                 vnode['constant_node_data_obj'],
-                vnode['config_format'],
+                vnode['json2config_script'],
+                vnode['config2json_script'],
+                vnode['conf_converter_libs'],
             )
             log_event(f'\033[35m[Traffic Reset]\033[0m Фоновая задача запущена, бульк-добавление | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
 

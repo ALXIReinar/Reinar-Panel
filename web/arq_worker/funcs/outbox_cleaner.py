@@ -82,7 +82,9 @@ async def retry_stuck_core_proto_actions(ctx: dict, db: PgSql = None, arq: ArqRe
                     vnode['required_user_data_obj'],
                     vnode['constant_user_data_obj'],
                     vnode['constant_node_data_obj'],
-                    vnode['config_format'],
+                    vnode['json2config_script'],
+                    vnode['config2json_script'],
+                    vnode['conf_converter_libs'],
                 )
                 log_event(f'\033[35m[ARQ Cron]\033[0m Ретрай операции в vpn-ядро протокола | node_proto_id: \033[32m{vnode['node_proto_id']}\033[0m; operation: \033[36m{operation}\033[0m', job_id=job.job_id)
             "3. Кидаем на одну ноду 2 пачки"

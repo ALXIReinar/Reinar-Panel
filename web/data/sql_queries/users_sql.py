@@ -288,7 +288,7 @@ class UsersQueries:
         SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib, pt.api_bulk_delete_user_script, 
                np.config_path, pt.bulk_delete_script_custom_params, pt.constant_user_data_obj, pt.required_user_data_obj,
                pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, np.constant_node_data_obj,
-               pau.users, pt.config_format,
+               pau.users, pt.json2config_script, pt.config2json_script, pt.conf_converter_libs,
                COALESCE(np.reload_core_command, pt.reload_core_command) AS reload_core_command, -- Предпочтение индивидуальной команде, фоллбек на шаблонную
                COALESCE(aui.user_injectors, '[]'::json) AS user_injectors
         FROM nodes_protocols np

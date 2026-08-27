@@ -57,7 +57,9 @@ async def bulk_action_users_core(body: BaseUserCoreSchema, request: Request, buf
         user_injectors=[u_inj.model_dump() for u_inj in body.user_injectors],
         reload_command=body.reload_core_command,
         action=body.action,
-        file_format=body.file_format,
+        config2json_script=body.config2json_script,
+        json2config_script=body.json2config_script,
+        conf_converter_libs=body.conf_converter_libs,
     )
 
     level = "INFO" if success else "CRITICAL"

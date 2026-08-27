@@ -13,7 +13,9 @@ class BaseUserCoreSchema(BaseModel):
     user_injectors: list["UserInjector"]
     users: list[dict]
     action_script: str | None
-    file_format: int = Field(ge=1, le=3, description='Поддерживается 3 формата: 1 - json(самый предпочитаемый), 2 - conf, 3 - yml/yaml')
+    config2json_script: str | None = Field(description='Конвертер-скрпт конфига из его формата в json-структуру(python dict)')
+    json2config_script: str | None = Field(description='Конвертер-скрпт из json-структуры в dict')
+    conf_converter_libs: str | None
 
     action: Literal["add", "delete"] = Field(description="Операция, выполняемая скриптом. Вставка или удаление. 1 - add, 2 - delete. Допускаются строки и цифры")
 

@@ -68,7 +68,9 @@ async def update_template(tmp_id: int, body: UpdateTmpSchema, request: Request, 
         bulk_delete_script_custom_params=body.bulk_delete_script_custom_params,
         bulk_add_script_custom_params=body.bulk_add_script_custom_params,
         api_metrics_script=body.api_metrics_script,
-        config_format=body.config_format,
+        json2config_script=body.json2config_script,
+        config2json_script=body.config2json_script,
+        conf_converter_libs=body.conf_converter_libs,
     )
     
     "Шаблон не найден"

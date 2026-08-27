@@ -77,7 +77,9 @@ async def action_on_core_proto_by_sub_plan(
                 'config_file_path': node['config_path'],
                 'user_injectors': node['user_injectors'],
                 'action': operation,
-                'file_format': node['config_format'],
+                'json2config_script': node['json2config_script'],
+                'config2json_script': node['config2json_script'],
+                'conf_converter_libs': node['conf_converter_libs'],
             }
 
             "Выбираем нужный скрипт в зависимости от операции"

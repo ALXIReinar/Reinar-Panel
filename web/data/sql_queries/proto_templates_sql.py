@@ -106,22 +106,24 @@ class ProtoTemplatesQueries:
     async def update(
         self,
         tmp_id: int,
-        title: str | None = None,
-        url_tmp: str | None = None,
-        reload_core_command: str | None = None,
-        required_user_data_obj: dict | None = None,
-        constant_user_data_obj: dict | None = None,
-        proto_python_lib: str | None = None,
-        sub_prepare_script: str | None = None,
-        sub_required_libs: str | None = None,
-        api_bulk_delete_user_script: str | None = None,
-        api_bulk_add_user_script: str | None = None,
-        metrics_parser_code: str | None = None,
-        metrics_command: str | None = None,
-        bulk_delete_script_custom_params: dict | None = None,
-        bulk_add_script_custom_params: dict | None = None,
-        api_metrics_script: str | None = None,
-        config_format: int | None = None,
+        title: str | None,
+        url_tmp: str | None,
+        reload_core_command: str | None,
+        required_user_data_obj: dict | None,
+        constant_user_data_obj: dict | None,
+        proto_python_lib: str | None,
+        sub_prepare_script: str | None,
+        sub_required_libs: str | None,
+        api_bulk_delete_user_script: str | None,
+        api_bulk_add_user_script: str | None,
+        metrics_parser_code: str | None,
+        metrics_command: str | None,
+        bulk_delete_script_custom_params: dict | None,
+        bulk_add_script_custom_params: dict | None,
+        api_metrics_script: str | None | int,
+        json2config_script: str | None | int,
+        config2json_script: str | None | int,
+        conf_converter_libs: str | None | int,
     ) -> tuple[int, str]:
         """
         Обновить шаблон (универсальный метод для всех полей)
@@ -210,9 +212,19 @@ class ProtoTemplatesQueries:
             params.append(api_metrics_script)
             param_idx += 1
 
-        if config_format is not None:
-            updates.append(f"config_format = ${param_idx}")
-            params.append(api_metrics_script)
+        if json2config_script != 0:
+            updates.append(f"json2config_script = ${param_idx}")
+            params.append(json2config_script)
+            param_idx += 1
+
+        if config2json_script != 0:
+            updates.append(f"config2json_script = ${param_idx}")
+            params.append(config2json_script)
+            param_idx += 1
+
+        if conf_converter_libs != 0:
+            updates.append(f"conf_converter_libs = ${param_idx}")
+            params.append(conf_converter_libs)
             param_idx += 1
 
         if not updates:

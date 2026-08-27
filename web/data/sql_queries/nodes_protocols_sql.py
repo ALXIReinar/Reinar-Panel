@@ -208,7 +208,7 @@ class NodesProtocolsQueries:
                pt.api_bulk_delete_user_script, COALESCE(np.reload_core_command, pt.reload_core_command) AS reload_core_command, -- Предпочтение индивидуальной команде, фоллбек на шаблонную
                np.config_path, pt.required_user_data_obj,
                pt.constant_user_data_obj, pt.bulk_delete_script_custom_params, pt.bulk_add_script_custom_params, oi.id AS event_id,
-               np.constant_node_data_obj, pt.config_format,
+               np.constant_node_data_obj, pt.json2config_script, pt.config2json_script, pt.conf_converter_libs,
                COALESCE(aui.user_injectors, '[]'::json) AS user_injectors
         FROM nodes_protocols np
         JOIN protocols p ON np.proto_id = p.id
