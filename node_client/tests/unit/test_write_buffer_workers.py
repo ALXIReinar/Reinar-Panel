@@ -78,7 +78,10 @@ async def test_worker_triggers_on_max_batch(config_with_2_users):
         node_proto_id=node_proto_id,
         filepath=str(config_with_2_users),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Добавляем первые 5 пользователей (достигаем max_batch)
@@ -89,7 +92,10 @@ async def test_worker_triggers_on_max_batch(config_with_2_users):
             user_obj=user,
             filepath=str(config_with_2_users),
             user_injectors=user_injectors,
-            reload_command=None
+            reload_command=None, 
+            config2json_script=None,
+            json2config_script=None,
+            conf_converter_libs=None,
         )
     
     # Даём время воркеру начать обработку первого батча
@@ -102,7 +108,10 @@ async def test_worker_triggers_on_max_batch(config_with_2_users):
         user_obj=user6,
         filepath=str(config_with_2_users),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None, 
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None,
     )
     
     # В очереди должна быть 1 операция (6-й пользователь)
@@ -144,15 +153,18 @@ async def test_worker_triggers_on_timeout(config_with_2_users):
         node_proto_id=node_proto_id,
         filepath=str(config_with_2_users),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None, 
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None,
     )
     
     # Добавляем только 2 пользователя (не достигаем max_batch)
     user1 = create_test_user(email="timeout_user_1@test.com", uuid="uuid-t1", as_superuser=True)
     user2 = create_test_user(email="timeout_user_2@test.com", uuid="uuid-t2", as_superuser=True)
     
-    await buffer.add_user(node_proto_id=node_proto_id, user_obj=user1, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None)
-    await buffer.add_user(node_proto_id=node_proto_id, user_obj=user2, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None)
+    await buffer.add_user(node_proto_id=node_proto_id, user_obj=user1, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
+    await buffer.add_user(node_proto_id=node_proto_id, user_obj=user2, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
     
     # Ждём больше чем timeout для срабатывания воркера
     await asyncio.sleep(1.5)
@@ -191,7 +203,10 @@ async def test_worker_respects_queue_limited_flag(config_with_2_users):
         node_proto_id=node_proto_id,
         filepath=str(config_with_2_users),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None, 
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None,
     )
     
     # Отключаем лимиты очереди для конкретной ноды
@@ -205,7 +220,10 @@ async def test_worker_respects_queue_limited_flag(config_with_2_users):
             user_obj=user,
             filepath=str(config_with_2_users),
             user_injectors=user_injectors,
-            reload_command=None
+            reload_command=None,
+            config2json_script=None,
+            json2config_script=None,
+            conf_converter_libs=None
         )
     
     # Ждём (воркер НЕ должен записать)
@@ -244,7 +262,10 @@ async def test_worker_handles_empty_queue(config_with_2_users):
         node_proto_id=node_proto_id,
         filepath=str(config_with_2_users),
         user_injectors=create_user_injectors(),
-        reload_command=None
+        reload_command=None, 
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None,
     )
     
     # Запоминаем время изменения файла
@@ -301,17 +322,17 @@ async def test_worker_isolation_between_nodes(tmp_path):
     user_injectors = create_user_injectors()
     
     # Регистрируем обе ноды
-    await buffer.register_node(node_proto_id=1, filepath=str(config1), user_injectors=user_injectors, reload_command=None)
-    await buffer.register_node(node_proto_id=2, filepath=str(config2), user_injectors=user_injectors, reload_command=None)
+    await buffer.register_node(node_proto_id=1, filepath=str(config1), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
+    await buffer.register_node(node_proto_id=2, filepath=str(config2), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
     
     # Добавляем по 2 пользователя в каждую ноду
     for i in range(2):
         user1 = create_test_user(email=f"node1_user_{i}@test.com", uuid=f"uuid-n1-{i}", as_superuser=True)
         user2 = create_test_user(email=f"node2_user_{i}@test.com", uuid=f"uuid-n2-{i}", as_superuser=True)
         
-        await buffer.add_user(node_proto_id=1, user_obj=user1, filepath=str(config1), user_injectors=user_injectors, reload_command=None)
-        await buffer.add_user(node_proto_id=2, user_obj=user2, filepath=str(config2), user_injectors=user_injectors, reload_command=None)
-    
+        await buffer.add_user(node_proto_id=1, user_obj=user1, filepath=str(config1), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
+        await buffer.add_user(node_proto_id=2, user_obj=user2, filepath=str(config2), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
+
     # Портим путь к файлу ноды 1 (эмулируем ошибку)
     buffer.node_metadata[1]['filepath'] = str(tmp_path / "nonexistent.json")
     
@@ -353,7 +374,10 @@ async def test_write_to_disk_success(config_with_2_users):
         node_proto_id=node_proto_id,
         filepath=str(config_with_2_users),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None, 
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None,
     )
     
     # Добавляем 3 пользователей в буфер (но не триггерим воркер)
@@ -364,7 +388,10 @@ async def test_write_to_disk_success(config_with_2_users):
             user_obj=user,
             filepath=str(config_with_2_users),
             user_injectors=user_injectors,
-            reload_command=None
+            reload_command=None, 
+            config2json_script=None,
+            json2config_script=None,
+            conf_converter_libs=None,
         )
     
     # Проверяем что в буфере 5 пользователей
@@ -432,11 +459,11 @@ async def test_write_preserves_file_structure(tmp_path):
     user_injectors = create_user_injectors()
     
     # Регистрируем ноду
-    await buffer.register_node(node_proto_id=node_proto_id, filepath=str(config_path), user_injectors=user_injectors, reload_command=None)
+    await buffer.register_node(node_proto_id=node_proto_id, filepath=str(config_path), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None,)
     
     # Добавляем пользователя
     new_user = create_test_user(email="new@test.com", uuid="uuid-new", as_superuser=True)
-    await buffer.add_user(node_proto_id=node_proto_id, user_obj=new_user, filepath=str(config_path), user_injectors=user_injectors, reload_command=None)
+    await buffer.add_user(node_proto_id=node_proto_id, user_obj=new_user, filepath=str(config_path), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
     
     # Записываем на диск
     await buffer._write_node_to_disk(node_proto_id)
@@ -485,12 +512,15 @@ async def test_write_with_reload_command(config_with_2_users, tmp_path):
         node_proto_id=node_proto_id,
         filepath=str(config_with_2_users),
         user_injectors=user_injectors,
-        reload_command=reload_command
+        reload_command=reload_command,
+        config2json_script=None, 
+        json2config_script=None, 
+        conf_converter_libs=None,
     )
     
     # Добавляем пользователя
     user = create_test_user(email="reload_test@test.com", uuid="uuid-reload", as_superuser=True)
-    await buffer.add_user(node_proto_id=node_proto_id, user_obj=user, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=reload_command)
+    await buffer.add_user(node_proto_id=node_proto_id, user_obj=user, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=reload_command, config2json_script=None, json2config_script=None, conf_converter_libs=None)
     
     # Проверяем что маркера ещё нет
     assert not marker_file.exists()
@@ -518,11 +548,11 @@ async def test_write_without_reload_command(config_with_2_users):
     user_injectors = create_user_injectors()
     
     # Регистрируем ноду БЕЗ команды перезагрузки
-    await buffer.register_node(node_proto_id=node_proto_id, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None)
+    await buffer.register_node(node_proto_id=node_proto_id, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
     
     # Добавляем пользователя
     user = create_test_user(email="no_reload@test.com", uuid="uuid-noreload", as_superuser=True)
-    await buffer.add_user(node_proto_id=node_proto_id, user_obj=user, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None)
+    await buffer.add_user(node_proto_id=node_proto_id, user_obj=user, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
     
     # Записываем на диск
     await buffer._write_node_to_disk(node_proto_id)
@@ -548,7 +578,7 @@ async def test_unlimit_queue_disables_limits(config_with_2_users):
     user_injectors = create_user_injectors()
     
     # Регистрируем ноду
-    await buffer.register_node(node_proto_id=node_proto_id, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None)
+    await buffer.register_node(node_proto_id=node_proto_id, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
     
     # Изначально True
     assert buffer.node_metadata[node_proto_id]['queue_limited'] is True
@@ -574,14 +604,14 @@ async def test_unlimit_queue_flushes_on_exit(config_with_2_users):
     user_injectors = create_user_injectors()
     
     # Регистрируем ноду
-    await buffer.register_node(node_proto_id=node_proto_id, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None)
+    await buffer.register_node(node_proto_id=node_proto_id, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
     
     # Используем unlimit режим
     async with buffer.unlimit_queue(node_proto_id):
         # Добавляем 3 пользователя (не достигаем max_batch=10)
         for i in range(3):
             user = create_test_user(email=f"unlimit_{i}@test.com", uuid=f"uuid-ul-{i}", as_superuser=True)
-            await buffer.add_user(node_proto_id=node_proto_id, user_obj=user, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None)
+            await buffer.add_user(node_proto_id=node_proto_id, user_obj=user, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
     
     # После выхода из контекста данные ДОЛЖНЫ записаться
     await asyncio.sleep(0.3)
@@ -605,7 +635,7 @@ async def test_unlimit_queue_restores_flag(config_with_2_users):
     user_injectors = create_user_injectors()
     
     # Регистрируем ноду
-    await buffer.register_node(node_proto_id=node_proto_id, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None)
+    await buffer.register_node(node_proto_id=node_proto_id, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
     
     # Изначально True
     assert buffer.node_metadata[node_proto_id]['queue_limited'] is True
@@ -640,7 +670,7 @@ async def test_bulk_operations_without_intermediate_writes(config_with_2_users):
     user_injectors = create_user_injectors()
     
     # Регистрируем ноду
-    await buffer.register_node(node_proto_id=node_proto_id, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None)
+    await buffer.register_node(node_proto_id=node_proto_id, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
     
     # Запоминаем время изменения файла
     initial_mtime = config_with_2_users.stat().st_mtime
@@ -650,7 +680,7 @@ async def test_bulk_operations_without_intermediate_writes(config_with_2_users):
         # Добавляем 20 пользователей
         for i in range(20):
             user = create_test_user(email=f"bulk_{i}@test.com", uuid=f"uuid-bulk-{i}", as_superuser=True)
-            await buffer.add_user(node_proto_id=node_proto_id, user_obj=user, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None)
+            await buffer.add_user(node_proto_id=node_proto_id, user_obj=user, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
         
         # Ждём больше чем timeout
         await asyncio.sleep(2.5)
@@ -691,19 +721,22 @@ async def test_stop_cancels_all_workers(tmp_path):
     
     # Регистрируем 3 ноды
     for i, config_path in enumerate(configs):
-        await buffer.register_node(node_proto_id=i + 1, filepath=str(config_path), user_injectors=user_injectors, reload_command=None)
+        await buffer.register_node(node_proto_id=i + 1, filepath=str(config_path), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
     
     # Проверяем что все воркеры запущены
     for i in range(1, 4):
         assert i in buffer.worker_tasks
         assert not buffer.worker_tasks[i].done()
     
+    # Сохраняем ссылки на таски перед остановкой
+    tasks = {i: buffer.worker_tasks[i] for i in range(1, 4)}
+    
     # Останавливаем
     await buffer.stop()
     
     # Проверяем что все воркеры остановлены (done)
     for i in range(1, 4):
-        assert buffer.worker_tasks[i].done()
+        assert tasks[i].done()
 
 
 @pytest.mark.slow
@@ -716,12 +749,12 @@ async def test_stop_flushes_pending_operations(config_with_2_users):
     user_injectors = create_user_injectors()
     
     # Регистрируем ноду
-    await buffer.register_node(node_proto_id=node_proto_id, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None)
+    await buffer.register_node(node_proto_id=node_proto_id, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
     
     # Добавляем пользователей (не достигая max_batch и не дожидаясь timeout)
     for i in range(3):
         user = create_test_user(email=f"pending_{i}@test.com", uuid=f"uuid-pend-{i}", as_superuser=True)
-        await buffer.add_user(node_proto_id=node_proto_id, user_obj=user, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None)
+        await buffer.add_user(node_proto_id=node_proto_id, user_obj=user, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
     
     # Вызываем stop (должен сбросить остатки)
     await buffer.stop()
@@ -740,7 +773,7 @@ async def test_stop_idempotent(config_with_2_users):
     user_injectors = create_user_injectors()
     
     # Регистрируем ноду
-    await buffer.register_node(node_proto_id=node_proto_id, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None)
+    await buffer.register_node(node_proto_id=node_proto_id, filepath=str(config_with_2_users), user_injectors=user_injectors, reload_command=None, config2json_script=None, json2config_script=None, conf_converter_libs=None)
     
     # Вызываем stop() три раза
     await buffer.stop()

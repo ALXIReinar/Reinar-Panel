@@ -1,6 +1,7 @@
 """
 Конфигурация pytest для тестирования нод-клиента
 """
+import asyncio
 import os
 import shutil
 from dataclasses import dataclass
@@ -45,6 +46,7 @@ class TemplateScriptFields:
     bulk_delete_users: str = 'api_bulk_delete_user_script'
     get_metrics: str = 'api_metrics_script'
     metrics_parser: str = 'metrics_parser_code'
+    metrics_parser_libs: str = 'metrics_parser_libs'  # Добавлено для парсера метрик
     lib_names: str = 'proto_python_lib'
     custom_params_bulk_add: str = 'bulk_add_script_custom_params'
     custom_params_bulk_delete: str = 'bulk_delete_script_custom_params'
@@ -390,6 +392,14 @@ async def mock_core_buffer(tmp_path):
     await buffer.stop()
 
 
+@pytest.fixture
+async def mock_buffer(mock_core_buffer):
+    """
+    Алиас для mock_core_buffer для совместимости с integrate тестами
+    """
+    return mock_core_buffer
+
+
 # ========== Mock Fixtures ==========
 
 @pytest.fixture
@@ -508,6 +518,8 @@ async def e2e_buffer(tmp_path):
     buffer = ConfigWriteBuffer(max_batch=5, timeout=0.3)
     yield buffer
     await buffer.stop()
+    # Небольшая задержка для гарантии завершения всех I/O операций
+    await asyncio.sleep(0.1)
 
 
 @pytest.fixture

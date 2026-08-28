@@ -60,14 +60,14 @@ class ExecCMDNodeSchema(RemoteExecBaseSchema):
 
 class ReadConfigSchema(BaseModel):
     node_proto_id: int
-    flatten_json_users_key: str | None = Field(default=None, description="Ключ к списку пользователей в конфиге. При чтении с админки этот объект вырезается во избежание лишних сетевых расходов")
+    flatten_json_users_key: list[str] = Field(default=None, description="Ключ к списку пользователей в конфиге. При чтении с админки этот объект вырезается во избежание лишних сетевых расходов")
 
 
 
 class WriteConfigSchema(BaseModel):
     node_proto_id: int
     file_content: str
-    flatten_json_users_key: str | None = Field(description='Ключ к списку пользователей в конфиге. При записи этот объект переносится из старого файла')
+    flatten_json_users_key: list[str] = Field(description='Ключ к списку пользователей в конфиге. При записи этот объект переносится из старого файла')
 
 
 class UserCoreProtoActionSchema(BaseModel):

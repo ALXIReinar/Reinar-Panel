@@ -19,7 +19,7 @@ class ScriptExecutor:
             sub_prepare_script: str,
             required_libs: str | None,
             user_obj: dict,
-            config_link: str
+            config_link: dict,
     ):
         # 1. Формируем список БАЗОВЫХ разрешенных пакетов
         allowed_packages = {
@@ -73,7 +73,7 @@ class ScriptExecutor:
             if not parse_func:
                 return False, "Функция 'prepare_sub' не найдена в скрипте."
 
-            result = parse_func(user_obj, config_link)
+            result = parse_func(user_obj, config_link['conf_url'], config_link['n_address'], config_link['n_title'])
 
             if asyncio.iscoroutine(result):
                 result = await result

@@ -64,13 +64,11 @@ async def test_sub_prepare_script_execution(sub_prepare_infrastructure):
             # 2. Генерируем mock node config
             mock_config = generate_mock_node_config(placeholders)
             
-            # 3. Рендерим config_link через generate_link_from_json (БЕЗ punycode!)
+            # 3. Рендерим config_link через generate_link_from_json (только двойные плейсхолдеры)
             try:
-                config_link = render_config_link_for_test(
+                conf_url = render_config_link_for_test(
                     url_tmp=template['url_tmp'],
-                    node_config_json=mock_config,
-                    node_address=node_address,
-                    node_title=node_title
+                    node_config_json=mock_config
                 )
             except Exception as e:
                 errors.append({
@@ -101,11 +99,16 @@ async def test_sub_prepare_script_execution(sub_prepare_infrastructure):
                 continue
 
             # 5. Вызываем prepare_sub через ScriptExecutor
+            # ВАЖНО: config_link теперь dict с conf_url, n_address, n_title
             success, output = await ScriptExecutor.executing_link_processing(
                 sub_prepare_script=template['sub_prepare_script'],
                 required_libs=template['sub_required_libs'],
                 user_obj=user_super_obj,
-                config_link=config_link
+                config_link={
+                    'conf_url': conf_url,  # Рендеренная ссылка с двойными плейсхолдерами
+                    'n_address': node_address,  # Из фикстуры (БД)
+                    'n_title': node_title  # Из фикстуры (БД)
+                }
             )
 
             # 6. Проверки результата
@@ -114,7 +117,7 @@ async def test_sub_prepare_script_execution(sub_prepare_infrastructure):
                     'template': template['title'],
                     'step': 'execute_prepare_sub',
                     'error': output,
-                    'config_link': config_link[:200]  # Первые 200 символов для дебага
+                    'conf_url': conf_url[:200]  # Первые 200 символов для дебага
                 })
                 continue
             
@@ -204,8 +207,8 @@ async def test_sub_prepare_script_execution(sub_prepare_infrastructure):
             print(f"\n  Template: {err['template']}")
             print(f"  Step: {err['step']}")
             print(f"  Error: {err['error']}")
-            if 'config_link' in err:
-                print(f"  Config link: {err['config_link']}")
+            if 'conf_url' in err:
+                print(f"  Config URL: {err['conf_url']}")
             if 'result' in err:
                 print(f"  Result: {err['result']}")
         
@@ -289,11 +292,9 @@ async def test_sub_prepare_no_double_encoding(sub_prepare_infrastructure):
             placeholders = extract_jinja_placeholders(template['url_tmp'])
             mock_config = generate_mock_node_config(placeholders)
             
-            config_link = render_config_link_for_test(
+            conf_url = render_config_link_for_test(
                 url_tmp=template['url_tmp'],
-                node_config_json=mock_config,
-                node_address=node_address,
-                node_title=node_title
+                node_config_json=mock_config
             )
             
             # 2. Создаём user_super_obj
@@ -312,12 +313,16 @@ async def test_sub_prepare_no_double_encoding(sub_prepare_infrastructure):
                 # Пропускаем если не смогли создать user_obj
                 continue
             
-            # 3. Выполняем prepare_sub
+            # 3. Выполняем prepare_sub с dict config_link
             success, final_link = await ScriptExecutor.executing_link_processing(
                 sub_prepare_script=template['sub_prepare_script'],
                 required_libs=template['sub_required_libs'],
                 user_obj=user_super_obj,
-                config_link=config_link
+                config_link={
+                    'conf_url': conf_url,
+                    'n_address': node_address,
+                    'n_title': node_title
+                }
             )
             
             if not success:

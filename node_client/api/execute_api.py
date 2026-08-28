@@ -78,6 +78,19 @@ async def get_metrics(body: MetricsSchema, buffer: CoreBuffersDep, request: Requ
     # xray api statsquery --server=127.0.0.1:{} -pattern "user>>>" -reset
     cmd_str = body.command.format(body.metrics_port)
     # xray api statsquery --server=127.0.0.1:10085 -pattern "user>>>" -reset
+    
+    # Проверяем что нода зарегистрирована
+    if body.node_proto_id not in buffer.buffer_storage:
+        log_event(f'\033[35m[Metrics Grabbing]\033[0m Нода не зарегистрирована в буфере | node_proto_id: \033[31m{body.node_proto_id}\033[0m', request=request, level='WARNING')
+        raise HTTPException(
+            status_code=404, 
+            detail={
+                "success": False, 
+                "error": "Node not registered", 
+                "message": f"Нода {body.node_proto_id} не зарегистрирована в ConfigWriteBuffer. Нет активных пользователей."
+            }
+        )
+    
     try:
 
         api_metrics, cli_metrics = None, None

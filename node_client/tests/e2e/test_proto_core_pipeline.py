@@ -116,7 +116,10 @@ def create_e2e_request_body(
     core_lib: str = None,
     core_port: int = None,
     action_script: str = None,
-    custom_params: dict = None
+    custom_params: dict = None,
+    config2json_script: str = None,
+    json2config_script: str = None,
+    conf_converter_libs: str = None
 ) -> dict:
     """
     Создаёт правильное тело запроса для /proto_core/user/bulk/action
@@ -132,6 +135,9 @@ def create_e2e_request_body(
         core_port: Порт API ядра
         action_script: Скрипт для hot-reload
         custom_params: Дополнительные параметры для скрипта
+        config2json_script: Конвертер из формата конфига в JSON (None если конфиг уже JSON)
+        json2config_script: Конвертер из JSON в формат конфига (None если конфиг уже JSON)
+        conf_converter_libs: Библиотеки для конвертеров (None если не нужны)
     
     Returns:
         dict: Валидное тело запроса согласно BaseUserCoreSchema
@@ -146,8 +152,29 @@ def create_e2e_request_body(
         "core_lib": core_lib,
         "core_port": core_port,
         "action_script": action_script,
-        "custom_params": custom_params or {}
+        "custom_params": custom_params or {},
+        "config2json_script": config2json_script,
+        "json2config_script": json2config_script,
+        "conf_converter_libs": conf_converter_libs
     }
+
+
+async def read_config_with_converter(buffer, config_path: str, node_proto_id: int = 1) -> dict:
+    """
+    Helper: читает конфиг и применяет config2json конвертер
+    
+    Args:
+        buffer: ConfigWriteBuffer instance
+        config_path: Путь к конфиг-файлу
+        node_proto_id: ID ноды (для получения конвертера из metadata)
+    
+    Returns:
+        dict: Десериализованный конфиг
+    """
+    _, config_str = await buffer._read_config(config_path)
+    # Применяем конвертер config2json (по умолчанию orjson.loads)
+    config = buffer.node_metadata[node_proto_id]['config2json_script'](config_str)
+    return config
 
 
 # ========== Локальные фикстуры ==========
@@ -294,7 +321,7 @@ async def test_add_user_without_api_script_only_file(
         assert "e2e-test-uuid-no-script" in e2e_buffer.buffer_storage[1]  # Проверяем по user_uuid
         
         # Читаем файл и проверяем наличие пользователя
-        _, updated_config = await e2e_buffer._read_config(str(e2e_config_path))
+        updated_config = await read_config_with_converter(e2e_buffer, str(e2e_config_path))
         updated_users = e2e_buffer._navigate_to_path(updated_config, "inbounds___1___settings___clients")
         
         # Проверяем что пользователь добавлен (должен быть ровно 1 пользователь)
@@ -401,7 +428,7 @@ async def test_delete_user_without_api_script_only_file(
         assert "e2e-delete-uuid" not in e2e_buffer.buffer_storage[1]
         
         # Читаем файл и проверяем отсутствие пользователя
-        _, after_delete_config = await e2e_buffer._read_config(str(e2e_config_path))
+        after_delete_config = await read_config_with_converter(e2e_buffer, str(e2e_config_path))
         after_delete_users = e2e_buffer._navigate_to_path(after_delete_config, "inbounds___1___settings___clients")
         
         # Проверяем что массив пустой (был 1 пользователь, удалили его)
@@ -483,7 +510,7 @@ async def test_add_user_with_api_script_success_no_reload(
         assert "e2e-hot-reload-success" in e2e_buffer.buffer_storage[1]
         
         # Читаем файл
-        _, updated_config = await e2e_buffer._read_config(str(e2e_config_path))
+        updated_config = await read_config_with_converter(e2e_buffer, str(e2e_config_path))
         updated_users = e2e_buffer._navigate_to_path(updated_config, "inbounds___1___settings___clients")
         
         # Проверяем что пользователь добавлен (должен быть 1)
@@ -573,7 +600,7 @@ async def bulk_add_users(users_list, node_ip, core_port, custom_params):
         assert "e2e-hot-reload-fail" in e2e_buffer.buffer_storage[1]
         
         # Читаем файл
-        _, updated_config = await e2e_buffer._read_config(str(e2e_config_path))
+        updated_config = await read_config_with_converter(e2e_buffer, str(e2e_config_path))
         updated_users = e2e_buffer._navigate_to_path(updated_config, "inbounds___1___settings___clients")
         
         # Проверяем длину массива
@@ -665,7 +692,7 @@ async def test_bulk_add_users_with_api_script_unlimit_flush(
         assert user['user_uuid'] in e2e_buffer.buffer_storage[1]
     
     # Читаем файл
-    _, updated_config = await e2e_buffer._read_config(str(e2e_config_path))
+    updated_config = await read_config_with_converter(e2e_buffer, str(e2e_config_path))
     updated_users = e2e_buffer._navigate_to_path(updated_config, "inbounds___1___settings___clients")
     
     # Проверяем что добавлено 10 пользователей
@@ -766,7 +793,7 @@ async def test_bulk_delete_users_without_api_script(
         assert user['user_uuid'] not in e2e_buffer.buffer_storage[1]
     
     # Читаем файл
-    _, after_delete_config = await e2e_buffer._read_config(str(e2e_config_path))
+    after_delete_config = await read_config_with_converter(e2e_buffer, str(e2e_config_path))
     after_delete_users = e2e_buffer._navigate_to_path(after_delete_config, "inbounds___1___settings___clients")
     
     # Проверяем что массив пустой (было 5, удалили 5)
@@ -853,11 +880,17 @@ async def test_e2e_add_user_with_hot_reload_and_verify_metrics(
     await asyncio.sleep(0.5)
     
     # 2. Получаем метрики через /node/metrics
+    metrics_parser = get_script_from_template(TemplateScriptFields.metrics_parser)
+    metrics_parser_libs = get_script_from_template(TemplateScriptFields.metrics_parser_libs)
+    
     metrics_request = {
+        "node_proto_id": 1,  # Добавлено обязательное поле
         "command": "xray api statsquery --server=127.0.0.1:{}",
         "metrics_script": metrics_script,
         "core_lib": lib_names,
-        "metrics_port": core_port
+        "metrics_port": core_port,
+        "metrics_parser_code": metrics_parser,  # Добавлено обязательное поле
+        "metrics_parser_libs": metrics_parser_libs
     }
     
     metrics_response = await e2e_client.post("/api/v1/server/node/metrics", json=metrics_request)
@@ -871,7 +904,7 @@ async def test_e2e_add_user_with_hot_reload_and_verify_metrics(
         # Проверяем через WBC и файл (по user_uuid)
         assert test_user_uuid in e2e_buffer.buffer_storage[1]
         
-        _, config = await e2e_buffer._read_config(str(e2e_config_path))
+        config = await read_config_with_converter(e2e_buffer, str(e2e_config_path))
         users = e2e_buffer._navigate_to_path(config, "inbounds___1___settings___clients")
         # В файле ядра email = user_sub_id
         added_user = next((u for u in users if u['email'] == test_user_sub_id), None)
@@ -978,7 +1011,7 @@ async def test_e2e_delete_user_and_verify_removed(
     assert test_user_uuid not in e2e_buffer.buffer_storage[1]
     
     # Проверяем файл конфига (extractor трансформирует: user_sub_id → email)
-    _, config = await e2e_buffer._read_config(str(e2e_config_path))
+    config = await read_config_with_converter(e2e_buffer, str(e2e_config_path))
     users = e2e_buffer._navigate_to_path(config, "inbounds___1___settings___clients")
     deleted_user = next((u for u in users if u.get('email') == test_user_sub_id), None)
     
@@ -1068,7 +1101,7 @@ async def test_e2e_bulk_operations_with_verification(
     await asyncio.sleep(0.2)
     
     # 2. Проверяем что все 5 добавлены
-    _, config_after_add = await e2e_buffer._read_config(str(e2e_config_path))
+    config_after_add = await read_config_with_converter(e2e_buffer, str(e2e_config_path))
     users_after_add = e2e_buffer._navigate_to_path(config_after_add, "inbounds___1___settings___clients")
     
     # Extractor трансформирует: user_sub_id → email
@@ -1114,7 +1147,7 @@ async def test_e2e_bulk_operations_with_verification(
     await asyncio.sleep(0.2)
     
     # 4. Проверяем что удалены 3, остались 2
-    _, config_after_delete = await e2e_buffer._read_config(str(e2e_config_path))
+    config_after_delete = await read_config_with_converter(e2e_buffer, str(e2e_config_path))
     users_after_delete = e2e_buffer._navigate_to_path(config_after_delete, "inbounds___1___settings___clients")
     
     # Проверяем что удалённых пользователей нет (в конфиге email = user_sub_id)

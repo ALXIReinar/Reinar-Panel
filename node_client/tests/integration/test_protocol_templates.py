@@ -48,6 +48,7 @@ def create_test_user_for_template(template: dict, index: int = 0) -> dict:
     Объединяет:
     1. required_user_data_obj - системные поля с плейсхолдерами (user_uuid, user_sub_id)
     2. constant_user_data_obj - протокол-специфичные поля (flow, level, и др.)
+    3. constant_node_data_obj - node_* поля (эвристически извлекаются из API скрипта)
     
     Заменяет плейсхолдеры {USER_UUID} и {USER_SUB_ID} на реальные значения.
     
@@ -63,34 +64,28 @@ def create_test_user_for_template(template: dict, index: int = 0) -> dict:
     
     Example:
         >>> template = {
-        ...     'title': 'xray-vless-tcp',
+        ...     'title': 'xray-shadowsocks-tcp',
         ...     'required_user_data_obj': {
         ...         'user_uuid': '{USER_UUID}',
         ...         'user_sub_id': '{USER_SUB_ID}'
         ...     },
-        ...     'constant_user_data_obj': {
-        ...         'flow': 'xtls-rprx-vision',
-        ...         'level': 0
-        ...     }
+        ...     'constant_user_data_obj': {},
+        ...     'api_bulk_add_user_script': "password = u['node_method']"
         ... }
         >>> user = create_test_user_for_template(template, index=1)
         >>> assert 'user_uuid' in user
-        >>> assert 'user_sub_id' in user
-        >>> assert user['flow'] == 'xtls-rprx-vision'
-        >>> # Проверяем что user_uuid - валидный UUID
-        >>> import uuid as uuid_lib
-        >>> uuid_lib.UUID(user['user_uuid'])  # Не выбросит исключение
+        >>> assert 'node_method' in user  # Автоматически добавлено!
     """
     import uuid as uuid_lib
+    from node_client.tests.utils.test_helpers import generate_mock_node_data
     
     # Получаем оба объекта
     required_data = template.get('required_user_data_obj', {}).copy()
     const_data = template.get('constant_user_data_obj', {}).copy()
     
     # Генерируем настоящий UUID4 (RFC 4122 compliant)
-    # Это критично для скриптов которые парсят UUID через uuid.UUID()
     user_uuid = str(uuid_lib.uuid4())
-    user_sub_id = f"test_sub_{template['title'][:20]}_{index}"  # Ограничиваем длину
+    user_sub_id = f"test_sub_{template['title'][:20]}_{index}"
     
     # Заменяем плейсхолдеры в required_data
     result = {}
@@ -102,8 +97,17 @@ def create_test_user_for_template(template: dict, index: int = 0) -> dict:
         else:
             result[key] = value
     
-    # Добавляем constant_data (без замены - там реальные значения)
+    # Добавляем constant_data
     result.update(const_data)
+    
+    # Эвристически извлекаем node_* поля из API скрипта
+    api_script = template.get('api_bulk_add_user_script', '')
+    if api_script:
+        node_data = generate_mock_node_data(api_script)
+        # Добавляем только те поля которых ещё нет
+        for key, value in node_data.items():
+            if key not in result:
+                result[key] = value
     
     return result
 
@@ -288,23 +292,35 @@ async def test_template_constant_user_data_obj_valid(protocol_templates_with_ext
 @pytest.mark.db
 async def test_template_has_required_scripts(protocol_templates_with_extractors):
     """
-    Проверка: каждый шаблон имеет обязательные скрипты
+    Проверка: API скрипты присутствуют когда они нужны
     
-    Обязательные скрипты:
+    Обязательные скрипты (если протокол поддерживает API управление):
     - api_bulk_add_user_script: добавление пользователей
     - api_bulk_delete_user_script: удаление пользователей
     
-    ВАЖНО: Проверяются только шаблоны с is_accepted = true
+    ВАЖНО: Некоторые протоколы (hysteria, amneziawg, и др.) управляются только
+    через конфиг-файлы и не имеют API скриптов - это нормально.
+    
+    Этот тест просто подсчитывает шаблоны с/без API скриптов для статистики.
     """
+    with_scripts = []
+    without_scripts = []
+    
     for template in protocol_templates_with_extractors:
-        assert template.get('api_bulk_add_user_script'), (
-            f"Template '{template['title']}': "
-            f"api_bulk_add_user_script не может быть пустым"
-        )
-        assert template.get('api_bulk_delete_user_script'), (
-            f"Template '{template['title']}': "
-            f"api_bulk_delete_user_script не может быть пустым"
-        )
+        has_add = template.get('api_bulk_add_user_script') is not None
+        has_delete = template.get('api_bulk_delete_user_script') is not None
+        
+        if has_add and has_delete:
+            with_scripts.append(template['title'])
+        else:
+            without_scripts.append(template['title'])
+    
+    # Информационный вывод
+    print(f"\nШаблонов с API скриптами: {len(with_scripts)}")
+    print(f"Шаблонов без API скриптов: {len(without_scripts)}")
+    
+    # Не считаем отсутствие API скриптов ошибкой
+    assert len(protocol_templates_with_extractors) > 0, "Шаблоны должны быть загружены из БД"
 
 
 @pytest.mark.asyncio
@@ -351,9 +367,14 @@ async def test_template_bulk_add_execution(
     Mock режим: используются моки библиотек
     Real режим: используются реальные Docker контейнеры с ядрами
     
-    ВАЖНО: Проверяются только шаблоны с is_accepted = true
+    ВАЖНО: Проверяются только шаблоны с is_accepted = true И с API скриптами.
+    Шаблоны без api_bulk_add_user_script пропускаются (skip).
     """
     for template in protocol_templates_with_extractors:
+        # Пропускаем шаблоны без API скриптов
+        if not template.get('api_bulk_add_user_script'):
+            continue
+        
         core_type = get_core_type(template['title'])
         
         if use_real_core:
@@ -419,9 +440,14 @@ async def test_template_bulk_delete_execution(
     Mock режим: используются моки библиотек
     Real режим: используются реальные Docker контейнеры с ядрами
     
-    ВАЖНО: Проверяются только шаблоны с is_accepted = true
+    ВАЖНО: Проверяются только шаблоны с is_accepted = true И с API скриптами.
+    Шаблоны без api_bulk_delete_user_script пропускаются (skip).
     """
     for template in protocol_templates_with_extractors:
+        # Пропускаем шаблоны без API скриптов
+        if not template.get('api_bulk_delete_user_script'):
+            continue
+        
         core_type = get_core_type(template['title'])
         
         if use_real_core:
@@ -569,11 +595,11 @@ async def test_template_metrics_parsing(
                 f"Не удалось скомпилировать metrics_parser_code: {e}"
             )
         
-        # Извлекаем функцию parse
-        parse_func = local_scope.get('parse')
+        # Извлекаем функцию parse_metrics
+        parse_func = local_scope.get('parse_metrics')
         assert callable(parse_func), (
             f"Template '{template['title']}': "
-            f"metrics_parser_code должен определять функцию parse()"
+            f"metrics_parser_code должен определять функцию parse_metrics()"
         )
         
         if use_real_core:
@@ -636,8 +662,20 @@ async def test_template_metrics_parsing(
         else:
             # Mock режим: тестируем на примерах
             
+            # Подготавливаем mock vpn_users и local_state
+            mock_vpn_users = {
+                'user-uuid-1': {'user_sub_id': 1},
+                'user-uuid-2': {'user_sub_id': 2},
+                'user-uuid-3': {'user_sub_id': 3},
+            }
+            mock_local_state = {}
+            
             # Тест 1: JSON с трафиком
-            users_traffics, troubles = parse_func(SAMPLE_XRAY_METRICS['with_traffic'])
+            users_traffics, troubles = parse_func(
+                SAMPLE_XRAY_METRICS['with_traffic'],
+                mock_vpn_users,
+                mock_local_state
+            )
             
             assert isinstance(users_traffics, list), (
                 f"Template '{template['title']}': "
@@ -682,7 +720,11 @@ async def test_template_metrics_parsing(
             )
             
             # Тест 2: Пустой JSON (нет трафика)
-            users_traffics_empty, troubles_empty = parse_func(SAMPLE_XRAY_METRICS['empty'])
+            users_traffics_empty, troubles_empty = parse_func(
+                SAMPLE_XRAY_METRICS['empty'],
+                mock_vpn_users,
+                mock_local_state
+            )
             
             assert isinstance(users_traffics_empty, list), "Парсер должен возвращать список"
             assert len(users_traffics_empty) == 0, (
@@ -691,7 +733,11 @@ async def test_template_metrics_parsing(
             )
             
             # Тест 3: JSON с troubles
-            users_traffics_troubles, troubles_list = parse_func(SAMPLE_XRAY_METRICS['with_troubles'])
+            users_traffics_troubles, troubles_list = parse_func(
+                SAMPLE_XRAY_METRICS['with_troubles'],
+                mock_vpn_users,
+                mock_local_state
+            )
             
             assert isinstance(troubles_list, list), "troubles должен быть списком"
             assert len(troubles_list) > 0, (

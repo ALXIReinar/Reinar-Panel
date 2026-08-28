@@ -9,6 +9,7 @@ Integration тесты для эндпоинтов управления конф
 - Используем реальные файлы через tmp_path
 - Используем реальный JSON из vless-tcp-server-metrics.json
 - Проверяем файловые операции и HTTP ответы
+- Для тестов с кастомными конвертерами используем данные из БД (protocol_templates_with_extractors)
 """
 import shutil
 from pathlib import Path
@@ -17,6 +18,131 @@ import orjson
 import pytest
 
 from node_client.api.proto_core.write_behind_caching_file import flatten_key2value
+
+
+# ========== Helper Functions ==========
+
+def extract_flatten_keys_from_template(template: dict) -> list[str]:
+    """
+    Извлекает список flatten_array_cursor из extractors шаблона.
+    
+    Args:
+        template: Шаблон протокола с полем 'extractors'
+    
+    Returns:
+        Список flatten ключей (например: ["inbounds___0___settings___clients"])
+    
+    Example:
+        >>> template = {'extractors': [{'flatten_array_cursor': 'inbounds___0___settings___clients'}]}
+        >>> extract_flatten_keys_from_template(template)
+        ['inbounds___0___settings___clients']
+    """
+    if not template.get('extractors'):
+        return []
+    
+    return [ext['flatten_array_cursor'] for ext in template['extractors']]
+
+
+def has_custom_converters(template: dict) -> bool:
+    """
+    Проверяет наличие кастомных config2json/json2config скриптов.
+    
+    JSON конвертация (оба поля NULL) работает безупречно и не требует тестирования.
+    Кастомные форматы (TOML, YAML, etc.) имеют нюансы и требуют отдельного тестирования.
+    
+    Args:
+        template: Шаблон протокола
+    
+    Returns:
+        True если хотя бы один конвертер кастомный (не NULL)
+    """
+    return (template.get('config2json_script') is not None or 
+            template.get('json2config_script') is not None)
+
+
+def create_nested_config_from_flatten_keys(flatten_keys: list[str], add_test_users: int = 3) -> dict:
+    """
+    Генерирует JSON структуру с правильной вложенностью по flatten ключам.
+    
+    Каждый flatten_key определяет путь к массиву пользователей в конфиге.
+    Функция создаёт минимальную структуру для тестирования операций read/write.
+    
+    Args:
+        flatten_keys: Список flatten путей (например: ["inbounds___1___settings___clients"])
+        add_test_users: Количество тестовых пользователей в каждом массиве
+    
+    Returns:
+        dict: JSON конфиг с правильной структурой и заполненными массивами пользователей
+    
+    Example:
+        >>> create_nested_config_from_flatten_keys(["level1___0___users"], add_test_users=2)
+        {'level1': [{'users': [{'id': 'test-uuid-0', 'email': 'user0@test'}, ...]}]}
+    """
+    config = {}
+    
+    for flatten_key in flatten_keys:
+        parts = flatten_key.split('___')
+        current = config
+        
+        # Навигация по всем частям пути кроме последней
+        for i, part in enumerate(parts[:-1]):
+            if part.isdigit():
+                # Это индекс массива
+                idx = int(part)
+                # Расширяем массив если нужно
+                while len(current) <= idx:
+                    current.append({})
+                current = current[idx]
+            else:
+                # Это ключ объекта
+                if part not in current:
+                    # Определяем тип следующего уровня (массив или объект)
+                    next_part = parts[i + 1] if i + 1 < len(parts) else None
+                    current[part] = [] if next_part and next_part.isdigit() else {}
+                current = current[part]
+        
+        # Последняя часть - это ключ массива пользователей
+        last_key = parts[-1]
+        current[last_key] = [
+            {"id": f"test-uuid-{i}", "email": f"user{i}@test.local"}
+            for i in range(add_test_users)
+        ]
+    
+    return config
+
+
+# ========== Helper Functions for Payloads ==========
+
+def create_read_payload(path: str, flatten_key: list[str] | None = None, node_proto_id: int = 1) -> dict:
+    """Создаёт payload для /node/config/read с актуальной схемой"""
+    return {
+        "node_proto_id": node_proto_id,
+        "path": path,
+        "flatten_json_users_key": flatten_key,
+        "config2json_script": None,  # JSON по умолчанию
+        "json2config_script": None,
+        "conf_converter_libs": None
+    }
+
+
+def create_write_payload(
+    path: str, 
+    content: str, 
+    flatten_key: list[str] | None = None, 
+    node_proto_id: int = 1,
+    tmp_link: str = "http://test.local/config"
+) -> dict:
+    """Создаёт payload для /node/config/write с актуальной схемой"""
+    return {
+        "node_proto_id": node_proto_id,
+        "tmp_link": tmp_link,
+        "path": path,
+        "content": content,
+        "flatten_json_users_key": flatten_key,
+        "config2json_script": None,  # JSON по умолчанию
+        "json2config_script": None,
+        "conf_converter_libs": None
+    }
 
 
 # ========== Группа 1: POST /node/config/read - Успешное чтение ==========
@@ -32,11 +158,10 @@ async def test_read_config_success(client, tmp_path):
     config_path = tmp_path / "simple_config.json"
     config_path.write_text(orjson.dumps(config_data, option=orjson.OPT_INDENT_2).decode())
     
-    # Читаем через API
-    response = await client.post("/api/v1/server/node/config/read", json={
-        "path": str(config_path),
-        "flatten_json_users_key": None
-    })
+    # Читаем через API (JSON конвертеры по умолчанию, буфер не нужен)
+    response = await client.post("/api/v1/server/node/config/read", json=create_read_payload(
+        path=str(config_path)
+    ))
     
     assert response.status_code == 200
     data = response.json()
@@ -61,11 +186,11 @@ async def test_read_config_with_users_key(client, base_config_path, tmp_path):
     assert original_users_count > 0, "В тестовом конфиге должны быть пользователи"
     
     # Читаем через API с удалением пользователей
-    flatten_key = "inbounds___1___settings___clients"
-    response = await client.post("/api/v1/server/node/config/read", json={
-        "path": str(test_config),
-        "flatten_json_users_key": flatten_key
-    })
+    flatten_key = ["inbounds___1___settings___clients"]
+    response = await client.post("/api/v1/server/node/config/read", json=create_read_payload(
+        path=str(test_config),
+        flatten_key=flatten_key
+    ))
     
     assert response.status_code == 200
     data = response.json()
@@ -94,10 +219,10 @@ async def test_read_config_without_users_key(client, base_config_path, tmp_path)
     original_users = original_config["inbounds"][1]["settings"]["clients"]
     
     # Читаем через API БЕЗ удаления
-    response = await client.post("/api/v1/server/node/config/read", json={
-        "path": str(test_config),
-        "flatten_json_users_key": None
-    })
+    response = await client.post("/api/v1/server/node/config/read", json=create_read_payload(
+        path=str(test_config),
+        flatten_key=None
+    ))
     
     assert response.status_code == 200
     data = response.json()
@@ -117,10 +242,10 @@ async def test_read_config_file_not_found(client, tmp_path):
     """404 если файл не существует"""
     non_existent = tmp_path / "ghost_file.json"
     
-    response = await client.post("/api/v1/server/node/config/read", json={
-        "path": str(non_existent),
-        "flatten_json_users_key": None
-    })
+    response = await client.post("/api/v1/server/node/config/read", json=create_read_payload(
+        path=str(non_existent),
+        flatten_key=None
+    ))
     
     assert response.status_code == 404
     data = response.json()
@@ -134,10 +259,10 @@ async def test_read_config_path_is_directory(client, tmp_path):
     directory = tmp_path / "config_dir"
     directory.mkdir()
     
-    response = await client.post("/api/v1/server/node/config/read", json={
-        "path": str(directory),
-        "flatten_json_users_key": None
-    })
+    response = await client.post("/api/v1/server/node/config/read", json=create_read_payload(
+        path=str(directory),
+        flatten_key=None
+    ))
     
     assert response.status_code == 400
     data = response.json()
@@ -152,10 +277,10 @@ async def test_read_config_invalid_encoding(client, tmp_path):
     # Записываем бинарные данные (не UTF-8)
     binary_file.write_bytes(b'\x80\x81\x82\x83\xFF\xFE')
     
-    response = await client.post("/api/v1/server/node/config/read", json={
-        "path": str(binary_file),
-        "flatten_json_users_key": None
-    })
+    response = await client.post("/api/v1/server/node/config/read", json=create_read_payload(
+        path=str(binary_file),
+        flatten_key=None
+    ))
     
     assert response.status_code == 400
     data = response.json()
@@ -171,11 +296,11 @@ async def test_read_config_removes_users_array(client, base_config_path, tmp_pat
     test_config = tmp_path / "test_remove.json"
     shutil.copy(base_config_path, test_config)
     
-    flatten_key = "inbounds___1___settings___clients"
-    response = await client.post("/api/v1/server/node/config/read", json={
-        "path": str(test_config),
-        "flatten_json_users_key": flatten_key
-    })
+    flatten_key = ["inbounds___1___settings___clients"]
+    response = await client.post("/api/v1/server/node/config/read", json=create_read_payload(
+        path=str(test_config),
+        flatten_key=flatten_key
+    ))
     
     assert response.status_code == 200
     returned_config = orjson.loads(response.json()["content"])
@@ -198,10 +323,10 @@ async def test_read_config_preserves_structure(client, base_config_path, tmp_pat
     original = orjson.loads(test_config.read_text())
     
     # Читаем с удалением пользователей
-    response = await client.post("/api/v1/server/node/config/read", json={
-        "path": str(test_config),
-        "flatten_json_users_key": "inbounds___1___settings___clients"
-    })
+    response = await client.post("/api/v1/server/node/config/read", json=create_read_payload(
+        path=str(test_config),
+        flatten_key=["inbounds___1___settings___clients"]
+    ))
     
     returned = orjson.loads(response.json()["content"])
     
@@ -229,11 +354,11 @@ async def test_write_config_success(client, tmp_path):
     }
     config_path = tmp_path / "new_config.json"
     
-    response = await client.post("/api/v1/server/node/config/write", json={
-        "path": str(config_path),
-        "content": orjson.dumps(new_config).decode(),
-        "flatten_json_users_key": None
-    })
+    response = await client.post("/api/v1/server/node/config/write", json=create_write_payload(
+        path=str(config_path),
+        content=orjson.dumps(new_config).decode(),
+        flatten_key=None
+    ))
     
     assert response.status_code == 200
     data = response.json()
@@ -257,11 +382,11 @@ async def test_write_config_overwrite_existing(client, tmp_path):
     
     # Перезаписываем новым содержимым
     new_config = {"version": 2, "data": "new"}
-    response = await client.post("/api/v1/server/node/config/write", json={
-        "path": str(config_path),
-        "content": orjson.dumps(new_config).decode(),
-        "flatten_json_users_key": None
-    })
+    response = await client.post("/api/v1/server/node/config/write", json=create_write_payload(
+        path=str(config_path),
+        content=orjson.dumps(new_config).decode(),
+        flatten_key=None
+    ))
     
     assert response.status_code == 200
     
@@ -289,12 +414,12 @@ async def test_write_config_preserves_users(client, base_config_path, tmp_path):
     new_config["inbounds"][1]["settings"]["clients"] = []  # Очищаем пользователей
     
     # Записываем с переносом пользователей
-    flatten_key = "inbounds___1___settings___clients"
-    response = await client.post("/api/v1/server/node/config/write", json={
-        "path": str(old_config_path),
-        "content": orjson.dumps(new_config).decode(),
-        "flatten_json_users_key": flatten_key
-    })
+    flatten_key = ["inbounds___1___settings___clients"]
+    response = await client.post("/api/v1/server/node/config/write", json=create_write_payload(
+        path=str(old_config_path),
+        content=orjson.dumps(new_config).decode(),
+        flatten_key=flatten_key
+    ))
     
     assert response.status_code == 200
     
@@ -326,11 +451,11 @@ async def test_write_config_without_users_key(client, base_config_path, tmp_path
     }
     
     # Записываем БЕЗ переноса пользователей
-    response = await client.post("/api/v1/server/node/config/write", json={
-        "path": str(old_config_path),
-        "content": orjson.dumps(new_config).decode(),
-        "flatten_json_users_key": None
-    })
+    response = await client.post("/api/v1/server/node/config/write", json=create_write_payload(
+        path=str(old_config_path),
+        content=orjson.dumps(new_config).decode(),
+        flatten_key=None
+    ))
     
     assert response.status_code == 200
     
@@ -370,11 +495,11 @@ async def test_write_config_merge_users_from_old(client, base_config_path, tmp_p
     }
     
     # Записываем с переносом
-    response = await client.post("/api/v1/server/node/config/write", json={
-        "path": str(config_path),
-        "content": orjson.dumps(new_config).decode(),
-        "flatten_json_users_key": "inbounds___1___settings___clients"
-    })
+    response = await client.post("/api/v1/server/node/config/write", json=create_write_payload(
+        path=str(config_path),
+        content=orjson.dumps(new_config).decode(),
+        flatten_key=["inbounds___1___settings___clients"]
+    ))
     
     assert response.status_code == 200
     
@@ -420,11 +545,11 @@ async def test_write_config_users_path_navigation(client, tmp_path):
     }
     
     # Записываем с переносом пользователей
-    response = await client.post("/api/v1/server/node/config/write", json={
-        "path": str(config_path),
-        "content": orjson.dumps(new_config).decode(),
-        "flatten_json_users_key": "level1___level2___level3___users"
-    })
+    response = await client.post("/api/v1/server/node/config/write", json=create_write_payload(
+        path=str(config_path),
+        content=orjson.dumps(new_config).decode(),
+        flatten_key=["level1___level2___level3___users"]
+    ))
     
     assert response.status_code == 200
     
@@ -457,11 +582,11 @@ async def test_write_config_empty_users_list(client, tmp_path):
     }
     
     # Записываем с переносом
-    response = await client.post("/api/v1/server/node/config/write", json={
-        "path": str(config_path),
-        "content": orjson.dumps(new_config).decode(),
-        "flatten_json_users_key": "inbounds___0___settings___clients"
-    })
+    response = await client.post("/api/v1/server/node/config/write", json=create_write_payload(
+        path=str(config_path),
+        content=orjson.dumps(new_config).decode(),
+        flatten_key=["inbounds___0___settings___clients"]
+    ))
     
     assert response.status_code == 200
     
@@ -477,11 +602,11 @@ async def test_write_config_invalid_json_content(client, tmp_path):
     """500 при невалидном JSON в content"""
     config_path = tmp_path / "invalid.json"
     
-    response = await client.post("/api/v1/server/node/config/write", json={
-        "path": str(config_path),
-        "content": "{ invalid json syntax: [,] }",
-        "flatten_json_users_key": None
-    })
+    response = await client.post("/api/v1/server/node/config/write", json=create_write_payload(
+        path=str(config_path),
+        content="{ invalid json syntax: [,] }",
+        flatten_key=None
+    ))
     
     assert response.status_code == 500
     data = response.json()
@@ -499,12 +624,206 @@ async def test_write_config_invalid_old_file(client, tmp_path):
     new_config = {"data": "new"}
     
     # Пытаемся записать с переносом пользователей
-    response = await client.post("/api/v1/server/node/config/write", json={
-        "path": str(old_config_path),
-        "content": orjson.dumps(new_config).decode(),
-        "flatten_json_users_key": "some___key"
-    })
+    response = await client.post("/api/v1/server/node/config/write", json=create_write_payload(
+        path=str(old_config_path),
+        content=orjson.dumps(new_config).decode(),
+        flatten_key=["some___key"]
+    ))
     
     assert response.status_code == 500
     data = response.json()
     assert data["success"] is False
+
+
+
+# ========== Группа 7: Тесты с реальными шаблонами из БД (кастомные конвертеры) ==========
+
+@pytest.mark.asyncio
+@pytest.mark.db
+async def test_read_config_with_custom_converters_from_db(protocol_templates_with_extractors, client, tmp_path):
+    """
+    Тест чтения конфига с кастомными конвертерами для всех шаблонов из БД.
+    
+    Проверяет корректность работы config2json/json2config скриптов:
+    1. Фильтрует только шаблоны с кастомными конвертерами (не JSON)
+    2. Генерирует мок-конфиг на основе flatten_keys из extractors
+    3. Проверяет удаление пользовательских массивов
+    4. Проверяет сохранение остальной структуры
+    
+    JSON конвертация (оба скрипта NULL) работает безупречно и не требует тестирования.
+    Кастомные форматы (TOML, YAML, etc.) имеют нюансы и требуют отдельного тестирования.
+    
+    Формат отчёта:
+    ✅ singbox-hysteria2: OK
+    ✅ singbox-wireguard: OK
+    ❌ v2fly-shadowsocks: KeyError 'method'
+    
+    Итого: 2/3 шаблонов passed
+    
+    Запуск:
+        pytest node_client/tests/integrate/test_node_config_api.py::test_read_config_with_custom_converters_from_db --protocol=* -v
+    """
+    results = []
+    errors = []
+    
+    # ОТЛАДКА: Проверяем что фикстура вообще что-то вернула
+    if not protocol_templates_with_extractors:
+        pytest.fail("Фикстура protocol_templates_with_extractors вернула пустой список!")
+    
+    for template in protocol_templates_with_extractors:
+        # Пропускаем JSON-шаблоны (работают идеально, тестировать не нужно)
+        if not has_custom_converters(template):
+            continue
+        
+        # Пропускаем шаблоны без extractors
+        flatten_keys = extract_flatten_keys_from_template(template)
+        if not flatten_keys:
+            continue
+        
+        template_title = template['title']
+        
+        try:
+            # Генерируем мок-конфиг на основе flatten_keys
+            config = create_nested_config_from_flatten_keys(flatten_keys, add_test_users=3)
+            config_path = tmp_path / f"{template_title.replace('/', '_')}_config.json"
+            config_path.write_bytes(orjson.dumps(config, option=orjson.OPT_INDENT_2))
+            
+            # Читаем через API с удалением пользователей
+            response = await client.post("/api/v1/server/node/config/read", json=create_read_payload(
+                path=str(config_path),
+                flatten_key=flatten_keys,
+                node_proto_id=template['id']
+            ))
+            
+            # Проверяем успешность
+            assert response.status_code == 200, f"Unexpected status: {response.status_code}"
+            data = response.json()
+            assert data["success"] is True, f"Response not successful: {data.get('message')}"
+            
+            # Проверяем что пользователи удалены из всех flatten_keys
+            returned_config = orjson.loads(data["content"])
+            
+            for flatten_key in flatten_keys:
+                # Навигация по ключу для проверки отсутствия массива
+                parts = flatten_key.split('___')
+                current = returned_config
+                
+                # Навигация до предпоследнего элемента
+                for part in parts[:-1]:
+                    if part.isdigit():
+                        current = current[int(part)]
+                    else:
+                        current = current[part]
+                
+                # Проверяем что последний ключ (массив пользователей) удалён
+                last_key = parts[-1]
+                assert last_key not in current, f"Ключ {last_key} должен быть удалён"
+            
+            results.append(f"✅ {template_title}: OK")
+            
+        except Exception as e:
+            errors.append(f"❌ {template_title}: {str(e)}")
+    
+    # Итоговый отчёт
+    print("\n" + "\n".join(results + errors))
+    print(f"\nИтого: {len(results)}/{len(results)+len(errors)} шаблонов passed")
+    
+    # Если были ошибки - тест проваливается
+    if errors:
+        pytest.fail(f"Тесты упали для {len(errors)} шаблонов:\n" + "\n".join(errors))
+
+
+@pytest.mark.asyncio
+@pytest.mark.db
+async def test_write_config_with_custom_converters_from_db(protocol_templates_with_extractors, client, tmp_path):
+    """
+    Тест записи конфига с переносом пользователей для кастомных конвертеров из БД.
+    
+    Проверяет корректность работы json2config скриптов:
+    1. Фильтрует только шаблоны с кастомными конвертерами
+    2. Создаёт старый конфиг с пользователями
+    3. Создаёт новый конфиг БЕЗ пользователей
+    4. Проверяет что пользователи корректно переносятся
+    5. Проверяет что изменения применены
+    
+    Формат отчёта:
+    ✅ singbox-hysteria2: OK (3 users preserved)
+    ✅ singbox-wireguard: OK (3 users preserved)
+    ❌ v2fly-shadowsocks: AssertionError: Users not preserved
+    
+    Итого: 2/3 шаблонов passed
+    
+    Запуск:
+        pytest node_client/tests/integrate/test_node_config_api.py::test_write_config_with_custom_converters_from_db --protocol=* -v
+    """
+    results = []
+    errors = []
+    
+    for template in protocol_templates_with_extractors:
+        # Пропускаем JSON-шаблоны
+        if not has_custom_converters(template):
+            continue
+        
+        # Пропускаем шаблоны без extractors
+        flatten_keys = extract_flatten_keys_from_template(template)
+        if not flatten_keys:
+            continue
+        
+        template_title = template['title']
+        
+        try:
+            # 1. Создаём старый конфиг с пользователями
+            old_config = create_nested_config_from_flatten_keys(flatten_keys, add_test_users=3)
+            config_path = tmp_path / f"{template_title.replace('/', '_')}_write_test.json"
+            config_path.write_bytes(orjson.dumps(old_config, option=orjson.OPT_INDENT_2))
+            
+            # Запоминаем старых пользователей для проверки
+            old_users = {}
+            for flatten_key in flatten_keys:
+                users = flatten_key2value(old_config, flatten_key)
+                old_users[flatten_key] = users
+            
+            # 2. Создаём новый конфиг БЕЗ пользователей (пустые массивы)
+            new_config = create_nested_config_from_flatten_keys(flatten_keys, add_test_users=0)
+            # Добавляем какое-то изменение для проверки
+            new_config['_test_field'] = 'modified'
+            
+            # 3. Записываем с переносом пользователей
+            response = await client.post("/api/v1/server/node/config/write", json=create_write_payload(
+                path=str(config_path),
+                content=orjson.dumps(new_config).decode(),
+                flatten_key=flatten_keys,
+                node_proto_id=template['id']
+            ))
+            
+            # Проверяем успешность
+            assert response.status_code == 200, f"Unexpected status: {response.status_code}"
+            data = response.json()
+            assert data["success"] is True, f"Response not successful: {data.get('message')}"
+            
+            # 4. Проверяем что файл сохранён и пользователи перенесены
+            saved_config = orjson.loads(config_path.read_text())
+            
+            # Проверяем что изменения применены
+            assert saved_config.get('_test_field') == 'modified', "Изменения должны быть применены"
+            
+            # Проверяем что пользователи сохранены
+            for flatten_key in flatten_keys:
+                saved_users = flatten_key2value(saved_config, flatten_key)
+                assert len(saved_users) == len(old_users[flatten_key]), \
+                    f"Количество пользователей для {flatten_key} должно сохраниться"
+                assert saved_users == old_users[flatten_key], \
+                    f"Пользователи для {flatten_key} должны полностью совпадать"
+            
+            results.append(f"✅ {template_title}: OK ({len(old_users[flatten_keys[0]])} users preserved)")
+            
+        except Exception as e:
+            errors.append(f"❌ {template_title}: {str(e)}")
+    
+    # Итоговый отчёт
+    print("\n" + "\n".join(results + errors))
+    print(f"\nИтого: {len(results)}/{len(results)+len(errors)} шаблонов passed")
+    
+    # Если были ошибки - тест проваливается
+    if errors:
+        pytest.fail(f"Тесты упали для {len(errors)} шаблонов:\n" + "\n".join(errors))

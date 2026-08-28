@@ -148,7 +148,7 @@ class HotReloadExecutor:
             args_func_map = {
                 "user_core_operation": (user_obj, node_ip, core_api_port, custom_params), # Подходит для бульк/обычных вставок/удалений
                 "get_metrics": (node_ip, core_api_port, custom_params),
-                "parse_metrics": (custom_params['raw_metrics'], custom_params['vpn_users'], custom_params['local_state']),
+                "parse_metrics": (custom_params.get('raw_metrics'), custom_params.get('vpn_users'), custom_params.get('local_state')),
             }
             result = action_user_func(*args_func_map[action])
 

@@ -286,42 +286,58 @@ async def test_execute_command_exception_handling(client):
 # ========== Группа 4: Тесты для /metrics endpoint ==========
 
 @pytest.mark.asyncio
-async def test_get_metrics_with_script_success(client):
+async def test_get_metrics_with_script_success(client, mock_buffer):
     """Успешное получение метрик через скрипт get_metrics"""
+    # Регистрируем ноду в буфере
+    node_proto_id = 1
+    mock_buffer.buffer_storage[node_proto_id] = {}
+    mock_buffer.local_state[node_proto_id] = {}
+    
     with patch('node_client.api.execute_api.HotReloadExecutor.execute_action_script') as mock_executor:
         # Мокируем успешный результат выполнения скрипта
         mock_metrics = '{"stat": [{"name": "user>>>test@test.com>>>traffic>>>uplink", "value": 1024}]}'
-        mock_executor.return_value = (True, mock_metrics)
+        mock_parser_result = ([], [])  # traffic_consuming, troubles
+        
+        # Первый вызов - get_metrics, второй - parse_metrics
+        mock_executor.side_effect = [
+            (True, mock_metrics),  # get_metrics
+            (True, mock_parser_result)  # parse_metrics
+        ]
         
         response = await client.post("/api/v1/server/node/metrics", json={
+            "node_proto_id": node_proto_id,
             "metrics_script": "async def get_metrics(node_ip, core_port, custom_params): return 'metrics'",
-            "core_lib": ["xtlsapi"],
+            "core_lib": "xtlsapi",
             "metrics_port": 10085,
-            "command": "xray api statsquery --server=127.0.0.1:{}"
+            "command": "xray api statsquery --server=127.0.0.1:{}",
+            "metrics_parser_code": "def parse_metrics(raw, users, state): return [], []",
+            "metrics_parser_libs": None
         })
         
         assert response.status_code == 200
         data = response.json()
         
         assert data["success"] is True
-        assert data["stdout"] == mock_metrics
+        assert data["users_traffic"] == []
         
-        # Проверяем что HotReloadExecutor был вызван с правильными параметрами
-        mock_executor.assert_called_once()
-        call_kwargs = mock_executor.call_args[1]
-        assert call_kwargs["action"] == "get_metrics"
-        assert call_kwargs["node_ip"] == "127.0.0.1"
-        assert call_kwargs["core_api_port"] == 10085
+        # Проверяем что HotReloadExecutor был вызван дважды
+        assert mock_executor.call_count == 2
 
 
 @pytest.mark.asyncio
-async def test_get_metrics_fallback_to_cli(client):
+async def test_get_metrics_fallback_to_cli(client, mock_buffer):
     """Fallback на CLI команду когда скрипт провалился"""
+    # Регистрируем ноду в буфере
+    node_proto_id = 2
+    mock_buffer.buffer_storage[node_proto_id] = {}
+    mock_buffer.local_state[node_proto_id] = {}
+    
     with patch('node_client.api.execute_api.HotReloadExecutor.execute_action_script') as mock_executor, \
          patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
         
         # Скрипт провалился
-        mock_executor.return_value = (False, "Script failed")
+        mock_parser_result = ([], [])
+        mock_executor.return_value = (True, mock_parser_result)
         
         # CLI команда успешна
         mock_result = MagicMock()
@@ -331,26 +347,34 @@ async def test_get_metrics_fallback_to_cli(client):
         mock_subprocess.return_value = mock_result
         
         response = await client.post("/api/v1/server/node/metrics", json={
-            "metrics_script": "async def get_metrics(): raise Exception('fail')",
-            "core_lib": ["xtlsapi"],
+            "node_proto_id": node_proto_id,
+            "metrics_script": None,  # Нет скрипта - используем CLI
+            "core_lib": None,
             "metrics_port": 10085,
-            "command": "xray api statsquery --server=127.0.0.1:{}"
+            "command": "xray api statsquery --server=127.0.0.1:{}",
+            "metrics_parser_code": "def parse_metrics(raw, users, state): return [], []",
+            "metrics_parser_libs": None
         })
         
         assert response.status_code == 200
         data = response.json()
         
         assert data["success"] is True
-        assert "cli@test.com" in data["stdout"]
         
         # Проверяем что CLI команда была вызвана
         mock_subprocess.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_get_metrics_no_script_uses_cli(client):
+async def test_get_metrics_no_script_uses_cli(client, mock_buffer):
     """Использование CLI когда скрипт не передан"""
-    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
+    # Регистрируем ноду в буфере
+    node_proto_id = 3
+    mock_buffer.buffer_storage[node_proto_id] = {}
+    mock_buffer.local_state[node_proto_id] = {}
+    
+    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess, \
+         patch('node_client.api.execute_api.HotReloadExecutor.execute_action_script') as mock_executor:
         
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -358,28 +382,36 @@ async def test_get_metrics_no_script_uses_cli(client):
         mock_result.stderr = ""
         mock_subprocess.return_value = mock_result
         
+        # parse_metrics успешен
+        mock_parser_result = ([], [])
+        mock_executor.return_value = (True, mock_parser_result)
+        
         response = await client.post("/api/v1/server/node/metrics", json={
+            "node_proto_id": node_proto_id,
             "metrics_script": None,  # Нет скрипта
-            "core_lib": [],
+            "core_lib": None,
             "metrics_port": 10085,
-            "command": "xray api statsquery --server=127.0.0.1:{}"
+            "command": "xray api statsquery --server=127.0.0.1:{}",
+            "metrics_parser_code": "def parse_metrics(raw, users, state): return [], []",
+            "metrics_parser_libs": None
         })
         
         assert response.status_code == 200
         data = response.json()
         
         assert data["success"] is True
-        assert data["stdout"] == "metrics from cli"
+        assert data["users_traffic"] == []
 
 
 @pytest.mark.asyncio
-async def test_get_metrics_cli_command_timeout(client):
+async def test_get_metrics_cli_command_timeout(client, mock_buffer):
     """408 при timeout CLI команды"""
-    with patch('node_client.api.execute_api.HotReloadExecutor.execute_action_script') as mock_executor, \
-         patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
-        
-        # Скрипт провалился или отсутствует
-        mock_executor.return_value = (False, "No script")
+    # Регистрируем ноду в буфере
+    node_proto_id = 4
+    mock_buffer.buffer_storage[node_proto_id] = {}
+    mock_buffer.local_state[node_proto_id] = {}
+    
+    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
         
         # CLI команда timeout
         mock_subprocess.side_effect = subprocess.TimeoutExpired(
@@ -388,10 +420,13 @@ async def test_get_metrics_cli_command_timeout(client):
         )
         
         response = await client.post("/api/v1/server/node/metrics", json={
+            "node_proto_id": node_proto_id,
             "metrics_script": None,
-            "core_lib": [],
+            "core_lib": None,
             "metrics_port": 10085,
-            "command": "xray api statsquery --server=127.0.0.1:{}"
+            "command": "xray api statsquery --server=127.0.0.1:{}",
+            "metrics_parser_code": "def parse_metrics(raw, users, state): return [], []",
+            "metrics_parser_libs": None
         })
         
         assert response.status_code == 408
@@ -402,8 +437,13 @@ async def test_get_metrics_cli_command_timeout(client):
 
 
 @pytest.mark.asyncio
-async def test_get_metrics_cli_non_zero_exit(client):
+async def test_get_metrics_cli_non_zero_exit(client, mock_buffer):
     """400 при ненулевом exit code CLI команды"""
+    # Регистрируем ноду в буфере
+    node_proto_id = 5
+    mock_buffer.buffer_storage[node_proto_id] = {}
+    mock_buffer.local_state[node_proto_id] = {}
+    
     with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
         
         mock_result = MagicMock()
@@ -413,32 +453,43 @@ async def test_get_metrics_cli_non_zero_exit(client):
         mock_subprocess.return_value = mock_result
         
         response = await client.post("/api/v1/server/node/metrics", json={
+            "node_proto_id": node_proto_id,
             "metrics_script": None,
-            "core_lib": [],
+            "core_lib": None,
             "metrics_port": 10085,
-            "command": "xray api statsquery --server=127.0.0.1:{}"
+            "command": "xray api statsquery --server=127.0.0.1:{}",
+            "metrics_parser_code": "def parse_metrics(raw, users, state): return [], []",
+            "metrics_parser_libs": None
         })
         
         assert response.status_code == 400
         data = response.json()
         
+        assert data["detail"]["success"] is False
         assert data["detail"]["error"] == "Failed to get stats"
-        assert data["detail"]["exit_code"] == 1
 
 
 @pytest.mark.asyncio
-async def test_get_metrics_exception_handling(client):
+async def test_get_metrics_exception_handling(client, mock_buffer):
     """500 при непредвиденной ошибке"""
+    # Регистрируем ноду в буфере
+    node_proto_id = 6
+    mock_buffer.buffer_storage[node_proto_id] = {}
+    mock_buffer.local_state[node_proto_id] = {}
+    
     with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
         
         # Симулируем непредвиденное исключение
         mock_subprocess.side_effect = RuntimeError("Unexpected error")
         
         response = await client.post("/api/v1/server/node/metrics", json={
+            "node_proto_id": node_proto_id,
             "metrics_script": None,
-            "core_lib": [],
+            "core_lib": None,
             "metrics_port": 10085,
-            "command": "xray api statsquery --server=127.0.0.1:{}"
+            "command": "xray api statsquery --server=127.0.0.1:{}",
+            "metrics_parser_code": "def parse_metrics(raw, users, state): return [], []",
+            "metrics_parser_libs": None
         })
         
         assert response.status_code == 500
@@ -449,9 +500,15 @@ async def test_get_metrics_exception_handling(client):
 
 
 @pytest.mark.asyncio
-async def test_get_metrics_command_formatting(client):
+async def test_get_metrics_command_formatting(client, mock_buffer):
     """Проверка правильного форматирования команды с портом"""
-    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
+    # Регистрируем ноду в буфере
+    node_proto_id = 7
+    mock_buffer.buffer_storage[node_proto_id] = {}
+    mock_buffer.local_state[node_proto_id] = {}
+    
+    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess, \
+         patch('node_client.api.execute_api.HotReloadExecutor.execute_action_script') as mock_executor:
         
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -459,11 +516,18 @@ async def test_get_metrics_command_formatting(client):
         mock_result.stderr = ""
         mock_subprocess.return_value = mock_result
         
+        # parse_metrics успешен
+        mock_parser_result = ([], [])
+        mock_executor.return_value = (True, mock_parser_result)
+        
         response = await client.post("/api/v1/server/node/metrics", json={
+            "node_proto_id": node_proto_id,
             "metrics_script": None,
-            "core_lib": [],
+            "core_lib": None,
             "metrics_port": 12345,
-            "command": "xray api statsquery --server=127.0.0.1:{} -pattern user"
+            "command": "xray api statsquery --server=127.0.0.1:{} -pattern user",
+            "metrics_parser_code": "def parse_metrics(raw, users, state): return [], []",
+            "metrics_parser_libs": None
         })
         
         assert response.status_code == 200

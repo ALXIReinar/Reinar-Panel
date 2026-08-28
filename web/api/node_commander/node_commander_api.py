@@ -5,7 +5,6 @@ from fastapi import APIRouter, HTTPException
 from fastapi.params import Query
 from starlette.requests import Request
 
-from web.api.protocols.proto_links_templates.handlers import generate_link_from_json
 from web.config_dir.config import NodeExecAiohttpDep, ArqDep
 from web.data.postgres import PgSqlDep
 from web.data.redis_storage import RedisDep
@@ -87,7 +86,15 @@ async def config_file_read(
     try:
         # url = f'http://localhost:18100{NodeUris.get_config_file}' if env.app_mode == AppMode.LOCAL else f'http://{node_info['private_ip']}:{node_info['api_port']}{NodeUris.get_config_file}'
         url = f'http://{node_info['private_ip']}:{node_info['api_port']}{NodeUris.get_config_file}'
-        async with aio_http.post(url, json={'path': node_info['config_path'], 'flatten_json_users_key': q_params.flatten_json_users_key}) as resp:
+        json_body = {
+            'node_proto_id': q_params.node_proto_id,
+            'path': node_info['config_path'],
+            'flatten_json_users_key': q_params.flatten_json_users_key,
+            'config2json_script': node_info['config2json_script'],
+            'config2json2config_script': node_info['json2config_script'],
+            'conf_converter_libs': node_info['conf_converter_libs'],
+        }
+        async with aio_http.post(url, json=json_body) as resp:
             resp.raise_for_status()
             resp_data = await resp.json()
 
@@ -125,34 +132,38 @@ async def config_file_write(body: WriteConfigSchema, request: Request, db: PgSql
         log_event(f'Путь к файлу не указан, не можем записать конфиг | node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='ERROR')
         raise HTTPException(status_code=400, detail={'success': False, 'message': 'Путь к конфиг-файлу протокола не указан!'})
 
-    "Запрашиваем файл с ноды"
+    "Запись файла на ноде"
     try:
         # url = f'{node_info['private_ip']}:{node_info['api_port']}{NodeUris.write_config_file}' if env.app_mode != AppMode.LOCAL else f'http://localhost:18100{NodeUris.write_config_file}'
         url = f'{node_info['private_ip']}:{node_info['api_port']}{NodeUris.write_config_file}'
-        async with aio_http.post(url, json={'path': node_info['config_path'], 'content': body.file_content, 'flatten_json_users_key': body.flatten_json_users_key}) as resp:
+        json_body = {
+            'node_proto_id': body.node_proto_id,
+            'tmp_link': node_info['url_tmp'],
+            'path': node_info['config_path'],
+            'content': body.file_content,
+            'flatten_json_users_key': body.flatten_json_users_key,
+            'config2json_script': node_info['config2json_script'],
+            'config2json2config_script': node_info['json2config_script'],
+            'conf_converter_libs': node_info['conf_converter_libs'],
+        }
+        "Успешная запись вернёт обновлённую конфиг ссылку"
+        async with aio_http.post(url, json=json_body) as resp:
             resp.raise_for_status()
+            resp_json = await resp.json()
+            new_config_link = resp_json['config_link']
 
-        "1. Вытаскиваем ссылку-шаблон, зависимости и описание из БД"
-        config_link_tmp, node_ip_or_domain, node_title = await db.nodes_protocols.get_proto_tmp_w_spec_params(body.node_proto_id)
-        success_status, sub_ready_link = generate_link_from_json(config_link_tmp, body.file_content, node_ip_or_domain, node_title)
-        if not success_status:
-            log_event(f'Генерация ссылок упала | error_reason: \033[34m{sub_ready_link}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
-            raise HTTPException(status_code=409, detail={'success': False, 'message': 'Исключение при генерации ссылки по шаблону', 'err_message': sub_ready_link})
+        "Сохраняем новую конфиг-ссылку"
+        await db.nodes_protocols.update_config_link(body.node_proto_id, new_config_link)
+        log_event(f'Нода записала конфиг-файл. Итого ссылка после Jinja2 | node_proto_id: \033[32m{body.node_proto_id}\033[0m; sub_ready_link: \033[35m{new_config_link}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
 
-        "2. Генерируем конфиг-ссылку для подписок"
-        await db.nodes_protocols.update_config_link(body.node_proto_id, sub_ready_link)
-        log_event(f"Итого ссылка после Jinja2 | node_proto_id: \033[32m{body.node_proto_id}\033[0m; sub_ready_link: \033[35m{sub_ready_link}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request)
-
-
-        log_event(f'Нода записала конфиг-файл | node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
-        return {'success': True, 'message': 'Конфиг-файл ноды обновился, ссылка переопределена', "tip": "Перезагрузите ядро, чтобы изменения вступили в силу","sub_ready_link": sub_ready_link}
+        return {'success': True, 'message': 'Конфиг-файл ноды обновился, ссылка переопределена', "tip": "Перезагрузите ядро, чтобы изменения вступили в силу", "sub_ready_link": new_config_link}
 
     except HTTPException:
         raise  # Пробрасываем HTTPException без изменений
     
     except ClientError as e:
         log_event(f'Нода ответила, что-то пошло не так | response: \033[37m{repr(e)}\033[0m; node_proto_id: \033[31m{body.node_proto_id}\033[0m', request=request, level='ERROR')
-        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка исполнения на ноде', "err_message": str(repr(e))})
+        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка исполнения на ноде', "err_message": repr(e)})
 
     except Exception as e:
         log_event(f'Ошибка исполнения на админке, не удалось записать файл | error: \033[31m{e}\033[0m; node_proto_id: \033[33m{body.node_proto_id}\033[0m',request=request, level='CRITICAL')

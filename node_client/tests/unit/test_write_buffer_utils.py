@@ -269,9 +269,10 @@ async def test_read_config_success(temp_config_file):
     """
     buffer = ConfigWriteBuffer()
     
-    success, config = await buffer._read_config(str(temp_config_file))
+    success, config_str = await buffer._read_config(str(temp_config_file))
     
     assert success is True
+    config = orjson.loads(config_str)
     assert isinstance(config, dict)
     assert "inbounds" in config
     assert "outbounds" in config
@@ -288,9 +289,9 @@ async def test_read_config_file_not_found():
     buffer = ConfigWriteBuffer()
     
     # Сценарий 1: raise_exc=False (по умолчанию)
-    success, config = await buffer._read_config("/path/to/nonexistent/file.json", raise_exc=False)
+    success, config_str = await buffer._read_config("/path/to/nonexistent/file.json", raise_exc=False)
     assert success is False
-    assert config == {}
+    assert config_str == ''
     
     # Сценарий 2: raise_exc=True
     with pytest.raises(FileNotFoundError):
@@ -301,19 +302,21 @@ async def test_read_config_invalid_json(temp_invalid_json_file):
     """
     Тест: Файл содержит невалидный JSON
     
-    Ожидаем: (False, {}) если raise_exc=False
-    Ожидаем: orjson.JSONDecodeError если raise_exc=True
+    _read_config() просто читает файл как текст и не парсит JSON,
+    поэтому файл с невалидным JSON будет успешно прочитан как строка.
+    Валидация JSON происходит на уровне вызывающего кода.
     """
     buffer = ConfigWriteBuffer()
     
-    # Сценарий 1: raise_exc=False (по умолчанию)
-    success, config = await buffer._read_config(str(temp_invalid_json_file), raise_exc=False)
-    assert success is False
-    assert config == {}
+    # Файл успешно читается как строка, даже если содержимое не валидный JSON
+    success, config_str = await buffer._read_config(str(temp_invalid_json_file), raise_exc=False)
+    assert success is True
+    assert isinstance(config_str, str)
+    assert len(config_str) > 0
     
-    # Сценарий 2: raise_exc=True
+    # Проверяем, что при попытке парсинга возникает ошибка
     with pytest.raises(orjson.JSONDecodeError):
-        await buffer._read_config(str(temp_invalid_json_file), raise_exc=True)
+        orjson.loads(config_str)
 
 
 # ========== Тесты _write_config_atomic() ==========
@@ -331,7 +334,7 @@ async def test_write_config_atomic_success(tmp_path, sample_xray_config):
     target_file = tmp_path / "output_config.json"
     
     # Записываем конфиг
-    await buffer._write_config_atomic(str(target_file), sample_xray_config)
+    await buffer._write_config_atomic(str(target_file), orjson.dumps(sample_xray_config, option=orjson.OPT_INDENT_2))
     
     # Проверяем что файл создан
     assert target_file.exists()
@@ -356,7 +359,7 @@ async def test_write_config_atomic_uses_tmp_dir(tmp_path, sample_xray_config):
     target_file = tmp_path / "atomic_test.json"
     
     # Записываем конфиг
-    await buffer._write_config_atomic(str(target_file), sample_xray_config)
+    await buffer._write_config_atomic(str(target_file), orjson.dumps(sample_xray_config, option=orjson.OPT_INDENT_2))
     
     # Проверяем что конечный файл существует
     assert target_file.exists()

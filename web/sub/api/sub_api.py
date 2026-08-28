@@ -7,7 +7,7 @@ from pydantic import IPvAnyAddress
 from starlette.requests import Request
 
 from web.sub.api.handlers.prepare_func import error_messages_for_client, process2vpn_client_format, \
-    create_vpn_like_user, normalize_url
+    create_vpn_like_user, normalize_url, urlsafe_address
 from web.sub.config_dir.logger_config import log_event
 from web.sub.config_dir.config import env
 from web.sub.data.postgres import PgSqlDep
@@ -55,7 +55,11 @@ async def sub(params: Annotated[SubUrlSchema, Path()], db: PgSqlDep, request: Re
             sub_prepare_script=proto_user_conf['sub_prepare_script'],
             required_libs=proto_user_conf['required_libs'],
             user_obj=user_super_obj,
-            config_link=proto_user_conf['config_link'],
+            config_link={
+                "conf_url": proto_user_conf['config_link'],
+                "n_address": urlsafe_address(proto_user_conf['node_address']),
+                "n_title": quote(proto_user_conf['title'])
+            },
         )
 
         "Исключение при обработке. Или ссылки для пользователя"

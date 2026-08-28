@@ -124,8 +124,20 @@ async def test_extractor_scripts_execution(protocol_templates_with_extractors):
                             f"Expected dict for cursor '{cursor}', got {type(result).__name__}"
                         )
                     
-                    schema = get_schema_for_template(template['title'])
-                    jsonschema.validate(result, schema)
+                    # Пытаемся получить схему. Если её нет - пропускаем валидацию
+                    try:
+                        schema = get_schema_for_template(template['title'])
+                        jsonschema.validate(result, schema)
+                    except ValueError as schema_error:
+                        # Схема не определена для этого шаблона - пропускаем
+                        results.append({
+                            'template': template['title'],
+                            'extractor_id': extractor_id,
+                            'cursor': cursor,
+                            'status': 'SKIPPED (no schema)',
+                            'result_type': 'dict'
+                        })
+                        continue
                     
                     results.append({
                         'template': template['title'],

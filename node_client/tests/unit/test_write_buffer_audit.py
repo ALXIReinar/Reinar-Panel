@@ -163,6 +163,9 @@ async def registered_vless_node(buffer, tmp_path, vless_extractor):
             'libs': None
         }],
         'reload_command': 'systemctl reload xray',
+        'config2json_script': None,
+        'json2config_script': None,
+        'conf_converter_libs': None,
         'queue_limited': True,
         'max_batch_size': 50
     }
@@ -222,6 +225,9 @@ async def registered_shadowsocks_node(buffer, tmp_path, shadowsocks_extractor):
             'libs': 'uuid,base64,hashlib'
         }],
         'reload_command': 'systemctl reload xray',
+        'config2json_script': None,
+        'json2config_script': None,
+        'conf_converter_libs': None,
         'queue_limited': True,
         'max_batch_size': 50
     }
@@ -613,6 +619,9 @@ async def test_audit_multiple_injectors_all_pass(buffer, tmp_path, vless_extract
             }
         ],
         'reload_command': 'systemctl reload xray',
+        'config2json_script': None,
+        'json2config_script': None,
+        'conf_converter_libs': None,
         'queue_limited': True,
         'max_batch_size': 50
     }
@@ -691,6 +700,9 @@ async def test_audit_multiple_injectors_one_fails(buffer, tmp_path, vless_extrac
             }
         ],
         'reload_command': 'systemctl reload xray',
+        'config2json_script': None,
+        'json2config_script': None,
+        'conf_converter_libs': None,
         'queue_limited': True,
         'max_batch_size': 50
     }

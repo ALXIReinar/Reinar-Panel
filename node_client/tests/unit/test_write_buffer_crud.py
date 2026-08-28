@@ -10,9 +10,7 @@ Unit тесты для CRUD операций ConfigWriteBuffer
 2. Операции в очереди
 3. Idempotency (повторные операции)
 """
-import asyncio
 import pytest
-from pathlib import Path
 
 import orjson
 
@@ -109,11 +107,15 @@ async def test_add_user_first_time_with_empty_config(empty_config):
         user_obj=new_user,
         filepath=str(empty_config),
         user_injectors=create_user_injectors(),
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None,
     )
     
     # Проверяем успех
     assert success is True
+    
     assert status_code == 200
     
     # Проверяем что нода зарегистрирована
@@ -156,10 +158,14 @@ async def test_add_user_first_time_with_existing_users(config_with_3_users):
         user_obj=new_user,
         filepath=str(config_with_3_users),
         user_injectors=create_user_injectors(),
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None,
     )
     
     assert success is True
+    
     assert status_code == 200
     
     # Проверяем длину: 3 существующих + 1 новый = 4
@@ -202,7 +208,10 @@ async def test_add_user_to_existing_node(config_with_3_users):
         user_obj=user1,
         filepath=str(config_with_3_users),
         user_injectors=create_user_injectors(),
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None,
     )
     
     # Проверяем начальное состояние: 3 из файла + 1 добавленный = 4
@@ -215,10 +224,14 @@ async def test_add_user_to_existing_node(config_with_3_users):
         user_obj=user2,
         filepath=str(config_with_3_users),
         user_injectors=create_user_injectors(),
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None,
     )
     
     assert success is True
+    
     assert status_code == 200
     
     # Проверяем длину: 4 → 5
@@ -252,7 +265,10 @@ async def test_add_user_idempotency(config_with_3_users):
         user_obj=user,
         filepath=str(config_with_3_users),
         user_injectors=create_user_injectors(),
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Запоминаем состояние
@@ -271,11 +287,15 @@ async def test_add_user_idempotency(config_with_3_users):
         user_obj=user,
         filepath=str(config_with_3_users),
         user_injectors=create_user_injectors(),
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Проверяем что операция вернула успех
     assert success is True
+    
     assert status_code == 200
     assert "добавлен" in msg.lower()
     
@@ -303,7 +323,10 @@ async def test_add_user_with_dict_vs_str(empty_config):
         user_obj=user_dict,  # dict с user_uuid
         filepath=str(empty_config),
         user_injectors=create_user_injectors(),
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     assert success1 is True
@@ -316,7 +339,10 @@ async def test_add_user_with_dict_vs_str(empty_config):
         user_obj=user_dict2,
         filepath=str(empty_config),
         user_injectors=create_user_injectors(),
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     assert success2 is True
@@ -348,7 +374,10 @@ async def test_add_user_registration_fails_invalid_config(tmp_path):
         user_obj=user,
         filepath=str(broken_config),
         user_injectors=create_user_injectors(),
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Проверяем ошибку
@@ -383,7 +412,10 @@ async def test_add_user_registration_fails_invalid_identifier(config_with_3_user
         user_obj=user,
         filepath=str(config_with_3_users),
         user_injectors=bad_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Проверяем ошибку
@@ -417,7 +449,10 @@ async def test_delete_user_existing(config_with_3_users):
         node_proto_id=node_proto_id,
         filepath=str(config_with_3_users),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Проверяем начальное состояние
@@ -432,11 +467,15 @@ async def test_delete_user_existing(config_with_3_users):
         user_obj=user_to_delete,
         filepath=str(config_with_3_users),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Проверяем успех
     assert success is True
+    
     assert status_code == 200
     
     # Проверяем длину: 3 → 2
@@ -476,7 +515,10 @@ async def test_delete_user_nonexistent(config_with_3_users):
         node_proto_id=node_proto_id,
         filepath=str(config_with_3_users),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     initial_len = len(buffer.buffer_storage[node_proto_id])
@@ -494,11 +536,15 @@ async def test_delete_user_nonexistent(config_with_3_users):
         user_obj=nonexistent_user,
         filepath=str(config_with_3_users),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Проверяем что операция вернула успех
     assert success is True
+    
     assert status_code == 200
     assert "уже не было" in msg.lower()
     
@@ -534,11 +580,15 @@ async def test_delete_user_unregistered_node_success(config_with_3_users):
         user_obj=user_to_delete,
         filepath=str(config_with_3_users),
         user_injectors=create_user_injectors(),
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Проверяем успех
     assert success is True
+    
     assert status_code == 200
     
     # Проверяем что нода зарегистрирована
@@ -571,7 +621,10 @@ async def test_delete_user_with_dict_vs_str(config_with_3_users):
         node_proto_id=node_proto_id,
         filepath=str(config_with_3_users),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Удаляем через dict (суперобъект из буфера)
@@ -581,7 +634,10 @@ async def test_delete_user_with_dict_vs_str(config_with_3_users):
         user_obj=user_dict,  # dict с user_uuid
         filepath=str(config_with_3_users),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     assert success1 is True
@@ -594,7 +650,10 @@ async def test_delete_user_with_dict_vs_str(config_with_3_users):
         user_obj=user_dict2,
         filepath=str(config_with_3_users),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     assert success2 is True
@@ -626,7 +685,10 @@ async def test_delete_user_registration_fails(tmp_path):
         user_obj=user_to_delete,
         filepath=str(broken_config),
         user_injectors=create_user_injectors(),
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Проверяем ошибку
@@ -658,7 +720,10 @@ async def test_delete_user_from_empty_buffer(empty_config):
         node_proto_id=node_proto_id,
         filepath=str(empty_config),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Проверяем что буфер пустой
@@ -671,11 +736,15 @@ async def test_delete_user_from_empty_buffer(empty_config):
         user_obj=nonexistent_user,
         filepath=str(empty_config),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Проверяем успех
     assert success is True
+    
     assert status_code == 200
     
     # Длина осталась 0
@@ -716,10 +785,14 @@ async def test_bulk_action_add_small_batch(config_with_3_users):
         filepath=str(config_with_3_users),
         user_injectors=create_user_injectors(),
         reload_command=None,
-        action="add"
+        action="add",
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     assert success is True
+    
     assert "выполнена" in msg.lower()
     
     # Проверяем что нода зарегистрирована
@@ -765,10 +838,14 @@ async def test_bulk_action_add_large_batch(config_with_3_users):
         filepath=str(config_with_3_users),
         user_injectors=create_user_injectors(),
         reload_command=None,
-        action="add"
+        action="add",
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     assert success is True
+    
     
     # Проверяем длину: 3 + 20 = 23
     assert len(buffer.buffer_storage[node_proto_id]) == 23
@@ -800,7 +877,10 @@ async def test_bulk_action_delete_users(config_with_3_users):
         node_proto_id=node_proto_id,
         filepath=str(config_with_3_users),
         user_injectors=create_user_injectors(),
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     assert len(buffer.buffer_storage[node_proto_id]) == 3
@@ -817,10 +897,14 @@ async def test_bulk_action_delete_users(config_with_3_users):
         filepath=str(config_with_3_users),
         user_injectors=create_user_injectors(),
         reload_command=None,
-        action="delete"
+        action="delete",
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     assert success is True
+    
     
     # Проверяем длину: 3 - 2 = 1
     assert len(buffer.buffer_storage[node_proto_id]) == 1
@@ -861,10 +945,14 @@ async def test_bulk_action_unregistered_node(empty_config):
         filepath=str(empty_config),
         user_injectors=create_user_injectors(),
         reload_command=None,
-        action="add"
+        action="add",
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     assert success is True
+    
     
     # Проверяем что нода зарегистрирована
     assert node_proto_id in buffer.node_metadata
@@ -899,7 +987,10 @@ async def test_bulk_action_registration_fails(tmp_path):
         filepath=str(broken_config),
         user_injectors=create_user_injectors(),
         reload_command=None,
-        action="add"
+        action="add",
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Проверяем ошибку

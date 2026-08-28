@@ -79,7 +79,10 @@ def create_bulk_action_payload(**overrides):
         "core_lib": None,
         "action_script": None,
         "custom_params": None,
-        "action": "add"  # По умолчанию add
+        "action": "add",  # По умолчанию add
+        "config2json_script": None,  # JSON по умолчанию
+        "json2config_script": None,
+        "conf_converter_libs": None
     }
     payload.update(overrides)
     return payload

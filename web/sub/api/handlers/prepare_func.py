@@ -1,6 +1,9 @@
 import base64
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse, quote
 
+from pydantic import IPvAnyAddress
+
+
 def error_messages_for_client(*messages: str):
     tmp = 'vless://00000000-0000-0000-0000-000000000000@127.0.0.1:443?encryption=none#{}'
     return [tmp.format(quote(msg)) for msg in messages]
@@ -21,6 +24,23 @@ def normalize_url(url: str) -> str:
     normalized_query = urlencode(query_params, quote_via=quote)
 
     return urlunparse(parsed._replace(query=normalized_query))
+
+
+def urlsafe_address(node_ip_or_domain):
+    try:
+        # Проверяем, является ли адрес валидным IPv4 или IPv6
+        node_ip_or_domain = str(IPvAnyAddress(node_ip_or_domain))
+    except ValueError:
+        # Если это не IP, то считаем доменом. Конвертируем в punycode (IDNA)
+        try:
+            node_ip_or_domain = node_ip_or_domain.encode('idna').decode('ascii')
+        except (UnicodeError, UnicodeDecodeError):
+            # Если punycode провалился - оставляем как есть
+            # Клиент получит ошибку DNS при попытке подключения
+            # ВАЖНО: НЕ используем quote() для hostname - это сломает DNS резолвинг
+            pass
+    return node_ip_or_domain
+
 
 def resolve_user_template(
         template: dict,

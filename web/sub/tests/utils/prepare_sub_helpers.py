@@ -108,20 +108,21 @@ def generate_constant_node_data_obj(script_code: str) -> dict:
 
 def extract_jinja_placeholders(url_tmp: str) -> list[str]:
     """
-    Парсит url_tmp и извлекает все Jinja2 плейсхолдеры
+    Парсит url_tmp и извлекает все Jinja2 плейсхолдеры (двойные {{...}})
     
     Ищет паттерны: {{placeholder}}
+    НЕ извлекает одинарные {placeholder} - они обрабатываются в prepare_sub
     
     Args:
         url_tmp: Шаблон config_link из proto_templates.url_tmp
     
     Returns:
-        Список уникальных плейсхолдеров (без {{}} скобок)
+        Список уникальных двойных плейсхолдеров (без {{}} скобок)
     
     Example:
-        >>> url_tmp = "vless://{user_uuid}@{{node___address}}:{{inbounds___0___port}}#{{node___title}}"
+        >>> url_tmp = "vless://{user_uuid}@{n_address}:{{inbounds___0___port}}#{n_title}"
         >>> extract_jinja_placeholders(url_tmp)
-        ['node___address', 'inbounds___0___port', 'node___title']
+        ['inbounds___0___port']
     """
     pattern = r'\{\{([^}]+)\}\}'
     matches = re.findall(pattern, url_tmp)
@@ -312,30 +313,31 @@ def generate_mock_node_config(placeholders: list[str]) -> dict:
 
 def render_config_link_for_test(
     url_tmp: str,
-    node_config_json: dict,
-    node_address: str = '192.168.1.100',
-    node_title: str = 'Sub Prepare Test Node'
+    node_config_json: dict
 ) -> str:
     """
-    Рендерит config_link (локальная копия generate_link_from_json для безопасности)
+    Рендерит config_link (локальная копия generate_link_from_json)
     
-    Это копия функции из web.api.protocols.proto_links_templates.handlers,
-    но БЕЗ punycode обработки (она перенесена в sub_api.py).
+    Имитирует работу node_client/utils/tmp_url_render.py:generate_link_from_json()
+    
+    ВАЖНО: 
+    - Рендерит ТОЛЬКО двойные плейсхолдеры {{inbounds___0___port}} через Jinja2
+    - НЕ трогает одинарные {n_address}, {n_title}, {user_uuid} и т.д.
+    - Одинарные плейсхолдеры подставляются в prepare_sub скриптах
     
     Args:
         url_tmp: Шаблон из proto_templates.url_tmp
         node_config_json: Mock конфиг ноды (dict структура)
-        node_address: IP/домен ноды для подстановки
-        node_title: Название ноды для подстановки
     
     Returns:
-        Отрендеренная config_link строка (сырая, БЕЗ URL encoding и БЕЗ punycode!)
+        Отрендеренная config_link с замененными двойными плейсхолдерами,
+        одинарные остаются как есть (БЕЗ URL encoding и БЕЗ punycode!)
     
     Example:
-        >>> url_tmp = "vless://{user_uuid}@{{node___address}}:{{inbounds___0___port}}#{{node___title}}"
+        >>> url_tmp = "vless://{user_uuid}@{n_address}:{{inbounds___0___port}}#{n_title}"
         >>> mock_config = {'inbounds': [{'port': 443}]}
         >>> render_config_link_for_test(url_tmp, mock_config)
-        'vless://{user_uuid}@192.168.1.100:443#Sub Prepare Test Node'
+        'vless://{user_uuid}@{n_address}:443#{n_title}'
     """
     if not url_tmp:
         raise ValueError('url_tmp не может быть пустым')
@@ -345,15 +347,8 @@ def render_config_link_for_test(
     
     flat_config = flatten(node_config_json, separator='___')
     
-    # Собираем контекст для Jinja2 (БЕЗ punycode - это делается в sub_api.py)
-    context = {
-        **flat_config,
-        'node___address': node_address,
-        'node___title': node_title,
-    }
-    
-    # Рендерим через Jinja2
+    # Рендерим через Jinja2 ТОЛЬКО двойные плейсхолдеры {{...}}
     template = Template(url_tmp)
-    config_url = template.render(context)
+    config_url = template.render(flat_config)
     
     return config_url

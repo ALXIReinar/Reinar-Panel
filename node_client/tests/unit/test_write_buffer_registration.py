@@ -111,7 +111,10 @@ async def test_register_node_success(sample_config_with_users):
         node_proto_id=node_proto_id,
         filepath=filepath,
         user_injectors=user_injectors,
-        reload_command=reload_command
+        reload_command=reload_command,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Проверяем успех
@@ -170,7 +173,10 @@ async def test_register_node_loads_existing_users(sample_config_with_users):
         node_proto_id=node_proto_id,
         filepath=str(config_path),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     assert success is True
@@ -205,7 +211,10 @@ async def test_register_node_empty_config(empty_config):
         node_proto_id=node_proto_id,
         filepath=str(empty_config),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     assert success is True
@@ -240,7 +249,10 @@ async def test_register_node_file_not_found():
         node_proto_id=node_proto_id,
         filepath="/path/to/nonexistent/file.json",
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Проверяем что регистрация провалилась
@@ -274,7 +286,10 @@ async def test_register_node_invalid_users_path(sample_config_with_users):
         node_proto_id=node_proto_id,
         filepath=str(config_path),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Проверяем что регистрация провалилась
@@ -309,7 +324,10 @@ async def test_register_node_invalid_extractor_script_syntax(sample_config_with_
         node_proto_id=node_proto_id,
         filepath=str(config_path),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Проверяем что регистрация провалилась
@@ -344,7 +362,10 @@ async def test_register_node_missing_transform_function(sample_config_with_users
         node_proto_id=node_proto_id,
         filepath=str(config_path),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Проверяем что регистрация провалилась
@@ -378,7 +399,10 @@ async def test_register_node_corrupted_json(tmp_path):
         node_proto_id=node_proto_id,
         filepath=str(broken_file),
         user_injectors=user_injectors,
-        reload_command=None
+        reload_command=None,
+        config2json_script=None,
+        json2config_script=None,
+        conf_converter_libs=None
     )
     
     # Проверяем что регистрация провалилась

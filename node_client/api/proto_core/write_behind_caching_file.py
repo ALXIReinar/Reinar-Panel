@@ -55,6 +55,9 @@ class ConfigWriteBuffer:
         
         # Воркеры для каждой ноды {node_proto_id: Task}
         self.worker_tasks: dict[int, asyncio.Task] = {}
+        
+        # Активные задачи записи для каждой ноды {node_proto_id: set[Task]}
+        self.pending_writes: dict[int, set[asyncio.Task]] = {}
 
 
     async def register_node(
@@ -135,8 +138,14 @@ class ConfigWriteBuffer:
         # 2. Создаём очередь
         self.node_queues[node_proto_id] = asyncio.Queue()
         
+        # 2.1. Создаём set для отслеживания pending writes
+        self.pending_writes[node_proto_id] = set()
+        
         # 3. Загружаем существующих пользователей из файла
         await self._load_users_from_config(node_proto_id)
+        
+        # 3.1. Инициализируем local_state для этой ноды
+        self.local_state[node_proto_id] = {}
         
         # 4. Запускаем воркер для этой ноды
         task = asyncio.create_task(self._node_worker(node_proto_id))
@@ -273,24 +282,45 @@ class ConfigWriteBuffer:
 
 
     async def stop(self):
-        """Останавливает все воркеры и сбрасывает остатки на диск"""
+        """Останавливает все воркеры и безопасно сбрасывает остатки на диск"""
         log_event("Остановка ConfigWriteBuffer...")
         
-        "Останавливаем воркеры"
-        for node_id, task in self.worker_tasks.items():
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+        # 1. ОСТАНАВЛИВАЕМ ВОРКЕРЫ ПЕРВЫМ ДЕЛОМ
+        # Чтобы они перестали читать очереди и порождать новые pending_writes
+        worker_tasks = list(self.worker_tasks.values())
+        if worker_tasks:
+            for task in worker_tasks:
+                task.cancel()
+            
+            # Дожидаемся фактической остановки всех воркеров
+            await asyncio.gather(*worker_tasks, return_exceptions=True)
+            self.worker_tasks.clear()
         
-        "Сбрасываем остатки на диск"
-        for node_id in self.node_metadata:
-            if not self.node_queues[node_id].empty():
+        # 2. ДОЖИДАЕМСЯ ЗАВЕРШЕНИЯ АКТИВНЫХ ЗАПИСЕЙ
+        # Теперь воркеры мертвы, список pending_writes больше не будет пополняться
+        all_pending_writes = [
+            task for tasks in self.pending_writes.values() for task in tasks
+        ]
+        
+        if all_pending_writes:
+            log_event(f"Ожидание завершения {len(all_pending_writes)} активных записей I/O...")
+            results = await asyncio.gather(*all_pending_writes, return_exceptions=True)
+            
+            for result in results:
+                if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
+                    log_event(f"Ошибка при завершении pending записи: {repr(result)}", level='ERROR')
+                    
+            self.pending_writes.clear()
+        
+        # 3. СБРАСЫВАЕМ ОСТАТКИ НА ДИСК
+        # Очереди теперь заморожены, можно безопасно сбросить остатки
+        for node_id in list(self.node_metadata.keys()):
+            queue = self.node_queues.get(node_id)
+            if queue and not queue.empty():
                 log_event(f"Сброс остатков для node_proto_id: \033[33m{node_id}\033[0m")
                 await self._write_node_to_disk(node_id)
         
-        log_event("ConfigWriteBuffer остановлен")
+        log_event("ConfigWriteBuffer полностью остановлен")
 
 
     async def bulk_action(
@@ -423,7 +453,13 @@ class ConfigWriteBuffer:
                 # Если есть операции → пишем на диск (неблокирующе)
                 if was_limited and self.node_metadata[node_id]['queue_limited'] and operations:
                     log_event(f"\033[35m[Worker]\033[0m Батч собран | node_proto_id: \033[32m{node_id}\033[0m; opers_len: \033[35m{len(operations)}\033[0m")
-                    asyncio.create_task(self._write_node_to_disk(node_id))
+                    
+                    # Создаём задачу и отслеживаем её
+                    write_task = asyncio.create_task(self._write_node_to_disk(node_id))
+                    self.pending_writes[node_id].add(write_task)
+                    
+                    # Удаляем из pending после завершения
+                    write_task.add_done_callback(lambda t: self.pending_writes[node_id].discard(t))
 
             except asyncio.CancelledError:
                 break
@@ -551,8 +587,11 @@ class ConfigWriteBuffer:
             state_users = orjson.loads(state_users)
 
             core_ok, config = await self._read_config(metadata['filepath'], False)
-            # в Json
-            config = metadata['config2json_script'](config)
+            # в Json - используем конвертер или orjson.loads по умолчанию
+            if metadata['config2json_script'] is None:
+                config = orjson.loads(config)
+            else:
+                config = metadata['config2json_script'](config)
 
             if not state_ok or not core_ok:
                 log_event(f'\033[36m[Audit]\033[0m Предоставлены неправильные конфигурации. Файлы не найдены; node_proto_id: \033[31m{node_id}\033[0m; node_meta: \033[34m{metadata}\033[0m', level='ERROR')
