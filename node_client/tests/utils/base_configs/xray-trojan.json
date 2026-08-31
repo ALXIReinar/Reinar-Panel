@@ -1,0 +1,34 @@
+{
+  "log": { "loglevel": "warning" },
+  "api": {
+    "services": ["HandlerService", "LoggerService", "StatsService"],
+    "tag": "api"
+  },
+  "stats": {},
+  "policy": {
+    "levels": { "0": { "statsUserUplink": true, "statsUserDownlink": true } },
+    "system": { "statsInboundUplink": true, "statsInboundDownlink": true }
+  },
+  "inbounds": [
+    {
+      "listen": "0.0.0.0",
+      "port": 443,
+      "protocol": "trojan",
+      "settings": {
+        "clients": []
+      },
+      "tag": "trojan-inbound"
+    },
+    {
+      "listen": "127.0.0.1",
+      "port": 10085,
+      "protocol": "dokodemo-door",
+      "settings": { "address": "127.0.0.1" },
+      "tag": "api"
+    }
+  ],
+  "outbounds": [
+    { "protocol": "freedom", "tag": "direct" },
+    { "protocol": "blackhole", "tag": "block" }
+  ]
+}

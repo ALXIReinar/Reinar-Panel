@@ -46,7 +46,16 @@ class TestCollectTrafficMetrics:
             ]
         }
         
-        arq_ctx['aio_http'] = FakeAiohttpSession(json_data={'stdout': fake_stdout}, status=200)
+        # Мокаем ответ от ноды в новом формате (теперь парсинг на ноде, возвращает готовый users_traffic)
+        arq_ctx['aio_http'] = FakeAiohttpSession(
+            json_data={
+                'users_traffic': [
+                    {'user_sub_id': user_a_sub_id, 'total_mb_used': 50},
+                    {'user_sub_id': user_b_sub_id, 'total_mb_used': 30},
+                ]
+            }, 
+            status=200
+        )
         
         # Получаем данные ноды из БД
         async with db_pool.acquire() as conn:
@@ -128,26 +137,21 @@ class TestCollectTrafficMetrics:
         user_g_sub_id = seed['should_not_block']['user_g']['order_id']
         
         # Fake aiohttp возвращает большой трафик (все превышают лимит 1000MB)
-        fake_stdout = {
-            'stat': [
-                # User A: 500 + 600 = 1100MB (превышает лимит) → ДОЛЖЕН блокироваться
-                {'name': f'user>>>{user_a_sub_id}>>>traffic>>>downlink', 'value': 629145600},  # 600MB
-                # User B: 800 + 300 = 1100MB (превышает лимит) → ДОЛЖЕН блокироваться
-                {'name': f'user>>>{user_b_sub_id}>>>traffic>>>downlink', 'value': 314572800},  # 300MB
-                # User C: 500 + 600 = 1100MB, но подписка неактивна → НЕ блокируется
-                {'name': f'user>>>{user_c_sub_id}>>>traffic>>>downlink', 'value': 629145600},  # 600MB
-                # User D: 500 + 600 = 1100MB, но пользователь удалён → НЕ блокируется
-                {'name': f'user>>>{user_d_sub_id}>>>traffic>>>downlink', 'value': 629145600},  # 600MB
-                # User E: 500 + 600 = 1100MB, но уже ограничен → НЕ блокируется
-                {'name': f'user>>>{user_e_sub_id}>>>traffic>>>downlink', 'value': 629145600},  # 600MB
-                # User F: 500 + 400 = 900MB (НЕ превышает лимит) → НЕ блокируется
-                {'name': f'user>>>{user_f_sub_id}>>>traffic>>>downlink', 'value': 419430400},  # 400MB
-                # User G: 500 + 600 = 1100MB, но подписка истекла → НЕ блокируется
-                {'name': f'user>>>{user_g_sub_id}>>>traffic>>>downlink', 'value': 629145600},  # 600MB
-            ]
-        }
-        
-        arq_ctx['aio_http'] = FakeAiohttpSession(json_data={'stdout': fake_stdout}, status=200)
+        # Мокаем ответ от ноды в новом формате (парсинг на ноде)
+        arq_ctx['aio_http'] = FakeAiohttpSession(
+            json_data={
+                'users_traffic': [
+                    {'user_sub_id': user_a_sub_id, 'total_mb_used': 600},  # 500 + 600 = 1100MB
+                    {'user_sub_id': user_b_sub_id, 'total_mb_used': 300},  # 800 + 300 = 1100MB
+                    {'user_sub_id': user_c_sub_id, 'total_mb_used': 600},  # неактивная подписка
+                    {'user_sub_id': user_d_sub_id, 'total_mb_used': 600},  # удалённый пользователь
+                    {'user_sub_id': user_e_sub_id, 'total_mb_used': 600},  # уже ограничен
+                    {'user_sub_id': user_f_sub_id, 'total_mb_used': 400},  # 500 + 400 = 900MB (не превышает)
+                    {'user_sub_id': user_g_sub_id, 'total_mb_used': 600},  # истёкшая подписка
+                ]
+            },
+            status=200
+        )
         
         # Получаем ноду
         async with db_pool.acquire() as conn:
@@ -247,16 +251,15 @@ class TestCollectTrafficMetrics:
         user_e_sub_id = seed['should_not_block']['user_e']['order_id']
         
         # Добавляем трафик так, чтобы ВСЕ превысили лимит
-        fake_stdout = {
-            'stat': [
-                {'name': f'user>>>{user_a_sub_id}>>>traffic>>>downlink', 'value': 629145600},  # +600MB
-                {'name': f'user>>>{user_c_sub_id}>>>traffic>>>downlink', 'value': 629145600},
-                {'name': f'user>>>{user_d_sub_id}>>>traffic>>>downlink', 'value': 629145600},
-                {'name': f'user>>>{user_e_sub_id}>>>traffic>>>downlink', 'value': 629145600},
+        # Готовые распарсенные метрики (парсинг теперь на node_client)
+        arq_ctx['aio_http'] = FakeAiohttpSession(json_data={
+            'users_traffic': [
+                {'user_sub_id': user_a_sub_id, 'total_mb_used': 600},
+                {'user_sub_id': user_c_sub_id, 'total_mb_used': 600},
+                {'user_sub_id': user_d_sub_id, 'total_mb_used': 600},
+                {'user_sub_id': user_e_sub_id, 'total_mb_used': 600},
             ]
-        }
-        
-        arq_ctx['aio_http'] = FakeAiohttpSession(json_data={'stdout': fake_stdout}, status=200)
+        }, status=200)
         
         async with db_pool.acquire() as conn:
             node = await conn.fetchrow("""
@@ -349,7 +352,10 @@ class TestCollectTrafficMetrics:
         # Arrange
         seed = metrics_collector_seed
         fake_stdout = {'stat': []}  # Пустой список
-        arq_ctx['aio_http'] = FakeAiohttpSession(json_data={'stdout': fake_stdout}, status=200)
+        arq_ctx['aio_http'] = FakeAiohttpSession(
+            json_data={'users_traffic': []},  # Пустой массив в новом формате
+            status=200
+        )
         
         async with db_pool.acquire() as conn:
             node = await conn.fetchrow("""

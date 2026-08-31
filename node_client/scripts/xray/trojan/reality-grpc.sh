@@ -116,10 +116,6 @@ cat <<EOF > "$CONFIG_PATH"
     {
       "protocol": "blackhole",
       "tag": "block"
-    },
-    {
-      "protocol": "none",
-      "tag": "api_out"
     }
   ],
   "routing": {

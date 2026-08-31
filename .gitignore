@@ -175,5 +175,6 @@ node_modules/
 *.generated.py
 graphify-out/
 !/web/db/seed_data.json
+!/node_client/tests/utils/base_configs
 *.sql
 check_env_imports.py

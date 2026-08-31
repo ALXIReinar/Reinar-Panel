@@ -1,0 +1,32 @@
+{
+  "log": {
+      "level": "warn"
+  },
+  "experimental": {
+    "v2ray_api": {
+      "listen": "127.0.0.1:10085",
+      "stats": {
+        "enabled": true,
+        "inbounds": [
+          "trojan-in"
+        ],
+        "users": []
+      }
+    }
+  },
+  "inbounds": [
+    {
+      "type": "trojan",
+      "tag": "trojan-in",
+      "listen": "::",
+      "listen_port": 443,
+      "users": []
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ]
+}

@@ -659,9 +659,6 @@ async def test_read_config_with_custom_converters_from_db(protocol_templates_wit
     ❌ v2fly-shadowsocks: KeyError 'method'
     
     Итого: 2/3 шаблонов passed
-    
-    Запуск:
-        pytest node_client/tests/integrate/test_node_config_api.py::test_read_config_with_custom_converters_from_db --protocol=* -v
     """
     results = []
     errors = []

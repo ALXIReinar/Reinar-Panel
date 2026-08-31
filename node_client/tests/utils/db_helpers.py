@@ -176,7 +176,7 @@ async def load_templates_with_extractors(pool: asyncpg.Pool, protocol_filters: s
             SELECT 
                 pt.id, pt.title, pt.proto_python_lib,
                 pt.api_bulk_add_user_script, pt.api_bulk_delete_user_script,
-                pt.reload_core_command, pt.metrics_command, pt.api_metrics_script, pt.metrics_parser_code,
+                pt.reload_core_command, pt.metrics_command, pt.api_metrics_script, pt.metrics_parser_code, pt.metrics_parser_libs,
                 pt.bulk_add_script_custom_params, pt.bulk_delete_script_custom_params,
                 pt.constant_user_data_obj, pt.required_user_data_obj,
                 pt.url_tmp, pt.sub_prepare_script, pt.sub_required_libs,

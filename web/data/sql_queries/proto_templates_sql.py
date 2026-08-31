@@ -70,7 +70,8 @@ class ProtoTemplatesQueries:
         )
         SELECT pt.id, pt.title, pt.url_tmp, pt.status, pt.is_accepted, pt.reload_core_command, pt.required_user_data_obj, pt.constant_user_data_obj,
                pt.proto_python_lib, pt.sub_prepare_script, pt.sub_required_libs, pt.api_bulk_delete_user_script, pt.metrics_parser_code, pt.metrics_command,
-               pt.bulk_delete_script_custom_params, pt.api_metrics_script, pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, pt.description, pt.config_format,
+               pt.bulk_delete_script_custom_params, pt.api_metrics_script, pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, pt.description,
+               pt.json2config_script, pt.config2json_script, pt.conf_converter_libs, pt.metrics_parser_libs,
                COALESCE(ui.user_injectors, '[]'::json) AS user_injectors
         FROM proto_templates pt
         LEFT JOIN user_injectors ui ON ui.tmp_id = pt.id
@@ -147,7 +148,7 @@ class ProtoTemplatesQueries:
             params.append(url_tmp)
             param_idx += 1
 
-        if reload_core_command is not None:
+        if reload_core_command is not None and reload_core_command != 0:
             updates.append(f"reload_core_command = ${param_idx}")
             params.append(reload_core_command)
             param_idx += 1
@@ -162,27 +163,27 @@ class ProtoTemplatesQueries:
             params.append(constant_user_data_obj)
             param_idx += 1
 
-        if proto_python_lib is not None:
+        if proto_python_lib is not None and proto_python_lib != 0:
             updates.append(f"proto_python_lib = ${param_idx}")
             params.append(proto_python_lib)
             param_idx += 1
 
-        if sub_prepare_script is not None:
+        if sub_prepare_script is not None and sub_prepare_script != 0:
             updates.append(f"sub_prepare_script = ${param_idx}")
             params.append(sub_prepare_script)
             param_idx += 1
 
-        if sub_required_libs is not None:
+        if sub_required_libs is not None and sub_required_libs != 0:
             updates.append(f"sub_required_libs = ${param_idx}")
             params.append(sub_required_libs)
             param_idx += 1
 
-        if api_bulk_delete_user_script is not None:
+        if api_bulk_delete_user_script is not None and api_bulk_delete_user_script != 0:
             updates.append(f"api_bulk_delete_user_script = ${param_idx}")
             params.append(api_bulk_delete_user_script)
             param_idx += 1
 
-        if api_bulk_add_user_script is not None:
+        if api_bulk_add_user_script is not None and api_bulk_add_user_script != 0:
             updates.append(f"api_bulk_add_user_script = ${param_idx}")
             params.append(api_bulk_add_user_script)
             param_idx += 1
@@ -207,22 +208,22 @@ class ProtoTemplatesQueries:
             params.append(bulk_add_script_custom_params)
             param_idx += 1
 
-        if api_metrics_script is not None:
+        if api_metrics_script is not None and api_metrics_script != 0:
             updates.append(f"api_metrics_script = ${param_idx}")
             params.append(api_metrics_script)
             param_idx += 1
 
-        if json2config_script != 0:
+        if json2config_script is not None and json2config_script != 0:
             updates.append(f"json2config_script = ${param_idx}")
             params.append(json2config_script)
             param_idx += 1
 
-        if config2json_script != 0:
+        if config2json_script is not None and config2json_script != 0:
             updates.append(f"config2json_script = ${param_idx}")
             params.append(config2json_script)
             param_idx += 1
 
-        if conf_converter_libs != 0:
+        if conf_converter_libs is not None and conf_converter_libs != 0:
             updates.append(f"conf_converter_libs = ${param_idx}")
             params.append(conf_converter_libs)
             param_idx += 1

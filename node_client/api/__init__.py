@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from node_client.config import env
-from .node_config_api import router as node_config_router
+from .node_config.node_config_api import router as node_config_router
 from .execute_api import router as execute_router
 from .proto_core.proto_core_users_api import router as proto_core_users_router
 

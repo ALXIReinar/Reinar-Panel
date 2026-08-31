@@ -25,6 +25,182 @@ from node_client.api.proto_core.write_behind_caching_file import ConfigWriteBuff
 
 # Импорты утилит
 from node_client.tests.utils.db_helpers import (
+    load_templates_by_protocol,
+    get_all_active_templates,
+    load_templates_with_extractors
+)
+
+
+# ========== Helper Functions for Core Management ==========
+
+def parse_template_name(template_title: str) -> tuple[str, str]:
+    """
+    Извлекает ядро и протокол из названия шаблона.
+    
+    Examples:
+        'xray-vless-reality-tcp' -> ('xray', 'vless')
+        'singbox-trojan-tls-ws' -> ('singbox', 'trojan')
+        'hysteria-hy2-tls' -> ('hysteria', 'hy2')
+        'amneziawg-awg-ipv4' -> ('amneziawg', 'awg')
+    
+    Args:
+        template_title: Полное название шаблона из БД
+    
+    Returns:
+        tuple[str, str]: (core_type, protocol_type)
+    
+    Raises:
+        ValueError: Если формат названия некорректный
+    """
+    parts = template_title.split('-')
+    if len(parts) < 2:
+        raise ValueError(f"Invalid template name format: {template_title}")
+    
+    return parts[0].lower(), parts[1].lower()
+
+
+# Реестр конфигураций: (ядро, протокол) -> конфиг-файл
+CORE_PROTOCOL_CONFIGS = {
+    ('xray', 'vless'): 'xray-vless.json',
+    ('xray', 'vmess'): 'xray-vmess.json',
+    ('xray', 'trojan'): 'xray-trojan.json',
+    ('xray', 'shadowsocks'): 'xray-ss.json',
+    # ('xray', 'hy2'): 'xray-hy2.json',
+    
+    ('singbox', 'vless'): 'singbox-vless.json',
+    ('singbox', 'vmess'): 'singbox-vmess.json',
+    ('singbox', 'trojan'): 'singbox-trojan.json',
+    ('singbox', 'shadowsocks'): 'singbox-ss.json',
+    ('singbox', 'hy2'): 'singbox-hy2.json',
+    ('singbox', 'wg'): 'singbox-wg.json',
+    ('singbox', 'awg'): 'singbox-awg.json',
+    ('singbox', 'tuicv5'): 'singbox-tuicv5.json',
+    
+    ('hysteria', 'hy2'): 'hysteria-hy2.yml',
+}
+
+# Настройки Docker образов для каждого ядра
+CORE_IMAGES = {
+    'xray': {
+        'image': 'teddysun/xray:latest',
+        'mount_path': '/etc/xray/config.json',
+        'start_command': 'xray run -c /etc/xray/config.json',
+        'log_ready_marker': 'started',
+        'api_port': 10085,
+        'service_port': 443
+    },
+    'singbox': {
+        'image': 'ghcr.io/sagernet/sing-box:latest',
+        'mount_path': '/etc/sing-box/config.json',
+        'start_command': 'sing-box run -c /etc/sing-box/config.json',
+        'log_ready_marker': 'started',
+        'api_port': 10085,
+        'service_port': 443
+    },
+    'hysteria': {
+        'image': 'tobyxdd/hysteria:latest',
+        'mount_path': '/etc/hysteria/config.yaml',
+        'start_command': 'hysteria server -c /etc/hysteria/config.yaml',
+        'log_ready_marker': 'server up',
+        'api_port': 10085,  # trafficStats endpoint
+        'service_port': 443
+    }
+}
+
+
+def get_core_container(template_title: str, is_real_mode: bool) -> tuple[str, int]:
+    """
+    Возвращает (core_ip, api_port) для указанного шаблона.
+    
+    Mock режим: возвращает ('127.0.0.1', 10085)
+    Real режим: поднимает Docker контейнер с соответствующим ядром
+    
+    Args:
+        template_title: Полное название шаблона (например, 'xray-vless-reality-tcp')
+        is_real_mode: Флаг реального режима (--mode=real)
+        
+    Returns:
+        tuple[str, int]: (host_ip, api_port)
+        
+    Raises:
+        pytest.skip: Если:
+            - Запущен в mock режиме (is_real_mode=False)
+            - Ядро не поддерживается (amneziawg)
+            - Конфиг для протокола не найден
+            - Docker контейнер не удалось запустить
+    
+    Example:
+        >>> core_ip, api_port = get_core_container('xray-vless-reality-tcp', True)
+        >>> print(f"Xray API доступен на {core_ip}:{api_port}")
+    """
+    if not is_real_mode:
+        # Mock режим - возвращаем фиктивные значения
+        return ('127.0.0.1', 10085)
+    
+    # Парсим название шаблона
+    try:
+        core_type, protocol_type = parse_template_name(template_title)
+    except ValueError as e:
+        pytest.skip(f"Cannot parse template name: {e}")
+    
+    # Проверяем поддержку ядра
+    if core_type == 'amneziawg':
+        # pytest.skip("AmneziaWG not supported in real mode (L3 networking issues with Docker)")
+        return False, False
+
+    if core_type not in CORE_IMAGES:
+        return False, False
+
+    # Проверяем наличие конфига для протокола
+    config_key = (core_type, protocol_type)
+    if config_key not in CORE_PROTOCOL_CONFIGS:
+        # pytest.skip(f"No config for {core_type}-{protocol_type} combination")
+        return False, False
+
+
+    # Получаем конфигурации
+    config_filename = CORE_PROTOCOL_CONFIGS[config_key]
+    core_config = CORE_IMAGES[core_type]
+    
+    # Путь к конфиг-файлу
+    config_path = Path(__file__).parent / "utils" / "base_configs" / config_filename
+    
+    if not config_path.exists():
+        pytest.skip(f"Config file not found: {config_path}")
+    
+    # Создаём контейнер
+    container = DockerContainer(core_config['image'])
+    container.with_exposed_ports(core_config['api_port'], core_config['service_port'])
+    container.with_volume_mapping(
+        str(config_path), 
+        core_config['mount_path'], 
+        mode="ro"
+    )
+    container.with_command(core_config['start_command'])
+    
+    # Запускаем контейнер
+    try:
+        container.start()
+        
+        # Ждём когда ядро запустится
+        wait_for_logs(container, core_config['log_ready_marker'], timeout=15)
+        time.sleep(2)  # Дополнительная пауза для инициализации API
+        
+        # Получаем проброшенный порт API
+        api_port = container.get_exposed_port(core_config['api_port'])
+        host_ip = container.get_container_host_ip()
+        
+        return (host_ip, int(api_port))
+        
+    except Exception as e:
+        container.stop()
+        pytest.skip(f"Failed to start {core_type} container: {e}")
+
+
+# ========== End of Helper Functions ==========
+
+
+from node_client.tests.utils.db_helpers import (
     load_templates_by_protocol,  # Новая функция
     load_templates_with_extractors,  # Для тестов шаблонов
     get_all_active_templates
@@ -196,7 +372,11 @@ def is_mock_mode(test_mode):
 @pytest.fixture(scope="function")
 def xray_core_container(is_real_mode):
     """
-    Поднимает реальный Xray контейнер для E2E тестов
+    Поднимает реальный Xray контейнер для E2E тестов.
+    
+    DEPRECATED: Используйте get_core_container(template_title, is_real_mode) вместо этой фикстуры.
+    
+    Оставлена для обратной совместимости со старыми тестами.
     
     Используется только при --mode=real
     
@@ -206,38 +386,8 @@ def xray_core_container(is_real_mode):
     Raises:
         pytest.skip: Если запущен в mock режиме
     """
-    if not is_real_mode:
-        pytest.skip("Real core tests require --mode=real")
-    
-    # Путь к тестовому конфигу Xray
-    config_path = Path(__file__).parent / "utils" / "vless-tcp-server-metrics.json"
-    
-    if not config_path.exists():
-        pytest.skip(f"Xray config not found: {config_path}")
-    
-    # Создаём контейнер с Xray
-    container = DockerContainer("teddysun/xray:latest")
-    container.with_exposed_ports(10085, 443)  # API port, VLESS port
-    container.with_volume_mapping(str(config_path), "/etc/xray/config.json", mode="ro")
-    container.with_command("xray run -c /etc/xray/config.json")
-    
-    # Запускаем контейнер
-    container.start()
-    
-    try:
-        # Ждём когда Xray запустится (ищем логи о старте)
-        wait_for_logs(container, "started", timeout=10)
-        time.sleep(1)  # Дополнительная пауза для инициализации API
-        
-        # Получаем проброшенный порт API
-        api_port = container.get_exposed_port(10085)
-        host_ip = container.get_container_host_ip()
-        
-        yield (host_ip, int(api_port))
-        
-    finally:
-        # Останавливаем контейнер
-        container.stop()
+    # Используем новую универсальную функцию
+    return get_core_container('xray-vless-tcp', is_real_mode)
 
 
 @pytest.fixture(scope="session")
@@ -315,7 +465,7 @@ async def protocol_templates_with_extractors(db_pool, protocol_name):
         pytest.skip(
             f"Шаблоны по фильтру '{protocol_name}' не найдены в БД. "
             f"Доступные шаблоны: {available_names}. "
-            f"Попробуйте: --protocol={available_names[0] if available_names else 'xray'}"
+            f"Попробуйте: --protocol={available_names[0] if available_names else '*'}"
         )
     
     return templates

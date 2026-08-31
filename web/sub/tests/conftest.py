@@ -734,17 +734,13 @@ async def sub_api_seed(db_pool, sub_infrastructure_seed):
         # Рендерим config_link для vnode_10
         config_link_10 = render_config_link_for_test(
             url_tmp=url_tmp,
-            node_config_json=mock_config,
-            node_address="192.168.1.100",
-            node_title="VNode 10 Active"
+            node_config_json=mock_config
         )
         
         # Рендерим config_link для vnode_11
         config_link_11 = render_config_link_for_test(
             url_tmp=url_tmp,
-            node_config_json=mock_config,
-            node_address="192.168.1.101",
-            node_title="VNode 11 Active"
+            node_config_json=mock_config
         )
         
         # Устанавливаем отрендеренные config_link

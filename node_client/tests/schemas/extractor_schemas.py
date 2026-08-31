@@ -193,6 +193,26 @@ SINGBOX_HY2_SCHEMA = {
     "additionalProperties": False
 }
 
+SINGBOX_TUICV5_SCHEMA = {
+    "type": "object",
+    "required": ["name", "password"],
+    "properties": {
+        "name": {
+            "type": "string",
+            "description": "Имя пользователя (user_sub_id)"
+        },
+        "password": {
+            "type": "string",
+            "description": "TuicV5 password (user_uuid)"
+        },
+        "uuid": {
+            "type": "string",
+            "description": "TuicV5 uuid (user_uuid)"
+        },
+    },
+    "additionalProperties": False
+}
+
 SINGBOX_WG_SCHEMA = {
     "type": "object",
     "required": ["name", "public_key", "allowed_ips"],
@@ -234,6 +254,62 @@ SINGBOX_WG_SCHEMA = {
     "additionalProperties": False
 }
 
+# ========== AMNEZIAWG L3 ЯДРО (нативный конфиг) ==========
+
+AMNEZIAWG_L3_SCHEMA = {
+    "type": "object",
+    "required": ["PublicKey", "PresharedKey", "AllowedIps"],  # Reserved опционален (только для WARP)
+    "properties": {
+        "PublicKey": {
+            "type": "string",
+            "description": "Curve25519 public key пользователя (base64)"
+        },
+        "PresharedKey": {
+            "type": "string",
+            "description": "Pre-shared key для дополнительной защиты (base64)"
+        },
+        "AllowedIps": {
+            "type": "array",
+            "description": "Разрешённые IP адреса для peer (IPv4/32 или IPv6/128)",
+            "items": {
+                "type": "string",
+                "pattern": r"^((\d{1,3}\.){3}\d{1,3}/32|([0-9a-fA-F:]+)/128)$"
+            },
+            "minItems": 1
+        },
+        "Reserved": {
+            "type": "array",
+            "description": "WARP reserved bytes (3 байта, опционально)",
+            "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+            },
+            "minItems": 3,
+            "maxItems": 3
+        }
+    },
+    "additionalProperties": False
+}
+
+# ========== HYSTERIA NATIVE ЯДРО ==========
+
+HYSTERIA_NATIVE_HY2_SCHEMA = {
+    "type": "object",
+    "required": ["username", "password"],
+    "properties": {
+        "username": {
+            "type": "string",
+            "description": "Имя пользователя (user_sub_id)"
+        },
+        "password": {
+            "type": "string",
+            "description": "Пароль (user_uuid)"
+        }
+    },
+    "additionalProperties": False
+}
+
 # ========== МАППИНГ (ЯДРО, ПРОТОКОЛ) → SCHEMA ==========
 
 SCHEMA_MAP = {
@@ -249,9 +325,16 @@ SCHEMA_MAP = {
     ('singbox', 'vmess'): SINGBOX_VMESS_SCHEMA,
     ('singbox', 'trojan'): SINGBOX_TROJAN_SCHEMA,
     ('singbox', 'shadowsocks'): SINGBOX_SHADOWSOCKS_SCHEMA,
+    ('singbox', 'tuicv5'): SINGBOX_TUICV5_SCHEMA,
     ('singbox', 'hy2'): SINGBOX_HY2_SCHEMA,
     ('singbox', 'wg'): SINGBOX_WG_SCHEMA,
     ('singbox', 'awg'): SINGBOX_WG_SCHEMA,  # AmneziaWG использует ту же схему что и WireGuard
+    
+    # AMNEZIAWG L3 ядро (нативный конфиг)
+    ('amneziawg', 'awg'): AMNEZIAWG_L3_SCHEMA,
+    
+    # HYSTERIA native ядро
+    ('hysteria', 'hy2'): HYSTERIA_NATIVE_HY2_SCHEMA,
 }
 
 

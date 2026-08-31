@@ -93,7 +93,7 @@ def generate_constant_node_data_obj(script_code: str) -> dict:
         'sub_link_grpc_mode': 'multi',
         'node_public_key': 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop',  # 44 символа base64 (reality, trojan)
         'node_ipv6_subnet': 'fd00::/64',  # Валидная локальная IPv6 подсеть (для WireGuard/AmneziaWG)
-        'node_ipv4_subnet': '10.0.0.0/24',  # Валидная приватная IPv4 подсеть
+        'node_ipv4_subnet': '172.0.0.0/8',  # Валидная приватная IPv4 подсеть
         'node_hop_start': 10000,  # Начальный порт для port hopping (WireGuard/AmneziaWG)
         'node_hop_end': 20000,  # Конечный порт для port hopping
         'node_hash_salt': 'test_salt_for_wg_keys',  # Salt для генерации WireGuard ключей

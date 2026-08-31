@@ -149,9 +149,12 @@ class NodesProtocolsQueries:
     async def get_node_for_file_edit(self, node_proto_id: int):
         query = '''
         SELECT n.node_name, np.title, n.ip, n.private_ip, n.api_port, n.is_active, np.user_visible, np.metrics_port, 
-               np.proto_port, np.config_path, np.constant_node_data_obj
+               np.proto_port, np.config_path, np.constant_node_data_obj,
+               pt.config2json_script, pt.json2config_script, pt.conf_converter_libs, pt.url_tmp
         FROM nodes_protocols np 
         JOIN nodes n ON np.node_id = n.id
+        JOIN protocols p ON np.proto_id = p.id
+        JOIN proto_templates pt ON p.tmp_id = pt.id
         WHERE np.id = $1
         '''
         return await self.conn.fetchrow(query, node_proto_id)

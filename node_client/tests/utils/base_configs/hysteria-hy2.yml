@@ -1,0 +1,15 @@
+trafficStats:
+  listen: 127.0.0.1:10085
+  secret: "test_token"
+
+listen: :443
+
+bandwidth:
+  up: 100 mbps
+  down: 100 mbps
+
+masquerade:
+  type: proxy
+  proxy:
+    url: https://microsoft.com
+    rewriteHost: true

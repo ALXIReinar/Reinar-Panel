@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from .templates_api import router as templates_router
+from web.api.templates_api import router as templates_router
 
 tmp_router = APIRouter(prefix='/templates')
 

@@ -63,9 +63,9 @@ class TestConfigFileWriteSuccess:
         """Успешная запись конфиг-файла и генерация ссылки"""
         vnode_id = vnode_with_template  # Фикстура уже возвращает int
         
-        # Мокируем успешный ответ от ноды (запись файла)
+        # Мокируем успешный ответ от ноды (запись файла + возврат config_link)
         client.app.state.cmd_center_aiohttp = FakeAiohttpSession(
-            json_data={"success": True}
+            json_data={"success": True, "config_link": "vless://test-uuid@example.com:443?encryption=none&security=reality#TestNode"}
         )
         
         # Конфиг-файл для записи (используем реальный JSON из utils)
@@ -102,9 +102,9 @@ class TestConfigFileWriteSuccess:
         """Проверка что config_link обновляется в БД"""
         vnode_id = vnode_with_template
         
-        # Мокируем успешный ответ от ноды
+        # Мокируем успешный ответ от ноды (с config_link)
         client.app.state.cmd_center_aiohttp = FakeAiohttpSession(
-            json_data={"success": True}
+            json_data={"success": True, "config_link": "vless://updated-uuid@example.com:443?encryption=none#UpdatedNode"}
         )
         
         # Используем реальный конфиг
@@ -148,9 +148,9 @@ class TestConfigFileWriteSuccess:
         """Запись конфиг-файла с параметром flatten_json_users_key"""
         vnode_id = vnode_with_template
         
-        # Мокируем успешный ответ от ноды
+        # Мокируем успешный ответ от ноды (с config_link)
         client.app.state.cmd_center_aiohttp = FakeAiohttpSession(
-            json_data={"success": True}
+            json_data={"success": True, "config_link": "vless://flatten-test@example.com:443?encryption=none#FlattenTest"}
         )
         
         # Используем реальный конфиг с clients
@@ -163,7 +163,7 @@ class TestConfigFileWriteSuccess:
             json={
                 "node_proto_id": vnode_id,
                 "file_content": config_content,
-                "flatten_json_users_key": "inbounds.0.settings.clients"  # vless теперь на позиции 0
+                "flatten_json_users_key": ["inbounds", "0", "settings", "clients"]  # Список строк, а не строка с точками
             }
         )
         
@@ -268,37 +268,33 @@ class TestConfigFileWriteErrors:
     
     @pytest.mark.asyncio
     async def test_write_config_link_generation_failed(self, client, vnode_with_template, db_pool):
-        """Ошибка генерации ссылки - шаблон недоступен или некорректный (409)"""
+        """Ошибка генерации ссылки - нода возвращает ошибку"""
         vnode_id = vnode_with_template
         
-        # Мокируем успешную запись файла на ноду
+        # Мокируем ошибку от ноды (нет config_link в ответе или ошибка генерации)
         client.app.state.cmd_center_aiohttp = FakeAiohttpSession(
-            json_data={"success": True}
+            json_data={"success": False, "error": "Url конфиг-ссылка не указана в шаблоне"},
+            status=400
         )
         
         import json
         with open("web/tests/utils/vless-tcp-server-metrics-copy.json", "r", encoding="utf-8") as f:
             config_content = json.dumps(json.load(f))
         
-        # Мокируем generate_link_from_json чтобы она вернула ошибку
-        with patch('web.api.node_commander.node_commander_api.generate_link_from_json') as mock_generate:
-            mock_generate.return_value = (False, "Url конфиг-ссылка не указана в шаблоне")
-            
-            response = await client.put(
-                "/api/v1/private/cmd_center/config_file/write",
-                json={
-                    "node_proto_id": vnode_id,
-                    "file_content": config_content,
-                    "flatten_json_users_key": None
-                }
-            )
+        response = await client.put(
+            "/api/v1/private/cmd_center/config_file/write",
+            json={
+                "node_proto_id": vnode_id,
+                "file_content": config_content,
+                "flatten_json_users_key": None
+            }
+        )
         
-        assert response.status_code == 409
+        assert response.status_code == 400
         data = response.json()
         detail = data.get("detail", data)  # FastAPI оборачивает в "detail"
         assert detail["success"] is False
-        assert "Исключение при генерации ссылки по шаблону" in detail["message"]
-        assert "Url конфиг-ссылка не указана" in detail["err_message"]
+        assert "Ошибка исполнения на ноде" in detail["message"]
 
 
 class TestConfigFileWriteValidation:

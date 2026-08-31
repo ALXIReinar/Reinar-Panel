@@ -74,8 +74,7 @@ cat <<EOF > "$CONFIG_PATH"
   ],
   "outbounds": [
     { "protocol": "freedom", "tag": "direct" },
-    { "protocol": "blackhole", "tag": "block" },
-    { "protocol": "none", "tag": "api_out" }
+    { "protocol": "blackhole", "tag": "block" }
   ],
   "routing": {
     "rules": [

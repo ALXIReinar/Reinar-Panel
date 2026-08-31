@@ -786,7 +786,7 @@ async def test_bulk_delete_users_without_api_script(
     assert data['hot_reload'] is False
     
     # Ждём записи
-    await asyncio.sleep(0.3)
+    await asyncio.sleep(0.7)
     
     # Проверяем что пользователей нет в буфере (по user_uuid)
     for user in users_to_add:

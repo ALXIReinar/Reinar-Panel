@@ -174,6 +174,9 @@ class ProtoTemplates(Base):
     bulk_add_script_custom_params: Mapped[Optional[dict]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     description: Mapped[Optional[str]] = mapped_column(Text)
     metrics_parser_libs: Mapped[Optional[str]] = mapped_column(String(512))
+    config2json_script: Mapped[Optional[str]] = mapped_column(Text)
+    json2config_script: Mapped[Optional[str]] = mapped_column(Text)
+    conf_converter_libs: Mapped[Optional[str]] = mapped_column(String(512))
 
     templates_statuses: Mapped['TemplatesStatuses'] = relationship('TemplatesStatuses', back_populates='proto_templates')
     protocols: Mapped[list['Protocols']] = relationship('Protocols', back_populates='tmp')
@@ -330,6 +333,8 @@ class NodesProtocols(Base):
     proto_port: Mapped[Optional[int]] = mapped_column(Integer)
     sub_node_address: Mapped[Optional[str]] = mapped_column(String(255))
     constant_node_data_obj: Mapped[Optional[dict]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    reload_core_command: Mapped[Optional[str]] = mapped_column(String(256))
+    metrics_command: Mapped[Optional[str]] = mapped_column(String(256))
 
     node: Mapped['Nodes'] = relationship('Nodes', back_populates='nodes_protocols')
     proto: Mapped['Protocols'] = relationship('Protocols', back_populates='nodes_protocols')

@@ -93,7 +93,7 @@ class TestGetSubEndpoint:
         # Проверяем что есть ссылки с UUID
         assert user_uuid in decoded
         assert "vless://" in decoded
-        assert "192.168.1.1" in decoded  # IP адрес из mock config
+        assert "vnode10.test.com" in decoded or "vnode11.test.com" in decoded  # Домены из фикстуры
         
         # Проверяем заголовки
         assert 'subscription-userinfo' in response.headers

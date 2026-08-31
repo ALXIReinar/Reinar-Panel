@@ -83,7 +83,7 @@ cat <<EOF > "$CONFIG_PATH"
       "listen_port": $AWG_PORT,
       "system": false,
       "local_address": [
-        "$IP_ADDR",
+        "$IP_ADDR"
       ],
       "private_key": "$WG_PRIVATE_KEY",
       "peers": [],

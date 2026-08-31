@@ -8,6 +8,7 @@ from web.api.node_commander.node_commander_api import router as node_commander_r
 from web.api.users.users_api import router as users_router
 from web.api.sub_plans_api import router as subscriptions_router
 from web.api.node_commander.execute_history import router as remote_execute_history_router
+from web.api.templates_api import router as templates_router
 
 main_router = APIRouter(prefix="/api/v1")
 
@@ -20,6 +21,7 @@ main_router.include_router(whitelist_router)
 main_router.include_router(remote_execute_history_router)
 main_router.include_router(users_router)
 main_router.include_router(subscriptions_router)
+main_router.include_router(templates_router)
 
 
 @main_router.get('/healthcheck')

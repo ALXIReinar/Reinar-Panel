@@ -101,6 +101,9 @@ class TestAdminBulkPipeline:
                 required_user_data_obj=args[13], # required_user_data_obj
                 constant_user_data_obj=args[14], # constant_user_data_obj
                 constant_node_data_obj=args[15], # constant_node_data_obj
+                json2config_script=args[16],     # json2config_script
+                config2json_script=args[17],     # config2json_script
+                conf_converter_libs=args[18],    # conf_converter_libs
                 current_attempt=1
             )
             
@@ -193,6 +196,9 @@ class TestAdminBulkPipeline:
                 required_user_data_obj=args[13],
                 constant_user_data_obj=args[14],
                 constant_node_data_obj=args[15],
+                json2config_script=args[16],     # json2config_script
+                config2json_script=args[17],     # config2json_script
+                conf_converter_libs=args[18],    # conf_converter_libs
                 current_attempt=1
             )
             
@@ -292,6 +298,9 @@ class TestAdminBulkPipeline:
                 required_user_data_obj=args[13],
                 constant_user_data_obj=args[14],
                 constant_node_data_obj=args[15],
+                json2config_script=args[16],     # json2config_script
+                config2json_script=args[17],     # config2json_script
+                conf_converter_libs=args[18],    # conf_converter_libs
                 current_attempt=1
             )
         

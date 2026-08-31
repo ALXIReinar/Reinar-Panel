@@ -82,6 +82,9 @@ class TestBulkActionUsersAdd:
             required_user_data_obj=node_data['required_user_data_obj'],
             constant_user_data_obj=node_data['constant_user_data_obj'],
             constant_node_data_obj=node_data['constant_node_data_obj'],
+            json2config_script=node_data['json2config_script'],
+            config2json_script=node_data['config2json_script'],
+            conf_converter_libs=node_data['conf_converter_libs'],
             current_attempt=1
         )
         
@@ -146,6 +149,9 @@ class TestBulkActionUsersAdd:
             required_user_data_obj=node_data['required_user_data_obj'],
             constant_user_data_obj=node_data['constant_user_data_obj'],
             constant_node_data_obj=node_data['constant_node_data_obj'],
+            json2config_script=node_data['json2config_script'],
+            config2json_script=node_data['config2json_script'],
+            conf_converter_libs=node_data['conf_converter_libs'],
             current_attempt=1
         )
         
@@ -198,6 +204,9 @@ class TestBulkActionUsersAdd:
             required_user_data_obj=node_data['required_user_data_obj'],
             constant_user_data_obj=node_data['constant_user_data_obj'],
             constant_node_data_obj=node_data['constant_node_data_obj'],
+            json2config_script=node_data['json2config_script'],
+            config2json_script=node_data['config2json_script'],
+            conf_converter_libs=node_data['conf_converter_libs'],
             current_attempt=1
         )
         
@@ -212,8 +221,8 @@ class TestBulkActionUsersAdd:
         # Проверяем имя задачи
         assert call_args[0][0] == 'bulk_action_users_by_node'
         
-        # Проверяем current_attempt инкрементирован (позиция 16 в параметрах)
-        assert call_args[0][16] == 2  # current_attempt должен быть 2
+        # Проверяем current_attempt инкрементирован (позиция 19 в параметрах после добавления 3 новых полей)
+        assert call_args[0][19] == 2  # current_attempt должен быть 2
         
         # Проверяем defer_seconds
         assert call_args[1]['_defer_by'] == 120  # 60 * 2^1
@@ -257,6 +266,9 @@ class TestBulkActionUsersAdd:
             required_user_data_obj=node_data['required_user_data_obj'],
             constant_user_data_obj=node_data['constant_user_data_obj'],
             constant_node_data_obj=node_data['constant_node_data_obj'],
+            json2config_script=node_data['json2config_script'],
+            config2json_script=node_data['config2json_script'],
+            conf_converter_libs=node_data['conf_converter_libs'],
             current_attempt=1
         )
         
@@ -305,6 +317,9 @@ class TestBulkActionUsersAdd:
             required_user_data_obj=node_data['required_user_data_obj'],
             constant_user_data_obj=node_data['constant_user_data_obj'],
             constant_node_data_obj=node_data['constant_node_data_obj'],
+            json2config_script=node_data['json2config_script'],
+            config2json_script=node_data['config2json_script'],
+            conf_converter_libs=node_data['conf_converter_libs'],
             current_attempt=3  # Последняя попытка
         )
         
@@ -384,6 +399,9 @@ class TestBulkActionUsersDelete:
             required_user_data_obj=node_data['required_user_data_obj'],
             constant_user_data_obj=node_data['constant_user_data_obj'],
             constant_node_data_obj=node_data['constant_node_data_obj'],
+            json2config_script=node_data['json2config_script'],
+            config2json_script=node_data['config2json_script'],
+            conf_converter_libs=node_data['conf_converter_libs'],
             current_attempt=1
         )
         
@@ -433,6 +451,9 @@ class TestBulkActionUsersDelete:
             required_user_data_obj=node_data['required_user_data_obj'],
             constant_user_data_obj=node_data['constant_user_data_obj'],
             constant_node_data_obj=node_data['constant_node_data_obj'],
+            json2config_script=node_data['json2config_script'],
+            config2json_script=node_data['config2json_script'],
+            conf_converter_libs=node_data['conf_converter_libs'],
             current_attempt=1
         )
         
@@ -473,6 +494,9 @@ class TestBulkActionUsersDelete:
             required_user_data_obj=node_data['required_user_data_obj'],
             constant_user_data_obj=node_data['constant_user_data_obj'],
             constant_node_data_obj=node_data['constant_node_data_obj'],
+            json2config_script=node_data['json2config_script'],
+            config2json_script=node_data['config2json_script'],
+            conf_converter_libs=node_data['conf_converter_libs'],
             current_attempt=1
         )
         
@@ -484,7 +508,7 @@ class TestBulkActionUsersDelete:
         call_args = mock_arq_ctx['arq_redis'].enqueue_job.call_args
         
         assert call_args[0][0] == 'bulk_action_users_by_node'
-        assert call_args[0][16] == 2  # current_attempt должен быть 2
+        assert call_args[0][19] == 2  # current_attempt должен быть 2
         assert call_args[1]['_defer_by'] == 120
     
     async def test_bulk_delete_connection_error_with_retry(self, mock_arq_ctx, arq_test_seed, db_pool):
@@ -512,6 +536,9 @@ class TestBulkActionUsersDelete:
             required_user_data_obj=node_data['required_user_data_obj'],
             constant_user_data_obj=node_data['constant_user_data_obj'],
             constant_node_data_obj=node_data['constant_node_data_obj'],
+            json2config_script=node_data['json2config_script'],
+            config2json_script=node_data['config2json_script'],
+            conf_converter_libs=node_data['conf_converter_libs'],
             current_attempt=1
         )
         
@@ -544,6 +571,9 @@ class TestBulkActionUsersDelete:
             required_user_data_obj=node_data['required_user_data_obj'],
             constant_user_data_obj=node_data['constant_user_data_obj'],
             constant_node_data_obj=node_data['constant_node_data_obj'],
+            json2config_script=node_data['json2config_script'],
+            config2json_script=node_data['config2json_script'],
+            conf_converter_libs=node_data['conf_converter_libs'],
             current_attempt=3  # Последняя попытка
         )
         

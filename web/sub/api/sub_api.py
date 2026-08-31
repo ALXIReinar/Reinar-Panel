@@ -1,9 +1,8 @@
 import base64
-from urllib.parse import urlunsplit, quote, urlsplit, urlencode, parse_qsl
+from urllib.parse import quote
 from typing import Annotated
 
 from fastapi import APIRouter, Response, Path
-from pydantic import IPvAnyAddress
 from starlette.requests import Request
 
 from web.sub.api.handlers.prepare_func import error_messages_for_client, process2vpn_client_format, \
