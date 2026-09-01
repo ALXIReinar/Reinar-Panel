@@ -5,7 +5,7 @@ name: test_reinar_panel_arq_worker
 services:
   pg_db:
     image: postgres:16
-    container_name: pg_db
+    container_name: pg_db_arq
     environment:
       - POSTGRES_USER=${PG_ADMIN}
       - POSTGRES_PASSWORD=${PG_ADMIN_PASSWORD}
@@ -24,7 +24,7 @@ services:
 
   redis:
     image: redis:7.2-alpine
-    container_name: redis
+    container_name: redis_arq
     command:
       - redis-server
       - --requirepass
@@ -60,6 +60,7 @@ services:
     network_mode: host
     volumes:
       - ./db:/app/web/db:ro
+      - .:/app/web
     secrets:
       - env.arq.test
 

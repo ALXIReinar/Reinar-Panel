@@ -2,7 +2,7 @@ name: Sub Service CI
 
 on:
   push:
-    branches: ["main", "dev/sub"]
+    branches: ["main", "dev/sub", "dev/backend"]
   pull_request:
     branches: ["main", "dev/backend", "dev/master"]
 

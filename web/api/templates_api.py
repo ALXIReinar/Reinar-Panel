@@ -6,7 +6,7 @@ from web.schemas.cookie_settings_schema import JWTCookieDep
 from web.schemas.templates_schema import AddTmpSchema, UpdateTmpSchema, GetTmpSchema, EditUserInjectorsSchema
 from web.utils.logger_config import log_event
 
-router = APIRouter(tags=['Proto Templates'])
+router = APIRouter(tags=['Proto Templates'], prefix='/private/templates')
 
 
 
