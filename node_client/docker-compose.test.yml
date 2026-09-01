@@ -38,9 +38,9 @@ services:
     depends_on:
       pg_db:
         condition: service_healthy
-#    volumes:
-#      - ../:/app/web
-#      - ../db:/app/web/db:ro
+    volumes:
+      - ../web:/app/web
+      - ../web/db:/app/web/db:ro
     network_mode: host
 
 volumes:

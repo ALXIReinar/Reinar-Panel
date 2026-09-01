@@ -10,6 +10,7 @@ from starlette.responses import JSONResponse
 
 from node_client.api.proto_core.write_behind_caching_file import flatten_key2value
 from node_client.api.sandbox.hot_reload_executor import HotReloadExecutor
+from node_client.api.node_config.handlers import create_backup
 from node_client.schemas.node_config_schema import ConfigReadSchema, ConfigReadResponseSchema, ConfigWriteSchema, \
     ConfigWriteResponseSchema
 from node_client.utils.logger_config import log_event
