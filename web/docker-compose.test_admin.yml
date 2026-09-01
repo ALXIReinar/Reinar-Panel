@@ -54,7 +54,7 @@ services:
       - ENV_FILE=/run/secrets/env.api.test
     network_mode: host
     volumes:
-      - ./:/app/web
+#      - ./:/app/web
       - ./db:/app/web/db:ro
     secrets:
       - env.api.test

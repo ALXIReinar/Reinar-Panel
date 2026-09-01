@@ -60,7 +60,7 @@ services:
     network_mode: host
     volumes:
       - ./db:/app/web/db:ro
-      - .:/app/web
+#      - .:/app/web
     secrets:
       - env.arq.test
 

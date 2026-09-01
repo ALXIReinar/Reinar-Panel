@@ -15,7 +15,6 @@ from starlette.requests import Request
 
 from node_client.api.sandbox.hot_reload_executor import HotReloadExecutor
 from node_client.config import TMP_DIR, env
-from node_client.utils.json_converters import FileConverter
 from node_client.utils.logger_config import log_event
 
 
@@ -38,7 +37,6 @@ class ConfigWriteBuffer:
         """
         self.max_batch = max_batch
         self.timeout = timeout
-        self.file_converter = FileConverter()
 
         # Хранилище пользователей {node_proto_id: {uuid: user_obj}}
         self.buffer_storage: dict[int, dict[str, dict]] = {}
