@@ -22,6 +22,10 @@ async def export_seed_data():
             templates_statuses = await conn.fetch(
                 "SELECT * FROM templates_statuses ORDER BY id"
             )
+            # 1. templates_statuses
+            vnodes_reg_statuses = await conn.fetch(
+                "SELECT * FROM vnodes_reg_statuses ORDER BY id"
+            )
 
             # 2. proto_templates
             proto_templates_rows = await conn.fetch(
@@ -67,6 +71,7 @@ async def export_seed_data():
             # Конвертируем в dict
             result = {
                 "templates_statuses": [dict(row) for row in templates_statuses],
+                "vnodes_reg_statuses": [dict(row) for row in vnodes_reg_statuses],
                 "proto_templates": [],
                 "pay_statuses": [dict(row) for row in pay_statuses],
                 "online_statuses": [dict(row) for row in online_statuses],
@@ -142,6 +147,7 @@ async def main():
     
     print(f"\n✅ Данные экспортированы в {output_path}")
     print(f"   📋 templates_statuses: {len(seed_data['templates_statuses'])} записей")
+    print(f"   📋 templates_statuses: {len(seed_data['vnodes_reg_statuses'])} записей")
     print(f"   🎯 proto_templates: {len(seed_data['proto_templates'])} записей")
     
     # Показываем сколько вложенных данных

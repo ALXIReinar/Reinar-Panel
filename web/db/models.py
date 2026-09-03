@@ -134,6 +134,18 @@ class TemplatesStatuses(Base):
     proto_templates: Mapped[list['ProtoTemplates']] = relationship('ProtoTemplates', back_populates='templates_statuses')
 
 
+class VnodesRegStatuses(Base):
+    __tablename__ = 'vnodes_reg_statuses'
+    __table_args__ = (
+        PrimaryKeyConstraint('id', name='vnodes_reg_statuses_pkey'),
+    )
+
+    id: Mapped[int] = mapped_column(SmallInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=32767, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    nodes_protocols: Mapped[list['NodesProtocols']] = relationship('NodesProtocols', back_populates='vnodes_reg_statuses')
+
+
 class WhitelistCommands(Base):
     __tablename__ = 'whitelist_commands'
     __table_args__ = (
@@ -314,6 +326,7 @@ class NodesProtocols(Base):
     __table_args__ = (
         ForeignKeyConstraint(['node_id'], ['nodes.id'], ondelete='CASCADE', name='nodes_protocols_node_id_fkey'),
         ForeignKeyConstraint(['proto_id'], ['protocols.id'], ondelete='RESTRICT', name='nodes_proto_id_fkey'),
+        ForeignKeyConstraint(['reg_status'], ['vnodes_reg_statuses.id'], name='nodes_protocols_reg_status_fkey'),
         PrimaryKeyConstraint('id', name='nodes_pkey'),
         UniqueConstraint('config_path', 'node_id', name='nodes_protocols_config_path_node_id_key'),
         UniqueConstraint('node_id', 'metrics_port', name='nodes_protocols_node_id_metrics_port_key'),
@@ -335,9 +348,11 @@ class NodesProtocols(Base):
     constant_node_data_obj: Mapped[Optional[dict]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     reload_core_command: Mapped[Optional[str]] = mapped_column(String(256))
     metrics_command: Mapped[Optional[str]] = mapped_column(String(256))
+    reg_status: Mapped[Optional[int]] = mapped_column(SmallInteger, server_default=text('1'))
 
     node: Mapped['Nodes'] = relationship('Nodes', back_populates='nodes_protocols')
     proto: Mapped['Protocols'] = relationship('Protocols', back_populates='nodes_protocols')
+    vnodes_reg_statuses: Mapped[Optional['VnodesRegStatuses']] = relationship('VnodesRegStatuses', back_populates='nodes_protocols')
     sub_nodes_outbox: Mapped[list['SubNodesOutbox']] = relationship('SubNodesOutbox', back_populates='node_proto')
     vnodes_sub_plans: Mapped[list['VnodesSubPlans']] = relationship('VnodesSubPlans', back_populates='node_proto')
 

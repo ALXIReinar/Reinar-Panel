@@ -247,10 +247,15 @@ async def seed_all(conn: Connection, seed_data: dict[str, Any]) -> None:
     print("\n=== Начало инициализации данных ===\n")
     
     # 1. Простые таблицы без FK
-    print("1. Статусы шаблонов...")
+    print("1.1. Статусы шаблонов...")
     await insert_with_fixed_id(
         conn, "templates_statuses",
         seed_data.get("templates_statuses", []),
+    )    # 1. Простые таблицы без FK
+    print("1.2. Статусы Регистрации нод...")
+    await insert_with_fixed_id(
+        conn, "vnodes_reg_statuses",
+        seed_data.get("vnodes_reg_statuses", []),
     )
 
     print("\n2. Статусы платежей...")
