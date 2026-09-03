@@ -30,6 +30,7 @@ find_free_port() {
 
 # Ищем свободный внутренний порт для сингбокса
 INTERNAL_PORT=$(find_free_port 443)
+METRICS_PORT=$(find_free_port 10085)
 
 
 # Извлекаем ключи
@@ -80,6 +81,18 @@ cat <<EOF > "$CONFIG_PATH"
     "level": "info",
     "timestamp": true
   },
+  "experimental": {
+    "v2ray_api": {
+      "listen": "127.0.0.1:$METRICS_PORT",
+      "stats": {
+        "enabled": true,
+        "inbounds": [
+          "hysteria-in"
+        ],
+        "users": []
+      }
+    }
+  },
   "inbounds": [
     {
       "type": "vless",
@@ -121,7 +134,7 @@ cat <<EOF > "$CONFIG_PATH"
 EOF
 
 # Создание systemd сервиса
-SERVICE_NAME="reinar-trojan-${NODE_PROTO_ID}"
+SERVICE_NAME="reinar-vless-${NODE_PROTO_ID}"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]

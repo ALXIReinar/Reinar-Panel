@@ -1,14 +1,15 @@
 #!/bin/bash
 
-SNI=${1:-"www.microsoft.com"}
-
 log() { echo -e "$1" >&2; }
 
 if [ -z "$NODE_ID" ] || [ -z "$PROTO_ID" ]; then
     log "\033[31mОшибка: Укажите NODE_ID и PROTO_ID в переменных окружения!\033[0m"
     exit 1
 fi
-
+if [ -z "$TITLE" ]; then
+    log "Название для виртуальной ноды не указано. Будет использовано составное"
+    TITLE="Vnode_PrId-'$PROTO_ID'_NId-'$NODE_ID'"
+fi
 # Используется кастомное ядро для совместимости
 SINGBOX_BIN="/usr/local/bin/sing-box-awg"
 CONFIG_DIR="/etc/reinar/configs/sing-box-awg/wh_list"
@@ -28,6 +29,7 @@ find_free_port() {
 
 # Ищем свободный внутренний порт для сингбокса
 INTERNAL_PORT=$(find_free_port 443)
+METRICS_PORT=$(find_free_port 10085)
 
 
 # Извлекаем ключи
@@ -79,6 +81,18 @@ cat <<EOF > "$CONFIG_PATH"
     "level": "info",
     "timestamp": true
   },
+  "experimental": {
+    "v2ray_api": {
+      "listen": "127.0.0.1:$METRICS_PORT",
+      "stats": {
+        "enabled": true,
+        "inbounds": [
+          "hysteria-in"
+        ],
+        "users": []
+      }
+    }
+  },
   "inbounds": [
     {
       "type": "vless",
@@ -94,12 +108,12 @@ cat <<EOF > "$CONFIG_PATH"
       ],
       "tls": {
         "enabled": true,
-        "server_name": "$SNI",
+        "server_name": "www.microsoft.com",
         "reality": {
           "enabled": true,
           "handshake": {
             "server_options": {
-              "server_name": "$SNI"
+              "server_name": "www.microsoft.com"
             }
           },
           "private_key": "$PRIVATE_KEY",

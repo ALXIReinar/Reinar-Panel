@@ -121,7 +121,7 @@ SERVICE_NAME="reinar-vmess-${NODE_PROTO_ID}"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Sing-box Vmess TLS HttpUpgrade Node (TMP_ID: ${TMP_ID})
+Description=Sing-box Vmess TLS HttpUpgrade Node (NODE_PROTO_ID: ${NODE_PROTO_ID})
 After=network.target nss-lookup.target
 
 [Service]

@@ -11,8 +11,13 @@ log "Переменные окружения для этой вариации"
 #EXIT_UUID=$6
 
 if [ -z "$EXIT_PORT" ] || [ -z "$EXIT_HOST" ] || [ -z "$EXIT_SID" ] || [ -z "$EXIT_PKEY" ] || [ -z "$EXIT_UUID" ]; then
-    echo "Ошибка: Необходимы параметры для оутбаунда выходной ноды: EXIT_HOST, EXIT_PORT, EXIT_SID, EXIT_PKEY, EXIT_UUID!"
+    log "Ошибка: Необходимы параметры для оутбаунда выходной ноды: EXIT_HOST, EXIT_PORT, EXIT_SID, EXIT_PKEY, EXIT_UUID!"
     log "Использование: bash sing-box-awg-install.sh <tmp_id> <ip_addr> <ip_version>"
+    exit 1
+fi
+
+if [ -z "$NODE_ID" ] || [ -z "$PROTO_ID" ]; then
+    log "\033[31mОшибка: Укажите NODE_ID и PROTO_ID в переменных окружения!\033[0m"
     exit 1
 fi
 
@@ -228,7 +233,7 @@ SERVICE_NAME="reinar-trojan-${NODE_PROTO_ID}"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Sing-box Trojan Reality TCP Node (TMP_ID: ${TMP_ID})
+Description=Sing-box Trojan Reality TCP Node (NODE_PROTO_ID: ${NODE_PROTO_ID})
 After=network.target nss-lookup.target
 
 [Service]

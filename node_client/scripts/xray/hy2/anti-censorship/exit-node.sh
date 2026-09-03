@@ -1,7 +1,6 @@
 #!/bin/bash
 # Использование: bash exit-node-vless-reality.sh <tmp_id>
 
-SNI=${1:-"www.microsoft.com"}
 
 log() { echo -e "$1" >&2; }
 
@@ -10,6 +9,10 @@ if [ -z "$NODE_ID" ] || [ -z "$PROTO_ID" ]; then
     exit 1
 fi
 
+if [ -z "$TITLE" ]; then
+    log "Название для виртуальной ноды не указано. Будет использовано составное"
+    TITLE="Vnode_PrId-'$PROTO_ID'_NId-'$NODE_ID'"
+fi
 
 XRAY_BIN="/usr/local/bin/xray"
 CONFIG_DIR="/etc/reinar/configs/xray/wh_list"

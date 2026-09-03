@@ -30,6 +30,7 @@ find_free_port() {
 
 # Ищем свободный внутренний порт для сингбокса
 INTERNAL_PORT=$(find_free_port 443)
+METRICS_PORT=$(find_free_port 10085)
 
 
 # Извлекаем ключи
@@ -81,6 +82,18 @@ cat <<EOF > "$CONFIG_PATH"
   "log": {
     "level": "info",
     "timestamp": true
+  },
+  "experimental": {
+    "v2ray_api": {
+      "listen": "127.0.0.1:$METRICS_PORT",
+      "stats": {
+        "enabled": true,
+        "inbounds": [
+          "hysteria-in"
+        ],
+        "users": []
+      }
+    }
   },
   "inbounds": [
     {

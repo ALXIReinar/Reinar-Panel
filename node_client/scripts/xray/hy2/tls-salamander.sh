@@ -133,7 +133,7 @@ SERVICE_NAME="reinar-hy2-${NODE_PROTO_ID}"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Xray Hysteria2-Salamander Node (TMP_ID: ${TMP_ID})
+Description=Xray Hysteria2-Salamander Node (NODE_PROTO_ID: ${NODE_PROTO_ID})
 After=network.target nss-lookup.target
 
 [Service]

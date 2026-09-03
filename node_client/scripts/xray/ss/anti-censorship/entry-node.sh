@@ -27,18 +27,18 @@ fi
 
 
 if [ -z "$METHOD_CHOICE" ]; then
-    echo "Выберите метод шифрования для ENTRY Node Shadowsocks-2022:"
-    echo "1 - 2022-blake3-aes-128-gcm (быстрый, легкий)"
-    echo "2 - 2022-blake3-aes-256-gcm (максимальная защита)"
-    echo "3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)"
+    log "Выберите метод шифрования для ENTRY Node Shadowsocks-2022:"
+    log "1 - 2022-blake3-aes-128-gcm (быстрый, легкий)"
+    log "2 - 2022-blake3-aes-256-gcm (максимальная защита)"
+    log "3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)"
     read -p "Введите цифру (1-3) [по умолчанию 1]: " METHOD_CHOICE
 fi
 
 if [ -z "$EXIT_METHOD_CHOICE" ]; then
-    echo "Укажите метод шифрования EXIT Node Shadowsocks-2022:"
-    echo "1 - 2022-blake3-aes-128-gcm (быстрый, легкий)"
-    echo "2 - 2022-blake3-aes-256-gcm (максимальная защита)"
-    echo "3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)"
+    log "Укажите метод шифрования EXIT Node Shadowsocks-2022:"
+    log "1 - 2022-blake3-aes-128-gcm (быстрый, легкий)"
+    log "2 - 2022-blake3-aes-256-gcm (максимальная защита)"
+    log "3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)"
     read -p "Введите цифру (1-3) [по умолчанию 1]: " EXIT_METHOD_CHOICE
 fi
 

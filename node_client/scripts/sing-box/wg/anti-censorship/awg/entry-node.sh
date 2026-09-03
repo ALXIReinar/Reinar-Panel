@@ -15,8 +15,8 @@ log "Зависимости-переменные окружения для оу�
 #EXIT_UUID=$8
 
 if [ -z "$NODE_ID" ] || [ -z "$PROTO_ID" ] ||  [ -z "$EXIT_PORT" ] || [ -z "$EXIT_HOST" ] || [ -z "$EXIT_SID" ] || [ -z "$EXIT_PKEY" ] || [ -z "$EXIT_UUID" ]; then
-    echo "Ошибка: Необходимы параметры для входной ноды: TMP_ID, IPV_ADDR, IP_VERSION!"
-    echo "Ошибка: Необходимы параметры для оутбаунда выходной ноды: EXIT_HOST, EXIT_PORT, EXIT_SID, EXIT_PKEY, EXIT_UUID!"
+    log "Ошибка: Необходимы параметры для входной ноды: TMP_ID, IPV_ADDR, IP_VERSION!"
+    log "Ошибка: Необходимы параметры для оутбаунда выходной ноды: EXIT_HOST, EXIT_PORT, EXIT_SID, EXIT_PKEY, EXIT_UUID!"
     exit 1
 fi
 
@@ -30,7 +30,10 @@ if [[ "$IP_VERSION" != "4" && "$IP_VERSION" != "6" ]]; then
     log "IP_VERSION must be 4 or 6"
     exit 1
 fi
-
+if [ -z "$TITLE" ]; then
+    log "Название для виртуальной ноды не указано. Будет использовано составное"
+    TITLE="Vnode_PrId-'$PROTO_ID'_NId-'$NODE_ID'"
+fi
 # Используем кастомный бинарник!
 SINGBOX_BIN="/usr/local/bin/sing-box-awg"
 CONFIG_DIR="/etc/reinar/configs/sing-box-awg/wh_list"

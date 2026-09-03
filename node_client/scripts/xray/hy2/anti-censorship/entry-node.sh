@@ -205,7 +205,7 @@ cat <<EOF > "$CONFIG_PATH"
 }
 EOF
 
-SERVICE_NAME="reinar-vless-${NODE_PROTO_ID}"
+SERVICE_NAME="reinar-hy2-${NODE_PROTO_ID}"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]

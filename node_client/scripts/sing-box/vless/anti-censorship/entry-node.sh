@@ -1,8 +1,6 @@
 #!/bin/bash
 
-CERT_PATH=$1
-KEY_PATH=$2
-DOMAIN=$3
+SNI=${1:-"www.microsoft.com"}
 
 log() { echo -e "$1" >&2; }
 log "Переменные окружения для этой вариации"
@@ -13,14 +11,8 @@ log "Переменные окружения для этой вариации"
 #EXIT_UUID=$6
 
 if [ -z "$EXIT_PORT" ] || [ -z "$EXIT_HOST" ] || [ -z "$EXIT_SID" ] || [ -z "$EXIT_PKEY" ] || [ -z "$EXIT_UUID" ]; then
-    echo "Ошибка: Необходимы параметры для оутбаунда выходной ноды: EXIT_HOST, EXIT_PORT, EXIT_SID, EXIT_PKEY, EXIT_UUID!"
+    log "Ошибка: Необходимы параметры для оутбаунда выходной ноды: EXIT_HOST, EXIT_PORT, EXIT_SID, EXIT_PKEY, EXIT_UUID!"
     log "Использование: bash sing-box-awg-install.sh <tmp_id> <ip_addr> <ip_version>"
-    exit 1
-fi
-
-if [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$DOMAIN" ]; then
-    log "Ошибка: Не указан TMP_ID!"
-    log "Использование: bash node_client/scripts/sing-box/trojan/anti-censorship/entry-node.sh <cert_path> <key_path> <domain>"
     exit 1
 fi
 
@@ -230,7 +222,7 @@ cat <<EOF > "$CONFIG_PATH"
 EOF
 
 # Создание systemd сервиса
-SERVICE_NAME="reinar-trojan-${NODE_PROTO_ID}"
+SERVICE_NAME="reinar-vless-${NODE_PROTO_ID}"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]

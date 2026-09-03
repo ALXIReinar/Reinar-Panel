@@ -1,12 +1,16 @@
 #!/bin/bash
 
-SNI=${1:-"www.microsoft.com"}
 
 log() { echo -e "$1" >&2; }
 
 if [ -z "$NODE_ID" ] || [ -z "$PROTO_ID" ]; then
     log "\033[31mОшибка: Укажите NODE_ID и PROTO_ID в переменных окружения!\033[0m"
     exit 1
+fi
+
+if [ -z "$TITLE" ]; then
+    log "Название для виртуальной ноды не указано. Будет использовано составное"
+    TITLE="Vnode_PrId-'$PROTO_ID'_NId-'$NODE_ID'"
 fi
 
 SINGBOX_BIN="/usr/local/bin/sing-box"
@@ -78,6 +82,18 @@ cat <<EOF > "$CONFIG_PATH"
     "level": "info",
     "timestamp": true
   },
+  "experimental": {
+    "v2ray_api": {
+      "listen": "127.0.0.1:$METRICS_PORT",
+      "stats": {
+        "enabled": true,
+        "inbounds": [
+          "hysteria-in"
+        ],
+        "users": []
+      }
+    }
+  },
   "inbounds": [
     {
       "type": "vless",
@@ -93,12 +109,12 @@ cat <<EOF > "$CONFIG_PATH"
       ],
       "tls": {
         "enabled": true,
-        "server_name": "$SNI",
+        "server_name": "www.microsoft.com",
         "reality": {
           "enabled": true,
           "handshake": {
             "server_options": {
-              "server_name": "$SNI"
+              "server_name": "www.microsoft.com"
             }
           },
           "private_key": "$PRIVATE_KEY",
@@ -123,7 +139,7 @@ SERVICE_NAME="reinar-vless-${NODE_PROTO_ID}"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Sing-box VLESS Reality TCP Node (TMP_ID: ${TMP_ID})
+Description=Sing-box VLESS Reality TCP Node (NODE_PROTO_ID: ${NODE_PROTO_ID})
 After=network.target nss-lookup.target
 
 [Service]

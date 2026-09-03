@@ -180,7 +180,7 @@ SERVICE_NAME="reinar-vless-${NODE_PROTO_ID}"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Xray Custom Instance VLESS-WS-TLS (TMP_ID: ${TMP_ID})
+Description=Xray Custom Instance VLESS-WS-TLS (NODE_PROTO_ID: ${NODE_PROTO_ID})
 After=network.target nss-lookup.target
 
 [Service]

@@ -169,7 +169,7 @@ SERVICE_NAME="reinar-ss-${NODE_PROTO_ID}"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Xray Shadowsocks-WS Node (TMP_ID: ${TMP_ID})
+Description=Xray Shadowsocks-WS Node (NODE_PROTO_ID: ${NODE_PROTO_ID})
 After=network.target nss-lookup.target
 
 [Service]
