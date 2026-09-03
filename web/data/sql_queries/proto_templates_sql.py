@@ -128,7 +128,13 @@ class ProtoTemplatesQueries:
     ) -> tuple[int, str]:
         """
         Обновить шаблон (универсальный метод для всех полей)
-        
+
+        Вопросы по поводу механики  добавления None полей. Они не добавляются с текущей проверкой
+        if param is not None and param != 0:
+
+        Если param = None, хотя должны
+
+
         Returns:
             tuple[status_code, message]
             - 200, 'Шаблон обновлён' - успех

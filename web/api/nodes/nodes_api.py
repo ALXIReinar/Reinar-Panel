@@ -12,7 +12,7 @@ from web.utils.anything import NodeUris
 from web.utils.logger_config import log_event
 
 
-router = APIRouter(tags=['Physical Nodes (Servers)'])
+router = APIRouter(prefix='/private/nodes', tags=['Physical Nodes (Servers)'])
 
 
 

@@ -1,16 +1,22 @@
-TMP_ID=$1
-SNI=${2:-"www.microsoft.com"}
+#!/bin/bash
+SNI=${1:-"www.microsoft.com"}
 
-if [ -z "$TMP_ID" ]; then
-    echo "Ошибка: Необходимы параметр TMP_ID!"
-    echo "Использование: bash trojan-reality-tcp.sh <tmp_id> [sni]"
+log() { echo -e "$1" >&2; }
+
+if [ -z "$NODE_ID" ] || [ -z "$PROTO_ID" ]; then
+    log "\033[31mОшибка: Укажите NODE_ID и PROTO_ID в переменных окружения!\033[0m"
     exit 1
 fi
 
+if [ -z "$TITLE" ]; then
+    log "Название для виртуальной ноды не указано. Будет использовано составное"
+    TITLE="Vnode_PrId-'$PROTO_ID'_NId-'$NODE_ID'"
+fi
+
 SINGBOX_BIN="/usr/local/bin/sing-box"
-CONFIG_DIR="/etc/sing-box/configs"
-CONFIG_PATH="$CONFIG_DIR/${TMP_ID}.json"
-PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback"
+CONFIG_DIR="/etc/reinar/configs/sing-box/vless"
+PANEL_CALLBACK_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/register"
+PANEL_CONFIRM_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/confirm"
 
 mkdir -p "$CONFIG_DIR"
 
@@ -27,7 +33,6 @@ find_free_port() {
 INTERNAL_PORT=$(find_free_port 443)
 METRICS_PORT=$(find_free_port 10085)
 
-
 # Извлекаем ключи
 KEYS=$(sing-box generate reality-keypair)
 PRIVATE_KEY=$(echo "$KEYS" | grep "PrivateKey" | awk '{print $2}')
@@ -36,10 +41,39 @@ PUBLIC_KEY=$(echo "$KEYS" | grep "PublicKey" | awk '{print $2}')
 SHORT_ID=$(openssl -hex 8)
 GRPC_SERVICE_NAME=$(openssl -hex 8)
 
+log "Выделен внутренний порт для Sing-box: $INTERNAL_PORT"
 
-echo "Выделен внутренний порт для Sing-box: $INTERNAL_PORT"
+log "1. Регистрация ноды в панели и получение node_proto_id..."
 
-# Генерация конфига Sing-box
+REG_RESPONSE=$(mktemp)
+HTTP_CODE=$(curl -s -w "%{http_code}" -o "$REG_RESPONSE" -X POST "$PANEL_CALLBACK_URL" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "proto_id": '"$PROTO_ID"',
+           "node_id": '"$NODE_ID"',
+           "proto_port": '"$INTERNAL_PORT"',
+           "metrics_port": '"$METRICS_PORT"',
+           "title": "'"$TITLE"'",
+           "constant_node_data_obj": {
+              "sub_link_fp": "chrome",
+              "node_public_key": "'"$PUBLIC_KEY"'",
+              "sub_link_grpc_mode": "gun"
+           }
+         }')
+
+if [ "$HTTP_CODE" -ne 200 ]; then
+    log "\033[31mОшибка регистрации (HTTP $HTTP_CODE): $(cat "$REG_RESPONSE")\033[0m"
+    rm -f "$REG_RESPONSE"
+    exit 1
+fi
+
+NODE_PROTO_ID=$(jq -r '.node_proto_id' "$REG_RESPONSE")
+TITLE=$(jq -r '.title' "$REG_RESPONSE")
+rm -f "$REG_RESPONSE"
+
+log "Назначен NODE_PROTO_ID: $NODE_PROTO_ID"
+
+CONFIG_PATH="$CONFIG_DIR/vless-reality-grpc-${NODE_PROTO_ID}.json"
 cat <<EOF > "$CONFIG_PATH"
 {
   "log": {
@@ -96,10 +130,11 @@ cat <<EOF > "$CONFIG_PATH"
 EOF
 
 # Создание systemd сервиса
-SERVICE_PATH="/etc/systemd/system/sing-box-${TMP_ID}.service"
+SERVICE_NAME="reinar-vless-${NODE_PROTO_ID}"
+SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Sing-box Vless Reality Grpc Node (TMP_ID: ${TMP_ID})
+Description=Sing-box Vless Reality Grpc Node (NODE_PROTO_ID: ${NODE_PROTO_ID})
 After=network.target nss-lookup.target
 
 [Service]
@@ -117,27 +152,46 @@ LimitNOFILE=1000000
 WantedBy=multi-user.target
 EOF
 
+log "2. Запуск юнита $SERVICE_NAME..."
 systemctl daemon-reload
-systemctl enable "sing-box-${TMP_ID}"
-systemctl restart "sing-box-${TMP_ID}"
+systemctl enable "$SERVICE_NAME" >&2
+systemctl restart "$SERVICE_NAME" >&2
 
-# Отправка callback-запроса в панель
-curl -s -X POST "$PANEL_CALLBACK_URL" \
-     -H "Content-Type: application/json" \
+sleep 1
+
+if ! systemctl is-active --quiet "$SERVICE_NAME"; then
+    log "\033[31mСервис $SERVICE_NAME не смог запуститься! Откат...\033[0m"
+    systemctl stop "$SERVICE_NAME" || true
+    systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+    rm -f "$CONFIG_PATH" "$SERVICE_PATH"
+    systemctl daemon-reload
+
+    # Оповещаем панель о фейле
+    curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
+         -d '{"node_proto_id": '"$NODE_PROTO_ID"', "status": 3}' >/dev/null || true
+    exit 1
+fi
+
+# 6. Финализация статуса в панели
+curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
      -d '{
-           "tmp_id": "'"$TMP_ID"'",
-           "config_path": "'"$CONFIG_PATH"'",
-           "internal_port": '"$INTERNAL_PORT"',
-           "status": "installed",
-           "node_type": "singbox_hysteria2_hopping",
-           "constant_node_data_obj": {
-              "sub_link_fp": "chrome",
-              "node_public_key": "'"$PUBLIC_KEY"'",
-              "sub_link_grpc_mode": "gun"
-           }
-         }'
+        "node_proto_id": '"$NODE_PROTO_ID"',
+        "status": 2,
+        "reload_core_command": "systemctl restart '"$SERVICE_NAME"'",
+        "config_path": "'"$CONFIG_PATH"'",
+     }' >/dev/null
 
-echo "=================================================="
-echo "Sing-box Vless Reality Grpc Salamander развернута."
-echo "Внутренний порт:  $INTERNAL_PORT"
-echo "=================================================="
+
+log "=================================================="
+log "✓ Виртуальная нода успешно создана!"
+log "Node Proto ID: $NODE_PROTO_ID"
+log "Config Path: $CONFIG_PATH"
+log "Title: $TITLE"
+log "Основной Порт: $INTERNAL_PORT"
+log "=================================================="
+
+# 7. Возврат результата в stdout (JSON) для вызывающего скрипта
+jq -n \
+  --arg node_proto_id "$NODE_PROTO_ID" \
+  --arg service_name "$SERVICE_NAME" \
+  '{node_proto_id: $node_proto_id, service_name: $service_name}'

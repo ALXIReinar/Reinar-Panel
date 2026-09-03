@@ -1,29 +1,38 @@
 #!/bin/bash
 
 
-TMP_ID=$1
-CERT_PATH=$2
-KEY_PATH=$3
-SNI_DOMAIN=$4
+CERT_PATH=$1
+KEY_PATH=$2
+SNI_DOMAIN=$3 # В нативном сервере hy2 не указывается явно в конфиге, берется из сертификата
 
-EXIT_HOST=$5
-EXIT_PORT=$6
-EXIT_UUID=$7
-EXIT_PKEY=$8
-EXIT_SID=$9
+log() { echo -e "$1" >&2; }
+log "Переменные окружения для этой вариации"
+#EXIT_HOST=$4
+#EXIT_PORT=$6
+#EXIT_PKEY=$7
+#EXIT_SID=$8
+#EXIT_UUID=$9
 
-OBFS_PASS=$(openssl rand -hex 8) # Пароль для обфускации Salamander
-
-if [ -z "$TMP_ID" ] || [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$SNI_DOMAIN" ] || [ -z "$EXIT_HOST" ] || [ -z "$EXIT_PORT" ] || [ -z "$EXIT_UUID" ] || [ -z "$EXIT_PKEY" ] || [ -z "$EXIT_SID" ]; then
-    echo "Ошибка: Необходимы параметры TMP_ID, CERT_PATH, KEY_PATH и SNI_DOMAIN!"
-    echo "Использование: bash xray-hy2-salamander-entry-install.sh <tmp_id> <cert_path> <key_path> <sni_domain>"
+if [ -z "$NODE_ID" ] || [ -z "$PROTO_ID" ] || [ -z "$EXIT_PORT" ] || [ -z "$EXIT_HOST" ] || [ -z "$EXIT_SID" ] || [ -z "$EXIT_PKEY" ] || [ -z "$EXIT_UUID" ]; then
+    log "Необходимо указать переменные окружения NODE_ID, PROTO_ID, EXIT_HOST, EXIT_PORT, EXIT_UUID, EXIT_SID, EXIT_PKEY !"
     exit 1
 fi
 
+if [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$SNI_DOMAIN" ]; then
+    log "Ошибка: Необходимы параметры CERT_PATH, KEY_PATH и SNI_DOMAIN!"
+    log "Использование: bash node_client/scripts/xray/hy2/anti-censorship/entry-node.sh <cert_path> <key_path> <sni_domain>"
+    exit 1
+fi
+
+if [ -z "$TITLE" ]; then
+    log "Название для виртуальной ноды не указано. Будет использовано составное"
+    TITLE="Vnode_PrId-'$PROTO_ID'_NId-'$NODE_ID'"
+fi
+
 XRAY_BIN="/usr/local/bin/xray"
-CONFIG_DIR="/etc/xray/configs"
-CONFIG_PATH="$CONFIG_DIR/${TMP_ID}.json"
-PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback"
+CONFIG_DIR="/etc/reinar/configs/xray/wh_list"
+PANEL_CALLBACK_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/register"
+PANEL_CONFIRM_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/confirm"
 
 mkdir -p "$CONFIG_DIR"
 
@@ -35,9 +44,37 @@ find_free_port() {
   echo $port
 }
 
-API_PORT=$(find_free_port 10085)
-INBOUND_PORT=$(find_free_port 8388)
+METRICS_PORT=$(find_free_port 10085)
+INTERNAL_PORT=$(find_free_port 8388)
+OBFS_PASS=$(openssl rand -hex 8) # Пароль для обфускации Salamander
 
+log "1. Регистрация ноды в панели и получение node_proto_id..."
+
+REG_RESPONSE=$(mktemp)
+HTTP_CODE=$(curl -s -w "%{http_code}" -o "$REG_RESPONSE" -X POST "$PANEL_CALLBACK_URL" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "proto_id": "'"$PROTO_ID"'",
+           "node_id": "'"$NODE_ID"'",
+           "proto_port": '"$INTERNAL_PORT"',
+           "metrics_port": '"$METRICS_PORT"',
+           "title": "'"$TITLE"'",
+         }')
+
+if [ "$HTTP_CODE" -ne 200 ]; then
+    log "\033[31mОшибка регистрации (HTTP $HTTP_CODE): $(cat "$REG_RESPONSE")\033[0m"
+    rm -f "$REG_RESPONSE"
+    exit 1
+fi
+
+NODE_PROTO_ID=$(jq -r '.node_proto_id' "$REG_RESPONSE")
+TITLE=$(jq -r '.title' "$REG_RESPONSE")
+rm -f "$REG_RESPONSE"
+
+log "Назначен NODE_PROTO_ID: $NODE_PROTO_ID"
+
+CONFIG_PATH="$CONFIG_DIR/hy2-tls-salamander-entry-${NODE_PROTO_ID}.json" # конфиги не должны совпасть
+# Генерация конфига Xray
 cat <<EOF > "$CONFIG_PATH"
 {
   "log": { "loglevel": "warning" },
@@ -53,7 +90,7 @@ cat <<EOF > "$CONFIG_PATH"
   "inbounds": [
     {
       "listen": "0.0.0.0",
-      "port": $INBOUND_PORT,
+      "port": $INTERNAL_PORT,
       "protocol": "hysteria",
       "settings": {
         "version": 2,
@@ -81,11 +118,11 @@ cat <<EOF > "$CONFIG_PATH"
           "udpIdleTimeout": 600
         }
       },
-      "tag": "inbound"
+      "tag": "hysteria-inbound"
     },
     {
       "listen": "127.0.0.1",
-      "port": $API_PORT,
+      "port": $METRICS_PORT,
       "protocol": "dokodemo-door",
       "settings": { "address": "127.0.0.1" },
       "tag": "api"
@@ -168,10 +205,11 @@ cat <<EOF > "$CONFIG_PATH"
 }
 EOF
 
-SERVICE_PATH="/etc/systemd/system/xray-${TMP_ID}.service"
+SERVICE_NAME="reinar-vless-${NODE_PROTO_ID}"
+SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Xray Shadowsocks-2022 Entry Node (TMP_ID: ${TMP_ID})
+Description=Xray Hysteria2 TLS Salamander Entry Node (NODE_PROTO_ID: ${NODE_PROTO_ID})
 After=network.target nss-lookup.target
 
 [Service]
@@ -189,23 +227,45 @@ LimitNOFILE=1000000
 WantedBy=multi-user.target
 EOF
 
+log "2. Запуск юнита $SERVICE_NAME..."
 systemctl daemon-reload
-systemctl enable "xray-${TMP_ID}"
-systemctl restart "xray-${TMP_ID}"
+systemctl enable "$SERVICE_NAME" >&2
+systemctl restart "$SERVICE_NAME" >&2
 
-curl -s -X POST "$PANEL_CALLBACK_URL" \
-     -H "Content-Type: application/json" \
+sleep 1
+
+if ! systemctl is-active --quiet "$SERVICE_NAME"; then
+    log "\033[31mСервис $SERVICE_NAME не смог запуститься! Откат...\033[0m"
+    systemctl stop "$SERVICE_NAME" || true
+    systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+    rm -f "$CONFIG_PATH" "$SERVICE_PATH"
+    systemctl daemon-reload
+
+    # Оповещаем панель о фейле
+    curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
+         -d '{"node_proto_id": '"$NODE_PROTO_ID"', "status": 3}' >/dev/null || true
+    exit 1
+fi
+
+# 6. Финализация статуса в панели
+curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
      -d '{
-           "tmp_id": "'"$TMP_ID"'",
-           "config_path": "'"$CONFIG_PATH"'",
-           "api_port": '$API_PORT',
-           "inbound_port": '$INBOUND_PORT',
-           "status": "installed",
-           "node_type": "shadowsocks_2022_entry",
-           "custom_fields": {
-              "method": "'"$METHOD"'",
-              "server_psk": "'"$SERVER_PSK"'"
-           }
-         }'
+        "node_proto_id": '"$NODE_PROTO_ID"',
+        "status": 2,
+        "reload_core_command": "systemctl restart '"$SERVICE_NAME"'",
+        "config_path": "'"$CONFIG_PATH"'",
+     }' >/dev/null
 
-echo "Shadowsocks-2022 Entry Node $TMP_ID installed successfully."
+log "=================================================="
+log "✓ Виртуальная нода успешно создана!"
+log "Node Proto ID: $NODE_PROTO_ID"
+log "Config Path: $CONFIG_PATH"
+log "Title: $TITLE"
+log "Основной Порт: $INTERNAL_PORT | SNI Domain: $SNI_DOMAIN"
+log "=================================================="
+
+# 7. Возврат результата в stdout (JSON) для вызывающего скрипта
+jq -n \
+  --arg node_proto_id "$NODE_PROTO_ID" \
+  --arg service_name "$SERVICE_NAME" \
+  '{node_proto_id: $node_proto_id, service_name: $service_name}'

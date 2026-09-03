@@ -1,16 +1,20 @@
 #!/bin/bash
 # Использование: bash exit-node-vless-reality.sh <tmp_id>
 
-TMP_ID=$1
-if [ -z "$TMP_ID" ]; then
-    echo "Ошибка: не передан tmp_id"
+SNI=${1:-"www.microsoft.com"}
+
+log() { echo -e "$1" >&2; }
+
+if [ -z "$NODE_ID" ] || [ -z "$PROTO_ID" ]; then
+    log "\033[31mОшибка: Укажите NODE_ID и PROTO_ID в переменных окружения!\033[0m"
     exit 1
 fi
 
+
 XRAY_BIN="/usr/local/bin/xray"
-CONFIG_DIR="/etc/xray/configs"
-CONFIG_PATH="$CONFIG_DIR/${TMP_ID}.json"
-PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback" # IP панели в WG
+CONFIG_DIR="/etc/reinar/configs/xray/wh_list"
+PANEL_CALLBACK_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/register"
+PANEL_CONFIRM_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/confirm"
 
 mkdir -p "$CONFIG_DIR"
 
@@ -32,6 +36,39 @@ PUBLIC_KEY=$(echo "$KEYS" | grep "Public key:" | awk '{print $3}')
 SHORT_ID=$(openssl rand -hex 8)
 EXIT_UUID=$($XRAY_BIN uuid)
 
+log "Выделен внутренний порт для Sing-box: $INBOUND_PORT"
+
+log "1. Регистрация ноды в панели и получение node_proto_id..."
+
+REG_RESPONSE=$(mktemp)
+HTTP_CODE=$(curl -s -w "%{http_code}" -o "$REG_RESPONSE" -X POST "$PANEL_CALLBACK_URL" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "proto_id": '"$PROTO_ID"',
+           "node_id": '"$NODE_ID"',
+           "proto_port": '"$INBOUND_PORT"',
+           "metrics_port": '"$API_PORT"',
+           "title": "'"$TITLE"'",
+           "constant_node_data_obj": {
+              "sub_link_fp": "chrome",
+              "node_public_key": "'"$PUBLIC_KEY"'"
+           }
+         }')
+
+if [ "$HTTP_CODE" -ne 200 ]; then
+    log "\033[31mОшибка регистрации (HTTP $HTTP_CODE): $(cat "$REG_RESPONSE")\033[0m"
+    rm -f "$REG_RESPONSE"
+    exit 1
+fi
+
+NODE_PROTO_ID=$(jq -r '.node_proto_id' "$REG_RESPONSE")
+TITLE=$(jq -r '.title' "$REG_RESPONSE")
+rm -f "$REG_RESPONSE"
+
+log "Назначен NODE_PROTO_ID: $NODE_PROTO_ID"
+
+# Генерация конфига Sing-box
+CONFIG_PATH="$CONFIG_DIR/vless-reality-tcp-exit-${NODE_PROTO_ID}.json"
 cat <<EOF > "$CONFIG_PATH"
 {
   "log": { "loglevel": "warning" },
@@ -74,7 +111,7 @@ cat <<EOF > "$CONFIG_PATH"
         "enabled": true,
         "destOverride": ["http", "tls", "quic"]
       },
-      "tag": "inbound"
+      "tag": "hysteria-inbound"
     },
     {
       "listen": "127.0.0.1",
@@ -104,10 +141,11 @@ cat <<EOF > "$CONFIG_PATH"
 EOF
 
 # Systemd юнит
-SERVICE_PATH="/etc/systemd/system/xray-${TMP_ID}.service"
+SERVICE_NAME="reinar-vless-${NODE_PROTO_ID}"
+SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Xray Anticensorship(AntiWhitelist/Block Bypass) Exit Node (TMP_ID: ${TMP_ID})
+Description=Xray VLESS Realuty TCP Exit Node (NODE_PROTO_ID: ${NODE_PROTO_ID})
 After=network.target nss-lookup.target
 
 [Service]
@@ -125,24 +163,43 @@ LimitNOFILE=1000000
 WantedBy=multi-user.target
 EOF
 
+log "2. Запуск юнита $SERVICE_NAME..."
 systemctl daemon-reload
+systemctl enable "$SERVICE_NAME" >&2
+systemctl restart "$SERVICE_NAME" >&2
 
-# В callback отдаем данные для подключения Entry нод к этой Выходной ноде
-curl -s -X POST "$PANEL_CALLBACK_URL" \
-     -H "Content-Type: application/json" \
+sleep 1
+
+if ! systemctl is-active --quiet "$SERVICE_NAME"; then
+    log "\033[31mСервис $SERVICE_NAME не смог запуститься! Откат...\033[0m"
+    systemctl stop "$SERVICE_NAME" || true
+    systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+    rm -f "$CONFIG_PATH" "$SERVICE_PATH"
+    systemctl daemon-reload
+
+    # Оповещаем панель о фейле
+    curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
+         -d '{"node_proto_id": '"$NODE_PROTO_ID"', "status": 3}' >/dev/null || true
+    exit 1
+fi
+
+# 6. Финализация статуса в панели
+curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
      -d '{
-           "tmp_id": "'"$TMP_ID"'",
-           "config_path": "'"$CONFIG_PATH"'",
-           "api_port": '$API_PORT',
-           "inbound_port": '$INBOUND_PORT',
-           "status": "installed",
-           "node_type": "exit",
-           "custom_fields": {
-               "node_public_key": "'"$PUBLIC_KEY"'"
-           }
-         }'
+        "node_proto_id": '"$NODE_PROTO_ID"',
+        "status": 2,
+        "reload_core_command": "systemctl restart '"$SERVICE_NAME"'",
+        "config_path": "'"$CONFIG_PATH"'",
+     }' >/dev/null
 
-echo "Exit нода $TMP_ID установлена. Данные для подключения Entry Ноды"
-echo "- UUID: $EXIT_UUID"
-echo "- PKEY: $PUBLIC_KEY"
-echo "- SID: $SHORT_ID"
+
+log "=================================================="
+log "Xray VLESS REALITY TCP в качестве EXIT ноды развернута!"
+log "Порт:  $INBOUND_PORT"
+log "Config Path: $CONFIG_PATH"
+log "ID(Node Proto Id): $NODE_PROTO_ID"
+log "Exit нода установлена. Данные для подключения Entry Ноды"
+log "- UUID: $UUID"
+log "- PKEY: $PUBLIC_KEY"
+log "- SID: $SHORT_ID"
+log "=================================================="

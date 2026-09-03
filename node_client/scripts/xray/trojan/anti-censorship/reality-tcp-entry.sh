@@ -1,24 +1,32 @@
 #!/bin/bash
 # Использование: bash vless-reality-tcp.sh <tmp_id>
 
-TMP_ID=$1
-EXIT_HOST=$2
-EXIT_PORT=$3
-EXIT_PUBKEY=$4
-EXIT_SHORTID=$5
-EXIT_PASSWORD=$6
-EXIT_REALITY_SNI=$7
+SNI=${1:-"apple.com"}
 
-if [ -z "$TMP_ID" ] || [ -z "$EXIT_HOST" ] || [ -z "$EXIT_PASSWORD" ]; then
-    echo "Ошибка: Недостаточно параметров!"
-    echo "Использование: bash entry-node.sh <tmp_id> <exit_host> <exit_port> <exit_pubkey> <exit_shortid> <exit_password> <exit_reality_sni>"
+log() { echo -e "$1" >&2; }
+log "Переменные окружения для этой вариации"
+#EXIT_HOST=$2
+#EXIT_PORT=$3
+#EXIT_PKEY=$4
+#EXIT_SID=$5
+#EXIT_UUID=$6
+
+if [ -z "$EXIT_PORT" ] || [ -z "$EXIT_HOST" ] || [ -z "$EXIT_SID" ] || [ -z "$EXIT_PKEY" ] || [ -z "$EXIT_UUID" ]; then
+    log "Ошибка: Необходимы параметры для оутбаунда выходной ноды: EXIT_HOST, EXIT_PORT, EXIT_SID, EXIT_PKEY, EXIT_UUID!"
+    log "Использование: bash sing-box-awg-install.sh <ip_addr> <ip_version>"
     exit 1
 fi
 
+if [ -z "$TITLE" ]; then
+    log "Название для виртуальной ноды не указано. Будет использовано составное"
+    TITLE="Vnode_PrId-'$PROTO_ID'_NId-'$NODE_ID'"
+fi
+
+
 XRAY_BIN="/usr/local/bin/xray"
-CONFIG_DIR="/opt/reinar_panel/configs"
-CONFIG_PATH="$CONFIG_DIR/trojan-reality-tcp_${TMP_ID}.json"
-PANEL_CALLBACK_URL="http://10.0.0.1/api/v1/nodes/protocols/callback" # Замени на IP твоей панели в сети Wireguard
+CONFIG_DIR="/etc/reinar/configs/xray/wh_list"
+PANEL_CALLBACK_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/register"
+PANEL_CONFIRM_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/confirm"
 
 mkdir -p "$CONFIG_DIR"
 
@@ -41,8 +49,38 @@ PRIVATE_KEY=$(echo "$KEYS" | grep "Private key:" | awk '{print $3}')
 PUBLIC_KEY=$(echo "$KEYS" | grep "Public key:" | awk '{print $3}')
 SHORT_ID=$(openssl rand -hex 8)
 
-# 3. Формирование JSON конфига
-# Важно: массив clients пуст, юзеров панель добавит позже через gRPC API
+log "Выделен внутренний порт для Xray: $INBOUND_PORT"
+
+log "1. Регистрация ноды в панели и получение node_proto_id..."
+
+REG_RESPONSE=$(mktemp)
+HTTP_CODE=$(curl -s -w "%{http_code}" -o "$REG_RESPONSE" -X POST "$PANEL_CALLBACK_URL" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "proto_id": '"$PROTO_ID"',
+           "node_id": '"$NODE_ID"',
+           "proto_port": '"$INBOUND_PORT"',
+           "metrics_port": '"$API_PORT"',
+           "title": "'"$TITLE"'",
+           "constant_node_data_obj": {
+              "sub_link_fp": "chrome",
+              "node_public_key": "'"$PUBLIC_KEY"'"
+           }
+         }')
+
+if [ "$HTTP_CODE" -ne 200 ]; then
+    log "\033[31mОшибка регистрации (HTTP $HTTP_CODE): $(cat "$REG_RESPONSE")\033[0m"
+    rm -f "$REG_RESPONSE"
+    exit 1
+fi
+
+NODE_PROTO_ID=$(jq -r '.node_proto_id' "$REG_RESPONSE")
+TITLE=$(jq -r '.title' "$REG_RESPONSE")
+rm -f "$REG_RESPONSE"
+
+log "Назначен NODE_PROTO_ID: $NODE_PROTO_ID"
+
+CONFIG_PATH="$CONFIG_DIR/trojan-reality-entry-${NODE_PROTO_ID}.json"
 cat <<EOF > "$CONFIG_PATH"
 {
   "log": {
@@ -84,11 +122,10 @@ cat <<EOF > "$CONFIG_PATH"
         "security": "reality",
         "realitySettings": {
           "show": false,
-          "dest": "vk.com:443",
+          "dest": "$SNI:443",
           "xver": 0,
           "serverNames": [
-            "vk.com",
-            "www.vk.com"
+            "$SNI"
           ],
           "privateKey": "$PRIVATE_KEY",
           "shortIds": [
@@ -123,7 +160,8 @@ cat <<EOF > "$CONFIG_PATH"
             "port": $EXIT_PORT,
             "users": [
               {
-                "password": "$EXIT_PASWORD"
+                "password": "$EXIT_UUID",
+                "flow": "xtls-rprx-vision"
               }
             ]
           }
@@ -133,9 +171,9 @@ cat <<EOF > "$CONFIG_PATH"
         "network": "tcp",
         "security": "reality",
         "realitySettings": {
-          "serverName": "$EXIT_REALITY_SNI",
-          "publicKey": "$EXIT_PUBKEY",
-          "shortId": "$EXIT_SHORTID",
+          "serverName": "www.microsoft.com",
+          "publicKey": "$EXIT_PKEY",
+          "shortId": "$EXIT_SID",
           "fingerprint": "chrome"
         }
       }
@@ -188,10 +226,11 @@ cat <<EOF > "$CONFIG_PATH"
 EOF
 
 # 4. Создание Systemd юнита
-SERVICE_PATH="/etc/systemd/system/xray-${TMP_ID}.service"
+SERVICE_NAME="reinar-trojan-${NODE_PROTO_ID}"
+SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Xray Custom Instance (TMP_ID: ${TMP_ID})
+Description=Xray Custom Instance (NODE_PROTO_ID: ${NODE_PROTO_ID})
 Documentation=https://xtls.github.io
 After=network.target nss-lookup.target
 
@@ -210,21 +249,46 @@ LimitNOFILE=1000000
 WantedBy=multi-user.target
 EOF
 
+log "2. Запуск юнита $SERVICE_NAME..."
 systemctl daemon-reload
+systemctl enable "$SERVICE_NAME" >&2
+systemctl restart "$SERVICE_NAME" >&2
 
-# 5. Callback на панель (сообщаем, что всё готово)
-# Передаем публичный ключ и short_id в кастомных полях, чтобы панель могла сразу собрать ссылки
-curl -s -X POST "$PANEL_CALLBACK_URL" \
-     -H "Content-Type: application/json" \
+sleep 1
+
+if ! systemctl is-active --quiet "$SERVICE_NAME"; then
+    log "\033[31mСервис $SERVICE_NAME не смог запуститься! Откат...\033[0m"
+    systemctl stop "$SERVICE_NAME" || true
+    systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+    rm -f "$CONFIG_PATH" "$SERVICE_PATH"
+    systemctl daemon-reload
+
+    # Оповещаем панель о фейле
+    curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
+         -d '{"node_proto_id": '"$NODE_PROTO_ID"', "status": 3}' >/dev/null || true
+    exit 1
+fi
+
+# 6. Финализация статуса в панели
+curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
      -d '{
-           "tmp_id": "'"$TMP_ID"'",
-           "config_path": "'"$CONFIG_PATH"'",
-           "metrics_port": '$INBOUND_PORT',
-           "status": "installed",
-           "spec_params": {
-               "public_key": "'"$PUBLIC_KEY"'",
-               "short_id": "'"$SHORT_ID"'"
-           }
-         }'
+        "node_proto_id": '"$NODE_PROTO_ID"',
+        "status": 2,
+        "reload_core_command": "systemctl restart '"$SERVICE_NAME"'",
+        "config_path": "'"$CONFIG_PATH"'",
+     }' >/dev/null
 
-echo "Нода $TMP_ID успешно инициализирована. API Порт: $API_PORT, Inbound Порт: $INBOUND_PORT."
+
+log "=================================================="
+log "✓ Виртуальная нода успешно создана!"
+log "Node Proto ID: $NODE_PROTO_ID"
+log "Config Path: $CONFIG_PATH"
+log "Title: $TITLE"
+log "Основной Порт: $INBOUND_PORT"
+log "=================================================="
+
+# 7. Возврат результата в stdout (JSON) для вызывающего скрипта
+jq -n \
+  --arg node_proto_id "$NODE_PROTO_ID" \
+  --arg service_name "$SERVICE_NAME" \
+  '{node_proto_id: $node_proto_id, service_name: $service_name}'

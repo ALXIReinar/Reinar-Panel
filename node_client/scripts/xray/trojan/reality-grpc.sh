@@ -1,16 +1,23 @@
 #!/bin/bash
 # Использование: bash vless-reality-grpc.sh <tmp_id>
+SNI=${1:-"www.microsoft.com"}
 
-TMP_ID=$1
-if [ -z "$TMP_ID" ]; then
-    echo "Ошибка: не передан tmp_id"
+log() { echo -e "$1" >&2; }
+
+if [ -z "$NODE_ID" ] || [ -z "$PROTO_ID" ]; then
+    log "\033[31mОшибка: Укажите NODE_ID и PROTO_ID в переменных окружения!\033[0m"
     exit 1
 fi
 
+if [ -z "$TITLE" ]; then
+    log "Название для виртуальной ноды не указано. Будет использовано составное"
+    TITLE="Vnode_PrId-'$PROTO_ID'_NId-'$NODE_ID'"
+fi
+
 XRAY_BIN="/usr/local/bin/xray"
-CONFIG_DIR="/etc/xray/configs"
-CONFIG_PATH="$CONFIG_DIR/${TMP_ID}.json"
-PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback" # IP вашей панели в сети WG
+CONFIG_DIR="/etc/reinar/configs/xray/trojan"
+PANEL_CALLBACK_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/register"
+PANEL_CONFIRM_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/confirm"
 
 mkdir -p "$CONFIG_DIR"
 
@@ -32,8 +39,41 @@ KEYS=$($XRAY_BIN x25519)
 PRIVATE_KEY=$(echo "$KEYS" | grep "Private key:" | awk '{print $3}')
 PUBLIC_KEY=$(echo "$KEYS" | grep "Public key:" | awk '{print $3}')
 SHORT_ID=$(openssl rand -hex 8)
-SERVICE_NAME="grpc-$(openssl rand -hex 4)"
+GRPC_SERVICE_NAME="grpc-$(openssl rand -hex 4)"
 
+log "Выделен внутренний порт для Xray: $INBOUND_PORT"
+
+log "1. Регистрация ноды в панели и получение node_proto_id..."
+
+REG_RESPONSE=$(mktemp)
+HTTP_CODE=$(curl -s -w "%{http_code}" -o "$REG_RESPONSE" -X POST "$PANEL_CALLBACK_URL" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "proto_id": '"$PROTO_ID"',
+           "node_id": '"$NODE_ID"',
+           "proto_port": '"$INBOUND_PORT"',
+           "metrics_port": '"$API_PORT"',
+           "title": "'"$TITLE"'",
+           "constant_node_data_obj": {
+              "sub_link_fp": "chrome",
+              "sub_link_grpc_mode": "gun",
+              "node_public_key": "'"$PUBLIC_KEY"'"
+           }
+         }')
+
+if [ "$HTTP_CODE" -ne 200 ]; then
+    log "\033[31mОшибка регистрации (HTTP $HTTP_CODE): $(cat "$REG_RESPONSE")\033[0m"
+    rm -f "$REG_RESPONSE"
+    exit 1
+fi
+
+NODE_PROTO_ID=$(jq -r '.node_proto_id' "$REG_RESPONSE")
+TITLE=$(jq -r '.title' "$REG_RESPONSE")
+rm -f "$REG_RESPONSE"
+
+log "Назначен NODE_PROTO_ID: $NODE_PROTO_ID"
+
+CONFIG_PATH="$CONFIG_DIR/trojan-reality-grpc-${NODE_PROTO_ID}.json"
 # 3. Формирование JSON конфига
 cat <<EOF > "$CONFIG_PATH"
 {
@@ -65,15 +105,6 @@ cat <<EOF > "$CONFIG_PATH"
   },
   "inbounds": [
     {
-      "listen": "127.0.0.1",
-      "port": $API_PORT,
-      "protocol": "dokodemo-door",
-      "settings": {
-        "address": "127.0.0.1"
-      },
-      "tag": "api"
-    },
-    {
       "listen": "0.0.0.0",
       "port": $INBOUND_PORT,
       "protocol": "trojan",
@@ -84,16 +115,15 @@ cat <<EOF > "$CONFIG_PATH"
         "network": "grpc",
         "security": "reality",
         "grpcSettings": {
-          "serviceName": "$SERVICE_NAME",
+          "serviceName": "$GRPC_SERVICE_NAME",
           "multiMode": true
         },
         "realitySettings": {
           "show": false,
-          "dest": "microsoft.com:443",
+          "dest": "$SNI:443",
           "xver": 0,
           "serverNames": [
-            "microsoft.com",
-            "www.microsoft.com"
+            "$SNI"
           ],
           "privateKey": "$PRIVATE_KEY",
           "shortIds": [
@@ -106,6 +136,15 @@ cat <<EOF > "$CONFIG_PATH"
         "destOverride": ["http", "tls", "quic"]
       },
       "tag": "trojan-inbound"
+    },
+    {
+      "listen": "127.0.0.1",
+      "port": $API_PORT,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1"
+      },
+      "tag": "api"
     }
   ],
   "outbounds": [
@@ -136,10 +175,11 @@ cat <<EOF > "$CONFIG_PATH"
 EOF
 
 # 4. Создание Systemd юнита
-SERVICE_PATH="/etc/systemd/system/xray-${TMP_ID}.service"
+SERVICE_NAME="reinar-trojan-${NODE_PROTO_ID}"
+SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Xray Custom Instance Trojan-gRPC-Reality (TMP_ID: ${TMP_ID})
+Description=Xray Custom Instance Trojan-gRPC-Reality (NODE_PROTO_ID: ${NODE_PROTO_ID})
 Documentation=https://xtls.github.io
 After=network.target nss-lookup.target
 
@@ -158,22 +198,46 @@ LimitNOFILE=1000000
 WantedBy=multi-user.target
 EOF
 
+log "2. Запуск юнита $SERVICE_NAME..."
 systemctl daemon-reload
+systemctl enable "$SERVICE_NAME" >&2
+systemctl restart "$SERVICE_NAME" >&2
 
-# 5. Callback на панель
-curl -s -X POST "$PANEL_CALLBACK_URL" \
-     -H "Content-Type: application/json" \
+sleep 1
+
+if ! systemctl is-active --quiet "$SERVICE_NAME"; then
+    log "\033[31mСервис $SERVICE_NAME не смог запуститься! Откат...\033[0m"
+    systemctl stop "$SERVICE_NAME" || true
+    systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+    rm -f "$CONFIG_PATH" "$SERVICE_PATH"
+    systemctl daemon-reload
+
+    # Оповещаем панель о фейле
+    curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
+         -d '{"node_proto_id": '"$NODE_PROTO_ID"', "status": 3}' >/dev/null || true
+    exit 1
+fi
+
+# 6. Финализация статуса в панели
+curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
      -d '{
-           "tmp_id": "'"$TMP_ID"'",
-           "config_path": "'"$CONFIG_PATH"'",
-           "api_port": '$API_PORT',
-           "inbound_port": '$INBOUND_PORT',
-           "status": "installed",
-           "custom_fields": {
-               "public_key": "'"$PUBLIC_KEY"'",
-               "short_id": "'"$SHORT_ID"'",
-               "service_name": "'"$SERVICE_NAME"'"
-           }
-         }'
+        "node_proto_id": '"$NODE_PROTO_ID"',
+        "status": 2,
+        "reload_core_command": "systemctl restart '"$SERVICE_NAME"'",
+        "config_path": "'"$CONFIG_PATH"'",
+     }' >/dev/null
 
-echo "Нода $TMP_ID (Trojan-gRPC-Reality) готова. API: $API_PORT, Inbound: $INBOUND_PORT, ServiceName: $SERVICE_NAME"
+
+log "=================================================="
+log "✓ Виртуальная нода успешно создана!"
+log "Node Proto ID: $NODE_PROTO_ID"
+log "Config Path: $CONFIG_PATH"
+log "Title: $TITLE"
+log "Основной Порт: $INBOUND_PORT"
+log "=================================================="
+
+# 7. Возврат результата в stdout (JSON) для вызывающего скрипта
+jq -n \
+  --arg node_proto_id "$NODE_PROTO_ID" \
+  --arg service_name "$SERVICE_NAME" \
+  '{node_proto_id: $node_proto_id, service_name: $service_name}'

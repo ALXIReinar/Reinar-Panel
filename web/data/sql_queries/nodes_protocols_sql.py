@@ -222,3 +222,95 @@ class NodesProtocolsQueries:
         WHERE np.id = $4
         '''
         return await self.conn.fetchrow(query, user_uuid, user_sub_id, CoreProtoActions.name2id[operation], node_proto_id)
+
+
+    async def reserve_place(
+            self,
+            proto_id,
+            node_id,
+            title,
+            metrics_port,
+            proto_port,
+            config_path,
+            constant_node_data_obj,
+            sub_node_address,
+            metrics_command,
+            reload_core_command,
+    ):
+        if constant_node_data_obj is None:
+            constant_node_data_obj = {}
+
+        query = '''
+        INSERT INTO nodes_protocols (proto_id, node_id, title, config_path, metrics_port, proto_port, sub_node_address, reload_core_command, metrics_command, constant_node_data_obj)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING id, title
+        '''
+        try:
+            vnode = await self.conn.fetchrow(
+                query, proto_id, node_id, title,
+                config_path, metrics_port, proto_port, sub_node_address,
+                reload_core_command, metrics_command, constant_node_data_obj
+            )
+            return True, vnode
+        except ForeignKeyViolationError:
+            return False, None
+
+
+    async def confirm_place(
+            self,
+            node_proto_id: int,
+            status: int,
+            title: str | None,
+            constant_node_data_obj: dict | None | int,
+            reload_core_command: str | None,
+            metrics_command: str | None,
+            config_path: str | None,
+    ):
+        if constant_node_data_obj is None:
+            constant_node_data_obj = {}
+
+        updates = []
+        params = []
+        param_idx = 1
+
+        if config_path is not None:
+            updates.append(f"config_path = ${param_idx}")
+            params.append(config_path)
+            param_idx += 1
+
+        if status is not None:
+            updates.append(f"reg_status = ${param_idx}")
+            params.append(status)
+            param_idx += 1
+
+        if title is not None:
+            updates.append(f"title = ${param_idx}")
+            params.append(title)
+            param_idx += 1
+
+        if reload_core_command is not None:
+            updates.append(f"reload_core_command = ${param_idx}")
+            params.append(reload_core_command)
+            param_idx += 1
+
+        if metrics_command is not None:
+            updates.append(f"metrics_command = ${param_idx}")
+            params.append(metrics_command)
+            param_idx += 1
+
+        if constant_node_data_obj != 0:
+            updates.append(f"constant_node_data_obj = ${param_idx}")
+            params.append(constant_node_data_obj)
+            param_idx += 1
+
+
+        updates.append("updated_at = NOW()")
+        query = f"""
+        UPDATE nodes_protocols SET {', '.join(updates)}
+        WHERE id = ${param_idx}
+        RETURNING id
+        """
+        params.append(node_proto_id)
+
+        vnode = await self.conn.fetchval(query, node_proto_id, status)
+        return vnode

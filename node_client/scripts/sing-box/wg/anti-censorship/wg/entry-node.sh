@@ -1,30 +1,41 @@
 #!/bin/bash
 
-TMP_ID=$1
 # Адреса самого сервера внутри туннеля (с маской). Передаются из панели.
 # Пример: 10.1.0.1/16
-IP_ADDR=$2
+IP_ADDR=$1
 # Пример: fd00:1::1/64
-IP_VERSION=$3
+IP_VERSION=$2
 
-EXIT_HOST=$4
-EXIT_PORT=$5
-EXIT_PKEY=$6
-EXIT_SID=$7
-EXIT_UUID=$8
+log() { echo -e "$1" >&2; }
+log "Зависимости-переменные окружения для оутбаунда"
+#EXIT_HOST=$4
+#EXIT_PORT=$5
+#EXIT_PKEY=$6
+#EXIT_SID=$7
+#EXIT_UUID=$8
 
-if [ -z "$TMP_ID" ] || [ -z "$IP_ADDR" ] || [ -z "$IP_VERSION" ] || [ -z "$EXIT_PORT" ] || [ -z "$EXIT_HOST" ] || [ -z "$EXIT_SID" ] || [ -z "$EXIT_PKEY" ] || [ -z "$EXIT_UUID" ]; then
+if [ -z "$NODE_ID" ] || [ -z "$PROTO_ID" ] ||  [ -z "$EXIT_PORT" ] || [ -z "$EXIT_HOST" ] || [ -z "$EXIT_SID" ] || [ -z "$EXIT_PKEY" ] || [ -z "$EXIT_UUID" ]; then
     echo "Ошибка: Необходимы параметры для входной ноды: TMP_ID, IPV_ADDR, IP_VERSION!"
     echo "Ошибка: Необходимы параметры для оутбаунда выходной ноды: EXIT_HOST, EXIT_PORT, EXIT_SID, EXIT_PKEY, EXIT_UUID!"
-    echo "Использование: bash sing-box-awg-install.sh <tmp_id> <ip_addr> <ip_version>"
+    exit 1
+fi
+
+if [ -z "$IP_ADDR" ] || [ -z "$IP_VERSION" ]; then
+    log "Ошибка: Необходимы параметры IP_ADDR, IP_VERSION !"
+    log "Использование: bash node_client/scripts/sing-box/wg/anti-censorship/awg/entry-node.sh <ip_addr> <ip_version>"
+    exit 1
+fi
+
+if [[ "$IP_VERSION" != "4" && "$IP_VERSION" != "6" ]]; then
+    log "IP_VERSION must be 4 or 6"
     exit 1
 fi
 
 # Используем кастомный бинарник!
 SINGBOX_BIN="/usr/local/bin/sing-box"
-CONFIG_DIR="/etc/sing-box/configs"
-CONFIG_PATH="$CONFIG_DIR/${TMP_ID}.json"
-PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback"
+CONFIG_DIR="/etc/reinar/configs/sing-box/wh_list"
+PANEL_CALLBACK_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/register"
+PANEL_CONFIRM_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/confirm"
 
 mkdir -p "$CONFIG_DIR"
 
@@ -46,25 +57,38 @@ WG_PRIVATE_KEY=$(echo "$WG_KEYS" | grep PrivateKey | awk '{print $2}')
 WG_PUBLIC_KEY=$(echo "$WG_KEYS" | grep PublicKey | awk '{print $2}')
 NODE_HASH_SALT=$(openssl rand -base64 12)
 
-echo "Выделен внутренний порт для Sing-box: $INTERNAL_PORT"
+log "Выделен порт для AmneziaWG: $INTERNAL_PORT"
 
-# --- 2. ГЕНЕРАЦИЯ ПАРАМЕТРОВ ОБФУСКАЦИИ (AWG) ---
-# Генерируем уникальный профиль маскировки для каждой ноды
-JC=$(( RANDOM % 10 + 3 ))           # от 3 до 12
-JMIN=$(( RANDOM % 20 + 40 ))        # от 40 до 59
-JMAX=$(( RANDOM % 300 + 700 ))      # от 700 до 999
-S1=$(( RANDOM % 100 + 15 ))         # от 15 до 114
-S2=$(( RANDOM % 100 + 15 ))         # от 15 до 114
+REG_RESPONSE=$(mktemp)
+HTTP_CODE=$(curl -s -w "%{http_code}" -o "$REG_RESPONSE" -X POST "$PANEL_CALLBACK_URL" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "proto_id": '"$PROTO_ID"',
+           "node_id": '"$NODE_ID"',
+           "proto_port": '"$INTERNAL_PORT"',
+           "metrics_port": '"$METRICS_PORT"',
+           "title": "'"$TITLE"'",
+           "constant_node_data_obj": {
+               "node_public_key": "'"$WG_PUBLIC_KEY"'",
+               "node_ipv'"$IP_VERSION"'_subnet": "'"$IP_ADDR"'",
+               "node_hash_salt": '"$NODE_HASH_SALT"'
+           }
+         }')
 
-# H1-H4 - большие случайные числа (магические заголовки)
-# Bash RANDOM генерирует от 0 до 32767, комбинируем для получения больших int
-generate_magic() { echo $(( (RANDOM << 15) | RANDOM )); }
-H1=$(generate_magic)
-H2=$(generate_magic)
-H3=$(generate_magic)
-H4=$(generate_magic)
+if [ "$HTTP_CODE" -ne 200 ]; then
+    log "\033[31mОшибка регистрации (HTTP $HTTP_CODE): $(cat "$REG_RESPONSE")\033[0m"
+    rm -f "$REG_RESPONSE"
+    exit 1
+fi
+
+NODE_PROTO_ID=$(jq -r '.node_proto_id' "$REG_RESPONSE")
+TITLE=$(jq -r '.title' "$REG_RESPONSE")
+rm -f "$REG_RESPONSE"
+
+log "Назначен NODE_PROTO_ID: $NODE_PROTO_ID"
 
 # Генерация конфига Sing-box
+CONFIG_PATH="$CONFIG_DIR/wg-${NODE_PROTO_ID}.json"
 cat <<EOF > "$CONFIG_PATH"
 {
   "log": {
@@ -76,7 +100,7 @@ cat <<EOF > "$CONFIG_PATH"
       "stats": {
         "enabled": true,
         "inbounds": [
-          "awg-in"
+          "wg-in"
         ],
         "users": []
       }
@@ -85,24 +109,15 @@ cat <<EOF > "$CONFIG_PATH"
   "inbounds": [
     {
       "type": "wireguard",
-      "tag": "awg-in",
+      "tag": "wg-in",
       "listen": "::",
-      "listen_port": $AWG_PORT,
+      "listen_port": $INTERNAL_PORT,
       "system": false,
       "local_address": [
         "$IP_ADDR"
       ],
       "private_key": "$WG_PRIVATE_KEY",
-      "peers": [],
-      "jc": $JC,
-      "jmin": $JMIN,
-      "jmax": $JMAX,
-      "s1": $S1,
-      "s2": $S2,
-      "h1": $H1,
-      "h2": $H2,
-      "h3": $H3,
-      "h4": $H4
+      "peers": []
     }
   ],
   "outbounds": [
@@ -204,10 +219,11 @@ cat <<EOF > "$CONFIG_PATH"
 EOF
 
 # Создание systemd сервиса
-SERVICE_PATH="/etc/systemd/system/sing-box-${TMP_ID}.service"
+SERVICE_NAME="reinar-wg-${NODE_PROTO_ID}"
+SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Sing box Wireguard Entry Node (TMP_ID: ${TMP_ID})
+Description=Sing box Wireguard Entry Node (NODE_PROTO_ID: ${NODE_PROTO_ID})
 After=network.target nss-lookup.target
 
 [Service]
@@ -225,29 +241,49 @@ LimitNOFILE=1000000
 WantedBy=multi-user.target
 EOF
 
+log "2. Запуск юнита $SERVICE_NAME..."
 systemctl daemon-reload
-systemctl enable "sing-box-${TMP_ID}"
-systemctl restart "sing-box-${TMP_ID}"
+systemctl enable "$SERVICE_NAME" >&2
+systemctl restart "$SERVICE_NAME" >&2
 
-# Отправка callback-запроса в панель
-curl -s -X POST "$PANEL_CALLBACK_URL" \
-     -H "Content-Type: application/json" \
+sleep 1
+
+if ! systemctl is-active --quiet "$SERVICE_NAME"; then
+    log "\033[31mСервис $SERVICE_NAME не смог запуститься! Откат...\033[0m"
+    systemctl stop "$SERVICE_NAME" || true
+    systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+    rm -f "$CONFIG_PATH" "$SERVICE_PATH"
+    systemctl daemon-reload
+
+    # Оповещаем панель о фейле
+    curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
+         -d '{"node_proto_id": '"$NODE_PROTO_ID"', "status": 3}' >/dev/null || true
+    exit 1
+fi
+
+# 6. Финализация статуса в панели
+curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
      -d '{
-           "tmp_id": "'"$TMP_ID"'",
-           "config_path": "'"$CONFIG_PATH"'",
-           "internal_port": '$INTERNAL_PORT',
-           "status": "installed",
-           "node_type": "singbox_hysteria2_hopping",
-           "constant_node_data_obj": {
-               "node_public_key": "'"$WG_PUBLIC_KEY"'",
-               "node_ipv'"$IP_VERSION"'_subnet": "'"$IP_ADDR"'",
-               "node_hash_salt": '"$NODE_HASH_SALT"'
-           }
-         }'
+        "node_proto_id": '"$NODE_PROTO_ID"',
+        "status": 2,
+        "reload_core_command": "systemctl restart '"$SERVICE_NAME"'",
+        "config_path": "'"$CONFIG_PATH"'",
+     }' >/dev/null
 
-echo "=================================================="
-echo "AmneziaWG развернут (кастомное ядро)."
-echo "Порт: $AWG_PORT"
-echo "Public Key: $WG_PUBLIC_KEY"
-echo "Обфускация: JC=$JC, JMIN=$JMIN, JMAX=$JMAX"
-echo "=================================================="
+
+log "=================================================="
+log "✓ Виртуальная нода успешно создана!"
+log "WireGuard развернут"
+log "Node Proto ID: $NODE_PROTO_ID"
+log "Config Path: $CONFIG_PATH"
+log "Title: $TITLE"
+log "Основной Порт: $INTERNAL_PORT"
+log "Public Key: $WG_PUBLIC_KEY"
+log "=================================================="
+
+
+# 7. Возврат результата в stdout (JSON) для вызывающего скрипта
+jq -n \
+  --arg node_proto_id "$NODE_PROTO_ID" \
+  --arg service_name "$SERVICE_NAME" \
+  '{node_proto_id: $node_proto_id, service_name: $service_name}'

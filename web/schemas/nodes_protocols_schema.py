@@ -46,3 +46,58 @@ class UpdateNodeProtoSchema(BaseModel):
                 raise ValueError('Порт протокола не может быть равен порту для сбора статистики трафика!')
         return v
 
+
+class VNodeRegisterSchema(BaseModel):
+    proto_id: int
+    node_id: int
+    title: str = Field(max_length=30)
+    metrics_port: int | None = Field(None, le=65535, gt=0)
+    proto_port: int = Field(le=65535, gt=0)
+    config_path: str
+    constant_node_data_obj: dict | None = Field(None, description='Входит в состав суперобъекта пользователей(в фарш для котлет нод клиента)')
+
+    sub_node_address: str | None = Field(None, description='Нода может прокинуть домен для подключения. Например, если использует tls слой шифрования')
+    metrics_command: str | None = Field(None, description='Команда сбора метрик индивидуально для этой Ноды')
+    reload_core_command: str | None = Field(None, description='Команда перезагрузки ядра индивидуально для этой Ноды')
+
+    @field_validator('title', mode='after')
+    @classmethod
+    def title_validator(cls, v):
+        return f'{v[:27]}...'
+
+    @field_validator('proto_port', mode='after')
+    @classmethod
+    def proto_port_validator(cls, v, info: ValidationInfo):
+        if info.data['metrics_port'] == v:
+            raise ValueError('Metrics Port и Proto Port не могут быть равны')
+        return v
+
+class VNodeRegisterResultSchema(BaseModel):
+    node_proto_id: int
+    status: str | int = Field(description='Принимает: 2 - "success", 3 - "failed". Строки преобразует в int')
+    title: str | None = Field(None, max_length=30)
+    constant_node_data_obj: dict | None | int = Field(0, description='Входит в состав суперобъекта пользователей(в фарш для котлет нод клиента)')
+    reload_core_command: str | None = Field(None)
+    metrics_command: str | None = Field(None)
+    config_path: str | None = Field(None)
+
+    @field_validator('title', mode='after')
+    @classmethod
+    def title_validator(cls, v):
+        if v is None:
+            return v
+
+        return f'{v[:27]}...'
+
+    @field_validator('status', mode='after')
+    @classmethod
+    def status_validator(cls, v):
+        status_map = {'success': 2, 'failed': 3}
+        if isinstance(v, str) and (int_status:= status_map.get(v.lower())):
+            return int_status
+
+        if v not in {1, 2, 3}:
+            raise ValueError('Статус не может быть вне диапазона 1-3. 1 - "pending", 2 - "success", 3 - "failed"')
+
+        return v
+

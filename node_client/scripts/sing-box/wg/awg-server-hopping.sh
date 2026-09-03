@@ -1,25 +1,38 @@
 #!/bin/bash
 
-TMP_ID=$1
 # Адреса самого сервера внутри туннеля (с маской). Передаются из панели.
 # Пример: 10.1.0.1/16
-IP_ADDR=$2
+IP_ADDR=$1
 # Пример: fd00:1::1/64
-IP_VERSION=$3
+IP_VERSION=$2
 
-if [ -z "$TMP_ID" ] || [ -z "$IP_ADDR" ] || [ -z "$IP_VERSION" ]; then
-    echo "Ошибка: Необходимы параметры TMP_ID, ip_addr, ip_version!"
-    echo "Использование: bash sing-box-wg-install.sh <tmp_id> <ip_addr> <ip_version>"
+log() { echo -e "$1" >&2; }
+
+if [ -z "$NODE_ID" ] || [ -z "$PROTO_ID" ]; then
+    log "\033[31mОшибка: Укажите NODE_ID и PROTO_ID в переменных окружения!\033[0m"
     exit 1
 fi
 
+if [ -z "$IP_ADDR" ] || [ -z "$IP_VERSION" ]; then
+    log "Ошибка: Необходимы параметры IP_ADDR, IP_VERSION !"
+    log "Использование: bash node_client/scripts/sing-box/wg/awg-server-hopping.sh <ip_addr> <ip_version>"
+    exit 1
+fi
+
+if [[ "$IP_VERSION" != "4" && "$IP_VERSION" != "6" ]]; then
+    log "IP_VERSION must be 4 or 6"
+    exit 1
+fi
+
+# Используем кастомный бинарник!
 SINGBOX_BIN="/usr/local/bin/sing-box-awg"
-CONFIG_DIR="/etc/sing-box/configs"
-CONFIG_PATH="$CONFIG_DIR/${TMP_ID}.json"
-PANEL_CALLBACK_URL="http://10.0.0.1/api/node/callback"
+CONFIG_DIR="/etc/reinar/configs/sing-box-awg/awg"
+PANEL_CALLBACK_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/register"
+PANEL_CONFIRM_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/confirm"
+IPTABLES_BIN=$(command -v iptables)
+IP6TABLES_BIN=$(command -v ip6tables)
 
 mkdir -p "$CONFIG_DIR"
-
 
 # Функция поиска свободного диапазона портов (размером 100 портов)
 find_free_port_range() {
@@ -59,30 +72,11 @@ find_free_port() {
     echo $port
 }
 
-WG_PORT=$(find_free_port 51820)
+AWG_PORT=$(find_free_port 51820)
 METRICS_PORT=$(find_free_port 10085)
 
-echo "Выделен порт для WireGuard: $WG_PORT"
-echo "Выделен порт для Метрик: $METRICS_PORT"
-
-# Ищем свободный диапазон для хоппинга
-# shellcheck disable=SC2046
-# shellcheck disable=SC2162
-read RANGE_START RANGE_END <<< $(find_free_port_range)
-
-
-echo "Выделен внутренний порт для Sing-box: $WG_PORT"
-# shellcheck disable=SC1072
-# shellcheck disable=SC1073
-# shellcheck disable=SC1009
-if [ "$IP_VERSION" --eq 4]; then
-  iptables -t nat -A PREROUTING -p udp --dport "${RANGE_START}":"${RANGE_END}" -j REDIRECT --to-ports "${WG_PORT}"
-fi
-
-if [ "$IP_VERSION" --eq 6]; then
-  ip6tables -t nat -A PREROUTING -p udp --dport ${RANGE_START}:${RANGE_END} -j REDIRECT --to-ports ${WG_PORT}
-fi
-echo "Выделен диапазон портов для Port Hopping: ${RANGE_START}-${RANGE_END}"
+log "Выделен порт для WireGuard: $AWG_PORT"
+log "Выделен порт для Метрик: $METRICS_PORT"
 
 # --- ГЕНЕРАЦИЯ КЛЮЧЕЙ СЕРВЕРА ---
 # sing-box выдает вывод вида:
@@ -92,6 +86,59 @@ WG_KEYS=$($SINGBOX_BIN generate wg-keypair)
 WG_PRIVATE_KEY=$(echo "$WG_KEYS" | grep PrivateKey | awk '{print $2}')
 WG_PUBLIC_KEY=$(echo "$WG_KEYS" | grep PublicKey | awk '{print $2}')
 NODE_HASH_SALT=$(openssl rand -base64 12)
+
+# Ищем свободный диапазон для хоппинга
+# shellcheck disable=SC2046
+# shellcheck disable=SC2162
+read RANGE_START RANGE_END <<< $(find_free_port_range)
+
+
+log "Выделен порт для AmneziaWG: $AWG_PORT"
+log "Выделен диапазон портов для Port Hopping: ${RANGE_START}-${RANGE_END}"
+
+REG_RESPONSE=$(mktemp)
+HTTP_CODE=$(curl -s -w "%{http_code}" -o "$REG_RESPONSE" -X POST "$PANEL_CALLBACK_URL" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "proto_id": '"$PROTO_ID"',
+           "node_id": '"$NODE_ID"',
+           "proto_port": '"$AWG_PORT"',
+           "metrics_port": '"$METRICS_PORT"',
+           "title": "'"$TITLE"'",
+           "constant_node_data_obj": {
+               "node_ipv'"$IP_VERSION"'_subnet": "'"$IP_ADDR"'",
+               "node_public_key": "'"$WG_PUBLIC_KEY"'",
+               "node_hop_start": '"$RANGE_START"',
+               "node_hop_end": '"$RANGE_END"',
+               "node_hash_salt": '"$NODE_HASH_SALT"'
+           }
+         }')
+
+if [ "$HTTP_CODE" -ne 200 ]; then
+    log "\033[31mОшибка регистрации (HTTP $HTTP_CODE): $(cat "$REG_RESPONSE")\033[0m"
+    rm -f "$REG_RESPONSE"
+    exit 1
+fi
+
+NODE_PROTO_ID=$(jq -r '.node_proto_id' "$REG_RESPONSE")
+TITLE=$(jq -r '.title' "$REG_RESPONSE")
+rm -f "$REG_RESPONSE"
+
+log "Назначен NODE_PROTO_ID: $NODE_PROTO_ID"
+
+
+# shellcheck disable=SC1073
+# shellcheck disable=SC1072
+# shellcheck disable=SC1009
+if [ "$IP_VERSION" --eq 4]; then
+  SYSTEMD_PRE_START="+${IPTABLES_BIN} -t nat -A PREROUTING -p udp --dport ${RANGE_START}:${RANGE_END} -j REDIRECT --to-ports ${AWG_PORT}"
+  SYSTEMD_POST_DOWN="+-${IPTABLES_BIN} -t nat -D PREROUTING -p udp --dport ${RANGE_START}:${RANGE_END} -j REDIRECT --to-ports ${AWG_PORT}"
+fi
+
+if [ "$IP_VERSION" --eq 6]; then
+  SYSTEMD_PRE_START="+${IP6TABLES_BIN} -t nat -A PREROUTING -p udp --dport ${RANGE_START}:${RANGE_END} -j REDIRECT --to-ports ${AWG_PORT}"
+  SYSTEMD_POST_DOWN="+-${IP6TABLES_BIN} -t nat -D PREROUTING -p udp --dport ${RANGE_START}:${RANGE_END} -j REDIRECT --to-ports ${AWG_PORT}"
+fi
 
 # --- 2. ГЕНЕРАЦИЯ ПАРАМЕТРОВ ОБФУСКАЦИИ (AWG) ---
 # Генерируем уникальный профиль маскировки для каждой ноды
@@ -108,7 +155,9 @@ H1=$(generate_magic)
 H2=$(generate_magic)
 H3=$(generate_magic)
 H4=$(generate_magic)
+
 # Генерация конфига Sing-box
+CONFIG_PATH="$CONFIG_DIR/awg-hopping-${NODE_PROTO_ID}.json" # конфиги не должны совпасть
 cat <<EOF > "$CONFIG_PATH"
 {
   "log": {
@@ -131,7 +180,7 @@ cat <<EOF > "$CONFIG_PATH"
       "type": "wireguard",
       "tag": "wg-in",
       "listen": "::",
-      "listen_port": $WG_PORT,
+      "listen_port": $AWG_PORT,
       "system": false,
       "local_address": [
         "$IP_ADDR"
@@ -159,18 +208,22 @@ cat <<EOF > "$CONFIG_PATH"
 EOF
 
 # Создание systemd сервиса
-SERVICE_PATH="/etc/systemd/system/sing-box-${TMP_ID}.service"
+# 2. Формирование путей с новым ID
+SERVICE_NAME="reinar-awg-${NODE_PROTO_ID}"
+SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=Sing-box AmneziaWG Node Server Hopping (TMP_ID: ${TMP_ID})
+Description=Sing-box AmneziaWG Node Server Hopping (NODE_PROTO_ID: ${NODE_PROTO_ID})
 After=network.target nss-lookup.target
 
 [Service]
 User=root
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
 NoNewPrivileges=true
 ExecStart=$SINGBOX_BIN run -c $CONFIG_PATH
+ExecStartPre=${SYSTEMD_PRE_START}
+ExecStopPost=${SYSTEMD_POST_DOWN}
 Restart=on-failure
 RestartPreventExitStatus=23
 LimitNPROC=10000
@@ -180,34 +233,50 @@ LimitNOFILE=1000000
 WantedBy=multi-user.target
 EOF
 
+log "2. Запуск юнита $SERVICE_NAME..."
 systemctl daemon-reload
-systemctl enable "sing-box-${TMP_ID}"
-systemctl restart "sing-box-${TMP_ID}"
+systemctl enable "$SERVICE_NAME" >&2
+systemctl restart "$SERVICE_NAME" >&2
 
-# --- ОТПРАВКА CALLBACK ---
-# Важно: Мы отправляем WG_PUBLIC_KEY обратно в панель!
-# Панель должна сохранить его в constant_node_data_obj,
-# чтобы клиенты знали, к какому серверу подключаться.
+sleep 1
 
-curl -s -X POST "$PANEL_CALLBACK_URL" \
-     -H "Content-Type: application/json" \
+if ! systemctl is-active --quiet "$SERVICE_NAME"; then
+    log "\033[31mСервис $SERVICE_NAME не смог запуститься! Откат...\033[0m"
+    systemctl stop "$SERVICE_NAME" || true
+    systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+    rm -f "$CONFIG_PATH" "$SERVICE_PATH"
+    systemctl daemon-reload
+
+    # Оповещаем панель о фейле
+    curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
+         -d '{"node_proto_id": '"$NODE_PROTO_ID"', "status": 3}' >/dev/null || true
+    exit 1
+fi
+
+# 6. Финализация статуса в панели
+curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
      -d '{
-           "tmp_id": "'"$TMP_ID"'",
-           "config_path": "'"$CONFIG_PATH"'",
-           "proto_port": '"$WG_PORT"',
-           "metrics_port": '"$METRICS_PORT"',
-           "status": "installed",
-           "node_type": "singbox_wg_hopping",
-           "constant_node_data_obj": {
-               "node_ipv'"$IP_VERSION"'_subnet": "'"$IP_ADDR"'",
-               "node_public_key": "'"$WG_PUBLIC_KEY"'",
-               "node_hop_start": '"$RANGE_START"',
-               "node_hop_end": '"$RANGE_END"',
-               "node_hash_salt": '"$NODE_HASH_SALT"'
-           }
-         }'
+        "node_proto_id": '"$NODE_PROTO_ID"',
+        "status": 2,
+        "reload_core_command": "systemctl restart '"$SERVICE_NAME"'",
+        "config_path": "'"$CONFIG_PATH"'",
+     }' >/dev/null
 
-echo "=================================================="
-echo "Sing-box WireGuard развернут."
-echo "Порт WG: $WG_PORT | Public Key: $WG_PUBLIC_KEY"
-echo "=================================================="
+
+log "=================================================="
+log "✓ Виртуальная нода успешно создана!"
+log "AmneziaWG развернут (кастомное Sing-Box ядро)."
+log "Node Proto ID: $NODE_PROTO_ID"
+log "Config Path: $CONFIG_PATH"
+log "Title: $TITLE"
+log "Основной Порт: $AWG_PORT | Port Hopping Range: ${RANGE_START}-${RANGE_END}"
+log "Public Key: $WG_PUBLIC_KEY"
+log "Обфускация: JC=$JC, JMIN=$JMIN, JMAX=$JMAX"
+log "=================================================="
+
+
+# 7. Возврат результата в stdout (JSON) для вызывающего скрипта
+jq -n \
+  --arg node_proto_id "$NODE_PROTO_ID" \
+  --arg service_name "$SERVICE_NAME" \
+  '{node_proto_id: $node_proto_id, service_name: $service_name}'

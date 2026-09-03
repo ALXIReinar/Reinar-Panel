@@ -5,14 +5,15 @@ from starlette.requests import Request
 
 from web.data.postgres import PgSqlDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
-from web.schemas.nodes_protocols_schema import NodeProtocolCreateSchema, UpdateNodeProtoSchema, GetNodeProtoSchema
+from web.schemas.nodes_protocols_schema import NodeProtocolCreateSchema, UpdateNodeProtoSchema, GetNodeProtoSchema, \
+    VNodeRegisterSchema, VNodeRegisterResultSchema
 from web.utils.logger_config import log_event
 
 
 
 router = APIRouter(tags=['Virtual Nodes-Protocols Variations'])
 
-@router.post('/protocols/create', summary="Добавить протокол на ноду")
+@router.post('/private/nodes/protocols/create', summary="Добавить протокол на ноду")
 async def add_protocol_to_node_api(body: NodeProtocolCreateSchema, db: PgSqlDep, request: Request, _: JWTCookieDep):
     np_id, msg = await db.nodes_protocols.create_node_protocol(body.node_id, body.proto_id, body.title, body.sub_node_address)
 
@@ -25,6 +26,47 @@ async def add_protocol_to_node_api(body: NodeProtocolCreateSchema, db: PgSqlDep,
     return {'success': True, 'node_protocol_id': np_id, 'message': msg}
 
 
+
+@router.post('/server/nodes/protocols/register')
+async def register_vnode(body: VNodeRegisterSchema, db: PgSqlDep, request: Request):
+    success, vnode = await db.nodes_protocols.reserve_place(
+        proto_id=body.proto_id,
+        vnode_id=body.vnode_id,
+        title=body.title,
+        metrics_port=body.metrics_port,
+        proto_port=body.proto_port,
+        config_path=body.config_path,
+        constant_node_data_obj=body.constant_node_data_obj,
+        sub_node_address=body.sub_node_address,
+        metrics_command=body.metrics_command,
+        reload_core_command=body.reload_core_command,
+    )
+    if not success:
+        log_event(f'Не удалось поставить на регистрацию виртуальную ноду. Физическая нода или протокол не существуют | node_id: \033[33m{body.node_id}\033[0m; proto_id: \033[34m{body.proto_id}\033[0m; title: \033[31m{body.title}\033[0m', request=request, level='WARNING')
+        raise HTTPException(status_code=404, detail={'success': False, 'message': 'Такие node_id или proto_id не найдены!'})
+
+    log_event(f'Забронировали место новой виртуальной ноде | node_id: \033[33m{body.node_id}\033[0m; node_proto_id: {vnode['id']}\033[34m; title: \033[36m{body.title}\033[0m', request=request)
+    return {'success': True, 'message': 'Виртуальная нода поставлена на регистрацию', 'node_proto_id': vnode['id'], 'title': vnode['title']}
+
+@router.post('/server/nodes/protocols/confirm')
+async def register_vnode(body: VNodeRegisterResultSchema, db: PgSqlDep, request: Request):
+    vnode = await db.nodes_protocols.confirm_place(
+        node_proto_id=body.node_proto_id,
+        title=body.title,
+        constant_node_data_obj=body.constant_node_data_obj,
+        status=body.status,
+        reload_core_command=body.reload_core_command,
+        metrics_command=body.metrics_command,
+        config_path=body.config_path,
+    )
+    if not vnode:
+        log_event(f'Не удалось подтвердить регистрацию ноды. Виртуальной ноды не существует! | node_proto_id: \033[33m{body.node_proto_id}\033[0m', request=request, level='WARNING')
+        raise HTTPException(status_code=404, detail={'success': False, 'message': 'Такие node_id или proto_id не найдены!'})
+
+    log_event(f'Виртуальная нода подтверждена | node_proto_id: \033[33m{body.node_proto_id}\033[0m', request=request)
+    return {'success': True, 'message': 'Виртуальная нода поставлена на регистрацию'}
+
+
 @router.get('/protocols/info/{np_id}', summary="Получить все протоколы на ноде")
 async def get_node_protocols_api(np_id: int, q_params: Annotated[GetNodeProtoSchema, Query()], request: Request, db: PgSqlDep, _: JWTCookieDep):
     protocols = await db.nodes_protocols.get_node_protocols(np_id, q_params.limit, q_params.offset)
@@ -32,7 +74,7 @@ async def get_node_protocols_api(np_id: int, q_params: Annotated[GetNodeProtoSch
     return {'protocols': protocols}
 
 
-@router.get('/protocols/{np_id}', summary="Получить виртуальную ноду")
+@router.get('/private/nodes/protocols/{np_id}', summary="Получить виртуальную ноду")
 async def get_node_protocol_api(np_id: int, request: Request, db: PgSqlDep, _: JWTCookieDep):
     node_protocol = await db.nodes_protocols.get_node_protocol(np_id)
     if not node_protocol:
@@ -43,7 +85,7 @@ async def get_node_protocol_api(np_id: int, request: Request, db: PgSqlDep, _: J
     return {'node_protocol': node_protocol}
 
 
-@router.put('/protocols/{np_id}', summary="Обновить виртуальную ноду")
+@router.put('/private/nodes/protocols/{np_id}', summary="Обновить виртуальную ноду")
 async def update_node_protocol_api(np_id: int, body: UpdateNodeProtoSchema, db: PgSqlDep, request: Request, _: JWTCookieDep):
     """
     Позволяет изменять все свойства виртуальной ноды (инстанса протокола на сервере)
@@ -85,7 +127,7 @@ async def update_node_protocol_api(np_id: int, body: UpdateNodeProtoSchema, db: 
     return {'success': True, 'message': message}
 
 
-@router.delete('/protocols/{np_id}', summary="Удалить протокол с ноды")
+@router.delete('/private/nodes/protocols/{np_id}', summary="Удалить протокол с ноды")
 async def delete_node_protocol_api(np_id: int, db: PgSqlDep, request: Request, _: JWTCookieDep):
     await db.nodes_protocols.delete_node_protocol(np_id)
     log_event(f"Удалён протокол с ноды | np_id: \033[31m{np_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m", request=request, level='WARNING')
