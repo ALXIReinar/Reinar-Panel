@@ -1,4 +1,4 @@
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager  # noqa: I001
 
 import uvicorn
 from aiohttp import ClientSession, ClientTimeout
@@ -25,10 +25,8 @@ async def lifespan(web_app):
 
     "Соедиение с Redis"
     web_app.state.redis = Redis(**redis_settings)
-    
     "ARQ пул для фоновых задач"
     web_app.state.arq_pool = await create_arq_pool(get_arq_redis_settings(), **get_arq_worker_settings())
-    
     try:
         yield
     finally:
@@ -37,12 +35,13 @@ async def lifespan(web_app):
         await web_app.state.redis.aclose()
         await web_app.state.arq_pool.close()
 
+
 app = FastAPI(
     # docs_url='/api/docs',
     # openapi_url='/api/openapi.json',
     lifespan=lifespan,
     response_model=env.post_processing_responses,
-    response_model_exclude_unset=env.post_processing_responses
+    response_model_exclude_unset=env.post_processing_responses,
 )
 
 app.include_router(main_router)
@@ -54,7 +53,7 @@ app.add_middleware(
     allow_origins=[f"http://127.0.0.1:{env.uvicorn_port}", f"http://localhost:{env.uvicorn_port}", env.domain],
     allow_credentials=True,
     allow_methods=['*'],
-    allow_headers=['*']
+    allow_headers=['*'],
 )
 app.add_middleware(AuthUXASGIMiddleware)
 app.add_middleware(ASGILoggingMiddleware)
@@ -63,7 +62,7 @@ if __name__ == '__main__':
     # uvicorn.run('web.main:app', host="0.0.0.0", port=env.uvicorn_port, log_config=None, workers=env.uvicorn_workers)
     uvicorn.run(
         'web.main:app',
-        host="127.0.0.1",           # Так как используется "network_mode: host", 0.0.0.0 будет принимать любые соединения
+        host="127.0.0.1",  # Так как используется "network_mode: host", 0.0.0.0 будет принимать любые соединения
         port=env.uvicorn_port,
-        workers=env.uvicorn_workers
+        workers=env.uvicorn_workers,
     )

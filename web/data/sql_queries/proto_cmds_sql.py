@@ -1,6 +1,6 @@
-from asyncpg import ForeignKeyViolationError, Connection
+from asyncpg import ForeignKeyViolationError, Connection  # noqa: I001
 
-from web.utils.logger_config import log_event
+from web.utils.logger_config import log_event  # noqa: F401
 
 
 class ProtocolCommandsQueries:
@@ -9,14 +9,12 @@ class ProtocolCommandsQueries:
     def __init__(self, conn: Connection):
         self.conn = conn
 
-
     async def get_protocol_commands(self, proto_id: int):
         """Получить все команды протокола"""
         query_proto_cmds = '''
         SELECT id AS cmd_id, cmd_title AS title, command, created_at, admin_id FROM protocols_commands WHERE proto_id = $1
         '''
         return await self.conn.fetch(query_proto_cmds, proto_id)
-
 
     async def insert_commands_bulk(self, proto_id: int, commands: list[dict]) -> tuple[int, list]:
         """Массовая вставка команд для протокола
@@ -41,12 +39,11 @@ class ProtocolCommandsQueries:
             """
             cmd_titles, cmds = zip(*(cmd.values() for cmd in commands))
             res = await self.conn.fetch(query, proto_id, cmd_titles, cmds)
-            return 200, [record['id'] for record in res] # изначально [{"id": 1}, {"id": 2}, {"id": 3}]
+            return 200, [record['id'] for record in res]  # изначально [{"id": 1}, {"id": 2}, {"id": 3}]
 
         except ForeignKeyViolationError:
             "Протокола не существует"
             return 404, []
-
 
     async def update_commands_bulk(self, proto_id: int, commands: list[dict]) -> list[dict]:
         """Массовое обновление команд"""
@@ -63,8 +60,7 @@ class ProtocolCommandsQueries:
         """
         ids, cmd_titles, cmds = zip(*(cmd.values() for cmd in commands))
         res = await self.conn.fetch(query, proto_id, ids, cmd_titles, cmds)
-        return [record['id'] for record in res] # изначально [{"id": 1}, {"id": 2}, {"id": 3}]
-
+        return [record['id'] for record in res]  # изначально [{"id": 1}, {"id": 2}, {"id": 3}]
 
     async def delete_commands_bulk(self, proto_id: int, cmd_ids: list[int]) -> int:
         """Массовое удаление команд"""

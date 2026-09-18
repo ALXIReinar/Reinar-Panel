@@ -1,4 +1,4 @@
-import asyncio
+import asyncio  # noqa: I001
 
 from aiogram import Dispatcher, F
 from aiogram.filters import Command
@@ -24,7 +24,7 @@ async def main():
     aio_http_session = ClientSession(
         base_url=env.sub_service_url,
     )
-    
+# noqa: W293
     "Redis"
     redis_conn = Redis(**redis_settings, decode_responses=True)
 
@@ -60,4 +60,4 @@ async def main():
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    asyncio.run(main())  # noqa: W292

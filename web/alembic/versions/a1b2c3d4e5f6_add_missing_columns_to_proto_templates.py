@@ -11,7 +11,8 @@ Create Date: 2026-08-17 13:00:00.000000
 - proto_templates.process_user_item_script
 - proto_templates.process_user_libs
 """
-from typing import Sequence, Union
+
+from typing import Sequence, Union  # noqa: I001
 
 from alembic import op
 import sqlalchemy as sa
@@ -29,17 +30,18 @@ def upgrade() -> None:
     Добавляет недостающие колонки в proto_templates.
     """
     # 1. Изменяем длину title с 32 на 64
-    op.alter_column('proto_templates', 'title',
-                    existing_type=sa.String(length=32),
-                    type_=sa.String(length=64),
-                    existing_nullable=False)
-    
+    op.alter_column(
+        'proto_templates',
+        'title',
+        existing_type=sa.String(length=32),
+        type_=sa.String(length=64),
+        existing_nullable=False,
+    )
     # 2. Добавляем новые колонки
     op.add_column('proto_templates', sa.Column('description', sa.Text(), nullable=True))
     op.add_column('proto_templates', sa.Column('metrics_parser_libs', sa.String(length=512), nullable=True))
     op.add_column('proto_templates', sa.Column('process_user_item_script', sa.Text(), nullable=True))
     op.add_column('proto_templates', sa.Column('process_user_libs', sa.String(length=512), nullable=True))
-    
     print("✓ Добавлены недостающие колонки в proto_templates")
 
 
@@ -52,11 +54,12 @@ def downgrade() -> None:
     op.drop_column('proto_templates', 'process_user_item_script')
     op.drop_column('proto_templates', 'metrics_parser_libs')
     op.drop_column('proto_templates', 'description')
-    
     # Возвращаем старую длину title
-    op.alter_column('proto_templates', 'title',
-                    existing_type=sa.String(length=64),
-                    type_=sa.String(length=32),
-                    existing_nullable=False)
-    
+    op.alter_column(
+        'proto_templates',
+        'title',
+        existing_type=sa.String(length=64),
+        type_=sa.String(length=32),
+        existing_nullable=False,
+    )
     print("✓ Удалены добавленные колонки из proto_templates")

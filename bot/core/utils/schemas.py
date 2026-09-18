@@ -1,4 +1,4 @@
-import os
+import os  # noqa: I001
 from datetime import datetime, UTC
 from typing import Optional
 
@@ -204,4 +204,4 @@ class UserSchema(BaseModel):
             "sub_count": u.get("sub_count", 0),
             "registered_date": u.get("registered_at", datetime.now(UTC)),
         }
-        return cls.model_validate(mapped_data)
+        return cls.model_validate(mapped_data)  # noqa: W292

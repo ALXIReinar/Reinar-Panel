@@ -3,6 +3,7 @@ Unit тесты для проверки постановки bulk задач в 
 
 Проверяем что задачи действительно попадают в Redis через реальный ARQ pool.
 """
+
 import pytest
 from arq.jobs import Job
 
@@ -11,21 +12,16 @@ pytestmark = pytest.mark.asyncio
 
 class TestBulkOperationsArqEnqueue:
     """Тесты постановки bulk задач в ARQ очередь"""
-    
+
     async def test_bulk_add_enqueued_to_real_arq(self, arq_pool, arq_test_seed):
         """
         Проверяем что bulk_action_users_by_node (operation=ADD) действительно попадает в Redis.
-        
+
         Используем реальный arq_pool для проверки.
         """
         # Arrange
         user3 = arq_test_seed['user3_active_for_add']
-        users = [{
-            'uuid': user3['uuid'],
-            'user_sub_id': user3['order_active'],
-            'event_id': 1
-        }]
-        
+        users = [{'uuid': user3['uuid'], 'user_sub_id': user3['order_active'], 'event_id': 1}]
         # Act
         job = await arq_pool.enqueue_job(
             'bulk_action_users_by_node',
@@ -45,33 +41,25 @@ class TestBulkOperationsArqEnqueue:
             {"level": 0},  # constant_user_data_obj
             1,  # current_attempt
         )
-        
         # Assert
         assert job is not None
         assert isinstance(job, Job)
         assert job.job_id is not None
-        
         # Проверяем что задача действительно в Redis (через Job.info())
         job_info = await job.info()
         assert job_info is not None
         assert job_info.function == 'bulk_action_users_by_node'
         assert job_info.enqueue_time is not None
-    
-    
+
     async def test_bulk_delete_enqueued_to_real_arq(self, arq_pool, arq_test_seed):
         """
         Проверяем что bulk_action_users_by_node (operation=DELETE) действительно попадает в Redis.
-        
+
         Используем реальный arq_pool для проверки.
         """
         # Arrange
         user4 = arq_test_seed['user4_active_for_delete']
-        users = [{
-            'uuid': user4['uuid'],
-            'user_sub_id': user4['order_active'],
-            'event_id': 2
-        }]
-        
+        users = [{'uuid': user4['uuid'], 'user_sub_id': user4['order_active'], 'event_id': 2}]
         # Act
         job = await arq_pool.enqueue_job(
             'bulk_action_users_by_node',
@@ -91,33 +79,25 @@ class TestBulkOperationsArqEnqueue:
             {"level": 0},  # constant_user_data_obj
             1,  # current_attempt
         )
-        
         # Assert
         assert job is not None
         assert isinstance(job, Job)
         assert job.job_id is not None
-        
         # Проверяем что задача действительно в Redis (через Job.info())
         job_info = await job.info()
         assert job_info is not None
         assert job_info.function == 'bulk_action_users_by_node'
         assert job_info.enqueue_time is not None
-    
-    
+
     async def test_bulk_add_defer_by_parameter(self, arq_pool, arq_test_seed):
         """
         Проверяем что параметр _defer_by работает (отложенное выполнение).
-        
+
         Задача должна быть в очереди, но не выполняться сразу.
         """
         # Arrange
         user3 = arq_test_seed['user3_active_for_add']
-        users = [{
-            'uuid': user3['uuid'],
-            'user_sub_id': user3['order_active'],
-            'event_id': 3
-        }]
-        
+        users = [{'uuid': user3['uuid'], 'user_sub_id': user3['order_active'], 'event_id': 3}]
         # Act - откладываем на 120 секунд
         job = await arq_pool.enqueue_job(
             'bulk_action_users_by_node',
@@ -136,17 +116,14 @@ class TestBulkOperationsArqEnqueue:
             {"id": "{USER_UUID}"},
             {"level": 0},
             2,  # current_attempt = 2 (второй retry)
-            _defer_by=120  # Отложить на 120 секунд
+            _defer_by=120,  # Отложить на 120 секунд
         )
-        
         # Assert
         assert job is not None
-        
         # Проверяем что задача в очереди (через Job.info())
         job_info = await job.info()
         assert job_info is not None
         assert job_info.function == 'bulk_action_users_by_node'
-        
         # Проверяем что задача успешно поставлена в очередь с _defer_by
         # (детальная проверка defer_until требует доступа к Redis напрямую)
         assert job_info.enqueue_time is not None

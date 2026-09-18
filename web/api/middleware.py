@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import datetime, UTC  # noqa: I001
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -22,7 +22,6 @@ class ASGILoggingMiddleware:
         if scope['type'] not in {'http', 'websocket'}:
             await self.app(scope, receive, send)
             return
-
 
         scope.setdefault('state', {})
 
@@ -97,10 +96,12 @@ class AuthUXASGIMiddleware:
         encoded_access_token = request.cookies.get('access_token')
 
         "Проверка Access Token"
-        if (access_token:= get_jwt_decode_payload(encoded_access_token)) == 401:
+        if (access_token := get_jwt_decode_payload(encoded_access_token)) == 401:
             # невалидный аксес_токен
             log_event("Попытка подмены access_token", request=request, level='CRITICAL')
-            response =  JSONResponse(status_code=401, content={'success': False, 'message': 'Нужна повторная аутентификация'})
+            response = JSONResponse(
+                status_code=401, content={'success': False, 'message': 'Нужна повторная аутентификация'}
+            )
             await response(scope, receive, send)
             return
 
@@ -117,9 +118,14 @@ class AuthUXASGIMiddleware:
 
             if new_token == 401:
                 # рефреш_токен НЕ ВАЛИДЕН
-                log_event(f"Попытка подмены refresh_token | s_id: {access_token.get('s_id', '')}; admin_id: {access_token.get('sub', '')}",
-                          request=request, level='CRITICAL')
-                response = JSONResponse(status_code=401, content={'success': False, 'message': 'Нужна повторная аутентификация'})
+                log_event(
+                    f"Попытка подмены refresh_token | s_id: {access_token.get('s_id', '')}; admin_id: {access_token.get('sub', '')}",
+                    request=request,
+                    level='CRITICAL',
+                )
+                response = JSONResponse(
+                    status_code=401, content={'success': False, 'message': 'Нужна повторная аутентификация'}
+                )
                 await response(scope, receive, send)
                 return
 

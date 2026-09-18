@@ -5,25 +5,26 @@ from starlette.requests import Request
 "ВАЖНО: Устанавливаем переменную окружения ДО любых импортов из web/"
 os.environ['ENV_FILE'] = os.getenv('ENV_FILE') or 'web/.env.api.test'
 
-import asyncpg
-import httpx
-import pytest
-from fastapi import FastAPI
-from web.config_dir.config import encryption
-from redis.asyncio import Redis
-from web.config_dir.config import redis_settings
-from web.config_dir import config as cfg
+import asyncpg  # noqa: E402
+import httpx  # noqa: E402
+import pytest  # noqa: E402
+from fastapi import FastAPI  # noqa: E402
+from redis.asyncio import Redis  # noqa: E402
+
+from web.config_dir import config as cfg  # noqa: E402
+from web.config_dir.config import encryption, redis_settings  # noqa: E402
 
 env = cfg.env
 pool_settings = cfg.pool_settings
 
-from web.api import main_router
-from web.schemas.cookie_settings_schema import JWTCookieDep
+from web.api import main_router  # noqa: E402
+from web.schemas.cookie_settings_schema import JWTCookieDep  # noqa: E402
 
 
 @pytest.fixture(scope="session", autouse=True)
 def ensure_test_database():
     """Проверяет что используется тестовая БД"""
+    # Тестовый комментарий для проверки линтера: настраиваем UTF-8 кодировку
     os.environ['PYTHONUTF8'] = '1'
     assert isinstance(env.pg_db, str), "env.pg_db is not set"
     assert env.pg_db.startswith("test_"), f"Refusing to run tests against non-test database: {env.pg_db}"
@@ -31,13 +32,18 @@ def ensure_test_database():
 
 # ========== Function Scope Fixtures ==========
 
+
 @pytest.fixture(scope="function")
 async def db_pool():
     """
     Пул соединений для каждого теста (function scope).
-    
+
     Function scope нужен для правильного event loop (asyncio_default_fixture_loop_scope = function).
     """
+    # Создаём пул соединений с настройками из конфига
+    # Пул автоматически управляет подключениями к базе данных
+    # Тестовый комментарий номер 6: проверяем запись отчёта в файл
+    #
     pool = await asyncpg.create_pool(**pool_settings)
     yield pool
     await pool.close()
@@ -47,22 +53,22 @@ async def db_pool():
 async def db_seed(db_pool):
     """
     Очищает БД и заполняет начальными данными перед КАЖДЫМ тестом.
-    
+
     autouse=True означает что выполняется автоматически для каждого теста.
-    
+
     Выполняет:
     1. TRUNCATE только пользовательских таблиц (НЕ ТРОГАЕМ шаблоны и справочники!)
     2. Удаляет тестовые шаблоны (title ILIKE '%test%')
     3. Справочники и шаблоны из seed_data должны быть заранее залиты через seed_data.py
     4. Создаёт тестового админа
     5. Создаёт софт-удалённых пользователей для проверки фильтрации
-    
+
     Возвращает:
         dict: {"admin_id", "admin_login", "admin_pass", "deleted_user_ids"}
     """
     test_admin_login = "test_admin"
     test_admin_pass = "TestPass123!"  # Соответствует валидации пароля
-    
+
     async with db_pool.acquire() as conn:
         # 1. Очищаем ТОЛЬКО пользовательские данные (НЕ ТРОГАЕМ СПРАВОЧНИКИ И ШАБЛОНЫ!)
         # Справочники и шаблоны управляются через seed_data.py
@@ -80,12 +86,12 @@ async def db_seed(db_pool):
                 vnodes_sub_plans,
                 sub_plans
             RESTART IDENTITY CASCADE
-        """)
-        
+        """)  # noqa: W291
+
         # 2. Очищаем whitelist_commands для тестов remote_execute
         # Whitelist будет пересоздан в тестах с нужными командами
         await conn.execute("TRUNCATE TABLE whitelist_commands RESTART IDENTITY")
-        
+
         # 3. Удаляем ТОЛЬКО тестовые protocols и шаблоны (созданные в тестах)
         # seed_data шаблоны начинаются с 'xray-' или 'singbox-'
         # Сначала удаляем тестовые protocols (привязанные к тестовым шаблонам)
@@ -96,50 +102,54 @@ async def db_seed(db_pool):
                 WHERE title NOT ILIKE 'xray-%' 
                 AND title NOT ILIKE 'singbox-%'
             )
-        """)
-        
+        """)  # noqa: W291
+
         # Затем удаляем сами тестовые шаблоны
         await conn.execute("""
             DELETE FROM proto_templates 
             WHERE title NOT ILIKE 'xray-%' 
             AND title NOT ILIKE 'singbox-%'
-        """)
-        
+        """)  # noqa: W291
+
         # 3. Справочники уже должны быть залиты через seed_data.py
         # Проверяем что они есть
         statuses_count = await conn.fetchval("SELECT COUNT(*) FROM templates_statuses")
         if statuses_count == 0:
-            raise RuntimeError(
-                "templates_statuses пуста! Запустите: python -m web.db.seed_data"
-            )
-        
+            raise RuntimeError("templates_statuses пуста! Запустите: python -m web.db.seed_data")
+
         templates_count = await conn.fetchval("SELECT COUNT(*) FROM proto_templates WHERE title NOT ILIKE '%test%'")
         if templates_count == 0:
-            raise RuntimeError(
-                "proto_templates пуста! Запустите: python -m web.db.seed_data"
-            )
+            raise RuntimeError("proto_templates пуста! Запустите: python -m web.db.seed_data")
 
         # 4. Создаём тестового админа
         admin_id = await conn.fetchval(
             "INSERT INTO admins (login, passw) VALUES ($1, $2) RETURNING id",
             test_admin_login,
-            encryption.hash(test_admin_pass)
+            encryption.hash(test_admin_pass),
         )
 
         # 5. Создаём софт-удалённых пользователей (константы для проверки фильтрации)
         # Гарантирует что все SQL запросы корректно игнорируют is_deleted = true
-        deleted_user_1_id = await conn.fetchval("""
+        deleted_user_1_id = await conn.fetchval(
+            """
             INSERT INTO users (tg_id, tg_username, is_deleted)
             VALUES ($1, $2, true)
             RETURNING id
-        """, 9999001, "deleted_user_1")
+        """,
+            9999001,
+            "deleted_user_1",
+        )
 
-        deleted_user_2_id = await conn.fetchval("""
+        deleted_user_2_id = await conn.fetchval(
+            """
             INSERT INTO users (tg_id, tg_username, is_deleted)
             VALUES ($1, $2, true)
             RETURNING id
-        """, 9999002, "deleted_user_2")
-    
+        """,
+            9999002,
+            "deleted_user_2",
+        )
+
     return {
         "admin_id": admin_id,
         "admin_login": test_admin_login,
@@ -150,11 +160,12 @@ async def db_seed(db_pool):
 
 # ========== FastAPI Client и App ==========
 
+
 @pytest.fixture(scope="session")
 def test_app():
     """
     FastAPI приложение (создаётся один раз на сессию).
-    
+
     Middleware добавляет test_admin_id и test_session_id в request.state.
     """
     app = FastAPI()
@@ -162,13 +173,14 @@ def test_app():
     @app.middleware("http")
     async def add_state(request: Request, call_next):
         request.state.client_ip = "127.0.0.1"
-        
+
         # Проверяем есть ли access_token в cookies
         # Если есть - извлекаем admin_id и session_id из него
         access_token_cookie = request.cookies.get('access_token')
         if access_token_cookie:
             try:
                 import jwt
+
                 decoded = jwt.decode(access_token_cookie, options={"verify_signature": False})
                 request.state.admin_id = int(decoded.get('sub', 0))
                 request.state.session_id = decoded.get('s_id', 'unknown')
@@ -179,12 +191,10 @@ def test_app():
         else:
             # Нет токена - используем fallback значения для простых тестов
             request.state.admin_id = getattr(
-                request.state, 'test_admin_id',
-                getattr(request.app.state, 'default_admin_id', None)
+                request.state, 'test_admin_id', getattr(request.app.state, 'default_admin_id', None)
             )
             request.state.session_id = getattr(
-                request.state, 'test_session_id',
-                getattr(request.app.state, 'default_session_id', None)
+                request.state, 'test_session_id', getattr(request.app.state, 'default_session_id', None)
             )
         return await call_next(request)
 
@@ -196,13 +206,13 @@ def test_app():
 async def client(test_app, db_pool, db_seed):
     """
     HTTP клиент для тестирования API (создаётся для каждого теста).
-    
+
     Setup:
     1. Устанавливает db_pool в app.state.pg_pool
     2. Создаёт Redis соединение
     3. Настраивает моки (aiohttp, JWT)
     4. Создаёт httpx.AsyncClient
-    
+
     Teardown:
     1. Закрывает AsyncClient (автоматически через context manager)
     2. Закрывает Redis
@@ -210,7 +220,7 @@ async def client(test_app, db_pool, db_seed):
     """
     # Setup: создаём Redis
     redis = Redis(**redis_settings)
-    
+
     try:
         # Настраиваем app.state
         test_app.state.pg_pool = db_pool
@@ -219,28 +229,30 @@ async def client(test_app, db_pool, db_seed):
         test_app.state.default_session_id = 'test-session'
         test_app.state.seed_info = db_seed
         test_app.state.cmd_center_aiohttp = FakeAiohttpSession()
-        
+
         # Настраиваем dependency overrides
         test_app.dependency_overrides.clear()
         test_app.dependency_overrides[JWTCookieDep] = lambda: None
-        
+
         # Создаём HTTP клиент
         transport = httpx.ASGITransport(app=test_app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
             ac.app = test_app
             yield ac
-            
+
     finally:
         # Teardown: очищаем ресурсы
         await redis.aclose()
         test_app.dependency_overrides.clear()
-        
+
         # Очищаем state (чтобы избежать утечек между тестами)
         for attr in ['pg_pool', 'redis', 'seed_info', 'cmd_center_aiohttp']:
             if hasattr(test_app.state, attr):
                 delattr(test_app.state, attr)
 
+
 # ========== Utility Fixtures ==========
+
 
 @pytest.fixture(autouse=True)
 async def flush_redis():
@@ -264,17 +276,17 @@ def mock_arq(client):
     Мокируем ARQ очередь для тестирования фоновых задач.
     Используется в тестах, где нужно проверить что задача отправлена в ARQ,
     но не нужно реально её выполнять.
-    
+
     Returns:
         AsyncMock с методом enqueue_job, который возвращает job с id "test-job-12345"
     """
     from unittest.mock import AsyncMock, MagicMock
-    
+
     mock_arq_pool = AsyncMock()
     mock_job = MagicMock()
     mock_job.job_id = "test-job-12345"
     mock_arq_pool.enqueue_job = AsyncMock(return_value=mock_job)
-    
+
     # Заменяем ARQ в app state (используется arq_pool, а не arq)
     client.app.state.arq_pool = mock_arq_pool
     return mock_arq_pool
@@ -282,11 +294,12 @@ def mock_arq(client):
 
 # ========== Seed Fixtures (создают уникальные данные для каждого теста) ==========
 
+
 @pytest.fixture
 async def physical_node_seed(db_pool, db_seed):
     """
     Создаёт тестовые физические ноды для теста.
-    
+
     Возвращает:
         dict: {"node_id_1": int, "node_id_2": int, "node_id_3": int}
     """
@@ -303,9 +316,9 @@ async def physical_node_seed(db_pool, db_seed):
             8100,
             "test-node-1",
             "Test Physical Node 1",
-            True
+            True,
         )
-        
+
         # Создаём вторую ноду (неактивная)
         node_id_2 = await conn.fetchval(
             """
@@ -318,9 +331,9 @@ async def physical_node_seed(db_pool, db_seed):
             8101,
             "test-node-2",
             "Test Physical Node 2",
-            False
+            False,
         )
-        
+
         # Создаём третью ноду (активная) - для усиления тестов фильтрации
         node_id_3 = await conn.fetchval(
             """
@@ -333,14 +346,10 @@ async def physical_node_seed(db_pool, db_seed):
             8102,
             "test-node-3",
             "Test Physical Node 3",
-            True
+            True,
         )
-        
-        return {
-            "node_id_1": node_id_1,
-            "node_id_2": node_id_2,
-            "node_id_3": node_id_3
-        }
+
+        return {"node_id_1": node_id_1, "node_id_2": node_id_2, "node_id_3": node_id_3}
 
 
 @pytest.fixture
@@ -348,7 +357,7 @@ async def proto_template_seed(db_pool, db_seed):
     """
     Создаёт тестовые шаблоны протоколов для теста.
     Использует префикс 'test-' в title для идентификации.
-    
+
     Возвращает:
         dict: {"tmp_id": int, "tmp_id_2": int}
     """
@@ -364,7 +373,7 @@ async def proto_template_seed(db_pool, db_seed):
                 required_user_data_obj, constant_user_data_obj
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             RETURNING id
-            """,
+            """,  # noqa: W291
             "test-TestProtocol-1",  # Префикс test- для идентификации тестовых шаблонов
             "https://example.com/proto_template",
             1,
@@ -377,9 +386,9 @@ async def proto_template_seed(db_pool, db_seed):
             '{}',  # bulk_add_script_custom_params
             '{}',  # bulk_delete_script_custom_params
             '{}',  # required_user_data_obj
-            '{}'   # constant_user_data_obj
+            '{}',  # constant_user_data_obj
         )
-        
+
         # Создаём второй шаблон для разнообразия (минимальный набор полей)
         tmp_id_2 = await conn.fetchval(
             """
@@ -394,9 +403,9 @@ async def proto_template_seed(db_pool, db_seed):
             1,
             True,
             "systemctl reload another",
-            "#!/bin/bash\necho 'another'"
+            "#!/bin/bash\necho 'another'",
         )
-        
+
         return {"tmp_id": tmp_id, "tmp_id_2": tmp_id_2}
 
 
@@ -404,13 +413,13 @@ async def proto_template_seed(db_pool, db_seed):
 async def sub_plan_seed(db_pool, db_seed):
     """
     Создаёт тестовые планы подписок для теста.
-    
-    Архитектура: sub_plans хранит метаданные (title, position), 
+
+    Архитектура: sub_plans хранит метаданные (title, position),
                  sub_plan_offers хранит настройки (cost, ttl_days, лимиты)
-    
+
     Возвращает:
         dict: {
-            "plan_id_1": int, 
+            "plan_id_1": int,
             "plan_id_2": int,
             "offer_id_1": int,  # offer для plan_id_1
             "offer_id_2": int   # offer для plan_id_2
@@ -426,10 +435,10 @@ async def sub_plan_seed(db_pool, db_seed):
             """,
             "Basic Plan",
             "Basic subscription plan for testing",
-            1,    # position
-            True  # is_active
+            1,  # position
+            True,  # is_active
         )
-        
+
         # Создаём offer для первого плана
         offer_id_1 = await conn.fetchval(
             """
@@ -439,17 +448,17 @@ async def sub_plan_seed(db_pool, db_seed):
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
-            """,
+            """,  # noqa: W291
             plan_id_1,
-            30,     # ttl_days - 30 дней
-            500,    # cost - 5.00 руб (в копейках)
+            30,  # ttl_days - 30 дней
+            500,  # cost - 5.00 руб (в копейках)
             10240,  # traffic_limit_day_mb - 10 GB в МБ
-            None,   # traffic_limit_mb - не используется
+            None,  # traffic_limit_mb - не используется
             False,  # infinite_traffic
             False,  # infinite_expire
-            True    # is_active
+            True,  # is_active
         )
-        
+
         # Создаём второй план (неактивный, безлимитный трафик)
         plan_id_2 = await conn.fetchval(
             """
@@ -459,10 +468,10 @@ async def sub_plan_seed(db_pool, db_seed):
             """,
             "Premium Plan",
             "Premium unlimited plan",
-            2,     # position
-            False  # is_active
+            2,  # position
+            False,  # is_active
         )
-        
+
         # Создаём offer для второго плана (безлимитный)
         offer_id_2 = await conn.fetchval(
             """
@@ -472,23 +481,18 @@ async def sub_plan_seed(db_pool, db_seed):
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
-            """,
+            """,  # noqa: W291
             plan_id_2,
-            90,    # ttl_days - 90 дней
+            90,  # ttl_days - 90 дней
             2000,  # cost - 20.00 руб
             None,  # traffic_limit_day_mb - безлимит
             None,  # traffic_limit_mb - безлимит
             True,  # infinite_traffic - безлимит трафика
-            False, # infinite_expire
-            False  # is_active
+            False,  # infinite_expire
+            False,  # is_active
         )
-        
-        return {
-            "plan_id_1": plan_id_1,
-            "plan_id_2": plan_id_2,
-            "offer_id_1": offer_id_1,
-            "offer_id_2": offer_id_2
-        }
+
+        return {"plan_id_1": plan_id_1, "plan_id_2": plan_id_2, "offer_id_1": offer_id_1, "offer_id_2": offer_id_2}
 
 
 @pytest.fixture
@@ -507,16 +511,19 @@ async def virtual_node_seed(db_pool, physical_node_seed, proto_template_seed):
             RETURNING id
             """,
             proto_template_seed["tmp_id"],
-            "Test Protocol for VNodes"
+            "Test Protocol for VNodes",
         )
-        
-        # Создаём виртуальную ноду 1: с портами (для тестов конфликтов)
+
+        # Создаём виртуальную ноду 1: с портами (для тестов конфликтов), SUCCESS статус
         vnode_id_1 = await conn.fetchval(
             """
-            INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, proto_port, config_path, user_visible)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO nodes_protocols (
+                node_id, proto_id, title, sub_node_address, metrics_port, 
+                proto_port, config_path, user_visible, reg_status
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id
-            """,
+            """,  # noqa: W291
             physical_node_seed["node_id_1"],
             proto_id,
             "VNode1 With Ports",  # Укорочено до 30 символов
@@ -524,37 +531,43 @@ async def virtual_node_seed(db_pool, physical_node_seed, proto_template_seed):
             9090,  # metrics_port
             8443,  # proto_port
             "/etc/test-proto/config1.json",
-            True  # user_visible = True (ВАЖНО для тестов)
+            True,  # user_visible = True (ВАЖНО для тестов)
+            2,  # reg_status = 2 (success) - рабочая нода
         )
-        
-        # Создаём виртуальную ноду 2: без портов (для тестов установки портов)
+
+        # Создаём виртуальную ноду 2: без портов (для тестов установки портов), PENDING статус
         vnode_id_2 = await conn.fetchval(
             """
-            INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, reg_status)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING id
             """,
             physical_node_seed["node_id_1"],
             proto_id,
             "VNode2 No Ports",  # Укорочено
-            "vnode2.example.com"
+            "vnode2.example.com",
+            1,  # reg_status = 1 (pending) - нода в процессе регистрации
         )
-        
-        # Создаём виртуальную ноду 3: на другой физической ноде (для проверки изоляции портов)
+
+        # Создаём виртуальную ноду 3: на другой физической ноде (для проверки изоляции портов), FAILED статус
         vnode_id_3 = await conn.fetchval(
             """
-            INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, proto_port)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO nodes_protocols (
+                node_id, proto_id, title, sub_node_address, 
+                metrics_port, proto_port, reg_status
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
-            """,
+            """,  # noqa: W291
             physical_node_seed["node_id_2"],
             proto_id,
             "VNode3 Other Node",  # Укорочено
             "vnode3.example.com",
             9090,  # Тот же порт что и vnode1, но на другой физ. ноде - это ОК
-            8443   # Тот же порт что и vnode1, но на другой физ. ноде - это ОК
+            8443,  # Тот же порт что и vnode1, но на другой физ. ноде - это ОК
+            3,  # reg_status = 3 (failed) - нода с ошибкой регистрации
         )
-        
+
         return {
             "proto_id": proto_id,
             "vnode_id_1": vnode_id_1,
@@ -563,6 +576,8 @@ async def virtual_node_seed(db_pool, physical_node_seed, proto_template_seed):
             "node_id_1": physical_node_seed["node_id_1"],
             "node_id_2": physical_node_seed["node_id_2"],
         }
+
+
 class FakeAiohttpResponse:
     def __init__(self, json_data: dict, status: int = 200):
         self._json_data = json_data
@@ -570,18 +585,17 @@ class FakeAiohttpResponse:
 
     async def json(self):
         return self._json_data
-    
+
     def raise_for_status(self):
         """Имитация raise_for_status из aiohttp"""
         if self.status >= 400:
             from aiohttp import ClientResponseError
+
             raise ClientResponseError(
-                request_info=None,
-                history=None,
-                status=self.status,
-                message=f"HTTP {self.status}"
+                request_info=None, history=None, status=self.status, message=f"HTTP {self.status}"
             )
         return self._json_data
+
 
 class FakeAiohttpGetContext:
     def __init__(self, json_data: dict, status: int = 200):
@@ -594,6 +608,7 @@ class FakeAiohttpGetContext:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         pass
 
+
 class FakeAiohttpSession:
     def __init__(self, json_data: dict | None = None, status: int = 200, raise_error: bool = False):
         self.json_data = {} if json_data is None else json_data
@@ -603,6 +618,7 @@ class FakeAiohttpSession:
     def get(self, url: str, *args, **kwargs):
         if self.raise_error:
             from aiohttp import ClientError
+
             raise ClientError("Simulated connection error")
         return FakeAiohttpGetContext(self.json_data, self.status)
 
@@ -610,7 +626,6 @@ class FakeAiohttpSession:
     def post(self, url: str, *args, **kwargs):
         if self.raise_error:
             from aiohttp import ClientError
+
             raise ClientError("Simulated connection error")
         return FakeAiohttpGetContext(self.json_data, self.status)
-
-

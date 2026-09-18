@@ -13,4 +13,3 @@ async def run_rT_cleaner(ctx: dict, db: PgSql = None):
     await db.slam_refresh_tokens()
     log_event('\033[36m[ARQ]\033[0m Истёкшие сессии удалены', level='WARNING')
     return {'success': True, 'message': 'Refresh tokens cleaned'}
-

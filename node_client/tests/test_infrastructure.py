@@ -3,7 +3,8 @@
 
 Этот файл можно удалить после успешной настройки всех реальных тестов
 """
-import pytest
+
+import pytest  # noqa: I001
 from pathlib import Path
 
 
@@ -18,20 +19,17 @@ async def test_protocol_template_loading(protocol_templates, protocol_name):
     """Проверяем что шаблоны загружаются из БД"""
     assert protocol_templates is not None
     assert len(protocol_templates) > 0, "Должен быть найден хотя бы один шаблон"
-    
     # Проверяем первый шаблон
     first_template = protocol_templates[0]
     assert 'id' in first_template
     assert 'title' in first_template
-    
     print(f"\n✅ Загружено шаблонов: {len(protocol_templates)}")
     print(f"   Фильтр: {protocol_name}")
     print(f"   Первый шаблон: {first_template['title']} (ID: {first_template['id']})")
     print(f"   Библиотека: {first_template.get('proto_python_lib', 'Не указана')}")
-    
     # Показываем все найденные шаблоны
     if len(protocol_templates) > 1:
-        print(f"\n   Все найденные шаблоны:")
+        print(f"\n   Все найденные шаблоны:")  # noqa: F541
         for idx, template in enumerate(protocol_templates, 1):
             print(f"   {idx}. {template['title']}")
 
@@ -41,7 +39,6 @@ def test_working_config_exists(working_config_path):
     assert working_config_path.exists()
     assert working_config_path.is_file()
     assert working_config_path.suffix == '.json'
-    
     print(f"\n✅ Рабочий конфиг создан: {working_config_path}")
 
 
@@ -54,7 +51,6 @@ def test_temp_config_path_unique(temp_config_path):
 def test_mock_subprocess_works(mock_subprocess):
     """Проверяем что мок subprocess работает"""
     result = mock_subprocess("echo test", shell=True)
-    
     assert result.returncode == 0
     assert result.stdout == "Success"
 
@@ -62,7 +58,7 @@ def test_mock_subprocess_works(mock_subprocess):
 def test_mock_subprocess_timeout_works(mock_subprocess_timeout):
     """Проверяем что мок timeout работает"""
     import subprocess
-    
+
     with pytest.raises(subprocess.TimeoutExpired):
         mock_subprocess_timeout("long command", timeout=1)
 
@@ -70,13 +66,8 @@ def test_mock_subprocess_timeout_works(mock_subprocess_timeout):
 async def test_mock_hot_reload_success(mock_hot_reload_success):
     """Проверяем что мок hot reload работает"""
     result = await mock_hot_reload_success(
-        script="test",
-        lib_names=["test"],
-        node_ip="127.0.0.1",
-        core_api_port=8080,
-        action="user_core_operation"
+        script="test", lib_names=["test"], node_ip="127.0.0.1", core_api_port=8080, action="user_core_operation"
     )
-    
     success, message = result
     assert success is True
     assert "успешно" in message.lower()
@@ -85,13 +76,8 @@ async def test_mock_hot_reload_success(mock_hot_reload_success):
 async def test_mock_hot_reload_failure(mock_hot_reload_failure):
     """Проверяем что мок hot reload failure работает"""
     result = await mock_hot_reload_failure(
-        script="test",
-        lib_names=["test"],
-        node_ip="127.0.0.1",
-        core_api_port=8080,
-        action="user_core_operation"
+        script="test", lib_names=["test"], node_ip="127.0.0.1", core_api_port=8080, action="user_core_operation"
     )
-    
     success, message = result
     assert success is False
     assert "провалился" in message.lower()
@@ -107,10 +93,8 @@ async def test_client_fixture_works(client):
 async def test_ping_endpoint(client):
     """Проверяем что базовый эндпоинт /ping работает"""
     response = await client.get('/api/v1/server/node/ping')
-    
     assert response.status_code == 200
     data = response.json()
-    
     assert data['success'] is True
     assert data['message'] == 'pong'
     assert 'service' in data

@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated  # noqa: I001
 
 from asyncpg import Connection
 from fastapi.params import Depends
@@ -39,7 +39,9 @@ async def get_pg_pool(request: Request):
     async with request.app.state.pg_pool.acquire() as conn:
         yield conn
 
+
 def get_custom_pgsql(conn: Annotated[Connection, Depends(get_pg_pool)]):
     return PgSql(conn)
+
 
 PgSqlDep = Annotated[PgSql, Depends(get_custom_pgsql)]

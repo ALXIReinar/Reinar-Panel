@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated  # noqa: I001
 
 from aiohttp import ClientResponseError, ClientError
 from fastapi import APIRouter, HTTPException
@@ -9,7 +9,12 @@ from web.config_dir.config import NodeExecAiohttpDep, ArqDep
 from web.data.postgres import PgSqlDep
 from web.data.redis_storage import RedisDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
-from web.schemas.node_commander_schema import ExecCMDNodeSchema, ReadConfigSchema, WriteConfigSchema, UserCoreProtoActionSchema
+from web.schemas.node_commander_schema import (
+    ExecCMDNodeSchema,
+    ReadConfigSchema,
+    WriteConfigSchema,
+    UserCoreProtoActionSchema,
+)
 from web.utils.anything import NodeUris, ExecHistoryStatuses, CoreProtoActions
 from web.data.redis_storage import CommandWhitelistCache
 from web.utils.logger_config import log_event
@@ -17,21 +22,35 @@ from web.utils.logger_config import log_event
 router = APIRouter(prefix='/private/cmd_center', tags=['Command Center Admin2Node'])
 
 
-
 @router.post('/remote_execute')
 async def execute_cmd_on_node(
-    body: ExecCMDNodeSchema, request: Request, db: PgSqlDep, _: JWTCookieDep, aio_http: NodeExecAiohttpDep, redis: RedisDep
+    body: ExecCMDNodeSchema,
+    request: Request,
+    db: PgSqlDep,
+    _: JWTCookieDep,
+    aio_http: NodeExecAiohttpDep,
+    redis: RedisDep,
 ):
     """Выполнение команды на удалённой ноде с валидацией"""
-    log_event(f'Исполняем команду на ноде | node_proto_id: \033[32m{body.node_proto_id}\033[0m; private_ip: \033[33m{body.private_ip}\033[0m; api_port: \033[35m{body.api_port}\033[0m; cmd: \033[36m{body.cmd}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    log_event(
+        f'Исполняем команду на ноде | node_proto_id: \033[32m{body.node_proto_id}\033[0m; private_ip: \033[33m{body.private_ip}\033[0m; api_port: \033[35m{body.api_port}\033[0m; cmd: \033[36m{body.cmd}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
+        request=request,
+    )
 
     "Проверка по белому списку"
     if not await CommandWhitelistCache.is_whitelisted(body.cmd, redis, db):
-        log_event(f'Команда не прошла по Whitelist | node_proto_id: \033[32m{body.node_proto_id}\033[0m; cmd: \033[36m{body.cmd}\033[0m; base_cmd: \033[37m{body.cmd}\033[0m; private_ip: \033[33m{body.private_ip}\033[0m; api_port: \033[35m{body.api_port}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
-        raise HTTPException(status_code=400, detail={'success': False, 'message': f'Команда {body.cmd} вне белого списка'})
+        log_event(
+            f'Команда не прошла по Whitelist | node_proto_id: \033[32m{body.node_proto_id}\033[0m; cmd: \033[36m{body.cmd}\033[0m; base_cmd: \033[37m{body.cmd}\033[0m; private_ip: \033[33m{body.private_ip}\033[0m; api_port: \033[35m{body.api_port}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
+            request=request,
+        )
+        raise HTTPException(
+            status_code=400, detail={'success': False, 'message': f'Команда {body.cmd} вне белого списка'}
+        )
 
     "Фиксиурем запрос на удалённое исполнение команды"
-    action_id = await db.remote_command_history.save_action(body.node_proto_id, body.private_ip, body.api_port, body.cmd)
+    action_id = await db.remote_command_history.save_action(
+        body.node_proto_id, body.private_ip, body.api_port, body.cmd
+    )
 
     "Отправка команды на ноду"
     # url = f'http://localhost:18100{NodeUris.exec_cmd}' if env.app_mode == AppMode.LOCAL else f'http://{body.private_ip}:{body.api_port}{NodeUris.exec_cmd}'
@@ -43,49 +62,80 @@ async def execute_cmd_on_node(
             resp_data = await resp.json()
 
         await db.remote_command_history.update_action(
-            action_id=action_id, status=ExecHistoryStatuses.success, stdout=resp_data['stdout'], stderr=resp_data['stderr'],
-            exit_code=resp_data['exit_code'], status_code=200, node_success=resp_data['success']
+            action_id=action_id,
+            status=ExecHistoryStatuses.success,
+            stdout=resp_data['stdout'],
+            stderr=resp_data['stderr'],
+            exit_code=resp_data['exit_code'],
+            status_code=200,
+            node_success=resp_data['success'],
         )
-        log_event(f'Результат команды на ноде | node_proto_id: \033[32m{body.node_proto_id}\033[0m; cmd_success: \033[33m{resp_data["success"]}\033[0m; status_code: \033[37m{status_code}\033[0m; stdout: {resp_data["stdout"][:30]}; stderr: {resp_data["stderr"][:30]}', request=request)
+        log_event(
+            f'Результат команды на ноде | node_proto_id: \033[32m{body.node_proto_id}\033[0m; cmd_success: \033[33m{resp_data["success"]}\033[0m; status_code: \033[37m{status_code}\033[0m; stdout: {resp_data["stdout"][:30]}; stderr: {resp_data["stderr"][:30]}',
+            request=request,
+        )
         return {'success': True, 'stdout': resp_data['stdout'], 'stderr': resp_data['stderr']}
 
     except ClientResponseError as e:
         await db.remote_command_history.update_action(
             action_id=action_id, status=ExecHistoryStatuses.failed_on_node, status_code=e.status, exception_text=repr(e)
         )
-        log_event(f'Нода ответила, что-то пошло не так | status_code: \033[33m{e.status}\033[0m; response: \033[37m{repr(e)}\033[0m; node_id: \033[31m{body.node_proto_id}\033[0m', request=request, level='ERROR')
-        raise HTTPException(status_code=400, detail={'success': False, 'message':'Ошибка исполнения на ноде'})
+        log_event(
+            f'Нода ответила, что-то пошло не так | status_code: \033[33m{e.status}\033[0m; response: \033[37m{repr(e)}\033[0m; node_id: \033[31m{body.node_proto_id}\033[0m',
+            request=request,
+            level='ERROR',
+        )
+        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка исполнения на ноде'})
 
     except Exception as e:
         await db.remote_command_history.update_action(
             action_id=action_id, status=ExecHistoryStatuses.failed_on_admin, status_code=500, exception_text=str(e)
         )
-        log_event(f'Ошибка на админке | error: {str(e)}; node_proto_id: \033[32m{body.node_proto_id}\033[0m; private_ip: \033[31m{body.private_ip}\033[0m; api_port: \033[33m{body.api_port}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='ERROR')
-        raise HTTPException(status_code=500, detail=f"Ошибка исполнения на админке")
-
+        log_event(
+            f'Ошибка на админке | error: {str(e)}; node_proto_id: \033[32m{body.node_proto_id}\033[0m; private_ip: \033[31m{body.private_ip}\033[0m; api_port: \033[33m{body.api_port}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
+            request=request,
+            level='ERROR',
+        )
+        raise HTTPException(status_code=500, detail=f"Ошибка исполнения на админке")  # noqa: F541
 
 
 @router.get('/config_file/read')
 async def config_file_read(
-        q_params: Annotated[ReadConfigSchema, Query()], request: Request, db: PgSqlDep, aio_http: NodeExecAiohttpDep, _: JWTCookieDep
+    q_params: Annotated[ReadConfigSchema, Query()],
+    request: Request,
+    db: PgSqlDep,
+    aio_http: NodeExecAiohttpDep,
+    _: JWTCookieDep,
 ):
-    log_event(f'Пробуем считать конфиг-файл с ноды | node_proto_id: \033[32m{q_params.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    log_event(
+        f'Пробуем считать конфиг-файл с ноды | node_proto_id: \033[32m{q_params.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
+        request=request,
+    )
     node_info = await db.nodes_protocols.get_node_for_file_edit(q_params.node_proto_id)
 
     "Виртуальной ноды не существует"
     if node_info is None:
-        log_event(f'Виртуальной ноды не существует | node_proto_id: \033[32m{q_params.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+        log_event(
+            f'Виртуальной ноды не существует | node_proto_id: \033[32m{q_params.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
+            request=request,
+        )
         raise HTTPException(status_code=404, detail={'success': False, 'message': 'Виртуальная нода не найдена'})
 
     "Не указан путь к файлу"
     if node_info['config_path'] is None:
-        log_event(f'Путь к файлу не указан, не можем прочесть конфиг | node_proto_id: \033[32m{q_params.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='ERROR')
-        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Путь к конфиг-файлу протокола не указан!'})
+        log_event(
+            f'Путь к файлу не указан, не можем прочесть конфиг | node_proto_id: \033[32m{q_params.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
+            request=request,
+            level='ERROR',
+        )
+        raise HTTPException(
+            status_code=400, detail={'success': False, 'message': 'Путь к конфиг-файлу протокола не указан!'}
+        )
 
     "Запрашиваем файл с ноды"
     try:
         # url = f'http://localhost:18100{NodeUris.get_config_file}' if env.app_mode == AppMode.LOCAL else f'http://{node_info['private_ip']}:{node_info['api_port']}{NodeUris.get_config_file}'
-        url = f'http://{node_info['private_ip']}:{node_info['api_port']}{NodeUris.get_config_file}'
+        url = f'http://{node_info["private_ip"]}:{node_info["api_port"]}{NodeUris.get_config_file}'
         json_body = {
             'node_proto_id': q_params.node_proto_id,
             'path': node_info['config_path'],
@@ -98,44 +148,71 @@ async def config_file_read(
             resp.raise_for_status()
             resp_data = await resp.json()
 
-        log_event(f'Нода прислала конфиг-файл | node_proto_id: \033[32m{q_params.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+        log_event(
+            f'Нода прислала конфиг-файл | node_proto_id: \033[32m{q_params.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
+            request=request,
+        )
         return {'success': True, 'file_content': resp_data['content'], 'message': 'Получен конфиг-файл от ноды'}
 
     except ClientError as e:
-        log_event(f'Нода ответила, что-то пошло не так | response: \033[37m{repr(e)}\033[0m; node_proto_id: \033[31m{q_params.node_proto_id}\033[0m', request=request, level='ERROR')
-        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка исполнения на ноде', "err_message": str(repr(e))})
+        log_event(
+            f'Нода ответила, что-то пошло не так | response: \033[37m{repr(e)}\033[0m; node_proto_id: \033[31m{q_params.node_proto_id}\033[0m',
+            request=request,
+            level='ERROR',
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={'success': False, 'message': 'Ошибка исполнения на ноде', "err_message": str(repr(e))},
+        )
 
     except Exception as e:
-        log_event(f'Ошибка исполнения на админке, не удалось прочесть файл | error: \033[31m{e}\033[0m; node_proto_id: \033[33m{q_params.node_proto_id}\033[0m', request=request, level='CRITICAL')
+        log_event(
+            f'Ошибка исполнения на админке, не удалось прочесть файл | error: \033[31m{e}\033[0m; node_proto_id: \033[33m{q_params.node_proto_id}\033[0m',
+            request=request,
+            level='CRITICAL',
+        )
         raise HTTPException(status_code=500, detail="Ошибка исполнения на админке")
 
 
-
 @router.put('/config_file/write')
-async def config_file_write(body: WriteConfigSchema, request: Request, db: PgSqlDep, aio_http: NodeExecAiohttpDep, _: JWTCookieDep):
+async def config_file_write(
+    body: WriteConfigSchema, request: Request, db: PgSqlDep, aio_http: NodeExecAiohttpDep, _: JWTCookieDep
+):
     """
     Рендеринг через Jinja2. При подстановке конфиг-файла в шаблон-ссылку бракованные ключи(опечатка/не существует) БУДУТ ПРОИГНОРИРОВАНЫ
 
     Касаемо шаблонов. Всё больше поводов сделать систему шаблонов такой, что
     пока шаблон не пройдёт системные проверки, он не будет допущен в прод(его не будет в выпадашке при настройке протоколов)
     """
-    log_event(f'Пробуем записать конфиг-файл на ноду | node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    log_event(
+        f'Пробуем записать конфиг-файл на ноду | node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
+        request=request,
+    )
     node_info = await db.nodes_protocols.get_node_for_file_edit(body.node_proto_id)
 
     "Виртуальной ноды не существует"
     if node_info is None:
-        log_event(f'Виртуальной ноды не существует | node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+        log_event(
+            f'Виртуальной ноды не существует | node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
+            request=request,
+        )
         raise HTTPException(status_code=404, detail={'success': False, 'message': 'Виртуальная нода не найдена'})
 
     "Не указан путь к файлу"
     if node_info['config_path'] is None:
-        log_event(f'Путь к файлу не указан, не можем записать конфиг | node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='ERROR')
-        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Путь к конфиг-файлу протокола не указан!'})
+        log_event(
+            f'Путь к файлу не указан, не можем записать конфиг | node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
+            request=request,
+            level='ERROR',
+        )
+        raise HTTPException(
+            status_code=400, detail={'success': False, 'message': 'Путь к конфиг-файлу протокола не указан!'}
+        )
 
     "Запись файла на ноде"
     try:
         # url = f'{node_info['private_ip']}:{node_info['api_port']}{NodeUris.write_config_file}' if env.app_mode != AppMode.LOCAL else f'http://localhost:18100{NodeUris.write_config_file}'
-        url = f'{node_info['private_ip']}:{node_info['api_port']}{NodeUris.write_config_file}'
+        url = f'{node_info["private_ip"]}:{node_info["api_port"]}{NodeUris.write_config_file}'
         json_body = {
             'node_proto_id': body.node_proto_id,
             'tmp_link': node_info['url_tmp'],
@@ -154,27 +231,41 @@ async def config_file_write(body: WriteConfigSchema, request: Request, db: PgSql
 
         "Сохраняем новую конфиг-ссылку"
         await db.nodes_protocols.update_config_link(body.node_proto_id, new_config_link)
-        log_event(f'Нода записала конфиг-файл. Итого ссылка после Jinja2 | node_proto_id: \033[32m{body.node_proto_id}\033[0m; sub_ready_link: \033[35m{new_config_link}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+        log_event(
+            f'Нода записала конфиг-файл. Итого ссылка после Jinja2 | node_proto_id: \033[32m{body.node_proto_id}\033[0m; sub_ready_link: \033[35m{new_config_link}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
+            request=request,
+        )
 
-        return {'success': True, 'message': 'Конфиг-файл ноды обновился, ссылка переопределена', "tip": "Перезагрузите ядро, чтобы изменения вступили в силу", "sub_ready_link": new_config_link}
+        return {
+            'success': True,
+            'message': 'Конфиг-файл ноды обновился, ссылка переопределена',
+            "tip": "Перезагрузите ядро, чтобы изменения вступили в силу",
+            "sub_ready_link": new_config_link,
+        }
 
     except HTTPException:
         raise  # Пробрасываем HTTPException без изменений
-    
     except ClientError as e:
-        log_event(f'Нода ответила, что-то пошло не так | response: \033[37m{repr(e)}\033[0m; node_proto_id: \033[31m{body.node_proto_id}\033[0m', request=request, level='ERROR')
-        raise HTTPException(status_code=400, detail={'success': False, 'message': 'Ошибка исполнения на ноде', "err_message": repr(e)})
+        log_event(
+            f'Нода ответила, что-то пошло не так | response: \033[37m{repr(e)}\033[0m; node_proto_id: \033[31m{body.node_proto_id}\033[0m',
+            request=request,
+            level='ERROR',
+        )
+        raise HTTPException(
+            status_code=400, detail={'success': False, 'message': 'Ошибка исполнения на ноде', "err_message": repr(e)}
+        )
 
     except Exception as e:
-        log_event(f'Ошибка исполнения на админке, не удалось записать файл | error: \033[31m{e}\033[0m; node_proto_id: \033[33m{body.node_proto_id}\033[0m',request=request, level='CRITICAL')
+        log_event(
+            f'Ошибка исполнения на админке, не удалось записать файл | error: \033[31m{e}\033[0m; node_proto_id: \033[33m{body.node_proto_id}\033[0m',
+            request=request,
+            level='CRITICAL',
+        )
         raise HTTPException(status_code=500, detail="Ошибка исполнения на админке")
 
 
-
 @router.post('/core_protocol/user/action')
-async def add_user(
-        body: UserCoreProtoActionSchema, request: Request, db: PgSqlDep, arq: ArqDep, _: JWTCookieDep
-):
+async def add_user(body: UserCoreProtoActionSchema, request: Request, db: PgSqlDep, arq: ArqDep, _: JWTCookieDep):
     """
     WARNING. Упростить SQL запрос. Должен передавать только легкие метаданные и id.
     Сейчас через брокер гоняются в том числе текстовые скрипты-шаблоны
@@ -183,25 +274,39 @@ async def add_user(
     1. Метаданные по ноде, Outbox запись
     2. Закидываем задачу в фон
     """
-    log_event(f'Операция над пользователем на ноде | node_proto_id: \033[32m{body.node_proto_id}\033[0m; action: \033[35m{body.action}\033[0m; uuid: \033[36m{body.uuid}\033[0m; user_sub_id: \033[35m{body.user_sub_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    log_event(
+        f'Операция над пользователем на ноде | node_proto_id: \033[32m{body.node_proto_id}\033[0m; action: \033[35m{body.action}\033[0m; uuid: \033[36m{body.uuid}\033[0m; user_sub_id: \033[35m{body.user_sub_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
+        request=request,
+    )
 
     "Мета для операции на ноде. Оутбокс фиксация"
     vnode = await db.nodes_protocols.get_core_proto_deps_by_user_sub(
-        user_uuid=body.uuid,
-        user_sub_id=body.user_sub_id,
-        node_proto_id=body.node_proto_id,
-        operation=body.action
+        user_uuid=body.uuid, user_sub_id=body.user_sub_id, node_proto_id=body.node_proto_id, operation=body.action
     )
 
     "Если SQL фильтрация "
     if not vnode:
-        log_event(f'\033[35m[Node Command Center]\033[0m Не удалось отправить пользователя на вставку | node_proto_id: \033[33m{body.node_proto_id}\033[0m; action: \033[35m{body.action}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request, level='WARNING')
-        raise HTTPException(status_code=409, detail={'success': False, 'message': 'Эта виртуальная нода находится на выключенной физической ноде. Или такой виртуальной ноды не существует. Вставка невозможна'})
+        log_event(
+            f'\033[35m[Node Command Center]\033[0m Не удалось отправить пользователя на вставку | node_proto_id: \033[33m{body.node_proto_id}\033[0m; action: \033[35m{body.action}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
+            request=request,
+            level='WARNING',
+        )
+        raise HTTPException(
+            status_code=409,
+            detail={
+                'success': False,
+                'message': 'Эта виртуальная нода находится на выключенной физической ноде. Или такой виртуальной ноды не существует. Вставка невозможна',
+            },
+        )
 
     "Апи бульк формата. Так что формат соблюдаем"
     users = [{"user_sub_id": body.user_sub_id, "uuid": body.uuid, "event_id": vnode['event_id']}]
     action_script_custom_params = {
-        'delete': (vnode['api_bulk_delete_user_script'], vnode['bulk_delete_script_custom_params'], CoreProtoActions.delete),
+        'delete': (
+            vnode['api_bulk_delete_user_script'],
+            vnode['bulk_delete_script_custom_params'],
+            CoreProtoActions.delete,
+        ),
         'add': (vnode['api_bulk_add_user_script'], vnode['bulk_add_script_custom_params'], CoreProtoActions.add),
     }
 
@@ -225,6 +330,9 @@ async def add_user(
         vnode['config2json_script'],
         vnode['conf_converter_libs'],
     )
-    log_event(f'\033[35m[Node Command Center]\033[0m Отправили в фон \033[34m{body.action}\033[0m на ноду | node_proto_id: \033[33m{body.node_proto_id}\033[0m; uuid: \033[32m{body.uuid}\033[0m; job_id: \033[31m{job.job_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m', request=request)
+    log_event(
+        f'\033[35m[Node Command Center]\033[0m Отправили в фон \033[34m{body.action}\033[0m на ноду | node_proto_id: \033[33m{body.node_proto_id}\033[0m; uuid: \033[32m{body.uuid}\033[0m; job_id: \033[31m{job.job_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
+        request=request,
+    )
 
     return {'success': True, 'message': 'Пользователь обрабатывается в фоновой очереди', 'job_id': job.job_id}

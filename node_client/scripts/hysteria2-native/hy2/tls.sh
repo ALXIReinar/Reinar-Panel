@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-CERT_PATH=$1
-KEY_PATH=$2
-SNI_DOMAIN=$3
 
 log() { echo -e "$1" >&2; }
 
@@ -12,9 +9,8 @@ if [ -z "$NODE_ID" ] || [ -z "$PROTO_ID" ]; then
     exit 1
 fi
 
-if [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$SNI_DOMAIN" ]; then
-    log "Ошибка: Необходимы параметры CERT_PATH, KEY_PATH и SNI_DOMAIN!"
-    log "Использование: bash node_client/scripts/hysteria2-native/hy2/tls.sh <cert_path> <key_path> <sni_domain>"
+if [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$DOMAIN" ] || [ -z "$SERVICES_LIST" ]; then
+    log "Ошибка: Необходимо предварительно выпустить сертификат (bash issue_cert_acme.sh)!"
     exit 1
 fi
 
@@ -53,7 +49,7 @@ HTTP_CODE=$(curl -s -w "%{http_code}" -o "$REG_RESPONSE" -X POST "$PANEL_CALLBAC
            "title": "'"$TITLE"'",
            "metrics_command" : "curl \"http://127.0.0.1:'"$METRICS_PORT"'/traffic?auth='"$METRICS_TOKEN"'\"",           "title": "'"$TITLE"'",
            "constant_node_data_obj": {
-               "node_sni": "'"$SNI_DOMAIN"'",
+               "node_sni": "'"$DOMAIN"'",
                "node_proto_port": '"$INTERNAL_PORT"'
            }
          }')
@@ -143,6 +139,11 @@ if ! systemctl is-active --quiet "$SERVICE_NAME"; then
     exit 1
 fi
 
+# Хук на авто-рестарт виртуальной ноды при обновлении сертификата acme
+if ! grep -Fxq "$SERVICE_NAME" "$SERVICES_LIST" 2>/dev/null; then
+        echo "$SERVICE_NAME" >> "$SERVICES_LIST"
+    fi
+
 # 6. Финализация статуса в панели
 curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
      -d '{
@@ -157,7 +158,7 @@ log "✓ Виртуальная нода успешно создана!"
 log "Node Proto ID: $NODE_PROTO_ID"
 log "Config Path: $CONFIG_PATH"
 log "Title: $TITLE"
-log "Основной Порт: $INTERNAL_PORT | SNI Domain: $SNI_DOMAIN"
+log "Основной Порт: $INTERNAL_PORT | SNI Domain: $DOMAIN"
 log "=================================================="
 
 # 7. Возврат результата в stdout (JSON) для вызывающего скрипта

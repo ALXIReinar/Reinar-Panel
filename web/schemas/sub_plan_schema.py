@@ -1,14 +1,16 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field  # noqa: I001
 from typing import Optional
 
 
 class SubPlanCreateSchema(BaseModel):
     """Схема для создания группы подписок"""
+
     title: str = Field(..., min_length=1, max_length=128, description="Название группы")
 
 
 class SubPlanUpdateSchema(BaseModel):
     """Схема для обновления группы подписок"""
+
     title: Optional[str] = Field(None, min_length=1, max_length=128, description="Название группы")
     description: Optional[str] = Field(None, description="Описание группы")
     is_active: Optional[bool] = Field(None, description="Статус активности группы")

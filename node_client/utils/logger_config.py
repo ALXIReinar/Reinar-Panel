@@ -1,4 +1,4 @@
-import os
+import os  # noqa: I001
 import inspect
 from datetime import datetime
 
@@ -67,7 +67,7 @@ logger_settings = {
             "format": "%(log_color)s%(levelname)-8s%(reset)s | "
                       "\033[32mD%(asctime)s\033[0m | "
                       "\033[34m%(method)s\033[0m \033[36m%(url)s\033[0m | "
-                      "%(cyan)s%(location)s:%(reset)s def %(cyan)s%(func)s%(reset)s(): line - %(cyan)s%(line)d%(reset)s "
+                      "%(cyan)s%(location)s:%(reset)s def %(cyan)s%(func)s%(reset)s(): line - %(cyan)s%(line)d%(reset)s "  # noqa: E501
                       "%(message)s",
             "datefmt": "%d-%m-%Y T%H:%M:%S",
             "log_colors": {
@@ -135,4 +135,4 @@ def log_event(event: Any, *args, request: Request | WebSocket = None,
         'line': line,
         'url': url,
         **extra
-    })
+    })  # noqa: W292

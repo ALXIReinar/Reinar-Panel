@@ -1,7 +1,7 @@
 from asyncpg import Connection, ForeignKeyViolationError
 
 from web.schemas.sub_plan_schema import SubPlanOfferSchema
-from web.utils.anything import CoreProtoActions
+from web.utils.anything import CoreProtoActions, VnodeRegStatuses
 from web.utils.logger_config import log_event
 
 
@@ -16,9 +16,8 @@ class SubPlansQueries:
         VALUES ($1, COALESCE((SELECT MAX(position) FROM sub_plans), 0) + 1) 
         ON CONFLICT DO NOTHING 
         RETURNING id
-        """
+        """  # noqa: W291
         return await self.conn.fetchval(query, title)
-
 
     async def update(
         self,
@@ -53,7 +52,6 @@ class SubPlansQueries:
             sub_plan_updates.append(f"is_active = ${sp_param_idx}")
             sub_plan_params.append(is_active)
             sp_param_idx += 1
-
 
         query_sub_plan = f"""
         UPDATE sub_plans
@@ -125,7 +123,6 @@ class SubPlansQueries:
 
         return sub_plan_upd, offer_upd_count
 
-
     async def attach_vnodes(self, sub_plan_id: int, node_proto_ids: list[int]):
         """Привязать виртуальные ноды к группе"""
         if not node_proto_ids:
@@ -143,26 +140,28 @@ class SubPlansQueries:
         except ForeignKeyViolationError as e:
             return 404, f"Некоторые ноды не существуют: {e}"
 
-
     async def detach_vnodes(self, sub_plan_id: int, node_proto_ids: list[int]):
         """Отвязать виртуальные ноды от группы"""
         if not node_proto_ids:
             return 0
 
-        query = "DELETE FROM vnodes_sub_plans WHERE sub_plan_id = $1 AND node_proto_id = ANY($2) RETURNING node_proto_id"
+        query = (
+            "DELETE FROM vnodes_sub_plans WHERE sub_plan_id = $1 AND node_proto_id = ANY($2) RETURNING node_proto_id"
+        )
         result = await self.conn.fetch(query, sub_plan_id, node_proto_ids)
 
         inp_nodes_len = len(node_proto_ids)
         if len(result) != inp_nodes_len:
-            return 409, f"Некоторые ноды не были откреплены. successful_detache: {[rec['node_proto_id'] for rec in result]}"
+            return (
+                409,
+                f"Некоторые ноды не были откреплены. successful_detache: {[rec['node_proto_id'] for rec in result]}",
+            )
         return 200, f'Успешно открепили ноды ({inp_nodes_len})'
-
 
     async def delete(self, plan_id: int):
         """Удаление группы подписок (CASCADE удалит связи в vnodes_sub_plans)"""
         query = "DELETE FROM sub_plans WHERE id = $1"
         await self.conn.execute(query, plan_id)
-
 
     async def all(self, limit: int, offset: int):
         """Получить список всех групп подписок"""
@@ -173,7 +172,7 @@ class SubPlansQueries:
         LEFT JOIN sub_plan_offers spo ON sp.id = spo.sub_plan_id
         GROUP BY sp.id
         LIMIT $1 OFFSET $2
-        """
+        """  # noqa: W291
         return await self.conn.fetch(query, limit, offset)
 
     async def get_by_id(self, plan_id: int):
@@ -234,9 +233,8 @@ class SubPlansQueries:
         LEFT JOIN plan_vnodes pv ON pv.sub_plan_id = sp.id
         LEFT JOIN plan_offers po ON po.sub_plan_id = sp.id
         WHERE sp.id = $1
-        """
+        """  # noqa: W291
         return await self.conn.fetchrow(query, plan_id)
-
 
     async def edit_vnodes_set(self, sub_plan_id: int, add_vnodes, remove_vnodes) -> tuple[list[int], list[int]]:
         """
@@ -251,7 +249,7 @@ class SubPlansQueries:
         SELECT us.uuid, $3, us.id, le.node_proto_id
         FROM user_subs us
         JOIN locations_edit le ON le.sub_plan_id = us.sub_plan_id
-        JOIN nodes_protocols np ON np.id = le.node_proto_id AND np.user_visible = true
+        JOIN nodes_protocols np ON np.id = le.node_proto_id AND np.user_visible = true AND np.reg_status = $4
         JOIN nodes n ON n.id = np.node_id AND n.is_active = true
         RETURNING sub_nodes_outbox.id
         """
@@ -259,7 +257,7 @@ class SubPlansQueries:
         INSERT INTO vnodes_sub_plans (sub_plan_id, node_proto_id) 
         SELECT $1, np_id FROM UNNEST($2::integer[]) AS t(np_id)
         ON CONFLICT DO NOTHING
-        """
+        """  # noqa: W291
         query_remove = """
         DELETE FROM vnodes_sub_plans WHERE sub_plan_id = $1 AND node_proto_id = ANY($2)
         """
@@ -268,16 +266,28 @@ class SubPlansQueries:
         add_outbox_ids = []
         if add_vnodes:
             add_outbox_ids = await self.conn.fetch(
-                query.format(edit_query=query_add), sub_plan_id, add_vnodes, CoreProtoActions.add
+                query.format(edit_query=query_add),
+                sub_plan_id,
+                add_vnodes,
+                CoreProtoActions.add,
+                VnodeRegStatuses.success,
             )
-            log_event(f'К тарифному плану добавлены ноды | sub_plan_id: \033[34m{sub_plan_id}\033[0m; node_proto_ids: \033[33m{add_vnodes}\033[0m; total_adds: \033[32m{len(add_outbox_ids)}\033[0m')
+            log_event(
+                f'К тарифному плану добавлены ноды | sub_plan_id: \033[34m{sub_plan_id}\033[0m; node_proto_ids: \033[33m{add_vnodes}\033[0m; total_adds: \033[32m{len(add_outbox_ids)}\033[0m'
+            )
 
         "Открепляем локации"
         remove_outbox_ids = []
         if remove_vnodes:
             remove_outbox_ids = await self.conn.fetch(
-                query.format(edit_query=query_remove), sub_plan_id, remove_vnodes, CoreProtoActions.delete
+                query.format(edit_query=query_remove),
+                sub_plan_id,
+                remove_vnodes,
+                CoreProtoActions.delete,
+                VnodeRegStatuses.success,
             )
-            log_event(f'Из тарифного плана удалены ноды | sub_plan_id: \033[35m{sub_plan_id}\033[0m; node_proto_ids: \033[32m{remove_vnodes}\033[0m; total_dels: \033[31m{len(remove_outbox_ids)}\033[0m')
+            log_event(
+                f'Из тарифного плана удалены ноды | sub_plan_id: \033[35m{sub_plan_id}\033[0m; node_proto_ids: \033[32m{remove_vnodes}\033[0m; total_dels: \033[31m{len(remove_outbox_ids)}\033[0m'
+            )
 
         return [rec['id'] for rec in add_outbox_ids], [rec['id'] for rec in remove_outbox_ids]

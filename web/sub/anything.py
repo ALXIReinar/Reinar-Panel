@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass  # noqa: I001
 from typing import Annotated
 
 from fastapi import HTTPException, Depends
@@ -9,7 +9,9 @@ from web.sub.config_dir.config import env
 
 @dataclass
 class RobokassaUrls:
-    create_payment = 'https://auth.robokassa.ru/Merchant/Index.aspx' # Пользователь перейдёт на страницу робокассы для оплаты
+    create_payment = (
+        'https://auth.robokassa.ru/Merchant/Index.aspx'  # Пользователь перейдёт на страницу робокассы для оплаты
+    )
 
 
 @dataclass
@@ -18,9 +20,9 @@ class PayStatuses:
     success: int = 2
     expired: int = 3
 
+
 @dataclass
 class Constants:
-
     @staticmethod
     def payment_robo_lock(csrf_token: str):
         return f'pay_lock:robo:{csrf_token}'
@@ -31,9 +33,10 @@ class DeleteReasons:
     sub_revoke: str = 'sub_revoke'
     admin_bulk_delete: str = 'admin_bulk_delete'
 
+
 @dataclass
-class AddReasons:
-    ...
+class AddReasons: ...
+
 
 class CoreProtoActions:
     reason_del: DeleteReasons = DeleteReasons
@@ -67,4 +70,14 @@ def tg_routing_is_tg_bot_access(request: Request):
     if ip not in env.tg_bot_service_private_ip:
         raise HTTPException(status_code=403, detail='Forbidden')
 
+
 TgRoutingAccessDep = Annotated[None, Depends(tg_routing_is_tg_bot_access)]
+
+
+@dataclass
+class VnodeRegStatuses:
+    """Статусы регистрации виртуальных нод"""
+
+    pending: int = 1
+    success: int = 2
+    failed: int = 3

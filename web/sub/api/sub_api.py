@@ -1,12 +1,17 @@
-import base64
+import base64  # noqa: I001
 from urllib.parse import quote
 from typing import Annotated
 
 from fastapi import APIRouter, Response, Path
 from starlette.requests import Request
 
-from web.sub.api.handlers.prepare_func import error_messages_for_client, process2vpn_client_format, \
-    create_vpn_like_user, normalize_url, urlsafe_address
+from web.sub.api.handlers.prepare_func import (
+    error_messages_for_client,
+    process2vpn_client_format,
+    create_vpn_like_user,
+    normalize_url,
+    urlsafe_address,
+)
 from web.sub.config_dir.logger_config import log_event
 from web.sub.config_dir.config import env
 from web.sub.data.postgres import PgSqlDep
@@ -32,7 +37,11 @@ async def sub(params: Annotated[SubUrlSchema, Path()], db: PgSqlDep, request: Re
             'Вы израсходовали лимит трафика за день. Обновите ваш план',
             f'Продлить подписку в нашем боте {env.tg_bot_link}',
         )
-        log_event(f'Подписка приостановлена/не найдена | b64_id: \033[31m{params.b64_id}\033[0m', request=request, level='WARNING')
+        log_event(
+            f'Подписка приостановлена/не найдена | b64_id: \033[31m{params.b64_id}\033[0m',
+            request=request,
+            level='WARNING',
+        )
         return Response(content=process2vpn_client_format(messages), media_type='text/plain')
 
     "Обрабатываем каждую ссылку через кастомный скрипт"
@@ -46,7 +55,11 @@ async def sub(params: Annotated[SubUrlSchema, Path()], db: PgSqlDep, request: Re
             constant_node_data_obj=proto_user_conf['constant_node_data_obj'],
         )
         if not ok:
-            log_event(f'Не удалось Сформировать суперобъект из шаблонов | err: {user_super_obj}; node_proto_id: \033[35m{proto_user_conf['node_proto_id']}\033[0m; req_u_data_obj: {proto_user_conf["required_user_data_obj"]}; const_u_data_obj: {proto_user_conf["constant_user_data_obj"]}; const_node_data_obj: {proto_user_conf["constant_node_data_obj"]}', request=request, level='WARNING')
+            log_event(
+                f'Не удалось Сформировать суперобъект из шаблонов | err: {user_super_obj}; node_proto_id: \033[35m{proto_user_conf["node_proto_id"]}\033[0m; req_u_data_obj: {proto_user_conf["required_user_data_obj"]}; const_u_data_obj: {proto_user_conf["constant_user_data_obj"]}; const_node_data_obj: {proto_user_conf["constant_node_data_obj"]}',
+                request=request,
+                level='WARNING',
+            )
             errors.append((500, "Не удалось сформировать суперобъект"))
             continue
 
@@ -57,13 +70,17 @@ async def sub(params: Annotated[SubUrlSchema, Path()], db: PgSqlDep, request: Re
             config_link={
                 "conf_url": proto_user_conf['config_link'],
                 "n_address": urlsafe_address(proto_user_conf['node_address']),
-                "n_title": quote(proto_user_conf['title'])
+                "n_title": quote(proto_user_conf['title']),
             },
         )
 
         "Исключение при обработке. Или ссылки для пользователя"
         if not success:
-            log_event(f'Не смогли выдать локацию из подписки | user_id: \033[34m{sub_meta['user_id']}\033[0m; sub_id: \033[33m{sub_meta['sub_plan_id']}\033[0m; node_proto_id: \033[35m{proto_user_conf['node_proto_id']}\033[0m; vnodes_sub_plans_id: {proto_user_conf['sub_node_id']}', request=request, level='CRITICAL')
+            log_event(
+                f'Не смогли выдать локацию из подписки | user_id: \033[34m{sub_meta["user_id"]}\033[0m; sub_id: \033[33m{sub_meta["sub_plan_id"]}\033[0m; node_proto_id: \033[35m{proto_user_conf["node_proto_id"]}\033[0m; vnodes_sub_plans_id: {proto_user_conf["sub_node_id"]}',
+                request=request,
+                level='CRITICAL',
+            )
             errors.append(res)
         else:
             "Сохраняем успешно обработанную ссылку для подключения пользователя"
@@ -71,11 +88,16 @@ async def sub(params: Annotated[SubUrlSchema, Path()], db: PgSqlDep, request: Re
             ready_config_links.append(urlencoded_link)
 
     if errors:
-        log_event(f'Не все конфиги удалось обработать | user_uuid: \033[35m{sub_meta['user_uuid']}\033[0m; errors: \033[37m{errors}\033[0m', level='WARNING')
+        log_event(
+            f'Не все конфиги удалось обработать | user_uuid: \033[35m{sub_meta["user_uuid"]}\033[0m; errors: \033[37m{errors}\033[0m',
+            level='WARNING',
+        )
 
     "В случае, если ни одна локация не сгенерировалась"
     if not ready_config_links:
-        ready_config_links = error_messages_for_client('Приносим свои извинения за технические неполадки', 'Мы уже знаем об этом и решаем проблему')
+        ready_config_links = error_messages_for_client(
+            'Приносим свои извинения за технические неполадки', 'Мы уже знаем об этом и решаем проблему'
+        )
 
     "Готовим ответ для Впн клиента"
     user_traffic, sub_plan_limit = sub_meta['traffic_used_day_mb'], sub_meta['sub_plan_limit']
@@ -90,6 +112,6 @@ async def sub(params: Annotated[SubUrlSchema, Path()], db: PgSqlDep, request: Re
             "profile-update-interval": env.subscription_update_interval,  # Обновлять каждые 12 часов
             "profile-web-page-url": env.tg_bot_link,
             "announce": f"base64:{base64.b64encode(sub_meta['description'].encode()).decode()}",
-        }
+        },
     )
     return response

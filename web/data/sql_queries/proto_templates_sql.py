@@ -10,12 +10,10 @@ class ProtoTemplatesQueries:
 
     async def get_all(self, last_id: int | None, sort_by: str, limit: int):
         """Получить список всех шаблонов с пагинацией и фильтрацией по proto_id"""
-        
         # Формируем WHERE условия
         where_conditions = []
         params = [limit]
         param_idx = 2
-        
         # Cursor condition (для пагинации)
         if last_id is not None:
             if sort_by == 'asc':
@@ -24,7 +22,6 @@ class ProtoTemplatesQueries:
                 where_conditions.append(f"pt.id < ${param_idx}")
             params.append(last_id)
             param_idx += 1
-        
         # Фильтр по proto_id (если указан)
         # proto_join = ''
         # if proto_id is not None:
@@ -37,7 +34,6 @@ class ProtoTemplatesQueries:
         where_clause = ''
         if where_conditions:
             where_clause = 'WHERE ' + ' AND '.join(where_conditions)
-        
         query = f"""
         SELECT pt.id, pt.title, pt.url_tmp, pt.status, pt.is_accepted, pt.proto_python_lib
         FROM proto_templates pt
@@ -45,11 +41,8 @@ class ProtoTemplatesQueries:
         ORDER BY pt.id {sort_by}
         LIMIT $1
         """
-        
         tmps = await self.conn.fetch(query, *params)
         return tmps
-
-
 
     async def get_by_id(self, tmp_id: int):
         """Получить шаблон по ID с привязанными"""
@@ -76,7 +69,7 @@ class ProtoTemplatesQueries:
         FROM proto_templates pt
         LEFT JOIN user_injectors ui ON ui.tmp_id = pt.id
         WHERE pt.id = $1
-        """
+        """  # noqa: W291, W293
 
         template = await self.conn.fetchrow(template_query, tmp_id)
         if not template:
@@ -84,11 +77,10 @@ class ProtoTemplatesQueries:
 
         return {'template': template}
 
-
     async def create(self, title: str) -> tuple[int, str, int | None]:
         """
         Создать новый шаблон
-        
+
         Returns:
             tuple[status_code, message, template_id]
             - 201, 'Шаблон создан', template_id - успех
@@ -102,7 +94,6 @@ class ProtoTemplatesQueries:
 
         except UniqueViolationError:
             return 409, 'Шаблон с таким названием уже существует', None
-
 
     async def update(
         self,
@@ -250,11 +241,10 @@ class ProtoTemplatesQueries:
 
         return 200, 'Шаблон обновлён'
 
-
     async def delete(self, tmp_id: int) -> tuple[int, str]:
         """
         Удалить шаблон
-        
+
         Returns:
             tuple[status_code, message]
             - 200, 'Шаблон удалён' - успех
@@ -274,11 +264,10 @@ class ProtoTemplatesQueries:
             "RESTRICT на удаление шаблона, если есть ссылающиеся записи"
             return 409, 'Невозможно удалить: шаблон используется виртуальными нодами'
 
-
     async def edit_user_injectors(self, tmp_id: int, injs_state: list[UserInjector]):
         """
         Обновить user_injectors шаблона (удалить старые и вставить новые).
-        
+
         Returns:
             True - успех
             False - шаблон не существует (ForeignKeyViolationError)
@@ -286,16 +275,13 @@ class ProtoTemplatesQueries:
         # Сначала удаляем все старые инжекторы
         delete_query = 'DELETE FROM templates_users_extractors WHERE tmp_id = $1'
         await self.conn.execute(delete_query, tmp_id)
-        
         # Если список пустой - просто возвращаем успех (все инжекторы удалены)
         if not injs_state:
             # Проверяем что шаблон существует
             template_exists = await self.conn.fetchval(
-                'SELECT EXISTS(SELECT 1 FROM proto_templates WHERE id = $1)',
-                tmp_id
+                'SELECT EXISTS(SELECT 1 FROM proto_templates WHERE id = $1)', tmp_id
             )
             return template_exists
-        
         # Вставляем новые инжекторы
         insert_query = '''
         INSERT INTO templates_users_extractors (tmp_id, flatten_array_cursor, extractor_script, libs)
@@ -303,7 +289,9 @@ class ProtoTemplatesQueries:
         FROM UNNEST($2::varchar[], $3::text[], $4::varchar[]) AS t(flatten_ac, extractor_script, libs)
         '''
         try:
-            arr_cursors, extractors, libs = zip(*[(inj.flatten_array_cursor, inj.extractor_script, inj.libs) for inj in injs_state])
+            arr_cursors, extractors, libs = zip(
+                *[(inj.flatten_array_cursor, inj.extractor_script, inj.libs) for inj in injs_state]
+            )
             await self.conn.execute(insert_query, tmp_id, arr_cursors, extractors, libs)
             return True
         except ForeignKeyViolationError:

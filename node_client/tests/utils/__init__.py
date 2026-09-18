@@ -2,7 +2,7 @@
 Утилиты для тестирования нод-клиента
 """
 
-from .db_helpers import load_template_by_protocol, load_template_by_id
+from .db_helpers import load_template_by_protocol, load_template_by_id  # noqa: I001
 from .test_data_factory import create_test_user
 from .fake_core import FakeSubprocessResult, create_mock_subprocess
 

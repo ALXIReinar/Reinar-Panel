@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional  # noqa: I001
 
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
@@ -40,6 +40,7 @@ class WebhookRoboPayload(BaseModel):
     IsTest='1',
     Culture='ru'
     """
+
     OutSum: str = Field(description="Сумма (Робокасса присылает строкой, например '150.00')")
     InvId: int = Field(description="ID заказа")
     SignatureValue: str = Field(description="Хеш от Робокассы для проверки")

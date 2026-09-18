@@ -1,4 +1,4 @@
-import asyncio
+import asyncio  # noqa: I001
 import os
 from logging.config import fileConfig
 
@@ -16,6 +16,7 @@ if config.config_file_name:
 
 target_metadata = Base.metadata
 
+
 def run_migrations_offline() -> None:
     """Офлайн режим (генерация SQL-скриптов без подключения к БД)"""
 
@@ -27,10 +28,10 @@ def run_migrations_offline() -> None:
 
     url = f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{database}"
     if not any([user, password, host, port, database]):
-
         "Для удобства в локалке. Если энвс не заданы, то используем Пайдентик сеттингс"
 
         from web.config_dir.config import env
+
         url = f"postgresql+asyncpg://{env.pg_admin}:{env.pg_admin_password}@{env.pg_host}:{env.pg_port}/{env.pg_db}"
 
     context.configure(
@@ -43,10 +44,12 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         context.run_migrations()
 
+
 def do_run_migrations(connection):
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()
+
 
 async def run_async_migrations() -> None:
     """Онлайн режим с поддержкой asyncpg"""
@@ -58,9 +61,9 @@ async def run_async_migrations() -> None:
 
     url = f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{database}"
     if not any([user, password, host, port, database]):
-
         "Для удобства в локалке. Если энвс не заданы, то используем Пайдентик сеттингс"
         from web.config_dir.config import env
+
         url = f"postgresql+asyncpg://{env.pg_admin}:{env.pg_admin_password}@{env.pg_host}:{env.pg_port}/{env.pg_db}"
 
     connectable = create_async_engine(
@@ -73,8 +76,10 @@ async def run_async_migrations() -> None:
 
     await connectable.dispose()
 
+
 def run_migrations_online() -> None:
     asyncio.run(run_async_migrations())
+
 
 if context.is_offline_mode():
     run_migrations_offline()

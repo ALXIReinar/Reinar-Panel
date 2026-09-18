@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Response, Request, HTTPException
+from fastapi import APIRouter, Response, Request, HTTPException  # noqa: I001
 from starlette.responses import JSONResponse
 
 from web.data.postgres import PgSqlDep
@@ -18,7 +18,9 @@ async def registration_user(creds: AdminRegSchema, db: PgSqlDep, request: Reques
     insert_attempt = await db.admins.reg_admin(creds.login, creds.passw)
 
     if not insert_attempt:
-        log_event(f"Пользователь с email: {hide_log_param(creds.login)} Уже существует", request=request, level='WARNING')
+        log_event(
+            f"Пользователь с email: {hide_log_param(creds.login)} Уже существует", request=request, level='WARNING'
+        )
         return JSONResponse(status_code=202, content={"success": False, "message": 'Такой пользователь уже существует'})
 
     log_event(f"Новый пользователь! email: {hide_log_param(creds.login)}", request=request)
@@ -54,25 +56,41 @@ async def log_out(request: Request, response: Response, db: PgSqlDep, _: JWTCook
     await db.auth.session_termination(request.state.admin_id, request.state.session_id)
     response.delete_cookie('access_token')
     response.delete_cookie('refresh_token')
-    log_event("Пользователь разлогинился | admin_id: %s; s_id: %s", request.state.admin_id, request.state.session_id,
-              request=request)
+    log_event(
+        "Пользователь разлогинился | admin_id: %s; s_id: %s",
+        request.state.admin_id,
+        request.state.session_id,
+        request=request,
+    )
     return {'success': True, 'message': 'Пользователь вне аккаунта'}
 
 
 @router.post('/private/admins/seances', summary='Все Устройства аккаунта')
 async def show_seances(request: Request, db: PgSqlDep, _: JWTCookieDep):
-    log_event("Запрос всех Устройств с акка | admin_id: %s; s_id: %s", request.state.admin_id, request.state.session_id,
-              request=request, level='INFO')
+    log_event(
+        "Запрос всех Устройств с акка | admin_id: %s; s_id: %s",
+        request.state.admin_id,
+        request.state.session_id,
+        request=request,
+        level='INFO',
+    )
     seances = await db.auth.all_seances_user(request.state.admin_id, request.state.session_id)
     return {'seances': seances}
 
 
-@router.put('/server/admins/passw/set_new_passw', description='Серверный эндпоинт. Используется скриптами. Не требует реализации на фронт части')
+@router.put(
+    '/server/admins/passw/set_new_passw',
+    description='Серверный эндпоинт. Используется скриптами. Не требует реализации на фронт части',
+)
 async def reset_password(update_secrets: UpdatePasswSchema, db: PgSqlDep, request: Request):
     hashed_passw = encryption.hash(update_secrets.passw)
     result = await db.admins.set_new_passw(update_secrets.admin_id, hashed_passw)
     if not result:
-        log_event(f'Не удалось обновить пароль. Админ не найден | unput_admin_id: \033[32m{update_secrets.admin_id}\033[0m', request=request, level='WARNING')
+        log_event(
+            f'Не удалось обновить пароль. Админ не найден | unput_admin_id: \033[32m{update_secrets.admin_id}\033[0m',
+            request=request,
+            level='WARNING',
+        )
         raise HTTPException(status_code=404, detail={'success': False, 'message': 'Админ с таким id не найден'})
 
     log_event(f"Юзер сменил Пароль | admin_id: {update_secrets.admin_id}", request=request, level='CRITICAL')

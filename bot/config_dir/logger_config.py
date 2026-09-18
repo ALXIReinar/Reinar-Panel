@@ -1,4 +1,4 @@
-import os
+import os  # noqa: I001
 import inspect
 import json
 from datetime import datetime, UTC
@@ -53,7 +53,7 @@ logger_settings = {
             "()": "colorlog.ColoredFormatter",
             "format": "%(log_color)s%(levelname)-8s%(reset)s | "
                       "\033[32mD%(asctime)s\033[0m | "
-                      "%(cyan)s%(location)s:%(reset)s def %(cyan)s%(func)s%(reset)s(): line - %(cyan)s%(line)d%(reset)s "
+                      "%(cyan)s%(location)s:%(reset)s def %(cyan)s%(func)s%(reset)s(): line - %(cyan)s%(line)d%(reset)s "  # noqa: E501
                       "%(message)s",
             "datefmt": "%d-%m-%Y T%H:%M:%S",
             "log_colors": {
@@ -114,4 +114,4 @@ def log_event(event: Any, *args, level: Literal['DEBUG', 'INFO', 'WARNING', 'ERR
         'func': func,
         'line': line,
         **extra
-    })
+    })  # noqa: W292

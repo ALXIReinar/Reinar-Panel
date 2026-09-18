@@ -1,4 +1,4 @@
-import ast
+import ast  # noqa: I001
 import asyncio
 import hashlib
 import importlib
@@ -15,17 +15,14 @@ class ScriptExecutor:
 
     @classmethod
     async def executing_link_processing(
-            cls,
-            sub_prepare_script: str,
-            required_libs: str | None,
-            user_obj: dict,
-            config_link: dict,
+        cls,
+        sub_prepare_script: str,
+        required_libs: str | None,
+        user_obj: dict,
+        config_link: dict,
     ):
         # 1. Формируем список БАЗОВЫХ разрешенных пакетов
-        allowed_packages = {
-            "json", "asyncio", "orjson", "re", "math",
-            "jmespath", "flatten_json"
-        }
+        allowed_packages = {"json", "asyncio", "orjson", "re", "math", "jmespath", "flatten_json"}
 
         # Добавляем пакеты из параметров функции
         if required_libs:
@@ -34,20 +31,37 @@ class ScriptExecutor:
                 if clean_lib:
                     allowed_packages.add(clean_lib)
 
-
         # 2. ЖЕСТКО ОЧИЩЕННЫЕ Builtins
         # ВАЖНО: Удалены type, dir, vars, eval, exec, globals, locals!
         safe_builtins = {
-            "int": int, "str": str, "float": float, "list": list, "dict": dict,
-            "set": set, "len": len, "range": range, "round": round, "print": print,
-            "enumerate": enumerate, "zip": zip, "map": map, "filter": filter,
-            "isinstance": isinstance, "all": all, "any": any, "bool": bool,
-            "bytes": bytes, "bytearray": bytearray,
-            "Exception": Exception, "ValueError": ValueError, "KeyError": KeyError,
-            "NameError": NameError, "TypeError": TypeError, "AttributeError": AttributeError,
+            "int": int,
+            "str": str,
+            "float": float,
+            "list": list,
+            "dict": dict,
+            "set": set,
+            "len": len,
+            "range": range,
+            "round": round,
+            "print": print,
+            "enumerate": enumerate,
+            "zip": zip,
+            "map": map,
+            "filter": filter,
+            "isinstance": isinstance,
+            "all": all,
+            "any": any,
+            "bool": bool,
+            "bytes": bytes,
+            "bytearray": bytearray,
+            "Exception": Exception,
+            "ValueError": ValueError,
+            "KeyError": KeyError,
+            "NameError": NameError,
+            "TypeError": TypeError,
+            "AttributeError": AttributeError,
             "__name__": "__main__",  # Безопасный dunder атрибут
             "__doc__": None,  # Безопасный dunder атрибут
-
             # Подменяем __import__ на нашу защиту
             "__import__": cls._create_restricted_import(allowed_packages),
         }
@@ -56,7 +70,9 @@ class ScriptExecutor:
             # 3. АНАЛИЗ И КОМПИЛЯЦИЯ (Безопасность на уровне AST)
             compiled_code = cls._get_compiled_code(sub_prepare_script)
 
-            imported_allowed_packages = {allow_pckg.strip(): importlib.import_module(allow_pckg.strip()) for allow_pckg in allowed_packages}
+            imported_allowed_packages = {
+                allow_pckg.strip(): importlib.import_module(allow_pckg.strip()) for allow_pckg in allowed_packages
+            }
 
             # 4. Формируем изолированный global_scope
             global_scope = {
@@ -86,14 +102,20 @@ class ScriptExecutor:
 
         except ImportError as e:
             error_msg = str(e)
-            log_event(f"\033[31mОШИБКА ИМПОРТА БИБЛИОТЕКИ\033[0m\nБиблиотека: {required_libs}\nAction: prepare_sub\nДетали: {repr(e)}", level='CRITICAL')
+            log_event(
+                f"\033[31mОШИБКА ИМПОРТА БИБЛИОТЕКИ\033[0m\nБиблиотека: {required_libs}\nAction: prepare_sub\nДетали: {repr(e)}",
+                level='CRITICAL',
+            )
 
             # Если это ошибка от restricted_import - возвращаем оригинальное сообщение
             if "запрещен в песочнице" in error_msg:
                 return False, error_msg
 
             # Иначе стандартное сообщение
-            return False, f"Библиотека {required_libs} не найдена. Убедитесь что она установлена в виртуальном окружении."
+            return (
+                False,
+                f"Библиотека {required_libs} не найдена. Убедитесь что она установлена в виртуальном окружении.",
+            )
 
         except SyntaxError as e:
             return False, f"Синтаксическая ошибка: {e.msg} (строка {e.lineno})"

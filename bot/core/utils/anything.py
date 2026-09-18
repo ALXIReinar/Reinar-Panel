@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass  # noqa: I001
 from bot.config_dir.config import env
 
 

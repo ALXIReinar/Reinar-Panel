@@ -5,11 +5,12 @@ Revises: e3f4a8b9c1d2
 Create Date: 2026-08-19 08:06:00.635753
 
 """
-from typing import Sequence, Union
+
+from typing import Sequence, Union  # noqa: I001
 
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+import sqlalchemy as sa  # noqa: F401
+from sqlalchemy.dialects import postgresql  # noqa: F401
 
 # revision identifiers, used by Alembic.
 revision: str = 'a28d62139a07'

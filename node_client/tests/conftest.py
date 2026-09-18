@@ -1,7 +1,8 @@
 """
 Конфигурация pytest для тестирования нод-клиента
 """
-import asyncio
+
+import asyncio  # noqa: I001
 import os
 import shutil
 from dataclasses import dataclass
@@ -12,7 +13,7 @@ import time
 # ВАЖНО: Устанавливаем переменную окружения ДО любых импортов
 os.environ['ENV_LOCAL_TEST_FILE'] = os.getenv('ENV_LOCAL_TEST_FILE') or 'node_client/.env.node.test'
 
-from asyncpg import create_pool, Connection
+from asyncpg import create_pool, Connection  # noqa: I001
 import httpx
 import orjson
 import pytest
@@ -27,35 +28,35 @@ from node_client.api.proto_core.write_behind_caching_file import ConfigWriteBuff
 from node_client.tests.utils.db_helpers import (
     load_templates_by_protocol,
     get_all_active_templates,
-    load_templates_with_extractors
+    load_templates_with_extractors,
 )
 
 
 # ========== Helper Functions for Core Management ==========
 
+
 def parse_template_name(template_title: str) -> tuple[str, str]:
     """
     Извлекает ядро и протокол из названия шаблона.
-    
+
     Examples:
         'xray-vless-reality-tcp' -> ('xray', 'vless')
         'singbox-trojan-tls-ws' -> ('singbox', 'trojan')
         'hysteria-hy2-tls' -> ('hysteria', 'hy2')
         'amneziawg-awg-ipv4' -> ('amneziawg', 'awg')
-    
+
     Args:
         template_title: Полное название шаблона из БД
-    
+
     Returns:
         tuple[str, str]: (core_type, protocol_type)
-    
+
     Raises:
         ValueError: Если формат названия некорректный
-    """
+    """  # noqa: W293
     parts = template_title.split('-')
     if len(parts) < 2:
         raise ValueError(f"Invalid template name format: {template_title}")
-    
     return parts[0].lower(), parts[1].lower()
 
 
@@ -66,7 +67,6 @@ CORE_PROTOCOL_CONFIGS = {
     ('xray', 'trojan'): 'xray-trojan.json',
     ('xray', 'shadowsocks'): 'xray-ss.json',
     # ('xray', 'hy2'): 'xray-hy2.json',
-    
     ('singbox', 'vless'): 'singbox-vless.json',
     ('singbox', 'vmess'): 'singbox-vmess.json',
     ('singbox', 'trojan'): 'singbox-trojan.json',
@@ -75,7 +75,6 @@ CORE_PROTOCOL_CONFIGS = {
     ('singbox', 'wg'): 'singbox-wg.json',
     ('singbox', 'awg'): 'singbox-awg.json',
     ('singbox', 'tuicv5'): 'singbox-tuicv5.json',
-    
     ('hysteria', 'hy2'): 'hysteria-hy2.yml',
 }
 
@@ -87,7 +86,7 @@ CORE_IMAGES = {
         'start_command': 'xray run -c /etc/xray/config.json',
         'log_ready_marker': 'started',
         'api_port': 10085,
-        'service_port': 443
+        'service_port': 443,
     },
     'singbox': {
         'image': 'ghcr.io/sagernet/sing-box:latest',
@@ -95,7 +94,7 @@ CORE_IMAGES = {
         'start_command': 'sing-box run -c /etc/sing-box/config.json',
         'log_ready_marker': 'started',
         'api_port': 10085,
-        'service_port': 443
+        'service_port': 443,
     },
     'hysteria': {
         'image': 'tobyxdd/hysteria:latest',
@@ -103,46 +102,44 @@ CORE_IMAGES = {
         'start_command': 'hysteria server -c /etc/hysteria/config.yaml',
         'log_ready_marker': 'server up',
         'api_port': 10085,  # trafficStats endpoint
-        'service_port': 443
-    }
+        'service_port': 443,
+    },
 }
 
 
 def get_core_container(template_title: str, is_real_mode: bool) -> tuple[str, int]:
     """
     Возвращает (core_ip, api_port) для указанного шаблона.
-    
+
     Mock режим: возвращает ('127.0.0.1', 10085)
     Real режим: поднимает Docker контейнер с соответствующим ядром
-    
+
     Args:
         template_title: Полное название шаблона (например, 'xray-vless-reality-tcp')
         is_real_mode: Флаг реального режима (--mode=real)
-        
+
     Returns:
         tuple[str, int]: (host_ip, api_port)
-        
+
     Raises:
         pytest.skip: Если:
             - Запущен в mock режиме (is_real_mode=False)
             - Ядро не поддерживается (amneziawg)
             - Конфиг для протокола не найден
             - Docker контейнер не удалось запустить
-    
+
     Example:
         >>> core_ip, api_port = get_core_container('xray-vless-reality-tcp', True)
         >>> print(f"Xray API доступен на {core_ip}:{api_port}")
-    """
+    """  # noqa: W293
     if not is_real_mode:
         # Mock режим - возвращаем фиктивные значения
         return ('127.0.0.1', 10085)
-    
     # Парсим название шаблона
     try:
         core_type, protocol_type = parse_template_name(template_title)
     except ValueError as e:
         pytest.skip(f"Cannot parse template name: {e}")
-    
     # Проверяем поддержку ядра
     if core_type == 'amneziawg':
         # pytest.skip("AmneziaWG not supported in real mode (L3 networking issues with Docker)")
@@ -157,41 +154,28 @@ def get_core_container(template_title: str, is_real_mode: bool) -> tuple[str, in
         # pytest.skip(f"No config for {core_type}-{protocol_type} combination")
         return False, False
 
-
     # Получаем конфигурации
     config_filename = CORE_PROTOCOL_CONFIGS[config_key]
     core_config = CORE_IMAGES[core_type]
-    
     # Путь к конфиг-файлу
     config_path = Path(__file__).parent / "utils" / "base_configs" / config_filename
-    
     if not config_path.exists():
         pytest.skip(f"Config file not found: {config_path}")
-    
     # Создаём контейнер
     container = DockerContainer(core_config['image'])
     container.with_exposed_ports(core_config['api_port'], core_config['service_port'])
-    container.with_volume_mapping(
-        str(config_path), 
-        core_config['mount_path'], 
-        mode="ro"
-    )
+    container.with_volume_mapping(str(config_path), core_config['mount_path'], mode="ro")
     container.with_command(core_config['start_command'])
-    
     # Запускаем контейнер
     try:
         container.start()
-        
         # Ждём когда ядро запустится
         wait_for_logs(container, core_config['log_ready_marker'], timeout=15)
         time.sleep(2)  # Дополнительная пауза для инициализации API
-        
         # Получаем проброшенный порт API
         api_port = container.get_exposed_port(core_config['api_port'])
         host_ip = container.get_container_host_ip()
-        
         return (host_ip, int(api_port))
-        
     except Exception as e:
         container.stop()
         pytest.skip(f"Failed to start {core_type} container: {e}")
@@ -200,24 +184,26 @@ def get_core_container(template_title: str, is_real_mode: bool) -> tuple[str, in
 # ========== End of Helper Functions ==========
 
 
-from node_client.tests.utils.db_helpers import (
-    load_templates_by_protocol,  # Новая функция
-    load_templates_with_extractors,  # Для тестов шаблонов
-    get_all_active_templates
+from node_client.tests.utils.db_helpers import (  # noqa: E402, I001
+    load_templates_by_protocol,  # Новая функция  # noqa: F811
+    load_templates_with_extractors,  # Для тестов шаблонов  # noqa: F811
+    get_all_active_templates,  # noqa: F811
 )
-from node_client.tests.utils.fake_core import create_mock_subprocess
+from node_client.tests.utils.fake_core import create_mock_subprocess  # noqa: E402
 
 
 # ========== Dataclasses ==========
+
 
 @dataclass
 class TemplateScriptFields:
     """
     Поля скриптов из proto_templates
-    
+
     Используется для унифицированного доступа к полям шаблона в тестах.
     Аналогично ExecHistoryStatuses в web модуле.
-    """
+    """  # noqa: W293
+
     bulk_add_users: str = 'api_bulk_add_user_script'
     bulk_delete_users: str = 'api_bulk_delete_user_script'
     get_metrics: str = 'api_metrics_script'
@@ -229,6 +215,7 @@ class TemplateScriptFields:
 
 
 # ========== Pytest Configuration ==========
+
 
 def pytest_addoption(parser):
     """Кастомные аргументы для pytest"""
@@ -244,48 +231,35 @@ def pytest_addoption(parser):
             "3) Фильтр по протоколу: --protocol=vless (5 шаблонов с 'vless') "
             "4) Точное имя: --protocol=xray-vless-reality-tcp (1 шаблон) "
             "5) Множественные фильтры: --protocol=xray,shadowsocks (OR условие)"
-        )
+        ),
     )
     parser.addoption(
         "--mode",
         action="store",
         default="mock",
-        help="Режим тестирования: mock (моки библиотек) или real (реальные Docker контейнеры с ядрами)"
+        help="Режим тестирования: mock (моки библиотек) или real (реальные Docker контейнеры с ядрами)",
     )
 
 
 def pytest_configure(config):
     """Регистрация кастомных маркеров"""
-    config.addinivalue_line(
-        "markers", "real_core: тесты требующие реального VPN ядра (пропускаются в mock режиме)"
-    )
-    config.addinivalue_line(
-        "markers", "slow: медленные тесты (батчинг, таймауты, асинхронность)"
-    )
-    config.addinivalue_line(
-        "markers", "db: тесты требующие доступа к БД"
-    )
-    config.addinivalue_line(
-        "markers", "vpn_core: параметризованные тесты для конкретных VPN ядер"
-    )
-    config.addinivalue_line(
-        "markers", "security: тесты проверяющие sandbox безопасности"
-    )
-    config.addinivalue_line(
-        "markers", "error_handling: тесты проверяющие обработку ошибок"
-    )
+    config.addinivalue_line("markers", "real_core: тесты требующие реального VPN ядра (пропускаются в mock режиме)")
+    config.addinivalue_line("markers", "slow: медленные тесты (батчинг, таймауты, асинхронность)")
+    config.addinivalue_line("markers", "db: тесты требующие доступа к БД")
+    config.addinivalue_line("markers", "vpn_core: параметризованные тесты для конкретных VPN ядер")
+    config.addinivalue_line("markers", "security: тесты проверяющие sandbox безопасности")
+    config.addinivalue_line("markers", "error_handling: тесты проверяющие обработку ошибок")
 
 
 def pytest_collection_modifyitems(config, items):
     """
     Фильтрация тестов на основе CLI аргументов
-    
+
     Логика:
     1. --mode=mock → пропускаем тесты с маркером real_core
     2. --protocol используется для фильтрации шаблонов при загрузке (в фикстурах)
-    """
+    """  # noqa: W293
     test_mode = config.getoption("--mode")
-    
     # 1. Пропускаем real_core тесты в mock режиме
     if test_mode == "mock":
         skip_real = pytest.mark.skip(reason="Пропускаем real_core тесты в mock режиме (используйте --mode=real)")
@@ -303,6 +277,7 @@ def ensure_test_database():
 
 
 # ========== Database Fixtures ==========
+
 
 @pytest.fixture(scope="session")
 async def db_pool():
@@ -337,15 +312,15 @@ async def db_pool():
 def protocol_name(request):
     """
     Получаем фильтр протокола/ядра из CLI аргумента --protocol
-    
+
     Поддерживает:
     - Одиночный фильтр: --protocol=xray
     - Множественные фильтры: --protocol=xray,shadowsocks
     - Точное совпадение: --protocol=xray-vless-reality-tcp
-    
+
     Returns:
         str: Строка с фильтром(ами), разделёнными запятой
-    """
+    """  # noqa: W293
     return request.config.getoption("--protocol")
 
 
@@ -369,23 +344,24 @@ def is_mock_mode(test_mode):
 
 # ========== Real Core Fixtures (Docker testcontainers) ==========
 
+
 @pytest.fixture(scope="function")
 def xray_core_container(is_real_mode):
     """
     Поднимает реальный Xray контейнер для E2E тестов.
-    
+
     DEPRECATED: Используйте get_core_container(template_title, is_real_mode) вместо этой фикстуры.
-    
+
     Оставлена для обратной совместимости со старыми тестами.
-    
+
     Используется только при --mode=real
-    
+
     Returns:
         tuple[str, int]: (host_ip, api_port) для подключения к Xray API
-        
+
     Raises:
         pytest.skip: Если запущен в mock режиме
-    """
+    """  # noqa: W293
     # Используем новую универсальную функцию
     return get_core_container('xray-vless-tcp', is_real_mode)
 
@@ -394,30 +370,30 @@ def xray_core_container(is_real_mode):
 async def protocol_templates(db_pool, protocol_name):
     """
     Загружает ВСЕ шаблоны по фильтру --protocol.
-    
+
     Примеры использования в тестах:
-    
+
     # Тест для всех шаблонов
     async def test_all_templates_have_scripts(protocol_templates):
         for template in protocol_templates:
             assert template['api_bulk_add_user_script'], f"{template['title']} missing bulk_add script"
             assert template['api_bulk_delete_user_script'], f"{template['title']} missing bulk_delete script"
-    
+
     # Тест с одним шаблоном (первым)
     async def test_something(protocol_template):  # единственное число!
         assert protocol_template['title']
-    
+
     Примеры запуска:
     - pytest --protocol=xray → загрузит все шаблоны xray
     - pytest --protocol=vless → загрузит все vless шаблоны на любом ядре
     - pytest --protocol=xray-vless → загрузит все xray-vless шаблоны
-    
+
     Returns:
         list[dict]: Список шаблонов со всеми скриптами и метаданными
-        
+
     Raises:
         pytest.skip: Если шаблоны не найдены в БД
-    """
+    """  # noqa: W293
     templates = await load_templates_by_protocol(db_pool, protocol_name)
 
     if not templates:
@@ -429,7 +405,6 @@ async def protocol_templates(db_pool, protocol_name):
             f"Доступные шаблоны: {available_names}. "
             f"Попробуйте: --protocol={available_names[0] if available_names else 'xray'}"
         )
-    
     return templates
 
 
@@ -437,25 +412,25 @@ async def protocol_templates(db_pool, protocol_name):
 async def protocol_templates_with_extractors(db_pool, protocol_name):
     """
     Загружает ВСЕ шаблоны по фильтру --protocol вместе с их extractors.
-    
+
     Расширенная версия protocol_templates, которая также загружает
     связанные extractors из таблицы templates_users_extractors.
-    
+
     Используется в integration тестах для проверки:
     - Наличия и валидности extractors
     - Структуры constant_user_data_obj
     - Выполнения скриптов с реальными данными
-    
+
     Примеры запуска:
     - pytest tests/integration/test_protocol_templates.py --protocol=xray
     - pytest tests/integration/test_protocol_templates.py --protocol=*
-    
+
     Returns:
         list[dict]: Список шаблонов с полем 'extractors' (список extractors)
-        
+
     Raises:
         pytest.skip: Если шаблоны не найдены в БД
-    """
+    """  # noqa: W293
     templates = await load_templates_with_extractors(db_pool, protocol_name)
 
     if not templates:
@@ -467,11 +442,11 @@ async def protocol_templates_with_extractors(db_pool, protocol_name):
             f"Доступные шаблоны: {available_names}. "
             f"Попробуйте: --protocol={available_names[0] if available_names else '*'}"
         )
-    
     return templates
 
 
 # ========== File System Fixtures ==========
+
 
 @pytest.fixture(scope="session")
 def base_config_path():
@@ -483,9 +458,9 @@ def base_config_path():
 def test_configs_dir(tmp_path_factory):
     """
     Временная директория для конфиг-файлов на весь session
-    
+
     Создаётся один раз, удаляется после всех тестов
-    """
+    """  # noqa: W293
     temp_dir = tmp_path_factory.mktemp("test_configs")
     yield temp_dir
     # Cleanup происходит автоматически через tmp_path_factory
@@ -495,10 +470,10 @@ def test_configs_dir(tmp_path_factory):
 def working_config_path(test_configs_dir, base_config_path):
     """
     Рабочая копия конфиг-файла для тестов (создаётся один раз на session)
-    
+
     Копируем базовый конфиг в временную директорию.
     Все тесты работают с этой копией.
-    """
+    """  # noqa: W293
     working_path = test_configs_dir / "working_config.json"
     shutil.copy(base_config_path, working_path)
     return working_path
@@ -508,23 +483,24 @@ def working_config_path(test_configs_dir, base_config_path):
 def temp_config_path(tmp_path):
     """
     Временный конфиг для одного теста (function scope)
-    
+
     Используется когда тесту нужен изолированный конфиг
-    """
+    """  # noqa: W293
     config_path = tmp_path / "test_config.json"
     return config_path
 
 
 # ========== ConfigWriteBuffer Fixtures ==========
 
+
 @pytest.fixture
 async def fast_buffer(tmp_path):
     """
     ConfigWriteBuffer с быстрым timeout для тестов
-    
+
     timeout=1 сек вместо дефолтных 10 для ускорения тестов
     max_batch=5 для проверки батчинга
-    """
+    """  # noqa: W293
     buffer = ConfigWriteBuffer(max_batch=5, timeout=1.0)
     yield buffer
     await buffer.stop()
@@ -534,9 +510,9 @@ async def fast_buffer(tmp_path):
 async def mock_core_buffer(tmp_path):
     """
     ConfigWriteBuffer с очень быстрым timeout для unit тестов
-    
+
     timeout=0.5 сек для быстрых тестов
-    """
+    """  # noqa: W293
     buffer = ConfigWriteBuffer(max_batch=5, timeout=0.5)
     yield buffer
     await buffer.stop()
@@ -552,21 +528,21 @@ async def mock_buffer(mock_core_buffer):
 
 # ========== Mock Fixtures ==========
 
+
 @pytest.fixture
 def mock_subprocess():
     """
     Мок subprocess.run для execute_api
-    
+
     По умолчанию возвращает успешный результат.
     Можно переопределить в конкретном тесте.
-    
+
     Example:
         def test_execute(mock_subprocess):
             mock_subprocess.return_value.stdout = "custom output"
             # ...
-    """
+    """  # noqa: W293
     mock = create_mock_subprocess(returncode=0, stdout="Success", stderr="")
-    
     with patch('subprocess.run', mock):
         yield mock
 
@@ -575,11 +551,10 @@ def mock_subprocess():
 def mock_subprocess_timeout():
     """
     Мок subprocess.run который выбрасывает TimeoutExpired
-    
+
     Используется для тестирования таймаутов команд
-    """
+    """  # noqa: W293
     mock = create_mock_subprocess(raise_timeout=True)
-    
     with patch('subprocess.run', mock):
         yield mock
 
@@ -588,11 +563,10 @@ def mock_subprocess_timeout():
 def mock_hot_reload_success():
     """
     Мок HotReloadExecutor с успешным выполнением скрипта
-    
+
     Возвращает (True, "success message")
-    """
+    """  # noqa: W293
     mock = AsyncMock(return_value=(True, "Hot-reload успешно выполнен"))
-    
     with patch('node_client.api.sandbox.hot_reload_executor.HotReloadExecutor.execute_action_script', mock):
         yield mock
 
@@ -601,37 +575,34 @@ def mock_hot_reload_success():
 def mock_hot_reload_failure():
     """
     Мок HotReloadExecutor с провалом скрипта
-    
+
     Возвращает (False, "error message")
-    """
+    """  # noqa: W293
     mock = AsyncMock(return_value=(False, "Hot-reload провалился"))
-    
     with patch('node_client.api.sandbox.hot_reload_executor.HotReloadExecutor.execute_action_script', mock):
         yield mock
 
 
 # ========== FastAPI Client Fixtures ==========
 
+
 @pytest.fixture
 async def client(mock_core_buffer):
     """
     FastAPI TestClient без middleware для тестирования API
-    
+
     Middleware (OnlyAdminAccessMiddleware) отключен для тестов,
     чтобы не проверять IP на каждый запрос.
-    
+
     Returns:
         httpx.AsyncClient: Клиент для отправки запросов к API
-    """
+    """  # noqa: W293
     app = FastAPI()
     app.include_router(main_router)
-    
     # Добавляем core_buffer в state приложения
     app.state.core_buffer = mock_core_buffer
-    
     # Middleware НЕ добавляем для тестов (OnlyAdminAccessMiddleware)
     # Это позволяет тестировать API без проверки IP
-    
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
         ac.app = app  # Сохраняем ссылку для доступа к app.state
@@ -642,14 +613,13 @@ async def client(mock_core_buffer):
 async def client_with_real_buffer(fast_buffer):
     """
     FastAPI TestClient с реальным ConfigWriteBuffer
-    
+
     Используется для интеграционных тестов где нужна
     реальная логика батчинга и таймаутов.
-    """
+    """  # noqa: W293
     app = FastAPI()
     app.include_router(main_router)
     app.state.core_buffer = fast_buffer
-    
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
         ac.app = app
@@ -658,13 +628,14 @@ async def client_with_real_buffer(fast_buffer):
 
 # ========== E2E Test Fixtures ==========
 
+
 @pytest.fixture
 async def e2e_buffer(tmp_path):
     """
     ConfigWriteBuffer для E2E тестов с очень быстрым timeout
-    
+
     timeout=0.3 сек для быстрого срабатывания воркера в тестах
-    """
+    """  # noqa: W293
     buffer = ConfigWriteBuffer(max_batch=5, timeout=0.3)
     yield buffer
     await buffer.stop()
@@ -676,14 +647,13 @@ async def e2e_buffer(tmp_path):
 async def e2e_client(e2e_buffer):
     """
     FastAPI TestClient для E2E тестов с реальным буфером
-    
+
     Используется для полномасштабных E2E тестов пайплайна:
     HTTP → Hot-reload → WBC → Disk → Reload
-    """
+    """  # noqa: W293
     app = FastAPI()
     app.include_router(main_router)
     app.state.core_buffer = e2e_buffer
-    
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
         ac.app = app
@@ -694,10 +664,11 @@ async def e2e_client(e2e_buffer):
 def e2e_config_path(tmp_path, base_config_path):
     """
     Временный конфиг для E2E теста (изолированный для каждого теста)
-    
+
     Копирует базовый конфиг в уникальную временную директорию
-    """
+    """  # noqa: W293
     import shutil
+
     e2e_config = tmp_path / "e2e_config.json"
     shutil.copy(base_config_path, e2e_config)
     return e2e_config
@@ -705,13 +676,14 @@ def e2e_config_path(tmp_path, base_config_path):
 
 # ========== Utility Fixtures ==========
 
+
 @pytest.fixture(autouse=True)
 def reset_env_vars():
     """
     Автоматическая фикстура для сброса переменных окружения между тестами
-    
+
     Гарантирует что изменения env не влияют на другие тесты
-    """
+    """  # noqa: W293
     original_env = os.environ.copy()
     yield
     os.environ.clear()

@@ -1,6 +1,6 @@
 from asyncpg import Connection
 
-from web.arq_worker.utils.anything import CoreProtoActions
+from web.arq_worker.utils.anything import CoreProtoActions, VnodeRegStatuses
 
 
 class MetricsQueries:
@@ -13,13 +13,12 @@ class MetricsQueries:
                pt.api_metrics_script, pt.proto_python_lib, pt.metrics_parser_code, pt.metrics_parser_libs, 
                pt.metrics_parser_code, pt.metrics_parser_libs
         FROM nodes n
-        JOIN nodes_protocols np ON np.node_id = n.id AND np.user_visible = true
+        JOIN nodes_protocols np ON np.node_id = n.id AND np.user_visible = true AND np.reg_status = $1
         JOIN protocols p ON np.proto_id = p.id
         JOIN proto_templates pt ON p.tmp_id = pt.id
         WHERE n.is_active = true AND np.metrics_port IS NOT NULL
-        '''
-        return await self.conn.fetch(query)
-
+        '''  # noqa: W291
+        return await self.conn.fetch(query, VnodeRegStatuses.success)
 
     async def update_traffic(self, user_sub_ids: list[str], traffic_add_mbs: list[int]):
         """
@@ -61,8 +60,10 @@ class MetricsQueries:
         SELECT std.uuid, std.user_sub_id, $2, vsp.node_proto_id
         FROM subs_to_disable std
         JOIN vnodes_sub_plans vsp ON std.sub_plan_id = vsp.sub_plan_id
-        JOIN nodes_protocols np ON vsp.node_proto_id = np.id AND np.user_visible = true
+        JOIN nodes_protocols np ON vsp.node_proto_id = np.id AND np.user_visible = true AND np.reg_status = $3
         RETURNING sub_nodes_outbox.id
         """
         await self.conn.execute(query_update_traffic, user_sub_ids, traffic_add_mbs)
-        return await self.conn.fetch(query_block_and_outbox, user_sub_ids, CoreProtoActions.delete)
+        return await self.conn.fetch(
+            query_block_and_outbox, user_sub_ids, CoreProtoActions.delete, VnodeRegStatuses.success
+        )

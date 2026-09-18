@@ -1,4 +1,4 @@
-from aiohttp import ClientSession
+from aiohttp import ClientSession  # noqa: I001
 
 from web.arq_worker.config import env
 from web.arq_worker.data.postgres import PgSql
@@ -9,7 +9,9 @@ from web.arq_worker.utils.arq_logger_config import log_event
 
 @pg_sql_dep
 @aiohttp_dep
-async def send_sub_link_tg_user(ctx: dict, user_id: int, user_sub_id: int, db: PgSql = None, aio_http: ClientSession = None):
+async def send_sub_link_tg_user(
+    ctx: dict, user_id: int, user_sub_id: int, db: PgSql = None, aio_http: ClientSession = None
+):
     user = await db.get_user_tg_notify(user_id, user_sub_id)
 
     try:
@@ -18,10 +20,12 @@ async def send_sub_link_tg_user(ctx: dict, user_id: int, user_sub_id: int, db: P
             json={
                 'chat_id': user['tg_id'],
                 'parse_mode': 'HTML',
-                'text': f'🚀Оплата прошла успешно!\n🌀Ссылка для подключения в <b>Happ</b>\n\n<code>{env.sub_service_domain}/sub/{user['b64_id']}</code>',
-            }
+                'text': f'🚀Оплата прошла успешно!\n🌀Ссылка для подключения в <b>Happ</b>\n\n<code>{env.sub_service_domain}/sub/{user["b64_id"]}</code>',
+            },
         ) as resp:
-            log_event(f'\033[34m[Tg Notify]\033[0m Отправили ссылку на подписку пользователю | status_code: {resp.status}')
+            log_event(
+                f'\033[34m[Tg Notify]\033[0m Отправили ссылку на подписку пользователю | status_code: {resp.status}'
+            )
             resp.release()
     except Exception as e:
         log_event(f'Не удалось подключиться к апи телеграм | err: \033[31m{repr(e)}\033[0m')

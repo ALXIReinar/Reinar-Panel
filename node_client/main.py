@@ -1,4 +1,4 @@
-import uvicorn
+import uvicorn  # noqa: I001
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 

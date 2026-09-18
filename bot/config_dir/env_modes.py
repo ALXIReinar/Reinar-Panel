@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum  # noqa: I001
 
 class AppMode(str, Enum):
     LOCAL = "local"
@@ -19,4 +19,4 @@ APP_MODE_CONFIG = {
         'redis_host': 'redis_host',
         'redis_port': 'redis_port',
     },
-}
+}  # noqa: W292

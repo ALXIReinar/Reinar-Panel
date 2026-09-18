@@ -1,4 +1,4 @@
-import asyncio
+import asyncio  # noqa: I001
 
 from arq import ArqRedis
 
@@ -35,7 +35,7 @@ async def retry_stuck_core_proto_actions(ctx: dict, db: PgSql = None, arq: ArqRe
                     'uuid': ev['uuid'],
                     'user_sub_id': sub_id,
                     'operation': ev['operation'],
-                    'event_id': []  # <-- Сюда будем складывать ВСЕ ID событий юзера
+                    'event_id': [],  # <-- Сюда будем складывать ВСЕ ID событий юзера
                 }
             # Перезаписываем операцию на самую свежую (т.к. БД отсортировала по ASC)
             final_states[sub_id]['operation'] = ev['operation']
@@ -48,6 +48,7 @@ async def retry_stuck_core_proto_actions(ctx: dict, db: PgSql = None, arq: ArqRe
 
         async with sem:
             "4. Вспомогательная функция для постановки задачи в ARQ"
+
             async def dispatch_job(batch, operation):
                 if not batch:
                     return  # Если пачка пустая, ничего не делаем
@@ -66,7 +67,9 @@ async def retry_stuck_core_proto_actions(ctx: dict, db: PgSql = None, arq: ArqRe
                 }
 
                 "Отправляем chain task на каждую ноду для бульк удаления"
-                log_event(f'\033[31m[ARQ Cron]\033[0m Отправляем Бульк запрос на \033[33m{CoreProtoActions.id2name[operation]}\033[0m | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
+                log_event(
+                    f'\033[31m[ARQ Cron]\033[0m Отправляем Бульк запрос на \033[33m{CoreProtoActions.id2name[operation]}\033[0m | node_proto_id: \033[33m{vnode["node_proto_id"]}\033[0m'
+                )
                 job = await arq.enqueue_job(
                     'bulk_action_users_by_node',
                     vnode['node_proto_id'],
@@ -86,7 +89,11 @@ async def retry_stuck_core_proto_actions(ctx: dict, db: PgSql = None, arq: ArqRe
                     vnode['config2json_script'],
                     vnode['conf_converter_libs'],
                 )
-                log_event(f'\033[35m[ARQ Cron]\033[0m Ретрай операции в vpn-ядро протокола | node_proto_id: \033[32m{vnode['node_proto_id']}\033[0m; operation: \033[36m{operation}\033[0m', job_id=job.job_id)
+                log_event(
+                    f'\033[35m[ARQ Cron]\033[0m Ретрай операции в vpn-ядро протокола | node_proto_id: \033[32m{vnode["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m',
+                    job_id=job.job_id,
+                )
+
             "3. Кидаем на одну ноду 2 пачки"
             await dispatch_job(add_batch, CoreProtoActions.add)
             await dispatch_job(delete_batch, CoreProtoActions.delete)
@@ -94,5 +101,7 @@ async def retry_stuck_core_proto_actions(ctx: dict, db: PgSql = None, arq: ArqRe
     "Параллельный запуск"
     await asyncio.gather(*(enqueue_worker(action) for action in stuck_actions))
 
-    log_event(f'\033[32m[ARQ Cron]\033[0m Перезапуск залипших операций прошёл успешно | stuck_len: \033[33m{len(stuck_actions)}\033[0m')
+    log_event(
+        f'\033[32m[ARQ Cron]\033[0m Перезапуск залипших операций прошёл успешно | stuck_len: \033[33m{len(stuck_actions)}\033[0m'
+    )
     return {'success': True, 'message': 'Чистка зависших операций', 'stuck_len': len(stuck_actions)}

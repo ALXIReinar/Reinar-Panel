@@ -10,7 +10,8 @@ EXPAND PHASE миграции:
 - Старые колонки в proto_templates НЕ удаляем (обе структуры работают параллельно)
 - После периода мониторинга будет создана миграция CONTRACT PHASE для удаления старых колонок
 """
-from typing import Sequence, Union
+
+from typing import Sequence, Union  # noqa: I001
 
 from alembic import op
 import sqlalchemy as sa
@@ -27,30 +28,39 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """
     EXPAND PHASE: Миграция данных из proto_templates в templates_users_extractors.
-    
+
     Маппинг полей:
     - proto_templates.flatten_json_users_key → templates_users_extractors.flatten_array_cursor
     - proto_templates.flatten_user_identifier_key → templates_users_extractors.extractor_script
-    
+
     Старые колонки в proto_templates СОХРАНЯЮТСЯ для совместимости.
     """
     conn = op.get_bind()
-    
     # 1. Создаём новую таблицу templates_users_extractors
     print("✓ Создаём таблицу templates_users_extractors")
     op.create_table(
         'templates_users_extractors',
-        sa.Column('id', sa.BigInteger(), sa.Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1), autoincrement=True, nullable=False),
+        sa.Column(
+            'id',
+            sa.BigInteger(),
+            sa.Identity(
+                always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1
+            ),
+            autoincrement=True,
+            nullable=False,
+        ),
         sa.Column('tmp_id', sa.Integer(), nullable=False),
         sa.Column('flatten_array_cursor', sa.String(length=1024), nullable=False),
         sa.Column('extractor_script', sa.Text(), nullable=True),
-        sa.ForeignKeyConstraint(['tmp_id'], ['proto_templates.id'], name='templates_users_extractors_tmp_id_fkey', ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id', name='templates_users_extractors_pkey')
+        sa.ForeignKeyConstraint(
+            ['tmp_id'], ['proto_templates.id'], name='templates_users_extractors_tmp_id_fkey', ondelete='CASCADE'
+        ),
+        sa.PrimaryKeyConstraint('id', name='templates_users_extractors_pkey'),
     )
-    
     # 2. Миграция данных: копируем из proto_templates в templates_users_extractors
     print("✓ Копируем данные из proto_templates в templates_users_extractors")
-    conn.execute(text("""
+    conn.execute(
+        text("""
         INSERT INTO templates_users_extractors 
             (tmp_id, flatten_array_cursor, extractor_script)
         SELECT 
@@ -60,8 +70,8 @@ def upgrade() -> None:
         FROM proto_templates pt
         WHERE pt.flatten_json_users_key IS NOT NULL 
            OR pt.flatten_user_identifier_key IS NOT NULL
-    """))
-    
+    """)
+    )
     # 3. Получаем количество мигрированных записей для логирования
     result = conn.execute(text("SELECT COUNT(*) FROM templates_users_extractors"))
     count = result.scalar()
@@ -71,10 +81,9 @@ def upgrade() -> None:
 def downgrade() -> None:
     """
     Откат EXPAND PHASE: Удаляем таблицу templates_users_extractors.
-    
+
     Данные в proto_templates остаются нетронутыми (они никогда не удалялись).
     """
     # Удаляем таблицу полностью
     op.drop_table('templates_users_extractors')
-    
     print("✓ Таблица templates_users_extractors удалена (откат EXPAND PHASE)")

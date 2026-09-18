@@ -1,70 +1,60 @@
 #!/bin/bash
+set -e
 
 DOMAIN=$1
 EMAIL=$2
-CERT_DIR=${3:-"/etc/xray/certs/$1"}
+CERT_DIR=${3:-"/etc/reinar/certs/$DOMAIN"}
+SERVICES_LIST="$CERT_DIR/services.list"
+
+log() { echo -e "$1" >&2; }
 
 if [ -z "$DOMAIN" ] || [ -z "$EMAIL" ]; then
-    echo "Ошибка: Не указан домен или email!"
-    echo "Использование: bash issue-cert.sh <domain> <email>"
+    log "\033[31mОшибка: Не указаны параметры! bash prepare-cert.sh <domain> <email>\033[0m"
     exit 1
 fi
 
-echo "Начинаем процесс получения сертификата для $DOMAIN ($EMAIL)..."
+log "1. Подготовка сертификата для $DOMAIN..."
+mkdir -p "$CERT_DIR"
+touch "$SERVICES_LIST" # Создаем пустой файл, если его нет
 
-# 1. Установка необходимых зависимостей (socat нужен для acme.sh standalone)
-apt-get update -y
-apt-get install -y curl socat cron
+apt-get update -y > /dev/null 2>&1
+apt-get install -y curl socat cron jq > /dev/null 2>&1
 
-# 2. Установка acme.sh (если еще не установлен)
 if [ ! -f "$HOME/.acme.sh/acme.sh" ]; then
-    echo "Установка acme.sh..."
-    curl https://get.acme.sh | sh -s email="$EMAIL"
+    log "Установка acme.sh..."
+    curl -s https://get.acme.sh | sh -s email="$EMAIL" > /dev/null 2>&1
 fi
-
-# Делаем алиас доступным в текущем скрипте
 source "$HOME/.acme.sh/acme.sh.env"
 
-# 3. Выпуск сертификата (ECC/ec-256 работает быстрее и безопаснее)
-echo "Попытка выпуска через Let's Encrypt..."
-"$HOME/.acme.sh/acme.sh" --set-default-ca --server letsencrypt
-"$HOME/.acme.sh/acme.sh" --issue -d "$DOMAIN" --standalone --keylength ec-256
-
-# Проверка на ошибку Let's Encrypt (код возврата не равен 0)
-if [ $? -ne 0 ]; then
-    echo "Let's Encrypt вернул ошибку. Пробуем fallback на ZeroSSL..."
-    "$HOME/.acme.sh/acme.sh" --set-default-ca --server zerossl
-    "$HOME/.acme.sh/acme.sh" --issue -d "$DOMAIN" --standalone --keylength ec-256
-
-    if [ $? -ne 0 ]; then
-        echo "Ошибка: Не удалось получить сертификат ни через Let's Encrypt, ни через ZeroSSL."
-        echo "Убедитесь, что A-запись домена $DOMAIN указывает на этот IP и порт 80 открыт."
-        exit 1
+# Если сертификата еще нет - выпускаем
+if [ ! -f "$CERT_DIR/fullchain.cer" ]; then
+    log "Запрашиваем новый сертификат (Let's Encrypt / ZeroSSL)..."
+    if ! "$HOME/.acme.sh/acme.sh" --issue -d "$DOMAIN" --standalone --keylength ec-256 --server letsencrypt >&2; then
+        if ! "$HOME/.acme.sh/acme.sh" --issue -d "$DOMAIN" --standalone --keylength ec-256 --server zerossl >&2; then
+            log "\033[31mОшибка выпуска сертификата.\033[0m"
+            exit 1
+        fi
     fi
-fi
 
-# 4. Установка сертификата в рабочую директорию Xray
-# Мы используем --install-cert, чтобы acme.sh запомнил эти пути для автообновления
-mkdir -p "$CERT_DIR"
+    # Устанавливаем сертификат и вешаем хук
+    # Флаг -r у xargs важен: если список пуст, команда не упадет с ошибкой
+    RELOAD_CMD="xargs -r -a $SERVICES_LIST -I {} systemctl try-restart {}"
 
-# Команда reloadcmd будет выполняться cron'ом каждые 60 дней после обновления сертификата.
-# Так как наши systemd-сервисы называются xray-<tmp_id>.service, мы перезапускаем их по маске.
-RELOAD_CMD="systemctl daemon-reload && systemctl try-restart 'xray-*'"
-
-echo "Установка сертификата и настройка cron-хуков..."
-"$HOME/.acme.sh/acme.sh" --install-cert -d "$DOMAIN" --ecc \
-    --fullchain-file "$CERT_DIR/fullchain.cer" \
-    --key-file "$CERT_DIR/private.key" \
-    --reloadcmd "$RELOAD_CMD"
-
-if [ $? -eq 0 ]; then
-    echo "=================================================="
-    echo "УСПЕХ! Сертификат успешно выпущен и установлен."
-    echo "Путь к сертификату: $CERT_DIR/fullchain.cer"
-    echo "Путь к ключу:       $CERT_DIR/private.key"
-    echo "Cron для автообновления настроен."
-    echo "=================================================="
+    "$HOME/.acme.sh/acme.sh" --install-cert -d "$DOMAIN" --ecc \
+        --fullchain-file "$CERT_DIR/fullchain.cer" \
+        --key-file "$CERT_DIR/private.key" \
+        --reloadcmd "$RELOAD_CMD" >&2
 else
-    echo "Произошла ошибка при копировании сертификатов."
-    exit 1
+    log "Сертификат уже существует. Пропускаем выпуск."
 fi
+
+log "=================================================="
+log "✓ УСПЕХ! Сертификат готов к использованию."
+log "Домен: $DOMAIN"
+log "Хук перезапуска охватывает: $(cat $SERVICES_LIST | tr '\n' ' ')"
+log "=================================================="
+
+export DOMAIN=$DOMAIN
+export CERT_PATH="$CERT_PATH/fullchain.cer"
+export KEY_PATH="$CERT_PATH/private.key"
+export SERVICES_LIST=$SERVICES_LIST

@@ -1,15 +1,14 @@
+from datetime import datetime, timedelta, timezone
+
 import httpx
 import jwt
 import pytest
-from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Response
 from starlette.requests import Request
 
-from web.api.middleware import AuthUXASGIMiddleware, ASGILoggingMiddleware
+from web.api.middleware import ASGILoggingMiddleware, AuthUXASGIMiddleware
 from web.config_dir.config import env
 from web.schemas.cookie_settings_schema import JWTCookieDep
-
-
 
 
 def _headers_with_ip(ip: str) -> dict[str, str]:

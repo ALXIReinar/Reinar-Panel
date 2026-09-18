@@ -1,4 +1,4 @@
-from datetime import timedelta, datetime, UTC
+from datetime import timedelta, datetime, UTC  # noqa: I001
 
 from asyncpg import Connection
 
@@ -27,9 +27,8 @@ class TgRoutingQueries:
             user_info = await self.tg_user_profile(tg_id)
             return False, {**user_info, 'user_id': insert_res['id']}
 
-        log_event(f'\033[36m[Tg Routing]\033[0m Обновили tg_username | user_id: \033[32m{insert_res['id']}\033[0m')
+        log_event(f'\033[36m[Tg Routing]\033[0m Обновили tg_username | user_id: \033[32m{insert_res["id"]}\033[0m')
         return None, None
-
 
     async def tg_user_profile(self, tg_id: int):
         query = """
@@ -39,7 +38,6 @@ class TgRoutingQueries:
         GROUP BY u.id
         """
         return await self.conn.fetchrow(query, tg_id)
-
 
     async def get_tg_user_subs(self, tg_id: int):
         query = '''
@@ -76,7 +74,7 @@ class TgRoutingQueries:
         WHERE u.tg_id = $1 AND u.is_deleted = false
         GROUP BY sp.id, sp.position, vc.sub_nodes_count
         ORDER BY sp.position
-        '''
+        '''  # noqa: W291
         return await self.conn.fetch(query, tg_id)
 
     async def get_shop_sub_plans(self):
@@ -113,5 +111,5 @@ class TgRoutingQueries:
         WHERE sp.is_active = true
         GROUP BY sp.id, sp.position, vc.sub_nodes_count
         ORDER BY sp.position
-        '''
+        '''  # noqa: W291
         return await self.conn.fetch(query)

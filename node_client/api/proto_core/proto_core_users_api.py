@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException  # noqa: I001
 from starlette.requests import Request
 
 from node_client.api.sandbox.hot_reload_executor import HotReloadExecutor
@@ -21,7 +21,7 @@ async def bulk_action_users_core(body: BaseUserCoreSchema, request: Request, buf
     3. Добавление в очередь на запись (батчинг)
     4. [Если нет hot-reload] → Перезагрузка ядра после записи файла
     """
-    log_event(f"Добавление пользователей | action: \033[33m{body.action}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m; users_len: \033[0m{len(body.users)}\033[0m", request=request)
+    log_event(f"Добавление пользователей | action: \033[33m{body.action}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m; users_len: \033[0m{len(body.users)}\033[0m", request=request)  # noqa: E501
 
     "0. Маппим действия в зависимости от операции"
     hot_reload_success = False
@@ -30,7 +30,7 @@ async def bulk_action_users_core(body: BaseUserCoreSchema, request: Request, buf
     "1. Hot-reload через API (если есть скрипт)"
     if body.action_script and body.core_port:
         try:
-            log_event(f"\033[32m[Bulk]]\033[0m Попытка hot-reload действия через {body.core_lib} | action: \033[33m{body.action}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m;", request=request)
+            log_event(f"\033[32m[Bulk]]\033[0m Попытка hot-reload действия через {body.core_lib} | action: \033[33m{body.action}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m;", request=request)  # noqa: E501
             hot_reload_success, hot_reload_result = await HotReloadExecutor.execute_action_script(
                 script=body.action_script,
                 lib_names=body.core_lib,
@@ -42,10 +42,10 @@ async def bulk_action_users_core(body: BaseUserCoreSchema, request: Request, buf
             )
 
             if not hot_reload_success:
-                log_event(f"\033[32m[Bulk]\033[0m Hot-reload ADD FAILED: {hot_reload_result}. Продолжаем с файловой записью | action: \033[33m{body.action}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m;", request=request, level='ERROR')
+                log_event(f"\033[32m[Bulk]\033[0m Hot-reload ADD FAILED: {hot_reload_result}. Продолжаем с файловой записью | action: \033[33m{body.action}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m;", request=request, level='ERROR')  # noqa: E501
 
         except Exception as e:
-            log_event(f"\033[32m[Bulk]\033[0m Исключение при hot-reload вставки: {e}", request=request, level='CRITICAL')
+            log_event(f"\033[32m[Bulk]\033[0m Исключение при hot-reload вставки: {e}", request=request, level='CRITICAL')  # noqa: E501
             hot_reload_result = str(repr(e))
 
 
@@ -63,10 +63,10 @@ async def bulk_action_users_core(body: BaseUserCoreSchema, request: Request, buf
     )
 
     level = "INFO" if success else "CRITICAL"
-    log_event(f"\033[32m[Bulk]\033[0m Бульк Действия в буфере в буфер | action: \033[33m{body.action}\033[0m; users_len: \033[31m{len(body.users)}\033[0m; msg: \033[36m{msg}\033[0m", request=request, level=level)
+    log_event(f"\033[32m[Bulk]\033[0m Бульк Действия в буфере в буфер | action: \033[33m{body.action}\033[0m; users_len: \033[31m{len(body.users)}\033[0m; msg: \033[36m{msg}\033[0m", request=request, level=level)  # noqa: E501
     if not success:
         raise HTTPException(status_code=500, detail={"success": False, "message": msg})
 
     return {
-        'success': True, 'message': 'Действие успешно выполнено', 'hot_reload': hot_reload_success, 'hot_reload_message': str(hot_reload_result)
+        'success': True, 'message': 'Действие успешно выполнено', 'hot_reload': hot_reload_success, 'hot_reload_message': str(hot_reload_result)  # noqa: E501
     }

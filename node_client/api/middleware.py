@@ -1,4 +1,4 @@
-import secrets
+import secrets  # noqa: F401, I001
 
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Send, Receive, Scope
@@ -24,4 +24,4 @@ class OnlyAdminAccessMiddleware:
             return
 
 
-        await self.app(scope, receive, send)
+        await self.app(scope, receive, send)  # noqa: W292

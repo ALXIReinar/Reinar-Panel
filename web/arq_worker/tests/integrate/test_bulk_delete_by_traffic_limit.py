@@ -9,7 +9,8 @@ Integration тесты для bulk_delete_by_traffic_limit (уровень 3 tas
 
 Функция bulk_delete_by_traffic_limit вызывает bulk_action_users_by_node с operation=2 (DELETE).
 """
-import pytest
+
+import pytest  # noqa: I001
 from unittest.mock import MagicMock
 
 from web.arq_worker.funcs.metrics_collector import bulk_delete_by_traffic_limit
@@ -19,11 +20,11 @@ pytestmark = pytest.mark.asyncio
 
 class TestBulkDeleteByTrafficLimit:
     """Интеграционные тесты для bulk_delete_by_traffic_limit"""
-    
+
     async def test_bulk_delete_by_traffic_limit_success(self, mock_arq_ctx, arq_test_seed, db_pool):
         """
         Успешная постановка задач на удаление пользователей, превысивших лимит трафика.
-        
+
         Flow:
         1. Создаём outbox записи (имитация update_traffic)
         2. Вызываем bulk_delete_by_traffic_limit с outbox_event_ids
@@ -32,68 +33,66 @@ class TestBulkDeleteByTrafficLimit:
         """
         # Arrange: создаём outbox записи для user3 (превышение трафика)
         user3 = arq_test_seed['user3_active_for_add']
-        
         async with db_pool.acquire() as conn:
             # Создаём outbox записи с operation=2 (DELETE) для обеих нод
             outbox_ids = []
             for vnode_id in [arq_test_seed['vnode_id_10'], arq_test_seed['vnode_id_11']]:
-                outbox_id = await conn.fetchval("""
+                outbox_id = await conn.fetchval(
+                    """
                     INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
                     VALUES ($1, $2, 2, $3)
                     RETURNING id
-                """, user3['uuid'], user3['user_sub_id'], vnode_id)
+                """,
+                    user3['uuid'],
+                    user3['user_sub_id'],
+                    vnode_id,
+                )
                 outbox_ids.append(outbox_id)
-        
         # Mock для arq.enqueue_job
         enqueued_jobs = []
-        
+
         async def mock_enqueue_job(*args, **kwargs):
             job_mock = MagicMock()
             job_mock.job_id = f"test-job-{len(enqueued_jobs)}"
-            enqueued_jobs.append({
-                'args': args,
-                'kwargs': kwargs,
-                'job': job_mock,
-                'function_name': args[0],
-                'node_proto_id': args[1] if len(args) > 1 else None,
-                'operation': args[8] if len(args) > 8 else None,  # operation параметр
-                'users': args[9] if len(args) > 9 else None  # users параметр
-            })
+            enqueued_jobs.append(
+                {
+                    'args': args,
+                    'kwargs': kwargs,
+                    'job': job_mock,
+                    'function_name': args[0],
+                    'node_proto_id': args[1] if len(args) > 1 else None,
+                    'operation': args[8] if len(args) > 8 else None,  # operation параметр
+                    'users': args[9] if len(args) > 9 else None,  # users параметр
+                }
+            )
             return job_mock
-        
+
         mock_arq_ctx['arq_redis'].enqueue_job = mock_enqueue_job
-        
         # Act: вызываем bulk_delete_by_traffic_limit
-        result = await bulk_delete_by_traffic_limit(
-            mock_arq_ctx,
-            outbox_ids
-        )
-        
+        result = await bulk_delete_by_traffic_limit(mock_arq_ctx, outbox_ids)
         # Assert: проверяем результат
         assert result['success'] is True
         assert result['total_nodes'] == 2, "Должно быть 2 ноды"
-        
         # Проверяем что задачи поставлены в ARQ
         assert len(enqueued_jobs) == 2, "Должно быть 2 задачи (по одной на каждую ноду)"
-        
         # Проверяем что все задачи для bulk_action_users_by_node с operation=2
         for job_data in enqueued_jobs:
-            assert job_data['function_name'] == 'bulk_action_users_by_node', "Должна быть вызвана bulk_action_users_by_node"
+            assert job_data['function_name'] == 'bulk_action_users_by_node', (
+                "Должна быть вызвана bulk_action_users_by_node"
+            )
             assert job_data['node_proto_id'] in [arq_test_seed['vnode_id_10'], arq_test_seed['vnode_id_11']]
             assert job_data['operation'] == 2, "operation должна быть 2 (DELETE)"
-            
             # Проверяем параметры задачи
             users_list = job_data['users']
             assert len(users_list) == 1, "Должен быть 1 пользователь на ноде"
             assert users_list[0]['uuid'] == user3['uuid']
             assert users_list[0]['user_sub_id'] == user3['user_sub_id']
             assert 'event_id' in users_list[0], "Должен быть event_id"
-    
-    
+
     async def test_bulk_delete_by_traffic_limit_multiple_nodes(self, mock_arq_ctx, arq_test_seed, db_pool):
         """
         Проверяем правильную группировку пользователей по нодам.
-        
+
         Сценарий:
         - 2 пользователя (user3 и user4) на разных/общих нодах
         - Проверяем что каждая нода получает правильный список пользователей
@@ -101,52 +100,54 @@ class TestBulkDeleteByTrafficLimit:
         # Arrange: создаём outbox для двух пользователей
         user3 = arq_test_seed['user3_active_for_add']
         user4 = arq_test_seed['user4_active_for_delete']
-        
         async with db_pool.acquire() as conn:
             outbox_ids = []
-            
             # User3 на обе ноды
             for vnode_id in [arq_test_seed['vnode_id_10'], arq_test_seed['vnode_id_11']]:
-                outbox_id = await conn.fetchval("""
+                outbox_id = await conn.fetchval(
+                    """
                     INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
                     VALUES ($1, $2, 2, $3)
                     RETURNING id
-                """, user3['uuid'], user3['user_sub_id'], vnode_id)
+                """,
+                    user3['uuid'],
+                    user3['user_sub_id'],
+                    vnode_id,
+                )
                 outbox_ids.append(outbox_id)
-            
             # User4 только на vnode_10
-            outbox_id = await conn.fetchval("""
+            outbox_id = await conn.fetchval(
+                """
                 INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
                 VALUES ($1, $2, 2, $3)
                 RETURNING id
-            """, user4['uuid'], user4['user_sub_id'], arq_test_seed['vnode_id_10'])
+            """,
+                user4['uuid'],
+                user4['user_sub_id'],
+                arq_test_seed['vnode_id_10'],
+            )
             outbox_ids.append(outbox_id)
-        
         # Mock для arq.enqueue_job
         enqueued_jobs = []
-        
+
         async def mock_enqueue_job(*args, **kwargs):
             job_mock = MagicMock()
             job_mock.job_id = f"test-job-{len(enqueued_jobs)}"
-            enqueued_jobs.append({
-                'args': args,
-                'node_proto_id': args[1],
-                'users': args[9]  # users на позиции 9
-            })
+            enqueued_jobs.append(
+                {
+                    'args': args,
+                    'node_proto_id': args[1],
+                    'users': args[9],  # users на позиции 9
+                }
+            )
             return job_mock
-        
+
         mock_arq_ctx['arq_redis'].enqueue_job = mock_enqueue_job
-        
         # Act
-        result = await bulk_delete_by_traffic_limit(
-            mock_arq_ctx,
-            outbox_ids
-        )
-        
+        result = await bulk_delete_by_traffic_limit(mock_arq_ctx, outbox_ids)
         # Assert
         assert result['success'] is True
         assert len(enqueued_jobs) == 2, "Должно быть 2 задачи (на 2 ноды)"
-        
         # Проверяем группировку пользователей
         for job_data in enqueued_jobs:
             if job_data['node_proto_id'] == arq_test_seed['vnode_id_10']:
@@ -159,12 +160,11 @@ class TestBulkDeleteByTrafficLimit:
                 # vnode_11 должна иметь только user3
                 assert len(job_data['users']) == 1, "vnode_11 должна иметь 1 пользователя"
                 assert job_data['users'][0]['uuid'] == user3['uuid']
-    
-    
+
     async def test_bulk_delete_by_traffic_limit_filters_inactive_nodes(self, mock_arq_ctx, arq_test_seed, db_pool):
         """
         Проверяем что SQL фильтрует невидимые/неактивные ноды.
-        
+
         Сценарий:
         - Создаём outbox записи на невидимую ноду
         - Проверяем что задачи НЕ поставлены
@@ -172,14 +172,20 @@ class TestBulkDeleteByTrafficLimit:
         # Arrange: создаём отдельный план только для невидимой ноды
         async with db_pool.acquire() as conn:
             # Создаём план подписки только для невидимой ноды
-            invisible_plan_id = await conn.fetchval("""
+            invisible_plan_id = await conn.fetchval(
+                """
                 INSERT INTO sub_plans (title, description, is_active, position)
                 VALUES ($1, $2, $3, $4)
                 RETURNING id
-            """, "Invisible Traffic Plan", "Plan for invisible node test", True, 99)
-            
+            """,
+                "Invisible Traffic Plan",
+                "Plan for invisible node test",
+                True,
+                99,
+            )
             # Создаём оффер для этого плана
-            invisible_offer_id = await conn.fetchval("""
+            invisible_offer_id = await conn.fetchval(
+                """
                 INSERT INTO sub_plan_offers (
                     sub_plan_id, ttl_days, cost,
                     traffic_limit_day_mb, traffic_limit_mb,
@@ -187,23 +193,39 @@ class TestBulkDeleteByTrafficLimit:
                 )
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 RETURNING id
-            """, invisible_plan_id, 30, 500, 10240, None, False, False, True, 1)
-            
+            """,
+                invisible_plan_id,
+                30,
+                500,
+                10240,
+                None,
+                False,
+                False,
+                True,
+                1,
+            )
             # Связываем план ТОЛЬКО с невидимой нодой
-            invisible_node_proto_id = await conn.fetchval("""
+            invisible_node_proto_id = await conn.fetchval(
+                """
                 INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id)
                 VALUES ($1, $2)
                 RETURNING id
-            """, arq_test_seed['vnode_id_invisible'], invisible_plan_id)
-            
+            """,
+                arq_test_seed['vnode_id_invisible'],
+                invisible_plan_id,
+            )
             # Создаём пользователя с подпиской на невидимую ноду
-            user_invisible_id = await conn.fetchval("""
+            user_invisible_id = await conn.fetchval(
+                """
                 INSERT INTO users (tg_id, tg_username, is_deleted)
                 VALUES ($1, $2, false)
                 RETURNING id
-            """, 888888, "traffic_invisible_user")
-            
-            pay_order_invisible = await conn.fetchval("""
+            """,
+                888888,
+                "traffic_invisible_user",
+            )
+            pay_order_invisible = await conn.fetchval(
+                """
                 INSERT INTO pay_orders (
                     user_id, status, 
                     infinite_expire, infinite_traffic, 
@@ -217,70 +239,73 @@ class TestBulkDeleteByTrafficLimit:
                 FROM sub_plan_offers 
                 WHERE id = $2
                 RETURNING id
-            """, user_invisible_id, invisible_offer_id)
-            
-            order_invisible = await conn.fetchval("""
+            """,
+                user_invisible_id,
+                invisible_offer_id,
+            )
+            order_invisible = await conn.fetchval(
+                """
                 INSERT INTO user_subs (user_id, sub_plan_id, order_id, is_active, expire_date,
                                        uuid, b64_id, infinite_traffic, infinite_expire,
                                        traffic_limit_day, used_mb_limit, used_mb, traffic_used_day_mb, is_limited)
                 VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
                 RETURNING id
-            """, user_invisible_id, invisible_plan_id, pay_order_invisible, 
-                 "uuid-traffic-invisible", "b64-traffic-invisible")
-            
+            """,
+                user_invisible_id,
+                invisible_plan_id,
+                pay_order_invisible,
+                "uuid-traffic-invisible",
+                "b64-traffic-invisible",
+            )
             # Создаём outbox запись на невидимую ноду
-            outbox_id_invisible = await conn.fetchval("""
+            outbox_id_invisible = await conn.fetchval(
+                """
                 INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
                 VALUES ($1, $2, 2, $3)
                 RETURNING id
-            """, "uuid-traffic-invisible", order_invisible, arq_test_seed['vnode_id_invisible'])
-        
+            """,
+                "uuid-traffic-invisible",
+                order_invisible,
+                arq_test_seed['vnode_id_invisible'],
+            )
         # Mock для arq.enqueue_job
         enqueued_jobs = []
-        
+
         async def mock_enqueue_job(*args, **kwargs):
             job_mock = MagicMock()
             job_mock.job_id = f"test-job-{len(enqueued_jobs)}"
             enqueued_jobs.append({'args': args})
             return job_mock
-        
+
         mock_arq_ctx['arq_redis'].enqueue_job = mock_enqueue_job
-        
         # Act
-        result = await bulk_delete_by_traffic_limit(
-            mock_arq_ctx,
-            [outbox_id_invisible]
-        )
-        
+        result = await bulk_delete_by_traffic_limit(mock_arq_ctx, [outbox_id_invisible])
         # Assert: проверяем что задачи НЕ поставлены (невидимая нода отфильтрована)
         assert result['success'] is True
         assert result['total_nodes'] == 0, "Не должно быть нод (невидимая нода отфильтрована)"
         assert len(enqueued_jobs) == 0, "Не должно быть задач для невидимых нод"
-    
-    
+
     async def test_bulk_delete_by_traffic_limit_empty_outbox_ids(self, mock_arq_ctx, arq_test_seed, db_pool):
         """
         Edge case: пустой массив outbox_event_ids.
-        
+
         Проверяем graceful handling.
         """
         # Mock для arq.enqueue_job
         enqueued_jobs = []
-        
+
         async def mock_enqueue_job(*args, **kwargs):
             job_mock = MagicMock()
             job_mock.job_id = f"test-job-{len(enqueued_jobs)}"
             enqueued_jobs.append({'args': args})
             return job_mock
-        
+
         mock_arq_ctx['arq_redis'].enqueue_job = mock_enqueue_job
-        
         # Act: вызываем с пустым массивом
         result = await bulk_delete_by_traffic_limit(
             mock_arq_ctx,
-            []  # Пустой массив
+            [],  # Пустой массив
         )
-        
         # Assert
         assert result['success'] is True
         assert result['total_nodes'] == 0, "Не должно быть нод для пустого массива"

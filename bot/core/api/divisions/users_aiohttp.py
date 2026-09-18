@@ -15,7 +15,7 @@ class UsersAioHttp(BaseAioHTTPClient):
 
         **return_data** - отдаёт данные о пользователе. Ответ идентичен методу get_user_info()
         """
-        log_event(f'Отправили запрос на сохранение пользователя Telegram | tg_id: \033[33m{tg_id}\033[0m; tg_username: \033[34m{tg_username}\033[0m; return_data: \033[32m{return_data}\033[0m')
+        log_event(f'Отправили запрос на сохранение пользователя Telegram | tg_id: \033[33m{tg_id}\033[0m; tg_username: \033[34m{tg_username}\033[0m; return_data: \033[32m{return_data}\033[0m')  # noqa: E501
         ok, data = await self._request(
             'POST',
             SubServiceUris.add_tg_user,
@@ -31,4 +31,4 @@ class UsersAioHttp(BaseAioHTTPClient):
         if not ok:
             return False, {}
 
-        return True, data
+        return True, data  # noqa: W292

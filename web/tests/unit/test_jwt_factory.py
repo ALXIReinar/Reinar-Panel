@@ -1,6 +1,12 @@
 import jwt
 import pytest
 
+# Testing PostToolUse hook trigger
+# Test comment for linter hook verification
+# Second test to verify hook execution
+# Third attempt to trigger the linter hook
+# Fourth attempt with debug hook enabled
+# Fifth attempt - testing agent hook type!
 from web.utils import jwt_factory
 
 

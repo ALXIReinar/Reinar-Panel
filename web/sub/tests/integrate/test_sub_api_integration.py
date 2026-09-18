@@ -14,7 +14,8 @@ GET /sub/{b64_id}:
 - ps.expire_date > now() (не истёкшие)
 - np.user_visible = true (только видимые ноды)
 """
-import pytest
+
+import pytest  # noqa: I001
 import base64
 import httpx
 from fastapi import FastAPI
@@ -39,11 +40,11 @@ def test_app():
 async def test_client(test_app, db_pool, sub_api_seed):
     """
     HTTP клиент для тестирования API (создаётся для каждого теста).
-    
+
     Setup:
     1. Устанавливает db_pool в app.state.pg_pool
     2. Создаёт httpx.AsyncClient с ASGITransport
-    
+
     Teardown:
     1. Закрывает AsyncClient (автоматически через context manager)
     2. Очищает state
@@ -51,7 +52,6 @@ async def test_client(test_app, db_pool, sub_api_seed):
     try:
         # Setup: устанавливаем db_pool
         test_app.state.pg_pool = db_pool
-        
         # Создаём HTTP клиент
         transport = httpx.ASGITransport(app=test_app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -64,11 +64,11 @@ async def test_client(test_app, db_pool, sub_api_seed):
 
 class TestGetSubEndpoint:
     """Integration тесты для GET /sub/{b64_id}"""
-    
+
     async def test_get_sub_active_subscription(self, test_client, sub_api_seed):
         """
         Успешное получение подписки с активной подпиской.
-        
+
         Проверяем:
         - Статус 200
         - Content-Type: text/plain
@@ -79,89 +79,71 @@ class TestGetSubEndpoint:
         # Arrange
         b64_id = sub_api_seed['active_user']['b64_id']
         user_uuid = sub_api_seed['active_user']['uuid']
-        
         # Act
         response = await test_client.get(f"/api/v1/public/sub/{b64_id}")
-        
         # Assert
         assert response.status_code == 200
         assert response.headers['content-type'] == 'text/plain; charset=utf-8'
-        
         # Декодируем base64
         decoded = base64.b64decode(response.content).decode()
-        
         # Проверяем что есть ссылки с UUID
         assert user_uuid in decoded
         assert "vless://" in decoded
         assert "vnode10.test.com" in decoded or "vnode11.test.com" in decoded  # Домены из фикстуры
-        
         # Проверяем заголовки
         assert 'subscription-userinfo' in response.headers
         assert 'profile-title' in response.headers
         assert 'profile-update-interval' in response.headers
-        
         # Проверяем Subscription-Userinfo формат
         userinfo = response.headers['subscription-userinfo']
         assert 'download=' in userinfo
         assert 'total=' in userinfo
         assert 'expire=' in userinfo
-    
-    
+
     async def test_get_sub_inactive_subscription_limit_exceeded(self, test_client, sub_api_seed):
         """
         Подписка деактивирована из-за превышения лимита трафика.
-        
+
         Проверяем:
         - Статус 200 (но с error messages)
         - Response содержит fake vless-ссылки с сообщениями об ошибках
         """
         import urllib.parse
-        
+
         # Arrange
         b64_id = sub_api_seed['invalid_users']['limit_exceeded']['b64_id']
-        
         # Act
         response = await test_client.get(f"/api/v1/public/sub/{b64_id}")
-        
         # Assert
         assert response.status_code == 200
-        
         # Декодируем base64
         decoded = base64.b64decode(response.content).decode()
-        
         # Проверяем что это error messages
         assert "00000000-0000-0000-0000-000000000000" in decoded
         assert "127.0.0.1" in decoded
-        
         # Декодируем URL для проверки текста
         decoded_unquoted = urllib.parse.unquote(decoded)
-        
         # Проверяем что есть сообщение о лимите или продлении
-        assert ("лимит" in decoded_unquoted.lower() or "продл" in decoded_unquoted.lower())
-    
-    
+        assert "лимит" in decoded_unquoted.lower() or "продл" in decoded_unquoted.lower()
+
     async def test_get_sub_inactive_subscription_expired(self, test_client, sub_api_seed):
         """Подписка истекла (expire_date < now())"""
         # Arrange
         b64_id = sub_api_seed['invalid_users']['expired']['b64_id']
-        
         # Act
         response = await test_client.get(f"/api/v1/public/sub/{b64_id}")
-        
         # Assert
         assert response.status_code == 200
-        
         decoded = base64.b64decode(response.content).decode()
         assert "00000000-0000-0000-0000-000000000000" in decoded
-    
-    
+
     async def test_get_sub_sql_filters_critical(self, test_client, sub_api_seed):
         """
         КРИТИЧЕСКИЙ ТЕСТ SQL ФИЛЬТРОВ: Проверяем что ссылки выдаются ТОЛЬКО валидным пользователям.
-        
+
         Должны получить ссылки:
         - User A: активная подписка, в пределах лимита, не истёкшая ✅
-        
+
         НЕ должны получить ссылки:
         - User B: превышен лимит трафика ❌
         - User C: подписка истекла ❌
@@ -169,38 +151,34 @@ class TestGetSubEndpoint:
         - User E: пользователь удалён ❌
         """
         # Act & Assert для каждого пользователя
-        
         # User A - активный (должен получить ссылки)
         resp_a = await test_client.get(f"/api/v1/public/sub/{sub_api_seed['active_user']['b64_id']}")
         decoded_a = base64.b64decode(resp_a.content).decode()
         assert sub_api_seed['active_user']['uuid'] in decoded_a
         assert "00000000-0000-0000-0000-000000000000" not in decoded_a  # НЕ error message
-        
         # User B - превышен лимит (НЕ должен получить ссылки)
-        resp_b = await test_client.get(f"/api/v1/public/sub/{sub_api_seed['invalid_users']['limit_exceeded']['b64_id']}")
+        resp_b = await test_client.get(
+            f"/api/v1/public/sub/{sub_api_seed['invalid_users']['limit_exceeded']['b64_id']}"
+        )
         decoded_b = base64.b64decode(resp_b.content).decode()
         assert "00000000-0000-0000-0000-000000000000" in decoded_b  # Error message
-        
         # User C - истёкшая подписка (НЕ должен получить ссылки)
         resp_c = await test_client.get(f"/api/v1/public/sub/{sub_api_seed['invalid_users']['expired']['b64_id']}")
         decoded_c = base64.b64decode(resp_c.content).decode()
         assert "00000000-0000-0000-0000-000000000000" in decoded_c
-        
         # User D - неактивная подписка (НЕ должен получить ссылки)
         resp_d = await test_client.get(f"/api/v1/public/sub/{sub_api_seed['invalid_users']['inactive']['b64_id']}")
         decoded_d = base64.b64decode(resp_d.content).decode()
         assert "00000000-0000-0000-0000-000000000000" in decoded_d
-        
         # User E - удалённый пользователь (НЕ должен получить ссылки)
         resp_e = await test_client.get(f"/api/v1/public/sub/{sub_api_seed['invalid_users']['deleted']['b64_id']}")
         decoded_e = base64.b64decode(resp_e.content).decode()
         assert "00000000-0000-0000-0000-000000000000" in decoded_e
-    
-    
+
     async def test_get_sub_response_headers(self, test_client, sub_api_seed):
         """
         Проверяем корректность заголовков ответа для VPN-клиента.
-        
+
         Обязательные заголовки:
         - Subscription-Userinfo: upload=0; download={mb}; total={limit}; expire={timestamp}
         - profile-title: название подписки
@@ -210,13 +188,10 @@ class TestGetSubEndpoint:
         """
         # Arrange
         b64_id = sub_api_seed['active_user']['b64_id']
-        
         # Act
         response = await test_client.get(f"/api/v1/public/sub/{b64_id}")
-        
         # Assert
         headers = response.headers
-        
         # 1. Subscription-Userinfo
         assert 'subscription-userinfo' in headers
         userinfo = headers['subscription-userinfo']
@@ -224,25 +199,20 @@ class TestGetSubEndpoint:
         assert 'download=' in userinfo
         assert 'total=' in userinfo
         assert 'expire=' in userinfo
-        
         # Проверяем формат чисел
         parts = userinfo.split('; ')
         for part in parts:
             key, value = part.split('=')
             assert value.isdigit(), f"{key} должен быть числом"
-        
         # 2. profile-title
         assert 'profile-title' in headers
         assert len(headers['profile-title']) > 0
-        
         # 3. profile-update-interval
         assert 'profile-update-interval' in headers
         assert headers['profile-update-interval'].isdigit()
-        
         # 4. profile-web-page-url
         assert 'profile-web-page-url' in headers
         assert headers['profile-web-page-url'].startswith('http')
-        
         # 5. announce (base64-encoded)
         assert 'announce' in headers
         announce = headers['announce']
@@ -250,50 +220,44 @@ class TestGetSubEndpoint:
         # Декодируем announce
         announce_decoded = base64.b64decode(announce.split('base64:')[1]).decode()
         assert len(announce_decoded) > 0
-    
-    
+
     async def test_get_sub_multiple_locations(self, test_client, sub_api_seed, db_pool):
         """
         Проверяем что подписка содержит несколько локаций (config_link).
-        
+
         Пользователь должен получить по одной ссылке на каждую видимую ноду.
         """
         # Arrange
         b64_id = sub_api_seed['active_user']['b64_id']
-        
         # Получаем количество видимых нод для плана (с учётом активности физ. ноды)
         async with db_pool.acquire() as conn:
-            nodes_count = await conn.fetchval("""
+            nodes_count = await conn.fetchval(
+                """
                 SELECT COUNT(DISTINCT vsp.node_proto_id)
                 FROM vnodes_sub_plans vsp
                 JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
                 JOIN nodes n ON np.node_id = n.id AND n.is_active = true
                 WHERE vsp.sub_plan_id = $1
-            """, sub_api_seed['plan_id'])
-        
+            """,
+                sub_api_seed['plan_id'],
+            )
         # Act
         response = await test_client.get(f"/api/v1/public/sub/{b64_id}")
-        
         # Assert
         decoded = base64.b64decode(response.content).decode()
         links = [line for line in decoded.split('\n') if line.startswith('vless://')]
-        
         # Должно быть столько же ссылок сколько видимых нод
         assert len(links) == nodes_count
         assert len(links) >= 2  # Минимум 2 ноды (vnode_id_10, vnode_id_11)
-    
-    
+
     async def test_get_sub_nonexistent_b64_id(self, test_client):
         """Запрос с несуществующим b64_id"""
         # Arrange
         fake_b64_id = "nonexistent-fake-id-12345"
-        
         # Act
         response = await test_client.get(f"/api/v1/public/sub/{fake_b64_id}")
-        
         # Assert
         assert response.status_code == 200
-        
         decoded = base64.b64decode(response.content).decode()
         # Должны получить error messages
         assert "00000000-0000-0000-0000-000000000000" in decoded

@@ -1,4 +1,4 @@
-from aiohttp import ClientSession
+from aiohttp import ClientSession  # noqa: I001
 
 from bot.core.api.base_aio_http_client import BaseAioHTTPClient
 from bot.core.utils.anything import SubServiceUris

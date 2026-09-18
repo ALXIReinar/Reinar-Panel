@@ -3,7 +3,6 @@ from asyncpg import Connection
 from web.config_dir.config import encryption
 
 
-
 class AdminsQueries:
     def __init__(self, conn: Connection):
         self.conn = conn
@@ -14,7 +13,7 @@ class AdminsQueries:
         VALUES($1, $2)
         ON CONFLICT (login) DO NOTHING 
         RETURNING id
-        '''
+        '''  # noqa: W291
         hashed = encryption.hash(passw)
         res = await self.conn.fetchrow(query, login, hashed)
         return res
@@ -33,27 +32,16 @@ class AdminsQueries:
         return await self.conn.fetchrow(query, admin_id)
 
 
-
 class AuthQueries:
     def __init__(self, conn: Connection):
         self.conn = conn
 
-    async def make_session(
-            self,
-            session_id: str,
-            admin_id: int,
-            iat,
-            exp,
-            user_agent: str,
-            ip: str,
-            hashed_rT: str
-    ):
+    async def make_session(self, session_id: str, admin_id: int, iat, exp, user_agent: str, ip: str, hashed_rT: str):
         query = '''
         INSERT INTO sessions_admins (session_id, admin_id, iat, exp, refresh_token, user_agent, ip) VALUES($1,$2,$3,$4,$5,$6,$7)
         ON CONFLICT (session_id) DO UPDATE SET iat = $3, exp = $4, refresh_token = $5, user_agent = $6, ip = $7
         '''
         await self.conn.execute(query, session_id, admin_id, iat, exp, hashed_rT, user_agent, ip)
-
 
     async def get_actual_rt(self, admin_id: int, session_id: str):
         query = '''
@@ -62,7 +50,6 @@ class AuthQueries:
         '''
         res = await self.conn.fetchrow(query, admin_id, session_id)
         return res
-
 
     async def all_seances_user(self, admin_id: int, session_id: str):
         query = 'SELECT user_agent, ip FROM sessions_admins WHERE admin_id = $1 AND session_id = $2'

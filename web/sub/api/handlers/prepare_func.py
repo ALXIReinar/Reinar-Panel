@@ -1,4 +1,4 @@
-import base64
+import base64  # noqa: I001
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse, quote
 
 from pydantic import IPvAnyAddress
@@ -7,6 +7,7 @@ from pydantic import IPvAnyAddress
 def error_messages_for_client(*messages: str):
     tmp = 'vless://00000000-0000-0000-0000-000000000000@127.0.0.1:443?encryption=none#{}'
     return [tmp.format(quote(msg)) for msg in messages]
+
 
 def process2vpn_client_format(any_obj: str | list[str], description: str = None) -> str:
     if isinstance(any_obj, list):
@@ -42,11 +43,7 @@ def urlsafe_address(node_ip_or_domain):
     return node_ip_or_domain
 
 
-def resolve_user_template(
-        template: dict,
-        uuid: str,
-        user_sub_id: int | None = None
-) -> dict:
+def resolve_user_template(template: dict, uuid: str, user_sub_id: int | None = None) -> dict:
     """
     Подставляет значения в шаблон пользователя
 
@@ -83,8 +80,8 @@ def resolve_user_template(
     # Проверяем что user_sub_id передан, если он требуется в шаблоне
     if '{USER_SUB_ID}' in template.values() and user_sub_id is None:
         raise ValueError(
-            f"Одно из полей шаблона требует user_sub_id (плейсхолдер {{USER_SUB_ID}}), "
-            f"но оно не передано"
+            f"Одно из полей шаблона требует user_sub_id (плейсхолдер {{USER_SUB_ID}}), "  # noqa: F541
+            f"но оно не передано"  # noqa: F541
         )
 
     resolved = {}
@@ -105,11 +102,11 @@ def resolve_user_template(
 
 
 def create_vpn_like_user(
-        user_uuid,
-        user_sub_id,
-        required_user_data_obj: dict,
-        constant_user_data_obj: dict,
-        constant_node_data_obj: dict,
+    user_uuid,
+    user_sub_id,
+    required_user_data_obj: dict,
+    constant_user_data_obj: dict,
+    constant_node_data_obj: dict,
 ):
     """Собирает готовый объект пользователя для впн-ядра из шаблон-скриптов"""
 

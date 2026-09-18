@@ -1,4 +1,4 @@
-from aiohttp import ClientSession
+from aiohttp import ClientSession  # noqa: I001
 from bot.core.api.divisions.sub_plans_aiohttp import SubPlansAioHttp
 from bot.core.api.divisions.user_subs_aiohttp import UserSubsAioHttp
 from bot.core.api.divisions.users_aiohttp import UsersAioHttp

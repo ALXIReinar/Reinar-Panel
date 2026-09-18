@@ -9,15 +9,15 @@ class BaseUserCoreSchema(BaseModel):
     reload_core_command: str = Field(None, max_length=255, description='Команда перезагрузки ядра')
     core_port: int | None = Field(gt=0, le=65535, description='Порт к апи ядра для взаимодействия через скрипты')
     config_file_path: str = Field(..., min_length=1, description='Путь к конфиг-файлу')
-    custom_params: dict | None = Field(description='Зависимости для скрипта, которые идут отдельно от объекта пользователя')
+    custom_params: dict | None = Field(description='Зависимости для скрипта, которые идут отдельно от объекта пользователя')  # noqa: E501
     user_injectors: list["UserInjector"]
     users: list[dict]
     action_script: str | None
-    config2json_script: str | None = Field(description='Конвертер-скрпт конфига из его формата в json-структуру(python dict)')
+    config2json_script: str | None = Field(description='Конвертер-скрпт конфига из его формата в json-структуру(python dict)')  # noqa: E501
     json2config_script: str | None = Field(description='Конвертер-скрпт из json-структуры в dict')
     conf_converter_libs: str | None
 
-    action: Literal["add", "delete"] = Field(description="Операция, выполняемая скриптом. Вставка или удаление. 1 - add, 2 - delete. Допускаются строки и цифры")
+    action: Literal["add", "delete"] = Field(description="Операция, выполняемая скриптом. Вставка или удаление. 1 - add, 2 - delete. Допускаются строки и цифры")  # noqa: E501
 
     @field_validator("action", mode="before")
     @classmethod
@@ -36,5 +36,5 @@ class UserInjector(BaseModel):
     - Позволяет сделать несколько операций(удаление/вставка) за одну операцию над пользователем
     """
     flatten_array_cursor: str = Field(description='inbounds___0___users - массив')
-    extractor_script: str = Field(description='скрипт-обработчик для трансформации user_obj под требования массива под flatten_array_cursor')
-    libs: str | None = Field(None, max_length=512, description='Либы, нужные для скрипта-экстрактора объекта пользователя для впн-ядра из Суперобъекта')
+    extractor_script: str = Field(description='скрипт-обработчик для трансформации user_obj под требования массива под flatten_array_cursor')  # noqa: E501
+    libs: str | None = Field(None, max_length=512, description='Либы, нужные для скрипта-экстрактора объекта пользователя для впн-ядра из Суперобъекта')  # noqa: E501

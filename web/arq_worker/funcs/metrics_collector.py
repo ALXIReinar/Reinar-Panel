@@ -1,4 +1,4 @@
-import asyncio
+import asyncio  # noqa: I001
 from aiohttp import ClientResponseError, ClientSession
 from arq import ArqRedis
 from asyncpg import Pool
@@ -31,9 +31,9 @@ async def traffic_sync_scheduler(ctx: dict, db: PgSql = None, arq: ArqRedis = No
     "Ставим задачу сбора метрик в очередь. Task Chaining"
     job = await arq.enqueue_job('collect_traffic_metrics', nodes)
     log_event(
-        f'\033[36m[ARQ Metrics Collector]\033[0m Найдены ноды для сбора метрик. Task Chaining, depth: \033[35m0\033[0m. Задача поставлена в очередь | job_id: \033[33m{job.job_id}\033[0m; nodes_count: \033[32m{len(nodes)}\033[0m')
+        f'\033[36m[ARQ Metrics Collector]\033[0m Найдены ноды для сбора метрик. Task Chaining, depth: \033[35m0\033[0m. Задача поставлена в очередь | job_id: \033[33m{job.job_id}\033[0m; nodes_count: \033[32m{len(nodes)}\033[0m'
+    )
     return {'success': True, 'job_id': job.job_id, 'nodes_count': len(nodes)}
-
 
 
 @aiohttp_dep
@@ -41,21 +41,20 @@ async def traffic_sync_scheduler(ctx: dict, db: PgSql = None, arq: ArqRedis = No
 async def collect_traffic_metrics(ctx: dict, nodes: list[dict], aio_http: ClientSession = None, arq: ArqRedis = None):
     """
     Сбор метрик трафика с нод и обновление в БД
-    
+
     Args:
         ctx: ARQ контекст (содержит pg_pool и aio_http из startup для декораторов)
         nodes: Список нод для сбора метрик
     """
-    log_event(f'\033[36m[ARQ Metrics Collector]\033[0m Начало сбора метрик трафика | nodes_count: \033[32m{len(nodes)}\033[0m')
-    
+    log_event(
+        f'\033[36m[ARQ Metrics Collector]\033[0m Начало сбора метрик трафика | nodes_count: \033[32m{len(nodes)}\033[0m'
+    )
     sem = asyncio.Semaphore(env.action_on_core_proto_limit)  # Батчинг по 8 нод
     success_count = 0
     error_count = 0
-    
 
     async def worker(node: dict, pool: Pool):
         nonlocal success_count, error_count
-        
         async with sem:
             try:
                 "Запрашиваем метрики потребления с нод. Запрос вернёт готовые прибавки трафика"
@@ -77,11 +76,13 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[dict], aio_http: Client
                 "Обновляем трафик, если был"
                 users_traffic = resp_data['users_traffic']
                 if users_traffic:
-                    user_sub_ids, traffic_adds = zip(*tuple(
-                        (user_dict['user_sub_id'], user_dict['total_mb_used']) for user_dict in users_traffic
-                    ))
+                    user_sub_ids, traffic_adds = zip(
+                        *tuple((user_dict['user_sub_id'], user_dict['total_mb_used']) for user_dict in users_traffic)
+                    )
                     async with pool.acquire() as conn:
-                        log_event(f'\033[35m[ARQ Metrics Collector]\033[0m Outbox операций по удалению пользователей с ядра | node_proto_id: \033[36m{node["id"]}\033[0m;')
+                        log_event(
+                            f'\033[35m[ARQ Metrics Collector]\033[0m Outbox операций по удалению пользователей с ядра | node_proto_id: \033[36m{node["id"]}\033[0m;'
+                        )
                         outbox_event_ids = await PgSql(conn).metrics.update_traffic(user_sub_ids, traffic_adds)
 
                     if outbox_event_ids:
@@ -90,42 +91,63 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[dict], aio_http: Client
                             'bulk_delete_by_traffic_limit',
                             outbox_event_ids,
                         )
-                        log_event(f'\033[36m[ARQ Metrics Collector]\033[0m \033[34mTask Chaining, depth: \033[31m1\033[0m Запустили бульк-удаление для пользователей, превысивших лимит трафика | events_len: {len(outbox_event_ids)}', job_id=job.job_id)
+                        log_event(
+                            f'\033[36m[ARQ Metrics Collector]\033[0m \033[34mTask Chaining, depth: \033[31m1\033[0m Запустили бульк-удаление для пользователей, превысивших лимит трафика | events_len: {len(outbox_event_ids)}',
+                            job_id=job.job_id,
+                        )
 
                     success_count += 1
-                    log_event(f'\033[36m[ARQ Metrics Collector]\033[0m Метрики обновлены | node_proto_id: \033[36m{node["id"]}\033[0m; users_count: \033[32m{len(users_traffic)}\033[0m')
+                    log_event(
+                        f'\033[36m[ARQ Metrics Collector]\033[0m Метрики обновлены | node_proto_id: \033[36m{node["id"]}\033[0m; users_count: \033[32m{len(users_traffic)}\033[0m'
+                    )
                 else:
-                    log_event(f'\033[36m[ARQ Metrics Collector]\033[0m Нет данных для обновления | node_proto_id: \033[33m{node["id"]}\033[0m', level='WARNING')
-            
+                    log_event(
+                        f'\033[36m[ARQ Metrics Collector]\033[0m Нет данных для обновления | node_proto_id: \033[33m{node["id"]}\033[0m',
+                        level='WARNING',
+                    )
             except ClientResponseError as e:
                 error_count += 1
-                log_event(f'\033[36m[ARQ Metrics Collector]\033[0m Нода ответила с ошибкой, не удалось собрать метрики | status_code: \033[33m{e.status}\033[0m; response: \033[37m{e}\033[0m;node: \033[36m{repr(node)}\033[0m', level='ERROR')
-            
+                log_event(
+                    f'\033[36m[ARQ Metrics Collector]\033[0m Нода ответила с ошибкой, не удалось собрать метрики | status_code: \033[33m{e.status}\033[0m; response: \033[37m{e}\033[0m;node: \033[36m{repr(node)}\033[0m',
+                    level='ERROR',
+                )
             except Exception as e:
                 error_count += 1
-                log_event(f'\033[36m[ARQ Metrics Collector]\033[0m Ошибка исполнения на админке, не удалось собрать метрики | error: \033[31m{e}\033[0m; node: \033[33m{repr(node)}\033[0m', level='CRITICAL')
-    
+                log_event(
+                    f'\033[36m[ARQ Metrics Collector]\033[0m Ошибка исполнения на админке, не удалось собрать метрики | error: \033[31m{e}\033[0m; node: \033[33m{repr(node)}\033[0m',
+                    level='CRITICAL',
+                )
+
     "Запускаем все воркеры"
     await asyncio.gather(*(worker(node, ctx['pg_pool']) for node in nodes))
-    log_event(f'\033[36m[ARQ Metrics Collector]\033[0m Сбор метрик завершён | success: \033[32m{success_count}\033[0m; errors: \033[31m{error_count}\033[0m')
+    log_event(
+        f'\033[36m[ARQ Metrics Collector]\033[0m Сбор метрик завершён | success: \033[32m{success_count}\033[0m; errors: \033[31m{error_count}\033[0m'
+    )
     return {'success': True, 'nodes_total': len(nodes), 'success_count': success_count, 'error_count': error_count}
 
 
 @arq_dep
 @pg_sql_dep
 async def bulk_delete_by_traffic_limit(ctx: dict, outbox_event_ids: list, arq: ArqRedis = None, db: PgSql = None):
-    log_event(f'\033[31m[ARQ Metrics Collector]\033[0m \033[34mTask Chaining, depth: \033[33m2\033[0m Собираем данные и группируем пользователей по нодаи для отправки delete бульк-запроса | outbox_events_fst10: \033[37m{outbox_event_ids[:10]}\033[0m', level='WARNING')
+    log_event(
+        f'\033[31m[ARQ Metrics Collector]\033[0m \033[34mTask Chaining, depth: \033[33m2\033[0m Собираем данные и группируем пользователей по нодаи для отправки delete бульк-запроса | outbox_events_fst10: \033[37m{outbox_event_ids[:10]}\033[0m',
+        level='WARNING',
+    )
 
     nodes_by_limited_users = await db.core_proto_bulk.get_meta_for_bulk(outbox_event_ids)
     users_to_delete = sum(len(vnode['users']) for vnode in nodes_by_limited_users)
 
-    log_event(f'\033[31m[ARQ Metrics Collector]\033[0m Фон по удалению пользователей из ядер протоколов | total_deletes: \033[31m{users_to_delete}\033[0m')
+    log_event(
+        f'\033[31m[ARQ Metrics Collector]\033[0m Фон по удалению пользователей из ядер протоколов | total_deletes: \033[31m{users_to_delete}\033[0m'
+    )
 
     sem = asyncio.Semaphore(env.action_on_core_proto_limit)
 
     async def enqueue_delete(vnode):
         async with sem:
-            log_event(f'\033[31m[ARQ Metrics Collector]\033[0m Отправляем Бульк запрос на фоновое удаление пользователей из ядра | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
+            log_event(
+                f'\033[31m[ARQ Metrics Collector]\033[0m Отправляем Бульк запрос на фоновое удаление пользователей из ядра | node_proto_id: \033[33m{vnode["node_proto_id"]}\033[0m'
+            )
             job = await arq.enqueue_job(
                 'bulk_action_users_by_node',
                 vnode['node_proto_id'],
@@ -147,8 +169,13 @@ async def bulk_delete_by_traffic_limit(ctx: dict, outbox_event_ids: list, arq: A
                 vnode['config2json_script'],
                 vnode['conf_converter_libs'],
             )
-            log_event(f'\033[31m[ARQ Metrics Collector]\033[0m \033[34mTask Chaining, depth: \033[32m3\033[0m бульк delete летит на ноду | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m')
-            log_event(f'\033[31m[ARQ Metrics Collector]\033[0m Фоновая задача запущена | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m', job_id=job.job_id)
+            log_event(
+                f'\033[31m[ARQ Metrics Collector]\033[0m \033[34mTask Chaining, depth: \033[32m3\033[0m бульк delete летит на ноду | node_proto_id: \033[33m{vnode["node_proto_id"]}\033[0m'
+            )
+            log_event(
+                f'\033[31m[ARQ Metrics Collector]\033[0m Фоновая задача запущена | node_proto_id: \033[33m{vnode["node_proto_id"]}\033[0m',
+                job_id=job.job_id,
+            )
 
     "Размеренная параллельная обработка с ограничением через семафор"
     await asyncio.gather(*[enqueue_delete(vnode) for vnode in nodes_by_limited_users if len(vnode['users']) > 0])
@@ -156,12 +183,7 @@ async def bulk_delete_by_traffic_limit(ctx: dict, outbox_event_ids: list, arq: A
     return {'success': True, 'message': 'Запущено Бульк удаление с нод', 'total_nodes': len(nodes_by_limited_users)}
 
 
-
-def resolve_user_template(
-        template: dict,
-        uuid: str,
-        user_sub_id: int | None = None
-) -> dict:
+def resolve_user_template(template: dict, uuid: str, user_sub_id: int | None = None) -> dict:
     """
     Подставляет значения в шаблон пользователя
 
@@ -198,8 +220,8 @@ def resolve_user_template(
     # Проверяем что user_sub_id передан, если он требуется в шаблоне
     if '{USER_SUB_ID}' in template.values() and user_sub_id is None:
         raise ValueError(
-            f"Одно из полей шаблона требует user_sub_id (плейсхолдер {{USER_SUB_ID}}), "
-            f"но оно не передано"
+            f"Одно из полей шаблона требует user_sub_id (плейсхолдер {{USER_SUB_ID}}), "  # noqa: F541
+            f"но оно не передано"  # noqa: F541
         )
 
     resolved = {}
@@ -220,11 +242,11 @@ def resolve_user_template(
 
 
 def create_vpn_like_user(
-        user_uuid,
-        user_sub_id,
-        required_user_data_obj: dict,
-        constant_user_data_obj: dict,
-        constant_node_data_obj: dict,
+    user_uuid,
+    user_sub_id,
+    required_user_data_obj: dict,
+    constant_user_data_obj: dict,
+    constant_node_data_obj: dict,
 ):
     """Собирает готовый объект пользователя для впн-ядра из шаблон-скриптов"""
     try:

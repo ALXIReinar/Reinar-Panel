@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class ValidatePasswSchema(BaseModel):
     passw: str
+
     @field_validator('passw', check_fields=False, mode='after')
     @classmethod
     def validate_password(cls, value):
@@ -25,8 +26,41 @@ class ValidatePasswSchema(BaseModel):
 
             if ch.isdigit():
                 digit = True
-            elif ch in {'.', ';', '\\', '!', '_', '/', '&', ')', '>', '$', '*', '}', '=', ',', '[', '#', '%', '~', ':',
-                        '{', ']', '?', '@', "'", '(', '`', '"', '^', '|', '<', '-', '+', '№'}:
+            elif ch in {
+                '.',
+                ';',
+                '\\',
+                '!',
+                '_',
+                '/',
+                '&',
+                ')',
+                '>',
+                '$',
+                '*',
+                '}',
+                '=',
+                ',',
+                '[',
+                '#',
+                '%',
+                '~',
+                ':',
+                '{',
+                ']',
+                '?',
+                '@',
+                "'",
+                '(',
+                '`',
+                '"',
+                '^',
+                '|',
+                '<',
+                '-',
+                '+',
+                '№',
+            }:
                 spec_spell = True
             elif ch == ch.upper():
                 uppercase = True
@@ -34,6 +68,7 @@ class ValidatePasswSchema(BaseModel):
         if spec_spell and digit and uppercase:
             return passw
         raise ValueError('Password does not match the conditions: 1 Spec char, 1 digit, 1 Uppercase letter')
+
 
 class TokenPayloadSchema(BaseModel):
     id: int
@@ -53,9 +88,11 @@ class TokenPayloadSchema(BaseModel):
 class UpdatePasswSchema(ValidatePasswSchema):
     admin_id: int
 
+
 class AdminLogInSchema(BaseModel):
     login: str = Field(max_length=128, min_length=3)
     passw: str
+
 
 class AdminRegSchema(ValidatePasswSchema):
     login: str = Field(max_length=128, min_length=3)

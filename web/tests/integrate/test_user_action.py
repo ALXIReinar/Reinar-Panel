@@ -2,6 +2,7 @@
 Интеграционные тесты для POST /core_protocol/user/action
 Тестируют добавление/удаление пользователей на ядрах протоколов через фоновую очередь
 """
+
 import pytest
 
 
@@ -22,9 +23,9 @@ async def subscription_data(db_pool, virtual_node_seed, sub_plan_seed):
             RETURNING id
             """,
             123456789,  # Тестовый telegram ID
-            "test_user_sub"  # Telegram username
+            "test_user_sub",  # Telegram username
         )
-        
+
         # Создаём дополнительную НЕАКТИВНУЮ физическую ноду
         inactive_node_id = await conn.fetchval(
             """
@@ -32,52 +33,66 @@ async def subscription_data(db_pool, virtual_node_seed, sub_plan_seed):
             VALUES ($1, $2, $3, $4, $5)
             RETURNING id
             """,
-            "Inactive Node", "203.0.113.3", "10.0.0.103", 8103, False  # is_active = False, уникальный IP
+            "Inactive Node",
+            "203.0.113.3",
+            "10.0.0.103",
+            8103,
+            False,  # is_active = False, уникальный IP
         )
-        
+
         # Создаём виртуальную ноду на НЕАКТИВНОЙ физической ноде (должна быть отфильтрована)
         vnode_on_inactive = await conn.fetchval(
             """
-            INSERT INTO nodes_protocols (node_id, proto_id, title, user_visible)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO nodes_protocols (node_id, proto_id, title, user_visible, reg_status)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING id
             """,
-            inactive_node_id, virtual_node_seed["proto_id"], "VNode on Inactive", True
+            inactive_node_id,
+            virtual_node_seed["proto_id"],
+            "VNode on Inactive",
+            True,
+            2,  # reg_status = 2 (success)
         )
-        
+
         # Создаём НЕВИДИМУЮ виртуальную ноду на активной физической ноде (должна быть отфильтрована)
         invisible_vnode = await conn.fetchval(
             """
-            INSERT INTO nodes_protocols (node_id, proto_id, title, user_visible)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO nodes_protocols (node_id, proto_id, title, user_visible, reg_status)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING id
             """,
-            virtual_node_seed["node_id_1"], virtual_node_seed["proto_id"], "Invisible VNode", False  # user_visible = False
+            virtual_node_seed["node_id_1"],
+            virtual_node_seed["proto_id"],
+            "Invisible VNode",
+            False,
+            2,  # user_visible = False, reg_status = 2
         )
-        
+
         # Связываем виртуальные ноды с планами подписки
         vnode_id_1 = virtual_node_seed["vnode_id_1"]  # Активная нода + видимая (✅ должна попасть)
         plan_id_1 = sub_plan_seed["plan_id_1"]
         plan_id_2 = sub_plan_seed["plan_id_2"]  # Для неактивной подписки
-        
+
         # Добавляем в vnodes_sub_plans
         await conn.execute(
-            "INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id) VALUES ($1, $2)",
-            vnode_id_1, plan_id_1
+            "INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id) VALUES ($1, $2)", vnode_id_1, plan_id_1
         )
         await conn.execute(
             "INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id) VALUES ($1, $2)",
-            vnode_id_1, plan_id_2  # Привязываем и второй план
+            vnode_id_1,
+            plan_id_2,  # Привязываем и второй план
         )
         await conn.execute(
             "INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id) VALUES ($1, $2)",
-            vnode_on_inactive, plan_id_1  # ❌ не должна попасть (нода неактивна)
+            vnode_on_inactive,
+            plan_id_1,  # ❌ не должна попасть (нода неактивна)
         )
         await conn.execute(
             "INSERT INTO vnodes_sub_plans (node_proto_id, sub_plan_id) VALUES ($1, $2)",
-            invisible_vnode, plan_id_1  # ❌ не должна попасть (невидима)
+            invisible_vnode,
+            plan_id_1,  # ❌ не должна попасть (невидима)
         )
-        
+
         # Создаём АКТИВНУЮ подписку для пользователя (plan_id_1)
         # Сначала pay_order
         pay_order_active = await conn.fetchval(
@@ -85,10 +100,10 @@ async def subscription_data(db_pool, virtual_node_seed, sub_plan_seed):
             INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) 
             VALUES ($1, 2, NOW(), false, false, 0) 
             RETURNING id
-            """,
-            user_id
+            """,  # noqa: W291
+            user_id,
         )
-        
+
         active_user_sub_id = await conn.fetchval(
             """
             INSERT INTO user_subs (
@@ -98,21 +113,23 @@ async def subscription_data(db_pool, virtual_node_seed, sub_plan_seed):
             VALUES ($1, $2, $3, true, false, NOW() + INTERVAL '30 days', $4, $5, false, false)
             RETURNING id
             """,
-            user_id, pay_order_active, plan_id_1,
+            user_id,
+            pay_order_active,
+            plan_id_1,
             "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-            "b64_test_user_sub"
+            "b64_test_user_sub",
         )
-        
+
         # Создаём НЕАКТИВНУЮ подписку для тестов фильтрации (plan_id_2)
         pay_order_inactive = await conn.fetchval(
             """
             INSERT INTO pay_orders (user_id, status, timestamp, infinite_expire, infinite_traffic, cost) 
             VALUES ($1, 3, NOW(), false, false, 0) 
             RETURNING id
-            """,
-            user_id
+            """,  # noqa: W291
+            user_id,
         )
-        
+
         inactive_user_sub_id = await conn.fetchval(
             """
             INSERT INTO user_subs (
@@ -122,11 +139,13 @@ async def subscription_data(db_pool, virtual_node_seed, sub_plan_seed):
             VALUES ($1, $2, $3, false, false, NOW() - INTERVAL '1 day', $4, $5, false, false)
             RETURNING id
             """,
-            user_id, pay_order_inactive, plan_id_2,
+            user_id,
+            pay_order_inactive,
+            plan_id_2,
             "bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
-            "b64_inactive_sub"
+            "b64_inactive_sub",
         )
-        
+
         return {
             "user_id": user_id,
             "active_order_id": active_user_sub_id,  # В новой архитектуре это user_subs.id
@@ -139,63 +158,62 @@ async def subscription_data(db_pool, virtual_node_seed, sub_plan_seed):
 
 class TestUserActionSuccess:
     """Тесты успешного добавления/удаления пользователя"""
-    
+
     @pytest.mark.asyncio
     async def test_user_action_add_success(self, client, subscription_data, mock_arq, db_pool):
         """Успешное добавление пользователя - задача попала в очередь"""
         user_sub_id = subscription_data["active_order_id"]  # В новой архитектуре это user_subs.id
         vnode_id = subscription_data["vnode_id_1"]  # Видимая нода на активной машине
-        
+
         response = await client.post(
             "/api/v1/private/cmd_center/core_protocol/user/action",
             json={
                 "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",  # UUID из фикстуры
                 "user_sub_id": user_sub_id,
                 "node_proto_id": vnode_id,  # ОБЯЗАТЕЛЬНОЕ ПОЛЕ в новой архитектуре
-                "action": "add"
-            }
+                "action": "add",
+            },
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
         assert data["message"] == "Пользователь обрабатывается в фоновой очереди"
         assert data["job_id"] == "test-job-12345"
-        
+
         # Проверяем что ARQ был вызван
         mock_arq.enqueue_job.assert_called_once()
         call_args = mock_arq.enqueue_job.call_args
         assert call_args[0][0] == "bulk_action_users_by_node"
-        
+
         # Проверяем что в outbox создалась запись (хотя бы одна)
         async with db_pool.acquire() as conn:
             outbox_count = await conn.fetchval(
-                "SELECT COUNT(*) FROM sub_nodes_outbox WHERE user_sub_id = $1",
-                user_sub_id
+                "SELECT COUNT(*) FROM sub_nodes_outbox WHERE user_sub_id = $1", user_sub_id
             )
             assert outbox_count >= 1  # Минимум 1 запись должна быть создана
-    
+
     @pytest.mark.asyncio
     async def test_user_action_delete_success(self, client, subscription_data, mock_arq, db_pool):
         """Успешное удаление пользователя"""
         user_sub_id = subscription_data["active_order_id"]
         vnode_id = subscription_data["vnode_id_1"]
-        
+
         response = await client.post(
             "/api/v1/private/cmd_center/core_protocol/user/action",
             json={
                 "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
                 "user_sub_id": user_sub_id,
                 "node_proto_id": vnode_id,
-                "action": "delete"
-            }
+                "action": "delete",
+            },
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
         assert "job_id" in data
-        
+
         # Проверяем что ARQ был вызван с правильной задачей
         mock_arq.enqueue_job.assert_called_once()
         call_args = mock_arq.enqueue_job.call_args
@@ -204,70 +222,70 @@ class TestUserActionSuccess:
 
 class TestUserActionFiltering:
     """Тесты фильтрации нод по различным условиям"""
-    
+
     @pytest.mark.asyncio
     async def test_user_action_filters_inactive_nodes(self, client, subscription_data, mock_arq, db_pool):
         """Неактивные физические ноды (is_active=false) - используем активную ноду"""
         user_sub_id = subscription_data["active_order_id"]
         vnode_id = subscription_data["vnode_id_1"]  # Активная нода
-        
+
         response = await client.post(
             "/api/v1/private/cmd_center/core_protocol/user/action",
             json={
                 "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
                 "user_sub_id": user_sub_id,
                 "node_proto_id": vnode_id,
-                "action": "add"
-            }
+                "action": "add",
+            },
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        
+
         # Проверяем что ARQ был вызван с правильной нодой
         mock_arq.enqueue_job.assert_called_once()
-    
+
     @pytest.mark.asyncio
     async def test_user_action_filters_invisible_vnodes(self, client, subscription_data, mock_arq):
         """Невидимые виртуальные ноды (user_visible=false) - используем видимую ноду"""
         user_sub_id = subscription_data["active_order_id"]
         vnode_id = subscription_data["vnode_id_1"]  # Видимая нода
-        
+
         response = await client.post(
             "/api/v1/private/cmd_center/core_protocol/user/action",
             json={
                 "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
                 "user_sub_id": user_sub_id,
                 "node_proto_id": vnode_id,
-                "action": "add"
-            }
+                "action": "add",
+            },
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-    
+
     @pytest.mark.asyncio
     async def test_user_action_filters_inactive_subscription(self, client, subscription_data, mock_arq):
         """Неактивная подписка (is_active=false) - используем неактивную подписку"""
         user_sub_id = subscription_data["inactive_order_id"]
         vnode_id = subscription_data["vnode_id_1"]
-        
+
         response = await client.post(
             "/api/v1/private/cmd_center/core_protocol/user/action",
             json={
                 "uuid": "bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
                 "user_sub_id": user_sub_id,
                 "node_proto_id": vnode_id,
-                "action": "add"
-            }
+                "action": "add",
+            },
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-    
+
     @pytest.mark.asyncio
     async def test_user_action_no_subscription_found(self, client, mock_arq):
         """Нет подписки для пользователя - несуществующая подписка"""
@@ -277,23 +295,23 @@ class TestUserActionFiltering:
                 "uuid": "44444444-4444-4444-4444-444444444444",
                 "user_sub_id": 99999,  # Несуществующая подписка
                 "node_proto_id": 99999,  # Несуществующая нода
-                "action": "add"
-            }
+                "action": "add",
+            },
         )
-        
+
         # Эндпоинт возвращает 409 если подписка/нода не найдена
         assert response.status_code == 409
         data = response.json()
         assert "detail" in data
         assert data["detail"]["success"] is False
-        
+
         # ARQ НЕ должен быть вызван (нода не найдена)
         mock_arq.enqueue_job.assert_not_called()
 
 
 class TestUserActionValidation:
     """Тесты валидации параметров"""
-    
+
     @pytest.mark.asyncio
     async def test_user_action_invalid_uuid_length(self, client, mock_arq):
         """UUID может быть меньше 36 символов - тест проверяет что короткие UUID принимаются"""
@@ -303,21 +321,21 @@ class TestUserActionValidation:
                 "uuid": "short-uuid",  # Короткий UUID валиден
                 "user_sub_id": 999999,  # Несуществующая подписка
                 "node_proto_id": 999999,  # Несуществующая нода
-                "action": "add"
-            }
+                "action": "add",
+            },
         )
-        
+
         # Должен вернуть 409 (подписка/нода не найдена)
         assert response.status_code == 409
         data = response.json()
         assert "detail" in data
-    
+
     @pytest.mark.asyncio
     async def test_user_action_invalid_username_length(self, client, mock_arq):
         """Тест удалён - tg_username больше не требуется в новой схеме API"""
         # Этот тест больше не актуален, так как tg_username удалён из схемы
         pass
-    
+
     @pytest.mark.asyncio
     async def test_user_action_invalid_action_type(self, client, mock_arq):
         """Неверный тип действия (должно быть 'add' или 'delete')"""
@@ -326,15 +344,15 @@ class TestUserActionValidation:
             json={
                 "uuid": "12345678-1234-1234-1234-123456789abc",
                 "user_sub_id": 1,
-                "action": "update"  # Неверное значение
-            }
+                "action": "update",  # Неверное значение
+            },
         )
-        
+
         assert response.status_code == 422
         data = response.json()
         assert "detail" in data
         assert any("action" in str(err).lower() for err in data["detail"])
-    
+
     @pytest.mark.asyncio
     async def test_user_action_missing_required_fields(self, client, mock_arq):
         """Отсутствуют обязательные поля"""
@@ -343,11 +361,10 @@ class TestUserActionValidation:
             json={
                 # uuid отсутствует
                 "user_sub_id": 1,
-                "action": "add"
-            }
+                "action": "add",
+            },
         )
-        
+
         assert response.status_code == 422
         data = response.json()
         assert "detail" in data
-

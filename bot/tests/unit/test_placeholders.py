@@ -5,8 +5,8 @@
 Покрывает все методы и edge cases.
 """
 
-import pytest
-from datetime import datetime, timezone
+import pytest  # noqa: I001
+from datetime import datetime, timezone  # noqa: F401
 from aiogram.types import User as TgUser, Message, CallbackQuery, Chat
 
 from bot.core.utils.placeholders import PlaceholderResolver
@@ -23,10 +23,10 @@ def test_add_message_all_fields():
     resolver = PlaceholderResolver()
     user = TgUser(id=123, username="john_doe", first_name="John", last_name="Doe", is_bot=False)
     message = Message(message_id=1, date=datetime.now(), chat=Chat(id=123, type="private"), from_user=user)
-    
+# noqa: W293
     resolver.add_message(message)
     result = resolver.resolve("{USER_TG_ID}|{USER_TG_USERNAME}|{USER_TG_FIRST_NAME}|{USER_TG_LAST_NAME}")
-    
+# noqa: W293
     assert result == "123|john_doe|John|Doe"
 
 
@@ -36,10 +36,10 @@ def test_add_message_no_username():
     resolver = PlaceholderResolver()
     user = TgUser(id=456, username=None, first_name="NoUser", last_name="Name", is_bot=False)
     message = Message(message_id=2, date=datetime.now(), chat=Chat(id=456, type="private"), from_user=user)
-    
+# noqa: W293
     resolver.add_message(message)
     result = resolver.resolve("{USER_TG_USERNAME}")
-    
+# noqa: W293
     assert result == ""
 
 
@@ -49,10 +49,10 @@ def test_add_message_no_last_name():
     resolver = PlaceholderResolver()
     user = TgUser(id=789, username="single", first_name="Single", last_name=None, is_bot=False)
     message = Message(message_id=3, date=datetime.now(), chat=Chat(id=789, type="private"), from_user=user)
-    
+# noqa: W293
     resolver.add_message(message)
     result = resolver.resolve("{USER_TG_LAST_NAME}")
-    
+# noqa: W293
     assert result == ""
 
 
@@ -60,10 +60,10 @@ def test_add_message_no_last_name():
 def test_add_message_none_message():
     """Тест: add_message(None) не падает"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     resolver.add_message(None)
     result = resolver.resolve("{USER_TG_ID}")
-    
+# noqa: W293
     assert result == "{USER_TG_ID}"  # Плейсхолдер остался
 
 
@@ -73,9 +73,9 @@ def test_add_message_id_conversion():
     resolver = PlaceholderResolver()
     user = TgUser(id=999999, username="big_id", first_name="Big", last_name="ID", is_bot=False)
     message = Message(message_id=4, date=datetime.now(), chat=Chat(id=999999, type="private"), from_user=user)
-    
+# noqa: W293
     resolver.add_message(message)
-    
+# noqa: W293
     assert resolver.context['USER_TG_ID'] == "999999"
     assert isinstance(resolver.context['USER_TG_ID'], str)
 
@@ -90,13 +90,13 @@ def test_add_callback_from_user():
     resolver = PlaceholderResolver()
     user = TgUser(id=111, username="callback_user", first_name="Callback", last_name="User", is_bot=False)
     bot_user = TgUser(id=999, username="bot", first_name="Bot", last_name="", is_bot=True)
-    
+# noqa: W293
     message = Message(message_id=5, date=datetime.now(), chat=Chat(id=111, type="private"), from_user=bot_user)
     callback = CallbackQuery(id="cb1", from_user=user, chat_instance="ci", message=message, data="data")
-    
+# noqa: W293
     resolver.add_callback(callback)
     result = resolver.resolve("{USER_TG_FIRST_NAME}|{USER_TG_ID}")
-    
+# noqa: W293
     assert result == "Callback|111"
 
 
@@ -106,13 +106,13 @@ def test_add_callback_bot_data_not_used():
     resolver = PlaceholderResolver()
     user = TgUser(id=222, username="real_user", first_name="Real", last_name="User", is_bot=False)
     bot_user = TgUser(id=888, username="bot", first_name="BotName", last_name="BotLast", is_bot=True)
-    
+# noqa: W293
     message = Message(message_id=6, date=datetime.now(), chat=Chat(id=222, type="private"), from_user=bot_user)
     callback = CallbackQuery(id="cb2", from_user=user, chat_instance="ci", message=message, data="data")
-    
+# noqa: W293
     resolver.add_callback(callback)
     result = resolver.resolve("{USER_TG_FIRST_NAME}")
-    
+# noqa: W293
     assert result == "Real"
     assert "BotName" not in result
 
@@ -124,10 +124,10 @@ def test_add_callback_no_username():
     user = TgUser(id=333, username=None, first_name="NoUsername", last_name="Test", is_bot=False)
     message = Message(message_id=7, date=datetime.now(), chat=Chat(id=333, type="private"), from_user=user)
     callback = CallbackQuery(id="cb3", from_user=user, chat_instance="ci", message=message, data="data")
-    
+# noqa: W293
     resolver.add_callback(callback)
     result = resolver.resolve("{USER_TG_USERNAME}")
-    
+# noqa: W293
     assert result == ""
 
 
@@ -135,10 +135,10 @@ def test_add_callback_no_username():
 def test_add_callback_none_callback():
     """Тест: add_callback(None) не падает"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     resolver.add_callback(None)
     result = resolver.resolve("{USER_TG_ID}")
-    
+# noqa: W293
     assert result == "{USER_TG_ID}"
 
 
@@ -150,7 +150,7 @@ def test_add_callback_none_callback():
 def test_add_user_sub_status_active():
     """Тест: status = '🟢 Активна' когда is_active=True, is_limited=False"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     sub_data = {
         'user_sub_id': 1, 'b64_id': 'test123', 'sub_plan_id': 1, 'title': 'Basic',
         'is_active': True, 'is_limited': False,
@@ -161,10 +161,10 @@ def test_add_user_sub_status_active():
         'offer_prices': []
     }
     user_sub = UserSubSchema.fast_create(sub_data)
-    
+# noqa: W293
     resolver.add_user_sub(user_sub)
     result = resolver.resolve("{USER_SUB_STATUS}")
-    
+# noqa: W293
     assert result == "🟢 Активна"
 
 
@@ -172,7 +172,7 @@ def test_add_user_sub_status_active():
 def test_add_user_sub_status_suspended():
     """Тест: status = '🔴 Приостановлена' когда is_active=False"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     sub_data = {
         'user_sub_id': 2, 'b64_id': 'test456', 'sub_plan_id': 1, 'title': 'Basic',
         'is_active': False, 'is_limited': False,
@@ -183,10 +183,10 @@ def test_add_user_sub_status_suspended():
         'offer_prices': []
     }
     user_sub = UserSubSchema.fast_create(sub_data)
-    
+# noqa: W293
     resolver.add_user_sub(user_sub)
     result = resolver.resolve("{USER_SUB_STATUS}")
-    
+# noqa: W293
     assert result == "🔴 Приостановлена"
 
 
@@ -194,7 +194,7 @@ def test_add_user_sub_status_suspended():
 def test_add_user_sub_status_limited():
     """Тест: status = '🟠 Ограничена' когда is_limited=True (приоритетнее)"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     sub_data = {
         'user_sub_id': 3, 'b64_id': 'test789', 'sub_plan_id': 1, 'title': 'Basic',
         'is_active': True, 'is_limited': True,  # is_limited приоритетнее
@@ -205,10 +205,10 @@ def test_add_user_sub_status_limited():
         'offer_prices': []
     }
     user_sub = UserSubSchema.fast_create(sub_data)
-    
+# noqa: W293
     resolver.add_user_sub(user_sub)
     result = resolver.resolve("{USER_SUB_STATUS}")
-    
+# noqa: W293
     assert result == "🟠 Ограничена"
 
 
@@ -216,7 +216,7 @@ def test_add_user_sub_status_limited():
 def test_add_user_sub_traffic_limit_day_int():
     """Тест: traffic_limit_day с int значением конвертируется в ГБ (/1024)"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     sub_data = {
         'user_sub_id': 4, 'b64_id': 'test111', 'sub_plan_id': 1, 'title': 'Basic',
         'is_active': True, 'is_limited': False,
@@ -228,10 +228,10 @@ def test_add_user_sub_traffic_limit_day_int():
         'offer_prices': []
     }
     user_sub = UserSubSchema.fast_create(sub_data)
-    
+# noqa: W293
     resolver.add_user_sub(user_sub)
     result = resolver.resolve("{USER_SUB_TRAFFIC_LIMIT_DAY}")
-    
+# noqa: W293
     assert result == "10"  # 10240 / 1024 = 10 ГБ
 
 
@@ -239,7 +239,7 @@ def test_add_user_sub_traffic_limit_day_int():
 def test_add_user_sub_traffic_limit_day_none():
     """Тест: traffic_limit_day=None → '-' (прочерк)"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     sub_data = {
         'user_sub_id': 5, 'b64_id': 'test222', 'sub_plan_id': 1, 'title': 'Basic',
         'is_active': True, 'is_limited': False,
@@ -251,10 +251,10 @@ def test_add_user_sub_traffic_limit_day_none():
         'offer_prices': []
     }
     user_sub = UserSubSchema.fast_create(sub_data)
-    
+# noqa: W293
     resolver.add_user_sub(user_sub)
     result = resolver.resolve("{USER_SUB_TRAFFIC_LIMIT_DAY}")
-    
+# noqa: W293
     assert result == "-"
 
 
@@ -262,7 +262,7 @@ def test_add_user_sub_traffic_limit_day_none():
 def test_add_user_sub_traffic_limit_day_infinite():
     """Тест: traffic_limit_day при infinite_traffic=True → '♾️'"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     sub_data = {
         'user_sub_id': 6, 'b64_id': 'test333', 'sub_plan_id': 1, 'title': 'Unlimited',
         'is_active': True, 'is_limited': False,
@@ -274,10 +274,10 @@ def test_add_user_sub_traffic_limit_day_infinite():
         'offer_prices': []
     }
     user_sub = UserSubSchema.fast_create(sub_data)
-    
+# noqa: W293
     resolver.add_user_sub(user_sub)
     result = resolver.resolve("{USER_SUB_TRAFFIC_LIMIT_DAY}")
-    
+# noqa: W293
     assert result == "♾️"
 
 
@@ -285,7 +285,7 @@ def test_add_user_sub_traffic_limit_day_infinite():
 def test_add_user_sub_traffic_limit_int():
     """Тест: traffic_limit с int значением → ГБ"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     sub_data = {
         'user_sub_id': 7, 'b64_id': 'test444', 'sub_plan_id': 1, 'title': 'Pro',
         'is_active': True, 'is_limited': False,
@@ -296,10 +296,10 @@ def test_add_user_sub_traffic_limit_int():
         'sub_nodes_count': 7, 'offer_prices': []
     }
     user_sub = UserSubSchema.fast_create(sub_data)
-    
+# noqa: W293
     resolver.add_user_sub(user_sub)
     result = resolver.resolve("{USER_SUB_TRAFFIC_LIMIT}")
-    
+# noqa: W293
     assert result == "300"  # 307200 / 1024 = 300 ГБ
 
 
@@ -307,7 +307,7 @@ def test_add_user_sub_traffic_limit_int():
 def test_add_user_sub_traffic_limit_none():
     """Тест: traffic_limit=None → '-'"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     sub_data = {
         'user_sub_id': 8, 'b64_id': 'test555', 'sub_plan_id': 1, 'title': 'Basic',
         'is_active': True, 'is_limited': False,
@@ -318,10 +318,10 @@ def test_add_user_sub_traffic_limit_none():
         'sub_nodes_count': 4, 'offer_prices': []
     }
     user_sub = UserSubSchema.fast_create(sub_data)
-    
+# noqa: W293
     resolver.add_user_sub(user_sub)
     result = resolver.resolve("{USER_SUB_TRAFFIC_LIMIT}")
-    
+# noqa: W293
     assert result == "-"
 
 
@@ -329,7 +329,7 @@ def test_add_user_sub_traffic_limit_none():
 def test_add_user_sub_traffic_limit_infinite():
     """Тест: traffic_limit при infinite_traffic=True → '♾️'"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     sub_data = {
         'user_sub_id': 9, 'b64_id': 'test666', 'sub_plan_id': 1, 'title': 'Unlimited',
         'is_active': True, 'is_limited': False,
@@ -340,10 +340,10 @@ def test_add_user_sub_traffic_limit_infinite():
         'offer_prices': []
     }
     user_sub = UserSubSchema.fast_create(sub_data)
-    
+# noqa: W293
     resolver.add_user_sub(user_sub)
     result = resolver.resolve("{USER_SUB_TRAFFIC_LIMIT}")
-    
+# noqa: W293
     assert result == "♾️"
 
 
@@ -351,7 +351,7 @@ def test_add_user_sub_traffic_limit_infinite():
 def test_add_user_sub_expire_date_infinite():
     """Тест: expire_date при infinite_expire=True → '♾️'"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     sub_data = {
         'user_sub_id': 10, 'b64_id': 'test777', 'sub_plan_id': 1, 'title': 'Lifetime',
         'is_active': True, 'is_limited': False,
@@ -363,10 +363,10 @@ def test_add_user_sub_expire_date_infinite():
         'offer_prices': []
     }
     user_sub = UserSubSchema.fast_create(sub_data)
-    
+# noqa: W293
     resolver.add_user_sub(user_sub)
     result = resolver.resolve("{USER_SUB_EXPIRE_DATE}")
-    
+# noqa: W293
     assert result == "♾️"
 
 
@@ -374,7 +374,7 @@ def test_add_user_sub_expire_date_infinite():
 def test_add_user_sub_date_formatting():
     """Тест: created_at форматируется в 'DD-MM-YYYY HH:MM'"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     sub_data = {
         'user_sub_id': 11, 'b64_id': 'test888', 'sub_plan_id': 1, 'title': 'Basic',
         'is_active': True, 'is_limited': False,
@@ -385,10 +385,10 @@ def test_add_user_sub_date_formatting():
         'offer_prices': []
     }
     user_sub = UserSubSchema.fast_create(sub_data)
-    
+# noqa: W293
     resolver.add_user_sub(user_sub)
     result = resolver.resolve("{USER_SUB_CREATED_AT}")
-    
+# noqa: W293
     assert "20-02-2024" in result
     assert "09:45" in result
 
@@ -397,7 +397,7 @@ def test_add_user_sub_date_formatting():
 def test_add_user_sub_sub_link_generation():
     """Тест: sub_link генерируется из SUB_SERVICE_URL + b64_id"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     sub_data = {
         'user_sub_id': 12, 'b64_id': 'test_b64_unique', 'sub_plan_id': 1, 'title': 'Basic',
         'is_active': True, 'is_limited': False,
@@ -408,10 +408,10 @@ def test_add_user_sub_sub_link_generation():
         'offer_prices': []
     }
     user_sub = UserSubSchema.fast_create(sub_data)
-    
+# noqa: W293
     resolver.add_user_sub(user_sub)
     result = resolver.resolve("{USER_SUB_LINK}")
-    
+# noqa: W293
     assert "test_b64_unique" in result
     assert "/sub/" in result
 
@@ -424,7 +424,7 @@ def test_add_user_sub_sub_link_generation():
 def test_add_shop_plan_all_fields():
     """Тест: add_shop_plan() извлекает все поля"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     shop_data = {
         'id': 5,
         'title': 'Premium Plan',
@@ -433,10 +433,10 @@ def test_add_shop_plan_all_fields():
         'offer_prices': []
     }
     shop_plan = ShopSubSchema.fast_create(shop_data)
-    
+# noqa: W293
     resolver.add_shop_plan(shop_plan)
     result = resolver.resolve("{SUB_ID}|{SUB_TITLE}|{SUB_DESCRIPTION}|{SUB_NODES_COUNT}")
-    
+# noqa: W293
     assert result == "5|Premium Plan|Best plan ever|15"
 
 
@@ -444,12 +444,12 @@ def test_add_shop_plan_all_fields():
 def test_add_shop_plan_nodes_count():
     """Тест: sub_nodes_count корректно извлекается"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     shop_data = {'id': 10, 'title': 'Basic', 'description': 'Desc', 'sub_nodes_count': 7, 'offer_prices': []}
     shop_plan = ShopSubSchema.fast_create(shop_data)
-    
+# noqa: W293
     resolver.add_shop_plan(shop_plan)
-    
+# noqa: W293
     assert resolver.context['SUB_NODES_COUNT'] == 7
     assert resolver.context['USER_SUB_NODES_COUNT'] == 7
 
@@ -458,12 +458,12 @@ def test_add_shop_plan_nodes_count():
 def test_add_shop_plan_title_duplication():
     """Тест: SUB_TITLE и USER_SUB_TITLE оба заполняются"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     shop_data = {'id': 15, 'title': 'Gold', 'description': 'Gold plan', 'sub_nodes_count': 20, 'offer_prices': []}
     shop_plan = ShopSubSchema.fast_create(shop_data)
-    
+# noqa: W293
     resolver.add_shop_plan(shop_plan)
-    
+# noqa: W293
     assert resolver.context['SUB_TITLE'] == 'Gold'
     assert resolver.context['USER_SUB_TITLE'] == 'Gold'
 
@@ -476,17 +476,17 @@ def test_add_shop_plan_title_duplication():
 def test_add_price_offer_traffic_day_int():
     """Тест: traffic_limit_day с int → ГБ (/1024)"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     offer_data = {
         'offer_id': 1, 'cost': 49900, 'ttl_days': 30,
         'traffic_day_limit': 10240, 'traffic_limit': 307200,
         'infinite_expire': False, 'infinite_traffic': False
     }
     offer = SubOfferSchema.fast_create(offer_data)
-    
+# noqa: W293
     resolver.add_price_offer(offer)
     result = resolver.resolve("{SUB_TRAFFIC_LIMIT_DAY}")
-    
+# noqa: W293
     assert result == "10"
 
 
@@ -494,16 +494,16 @@ def test_add_price_offer_traffic_day_int():
 def test_add_price_offer_traffic_day_none():
     """Тест: traffic_limit_day=None → '-'"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     offer_data = {
         'offer_id': 2, 'cost': 29900, 'ttl_days': 14,
         'traffic_day_limit': None, 'traffic_limit': 51200,
         'infinite_expire': False, 'infinite_traffic': False
     }
     offer = SubOfferSchema.fast_create(offer_data)
-    
+# noqa: W293
     resolver.add_price_offer(offer)
-    
+# noqa: W293
     assert resolver.context['SUB_TRAFFIC_LIMIT_DAY'] == '-'
 
 
@@ -511,16 +511,16 @@ def test_add_price_offer_traffic_day_none():
 def test_add_price_offer_traffic_day_infinite():
     """Тест: traffic_limit_day при infinite_traffic=True → '♾️'"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     offer_data = {
         'offer_id': 3, 'cost': 199900, 'ttl_days': 365,
         'traffic_day_limit': None, 'traffic_limit': None,
         'infinite_expire': False, 'infinite_traffic': True
     }
     offer = SubOfferSchema.fast_create(offer_data)
-    
+# noqa: W293
     resolver.add_price_offer(offer)
-    
+# noqa: W293
     assert resolver.context['SUB_TRAFFIC_LIMIT_DAY'] == '♾️'
 
 
@@ -528,17 +528,17 @@ def test_add_price_offer_traffic_day_infinite():
 def test_add_price_offer_traffic_limit_int():
     """Тест: traffic_limit с int → ГБ"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     offer_data = {
         'offer_id': 4, 'cost': 79900, 'ttl_days': 60,
         'traffic_day_limit': 15360, 'traffic_limit': 512000,
         'infinite_expire': False, 'infinite_traffic': False
     }
     offer = SubOfferSchema.fast_create(offer_data)
-    
+# noqa: W293
     resolver.add_price_offer(offer)
     result = resolver.resolve("{SUB_TRAFFIC_LIMIT}")
-    
+# noqa: W293
     assert result == "500"  # 512000 / 1024
 
 
@@ -546,16 +546,16 @@ def test_add_price_offer_traffic_limit_int():
 def test_add_price_offer_traffic_limit_none():
     """Тест: traffic_limit=None → '-'"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     offer_data = {
         'offer_id': 5, 'cost': 39900, 'ttl_days': 21,
         'traffic_day_limit': 5120, 'traffic_limit': None,
         'infinite_expire': False, 'infinite_traffic': False
     }
     offer = SubOfferSchema.fast_create(offer_data)
-    
+# noqa: W293
     resolver.add_price_offer(offer)
-    
+# noqa: W293
     assert resolver.context['SUB_TRAFFIC_LIMIT'] == '-'
 
 
@@ -563,16 +563,16 @@ def test_add_price_offer_traffic_limit_none():
 def test_add_price_offer_traffic_limit_infinite():
     """Тест: traffic_limit при infinite_traffic=True → '♾️'"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     offer_data = {
         'offer_id': 6, 'cost': 299900, 'ttl_days': 730,
         'traffic_day_limit': None, 'traffic_limit': None,
         'infinite_expire': True, 'infinite_traffic': True
     }
     offer = SubOfferSchema.fast_create(offer_data)
-    
+# noqa: W293
     resolver.add_price_offer(offer)
-    
+# noqa: W293
     assert resolver.context['SUB_TRAFFIC_LIMIT'] == '♾️'
 
 
@@ -580,17 +580,17 @@ def test_add_price_offer_traffic_limit_infinite():
 def test_add_price_offer_cost_formatting():
     """Тест: cost форматируется с делением на 100 и 2 знаками после запятой"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     offer_data = {
         'offer_id': 7, 'cost': 12345, 'ttl_days': 7,
         'traffic_day_limit': 1024, 'traffic_limit': 10240,
         'infinite_expire': False, 'infinite_traffic': False
     }
     offer = SubOfferSchema.fast_create(offer_data)
-    
+# noqa: W293
     resolver.add_price_offer(offer)
     result = resolver.resolve("{SUB_COST}")
-    
+# noqa: W293
     assert " 123.45" in result  # Форматирование с пробелом в начале
 
 
@@ -598,16 +598,16 @@ def test_add_price_offer_cost_formatting():
 def test_add_price_offer_ttl_infinite():
     """Тест: ttl_days при infinite_expire=True → '♾️'"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     offer_data = {
         'offer_id': 8, 'cost': 999900, 'ttl_days': 99999,
         'traffic_day_limit': None, 'traffic_limit': None,
         'infinite_expire': True, 'infinite_traffic': True
     }
     offer = SubOfferSchema.fast_create(offer_data)
-    
+# noqa: W293
     resolver.add_price_offer(offer)
-    
+# noqa: W293
     assert resolver.context['SUB_TTL_DAYS'] == '♾️'
 
 
@@ -615,16 +615,16 @@ def test_add_price_offer_ttl_infinite():
 def test_add_price_offer_ttl_days():
     """Тест: ttl_days обычное число остаётся как есть"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     offer_data = {
         'offer_id': 9, 'cost': 59900, 'ttl_days': 45,
         'traffic_day_limit': 10240, 'traffic_limit': 307200,
         'infinite_expire': False, 'infinite_traffic': False
     }
     offer = SubOfferSchema.fast_create(offer_data)
-    
+# noqa: W293
     resolver.add_price_offer(offer)
-    
+# noqa: W293
     assert resolver.context['SUB_TTL_DAYS'] == 45
 
 
@@ -636,16 +636,16 @@ def test_add_price_offer_ttl_days():
 def test_add_user_date_formatting():
     """Тест: registered_date форматируется в 'DD-MM-YYYY HH:MM'"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     user_data = {
         'sub_count': 5,
         'registered_at': '2024-03-15T16:20:45.000000+00:00'
     }
     user = UserSchema.fast_create(user_data)
-    
+# noqa: W293
     resolver.add_user(user)
     result = resolver.resolve("{USER_REGISTERED_DATE}")
-    
+# noqa: W293
     assert "15-03-2024" in result
     assert "16:20" in result
 
@@ -654,12 +654,12 @@ def test_add_user_date_formatting():
 def test_add_user_sub_count():
     """Тест: sub_count корректно извлекается"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     user_data = {'sub_count': 12, 'registered_at': '2024-01-01T10:00:00.000000+00:00'}
     user = UserSchema.fast_create(user_data)
-    
+# noqa: W293
     resolver.add_user(user)
-    
+# noqa: W293
     assert resolver.context['USER_SUB_COUNT'] == 12
 
 
@@ -671,9 +671,9 @@ def test_add_user_sub_count():
 def test_add_custom_upper_case():
     """Тест: ключи конвертируются в UPPER_CASE"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     resolver.add_custom(my_value="test", another_key="data")
-    
+# noqa: W293
     assert 'MY_VALUE' in resolver.context
     assert 'ANOTHER_KEY' in resolver.context
     assert 'my_value' not in resolver.context
@@ -683,9 +683,9 @@ def test_add_custom_upper_case():
 def test_add_custom_none_values():
     """Тест: None конвертируется в пустую строку"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     resolver.add_custom(empty_field=None, filled_field="data")
-    
+# noqa: W293
     assert resolver.context['EMPTY_FIELD'] == ''
     assert resolver.context['FILLED_FIELD'] == 'data'
 
@@ -694,9 +694,9 @@ def test_add_custom_none_values():
 def test_add_custom_type_conversion():
     """Тест: int/float/bool конвертируются в строку"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     resolver.add_custom(count=42, price=99.99, active=True)
-    
+# noqa: W293
     assert resolver.context['COUNT'] == '42'
     assert resolver.context['PRICE'] == '99.99'
     assert resolver.context['ACTIVE'] == 'True'
@@ -707,10 +707,10 @@ def test_add_custom_type_conversion():
 def test_add_custom_multiple_values():
     """Тест: несколько кастомных значений одновременно"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     resolver.add_custom(a="1", b="2", c="3", d="4")
     result = resolver.resolve("{A}-{B}-{C}-{D}")
-    
+# noqa: W293
     assert result == "1-2-3-4"
 
 
@@ -718,10 +718,10 @@ def test_add_custom_multiple_values():
 def test_add_custom_special_characters():
     """Тест: спецсимволы в значениях сохраняются"""
     resolver = PlaceholderResolver()
-    
+# noqa: W293
     resolver.add_custom(emoji="🚀✅", special="@#$%", unicode="Привет")
     result = resolver.resolve("{EMOJI}|{SPECIAL}|{UNICODE}")
-    
+# noqa: W293
     assert result == "🚀✅|@#$%|Привет"
 
 
@@ -734,9 +734,9 @@ def test_resolve_single_placeholder():
     """Тест: resolve() заменяет одиночный плейсхолдер"""
     resolver = PlaceholderResolver()
     resolver.add_custom(name="Alice")
-    
+# noqa: W293
     result = resolver.resolve("Hello, {NAME}!")
-    
+# noqa: W293
     assert result == "Hello, Alice!"
 
 
@@ -745,9 +745,9 @@ def test_resolve_multiple_placeholders():
     """Тест: resolve() заменяет несколько плейсхолдеров"""
     resolver = PlaceholderResolver()
     resolver.add_custom(first="John", last="Doe", age=30)
-    
+# noqa: W293
     result = resolver.resolve("{FIRST} {LAST} is {AGE} years old")
-    
+# noqa: W293
     assert result == "John Doe is 30 years old"
 
 
@@ -756,9 +756,9 @@ def test_resolve_unknown_placeholders():
     """Тест: неизвестные плейсхолдеры остаются без изменений"""
     resolver = PlaceholderResolver()
     resolver.add_custom(known="value")
-    
+# noqa: W293
     result = resolver.resolve("{KNOWN} and {UNKNOWN}")
-    
+# noqa: W293
     assert result == "value and {UNKNOWN}"
 
 
@@ -767,9 +767,9 @@ def test_resolve_empty_template():
     """Тест: resolve() с пустым шаблоном возвращает пустую строку"""
     resolver = PlaceholderResolver()
     resolver.add_custom(test="data")
-    
+# noqa: W293
     result = resolver.resolve("")
-    
+# noqa: W293
     assert result == ""
 
 
@@ -778,9 +778,9 @@ def test_resolve_no_placeholders():
     """Тест: текст без плейсхолдеров возвращается без изменений"""
     resolver = PlaceholderResolver()
     resolver.add_custom(unused="data")
-    
+# noqa: W293
     result = resolver.resolve("Plain text without placeholders")
-    
+# noqa: W293
     assert result == "Plain text without placeholders"
 
 
@@ -793,14 +793,14 @@ def test_chaining_multiple_methods():
     """Тест: цепочка вызовов работает корректно"""
     user = TgUser(id=777, username="chain", first_name="Chain", last_name="Test", is_bot=False)
     message = Message(message_id=100, date=datetime.now(), chat=Chat(id=777, type="private"), from_user=user)
-    
+# noqa: W293
     result = (
         PlaceholderResolver()
         .add_message(message)
         .add_custom(extra="bonus")
         .resolve("{USER_TG_FIRST_NAME} has {EXTRA}")
     )
-    
+# noqa: W293
     assert result == "Chain has bonus"
 
 
@@ -809,7 +809,7 @@ def test_chaining_order_independence():
     """Тест: порядок вызовов не важен (последний перезаписывает)"""
     result1 = PlaceholderResolver().add_custom(val="A").add_custom(val="B").resolve("{VAL}")
     result2 = PlaceholderResolver().add_custom(val="B").add_custom(val="A").resolve("{VAL}")
-    
+# noqa: W293
     assert result1 == "B"  # Последнее значение
     assert result2 == "A"
 
@@ -820,7 +820,7 @@ def test_chaining_override_values():
     resolver = PlaceholderResolver()
     resolver.add_custom(key="first")
     resolver.add_custom(key="second")
-    
+# noqa: W293
     result = resolver.resolve("{KEY}")
-    
+# noqa: W293
     assert result == "second"

@@ -21,7 +21,6 @@ class ProtocolsQueries:
         except ForeignKeyViolationError:
             return 404, 'Выбранный шаблон не найден', None
 
-
     async def get_protocol(self, proto_id: int):
         """Получить протокол по ID"""
         query_proto = """
@@ -35,8 +34,9 @@ class ProtocolsQueries:
 
         return 200, '', proto_info
 
-
-    async def get_all_protocols(self, order_by: Literal["desc", "asc"], limit: int, proto_id: int | None, tmp_id: int | None):
+    async def get_all_protocols(
+        self, order_by: Literal["desc", "asc"], limit: int, proto_id: int | None, tmp_id: int | None
+    ):
         sql_params = [limit]
         filters = []
         param_idx = 2
@@ -69,7 +69,6 @@ class ProtocolsQueries:
         LIMIT $1
         """
         return await self.conn.fetch(query, *sql_params)
-
 
     async def delete_protocol(self, proto_id: int):
         """Удалить протокол"""

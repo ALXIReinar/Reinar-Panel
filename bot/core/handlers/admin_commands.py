@@ -1,4 +1,4 @@
-from typing import Callable, Any, Awaitable
+from typing import Callable, Any, Awaitable  # noqa: I001
 
 from aiogram import BaseMiddleware
 from aiogram.types import Message
@@ -25,7 +25,7 @@ class MiddlewareAdmin(BaseMiddleware):
         "Если команда админская, но стучится не админ"
         command = event.text.split()[0]
         if command in admin_commands and event.from_user.id != env.admin_tg_id:
-            log_event(f'Несанкционированный доступ к админ-командам | tg_id: \033[31m{event.from_user.id}\033[34m; username: \033[35m{event.from_user.username}\033[0m', level='WARNING')
+            log_event(f'Несанкционированный доступ к админ-командам | tg_id: \033[31m{event.from_user.id}\033[34m; username: \033[35m{event.from_user.username}\033[0m', level='WARNING')  # noqa: E501
             await event.answer('Операция доступна только администратору')
             return None
 
@@ -38,7 +38,7 @@ async def reset_req_limit(message: Message, redis: Redis):
 
     user_tg_id = int(inp_text[1]) if len(inp_text) == 2 and inp_text[1].isdigit() else None
     if not user_tg_id:
-        await message.answer(f'❌ Не выполнено. Введите корректный числовой <b>tg_id</b> пользователя после команды')
+        await message.answer(f'❌ Не выполнено. Введите корректный числовой <b>tg_id</b> пользователя после команды')  # noqa: F541
         return
 
     res = await redis.delete(RedisKeys.rate_limit(user_tg_id))
@@ -46,15 +46,15 @@ async def reset_req_limit(message: Message, redis: Redis):
     if not res:
         text = f'❌ Не выполнено. Пользователь с таким id не существует в Redis. <code>{user_tg_id}</code>'
 
-    log_event(f'\033[31m[Admin Command]\033[0m Сброс блокировки по запросам | success: \033[34m{bool(res)}\033[0m; user_tg_id: \033[35m{user_tg_id}\033[0m; admin_id: \033[31m{message.from_user.id}\033[0m', level='WARNING')
+    log_event(f'\033[31m[Admin Command]\033[0m Сброс блокировки по запросам | success: \033[34m{bool(res)}\033[0m; user_tg_id: \033[35m{user_tg_id}\033[0m; admin_id: \033[31m{message.from_user.id}\033[0m', level='WARNING')  # noqa: E501
     await message.answer(text)
 
 
 async def flush_shop_cache(message: Message, redis: Redis):
     res = await redis.delete(RedisKeys.shop_sub_plans)
-    text = f'✅ Выполнено. Кэш тарифных планов магазина очищен'
+    text = f'✅ Выполнено. Кэш тарифных планов магазина очищен'  # noqa: F541
     if not res:
-        text = f'❌ Не выполнено. Ключ тарифных планов не найден в Redis'
+        text = f'❌ Не выполнено. Ключ тарифных планов не найден в Redis'  # noqa: F541
 
-    log_event(f'\033[31m[Admin Command]\033[0m Команда очистки кэша магазина | success: \033[34m{bool(res)}\033[0m; admin_id: \033[31m{message.from_user.id}\033[0m', level='WARNING')
-    await message.answer(text)
+    log_event(f'\033[31m[Admin Command]\033[0m Команда очистки кэша магазина | success: \033[34m{bool(res)}\033[0m; admin_id: \033[31m{message.from_user.id}\033[0m', level='WARNING')  # noqa: E501
+    await message.answer(text)  # noqa: W292

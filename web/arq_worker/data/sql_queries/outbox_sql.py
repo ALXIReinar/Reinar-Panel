@@ -1,5 +1,7 @@
 from asyncpg import Connection
 
+from web.arq_worker.utils.anything import VnodeRegStatuses
+
 
 class OutboxQueries:
     def __init__(self, conn: Connection):
@@ -49,10 +51,10 @@ class OutboxQueries:
                pae.events_timeline, np.constant_node_data_obj, pt.json2config_script, pt.config2json_script, pt.conf_converter_libs,
                COALESCE(aui.user_injectors, '[]'::json) AS user_injectors
         FROM pre_agg_events pae
-        JOIN nodes_protocols np ON np.id = pae.node_proto_id AND np.user_visible = true
+        JOIN nodes_protocols np ON np.id = pae.node_proto_id AND np.user_visible = true AND np.reg_status = $1
         JOIN nodes n ON np.node_id = n.id AND n.is_active = true
         JOIN protocols p ON np.proto_id = p.id
         JOIN proto_templates pt ON p.tmp_id = pt.id
         LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id
-        '''
-        return await self.conn.fetch(query)
+        '''  # noqa: W291
+        return await self.conn.fetch(query, VnodeRegStatuses.success)

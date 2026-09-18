@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any  # noqa: I001
 from aiogram.types import Message, CallbackQuery
 
 from bot.core.utils.schemas import UserSubSchema, ShopSubSchema, SubOfferSchema, UserSchema
@@ -23,11 +23,11 @@ class PlaceholderResolver:
     
     Формат плейсхолдеров: {KEY_NAME}
     Пустые значения заменяются на пустую строку.
-    """
-    
+    """  # noqa: W293
+# noqa: W293
     def __init__(self):
         self.context: dict[str, str] = {}
-    
+# noqa: W293
     def add_message(self, message: Message) -> 'PlaceholderResolver':
         """
         Автоматически извлекает данные из Message объекта.
@@ -42,7 +42,7 @@ class PlaceholderResolver:
             message: aiogram Message объект
         Returns:
             self для цепочки вызовов
-        """
+        """  # noqa: W293
         if message and message.from_user:
             user = message.from_user
             self.context.update({
@@ -52,7 +52,7 @@ class PlaceholderResolver:
                 'USER_TG_LAST_NAME': user.last_name or '',
             })
         return self
-    
+# noqa: W293
     def add_callback(self, callback: CallbackQuery) -> 'PlaceholderResolver':
         """
         Автоматически извлекает данные из CallbackQuery объекта.
@@ -71,7 +71,7 @@ class PlaceholderResolver:
             
         Returns:
             self для цепочки вызовов
-        """
+        """  # noqa: W293
         if callback and callback.from_user:
             user = callback.from_user
             self.context.update({
@@ -100,7 +100,7 @@ class PlaceholderResolver:
         - USER_SUB_EXPIRE_DATE - Дата истечения срока действия подписки. ♾️ если срок неограничен
         - USER_SUB_CREATED_AT - Дата истечения срока действия подписки. ♾️ если срок неограничен
         - SUB_NODES_COUNT/USER_SUB_NODES_COUNT - Количество локаций по подписке
-        """
+        """  # noqa: E501
         self.context.update({
             'USER_SUB_ID': user_sub.id,
             'USER_SUB_PLAN_ID': user_sub.sub_plan_id,
@@ -113,7 +113,7 @@ class PlaceholderResolver:
             'USER_SUB_TRAFFIC_LIMIT_DAY': user_sub.traffic_limit_day,
             'USER_SUB_TRAFFIC_USED': user_sub.traffic_used,
             'USER_SUB_TRAFFIC_LIMIT': user_sub.traffic_limit,
-            'USER_SUB_EXPIRE_DATE': user_sub.expire_date if isinstance(user_sub.expire_date, str) else user_sub.expire_date.strftime("%d-%m-%Y %H:%M"),
+            'USER_SUB_EXPIRE_DATE': user_sub.expire_date if isinstance(user_sub.expire_date, str) else user_sub.expire_date.strftime("%d-%m-%Y %H:%M"),  # noqa: E501
             'USER_SUB_CREATED_AT': user_sub.created_at.strftime("%d-%m-%Y %H:%M"),
             'USER_SUB_NODES_COUNT': user_sub.sub_nodes_count,
             'SUB_SUB_NODES_COUNT': user_sub.sub_nodes_count,
@@ -128,7 +128,7 @@ class PlaceholderResolver:
         - SUB_ID - sub_plan_id
         - USER_SUB_TITLE/SUB_TITLE - название подписки, которое отображается в впн-клиенте пользователя
         - SUB_DESCRIPTION - Описание тарифа. В нём можно подробнее описать тариф("Доступен безлимит, если купить подписку за 1000р" и т.п.)
-        """
+        """  # noqa: E501
         self.context.update({
             'SUB_ID': shop_sub.id,
             'SUB_TITLE': shop_sub.title,
@@ -148,7 +148,7 @@ class PlaceholderResolver:
         - SUB_TTL_DAYS - Длительность подписки в днях после покупки/продления(прибавится к существующей подписке). ♾️ - если infinite_expire = true
         - SUB_TRAFFIC_LIMIT_DAY - лимит ГБ в день. Если None, то - (прочерк). Если infinite_traffic = true, то ♾️ НЕЗАВИСИМО от указанного значения.
         - SUB_TRAFFIC_LIMIT - Общий лимит ГБ. Если None, то - (прочерк). Если infinite_traffic = true, то ♾️ НЕЗАВИСИМО от указанного значения.
-        """
+        """  # noqa: E501
         self.context.update({
             "SUB_COST": f'{offer.cost / 100: .2f}',
             "SUB_TTL_DAYS": offer.ttl_days,
@@ -176,7 +176,7 @@ class PlaceholderResolver:
         Example:
             resolver.add_custom(user_api_sub_count=5, server_name='prod')
             # Создаст плейсхолдеры {USER_API_SUB_COUNT} и {SERVER_NAME}
-        """
+        """  # noqa: W293
         self.context.update({
             key.upper(): str(value) if value is not None else ''
             for key, value in kwargs.items()

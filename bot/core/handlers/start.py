@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime  # noqa: F401, I001
 from typing import Union
 
 from aiogram.types import Message, CallbackQuery
@@ -21,7 +21,7 @@ async def on_startup():
 @rate_limit(env.user_req_limit, env.user_req_window_seconds)
 async def start_handler(event: Union[Message, CallbackQuery], redis: Redis, aio_http: SubServiceConn):
     """Запрос на сохранение пользователя + Приветствие"""
-    
+# noqa: W293
     # Сохраняем пользователя
     ok, user_data = await aio_http.users.save_user(
         event.from_user.id, event.from_user.username, return_data=True
@@ -36,10 +36,10 @@ async def start_handler(event: Union[Message, CallbackQuery], redis: Redis, aio_
         await event.answer(text, reply_markup=main_kb())
     else:  # CallbackQuery
         await event.message.answer(text, reply_markup=main_kb())
-    
+# noqa: W293
     await set_commands(bot)
 
 
 async def helping(message: Message):
     text = env.message_templates.render('message_help', message)
-    await message.answer(text)
+    await message.answer(text)  # noqa: W292

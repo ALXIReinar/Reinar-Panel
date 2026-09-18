@@ -1,4 +1,4 @@
-import logging
+import logging  # noqa: I001
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -12,12 +12,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from web.arq_worker.utils.env_modes import AppMode
 
 
-env_files = (
-    os.getenv('ENV_FILE') or
-    'web/arq_worker/.env.arq.prod'
-)
+env_files = os.getenv('ENV_FILE') or 'web/arq_worker/.env.arq.prod'
 load_dotenv(env_files, override=True)
-logging.critical(f'\033[35m{env_files}\033[0m | app_mode: \033[32m{os.getenv('APP_MODE')}\033[0m')
+logging.critical(f'\033[35m{env_files}\033[0m | app_mode: \033[32m{os.getenv("APP_MODE")}\033[0m')
 
 "Создаём директории"
 WORKDIR = Path(__file__).resolve().parent
@@ -51,13 +48,17 @@ class Settings(BaseSettings):
     node_client_command_timeout: int = os.getenv('NODE_CLIENT_COMMAND_TIMEOUT', 120)
     model_config = SettingsConfigDict(extra='allow', env_file_encoding='utf-8')
 
+
 @lru_cache
 def get_env_vars():
     return Settings()
 
+
 env = get_env_vars()
 
 "Redis"
+
+
 def get_redis_settings(envs: Settings):
     redis_conf = {
         'host': envs.redis_host,
@@ -68,10 +69,13 @@ def get_redis_settings(envs: Settings):
         redis_conf['password'] = envs.redis_password
     return redis_conf
 
+
 redis_settings = get_redis_settings(env)
 
 
 "ARQ для фоновых задач"
+
+
 def get_arq_redis_settings():
     return RedisSettings(
         host=redis_settings['host'],
@@ -80,6 +84,7 @@ def get_arq_redis_settings():
         database=0,
     )
 
+
 def get_arq_worker_settings():
     return {
         'default_queue_name': env.arq_queue_name,
@@ -87,6 +92,8 @@ def get_arq_worker_settings():
 
 
 "PostgreSQL"
+
+
 async def init(conn: Connection):
     await conn.set_type_codec(
         'jsonb',
@@ -101,6 +108,7 @@ async def init(conn: Connection):
         schema='pg_catalog',
     )
 
+
 pool_settings = dict(
     user=env.pg_user,
     database=env.pg_db,
@@ -109,5 +117,5 @@ pool_settings = dict(
     port=env.pg_port,
     command_timeout=60,
     init=init,
-    max_size=env.pg_max_connections # connections on pool
+    max_size=env.pg_max_connections,  # connections on pool
 )

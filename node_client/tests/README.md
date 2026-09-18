@@ -96,7 +96,7 @@ python -m pytest node_client/tests/unit/ -v
     'bulk_add_script_custom_params': dict,
     'bulk_delete_script_custom_params': dict,
     'is_accepted': bool,
-    'status': str
+    'status': str,
 }
 ```
 

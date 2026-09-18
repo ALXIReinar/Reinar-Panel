@@ -19,4 +19,4 @@ def generate_link_from_json(tmp_link: str, node_config_json: dict):
     "Рендерим двойные плейсхолдеры '{{v___0___item}}' "
     template = Template(tmp_link)
     config_url = template.render(flat_config)
-    return True, config_url
+    return True, config_url  # noqa: W292

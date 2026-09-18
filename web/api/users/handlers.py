@@ -9,7 +9,9 @@ from web.utils.logger_config import log_event
 
 
 async def put_to_arq_bg_bulk(
-        arq: ArqRedis, outbox_event_ids: list[dict], action: Literal['activate', 'deactivate', 'reset_traffic', 'add', 'delete']
+    arq: ArqRedis,
+    outbox_event_ids: list[dict],
+    action: Literal['activate', 'deactivate', 'reset_traffic', 'add', 'delete'],
 ) -> str:
     """
     В микросервисе фона/подписок 5 путей с админки исполняются 2 функциями
@@ -32,7 +34,13 @@ async def put_to_arq_bg_bulk(
     action = action_simple.get(action, 'reset_traffic')
 
     "Выбираем нужную фоновую задачу"
-    bg_func_params = ('admin_request_bulk_action_users', (action, outbox_event_ids,))
+    bg_func_params = (
+        'admin_request_bulk_action_users',
+        (
+            action,
+            outbox_event_ids,
+        ),
+    )
     if action == 'reset_traffic':
         bg_func_params = ('reset_day_user_traffic', (outbox_event_ids,))
 
@@ -45,7 +53,7 @@ async def put_to_arq_bg_bulk(
 async def put_to_arq_bg_single(arq: ArqRedis, nodes_pack: list, action: Literal['add', 'delete']) -> list[str]:
     """
     Вставки и удаления требуют изменений на впн ядрах.
-    
+
     :param nodes_pack: Список подписок, где каждая подписка содержит:
         - node_proto_id,
         - private_ip,
@@ -57,12 +65,20 @@ async def put_to_arq_bg_single(arq: ArqRedis, nodes_pack: list, action: Literal[
     Так что параллельно раскидываем ноды. Они раскидают по пользователям всё это
     """
     sem = asyncio.Semaphore(env.node_metrics_queue_limit)
-    
+
     async def worker(vnode: dict):
         async with sem:
             action_script_custom_params = {
-                'delete': (vnode['api_bulk_delete_user_script'], vnode['bulk_delete_script_custom_params'], CoreProtoActions.delete),
-                'add': (vnode['api_bulk_add_user_script'], vnode['bulk_add_script_custom_params'], CoreProtoActions.add),
+                'delete': (
+                    vnode['api_bulk_delete_user_script'],
+                    vnode['bulk_delete_script_custom_params'],
+                    CoreProtoActions.delete,
+                ),
+                'add': (
+                    vnode['api_bulk_add_user_script'],
+                    vnode['bulk_add_script_custom_params'],
+                    CoreProtoActions.add,
+                ),
             }
             job = await arq.enqueue_job(
                 'bulk_action_users_by_node',
@@ -79,7 +95,9 @@ async def put_to_arq_bg_single(arq: ArqRedis, nodes_pack: list, action: Literal[
                 vnode['required_user_data_obj'],
                 vnode['constant_user_data_obj'],
             )
-            log_event(f'\033[35m[User Subs Editor]\033[0m Отправили в фон \033[34m{action}\033[0m на ноду | node_proto_id: \033[33m{vnode['node_proto_id']}\033[0m; users: \033[32m{vnode["users"]}\033[0m; job_id: \033[31m{job.job_id}\033[0m')
+            log_event(
+                f'\033[35m[User Subs Editor]\033[0m Отправили в фон \033[34m{action}\033[0m на ноду | node_proto_id: \033[33m{vnode["node_proto_id"]}\033[0m; users: \033[32m{vnode["users"]}\033[0m; job_id: \033[31m{job.job_id}\033[0m'
+            )
             return job.job_id
 
     job_ids = await asyncio.gather(*(worker(vnode) for vnode in nodes_pack if len(vnode['users']) > 0))

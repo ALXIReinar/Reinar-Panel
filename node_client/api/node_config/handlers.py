@@ -71,4 +71,4 @@ async def cleanup_old_backups():
             log_event(f"Ошибка при удалении бэкапа {backup_file}: {e}", level='WARNING')
 
     if deleted_count > 0:
-        log_event(f"Удалено старых бэкапов: {deleted_count}", level='INFO')
+        log_event(f"Удалено старых бэкапов: {deleted_count}", level='INFO')  # noqa: W292

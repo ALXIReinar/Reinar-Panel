@@ -16,4 +16,4 @@ class UserSubsAioHttp(BaseAioHTTPClient):
         if not ok:
             return False, []
 
-        return True, data['user_subs']
+        return True, data['user_subs']  # noqa: W292

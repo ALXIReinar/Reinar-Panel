@@ -9,8 +9,8 @@ Unit тесты для админских хендлеров (bot/core/handlers/
 Использует настоящий Redis для реалистичного тестирования.
 """
 
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+import pytest  # noqa: I001
+from unittest.mock import AsyncMock, patch, MagicMock  # noqa: F401
 from aiogram.types import Message, User as TgUser, Chat
 from datetime import datetime
 
@@ -29,7 +29,7 @@ async def test_middleware_passes_non_command_messages():
     # Arrange
     middleware = MiddlewareAdmin()
     handler = AsyncMock(return_value="handler_result")
-    
+# noqa: W293
     user = TgUser(id=12345, username='regular_user', first_name='Test', is_bot=False)
     message = Message(
         message_id=1,
@@ -38,10 +38,10 @@ async def test_middleware_passes_non_command_messages():
         from_user=user,
         text="Обычное сообщение без команды"
     )
-    
+# noqa: W293
     # Act
     result = await middleware(handler, message, {})
-    
+# noqa: W293
     # Assert
     handler.assert_called_once_with(message, {})
     assert result == "handler_result"
@@ -53,7 +53,7 @@ async def test_middleware_passes_regular_commands():
     # Arrange
     middleware = MiddlewareAdmin()
     handler = AsyncMock(return_value="handler_result")
-    
+# noqa: W293
     user = TgUser(id=12345, username='regular_user', first_name='Test', is_bot=False)
     message = Message(
         message_id=2,
@@ -62,10 +62,10 @@ async def test_middleware_passes_regular_commands():
         from_user=user,
         text="/start"
     )
-    
+# noqa: W293
     # Act
     result = await middleware(handler, message, {})
-    
+# noqa: W293
     # Assert
     handler.assert_called_once_with(message, {})
     assert result == "handler_result"
@@ -77,7 +77,7 @@ async def test_middleware_passes_admin_commands_for_admin():
     # Arrange
     middleware = MiddlewareAdmin()
     handler = AsyncMock(return_value="handler_result")
-    
+# noqa: W293
     user = TgUser(id=env.admin_tg_id, username='admin', first_name='Admin', is_bot=False)
     message = Message(
         message_id=3,
@@ -86,10 +86,10 @@ async def test_middleware_passes_admin_commands_for_admin():
         from_user=user,
         text="/flush_shop_cache"
     )
-    
+# noqa: W293
     # Act
     result = await middleware(handler, message, {})
-    
+# noqa: W293
     # Assert
     handler.assert_called_once_with(message, {})
     assert result == "handler_result"
@@ -101,7 +101,7 @@ async def test_middleware_blocks_admin_commands_for_non_admin():
     # Arrange
     middleware = MiddlewareAdmin()
     handler = AsyncMock(return_value="handler_result")
-    
+# noqa: W293
     user = TgUser(id=99999, username='hacker', first_name='Hacker', is_bot=False)
     message = Message(
         message_id=4,
@@ -110,18 +110,18 @@ async def test_middleware_blocks_admin_commands_for_non_admin():
         from_user=user,
         text="/flush_shop_cache"
     )
-    
+# noqa: W293
     with patch.object(Message, 'answer', new_callable=AsyncMock) as mock_answer:
         # Act
         result = await middleware(handler, message, {})
-        
+# noqa: W293
         # Assert
         # 1. Handler НЕ вызван
         handler.assert_not_called()
-        
+# noqa: W293
         # 2. Возвращает None
         assert result is None
-        
+# noqa: W293
         # 3. Сообщение о блокировке отправлено
         mock_answer.assert_called_once()
 
@@ -132,7 +132,7 @@ async def test_middleware_sends_warning_on_unauthorized_access():
     # Arrange
     middleware = MiddlewareAdmin()
     handler = AsyncMock()
-    
+# noqa: W293
     user = TgUser(id=88888, username='intruder', first_name='Intruder', is_bot=False)
     message = Message(
         message_id=5,
@@ -141,11 +141,11 @@ async def test_middleware_sends_warning_on_unauthorized_access():
         from_user=user,
         text="/reset_req_limit 123456"
     )
-    
+# noqa: W293
     with patch.object(Message, 'answer', new_callable=AsyncMock) as mock_answer:
         # Act
         await middleware(handler, message, {})
-        
+# noqa: W293
         # Assert
         mock_answer.assert_called_once_with('Операция доступна только администратору')
 
@@ -157,7 +157,7 @@ async def test_middleware_logs_unauthorized_access_attempts(mock_log_event):
     # Arrange
     middleware = MiddlewareAdmin()
     handler = AsyncMock()
-    
+# noqa: W293
     user = TgUser(id=77777, username='attacker', first_name='Attacker', is_bot=False)
     message = Message(
         message_id=6,
@@ -166,15 +166,15 @@ async def test_middleware_logs_unauthorized_access_attempts(mock_log_event):
         from_user=user,
         text="/flush_shop_cache"
     )
-    
+# noqa: W293
     with patch.object(Message, 'answer', new_callable=AsyncMock):
         # Act
         await middleware(handler, message, {})
-        
+# noqa: W293
         # Assert
         mock_log_event.assert_called_once()
         call_args = mock_log_event.call_args
-        
+# noqa: W293
         # Проверяем что в логе есть информация о попытке доступа
         assert '77777' in call_args[0][0]  # tg_id
         assert 'attacker' in call_args[0][0]  # username
@@ -187,7 +187,7 @@ async def test_middleware_handles_commands_with_parameters():
     # Arrange
     middleware = MiddlewareAdmin()
     handler = AsyncMock(return_value="handler_result")
-    
+# noqa: W293
     user = TgUser(id=env.admin_tg_id, username='admin', first_name='Admin', is_bot=False)
     message = Message(
         message_id=7,
@@ -196,10 +196,10 @@ async def test_middleware_handles_commands_with_parameters():
         from_user=user,
         text="/reset_req_limit 123456"
     )
-    
+# noqa: W293
     # Act
     result = await middleware(handler, message, {})
-    
+# noqa: W293
     # Assert
     handler.assert_called_once_with(message, {})
     assert result == "handler_result"
@@ -215,10 +215,10 @@ async def test_reset_req_limit_success(redis_client):
     # Arrange
     user_tg_id = 555555
     redis_key = RedisKeys.rate_limit(user_tg_id)
-    
+# noqa: W293
     # Создаём запись в Redis
     await redis_client.set(redis_key, "5", ex=60)
-    
+# noqa: W293
     user = TgUser(id=env.admin_tg_id, username='admin', first_name='Admin', is_bot=False)
     message = Message(
         message_id=10,
@@ -227,16 +227,16 @@ async def test_reset_req_limit_success(redis_client):
         from_user=user,
         text=f"/reset_req_limit {user_tg_id}"
     )
-    
+# noqa: W293
     with patch.object(Message, 'answer', new_callable=AsyncMock) as mock_answer:
         # Act
         await reset_req_limit(message, redis_client)
-        
+# noqa: W293
         # Assert
         # 1. Ключ удалён из Redis
         exists = await redis_client.exists(redis_key)
         assert exists == 0
-        
+# noqa: W293
         # 2. Успешное сообщение отправлено
         mock_answer.assert_called_once()
         call_text = mock_answer.call_args[0][0]
@@ -250,11 +250,11 @@ async def test_reset_req_limit_deletes_redis_key(redis_client):
     # Arrange
     user_tg_id = 666666
     redis_key = RedisKeys.rate_limit(user_tg_id)
-    
+# noqa: W293
     # Предварительно создаём ключ
     await redis_client.set(redis_key, "3", ex=60)
     assert await redis_client.exists(redis_key) == 1
-    
+# noqa: W293
     user = TgUser(id=env.admin_tg_id, username='admin', first_name='Admin', is_bot=False)
     message = Message(
         message_id=11,
@@ -263,11 +263,11 @@ async def test_reset_req_limit_deletes_redis_key(redis_client):
         from_user=user,
         text=f"/reset_req_limit {user_tg_id}"
     )
-    
+# noqa: W293
     with patch.object(Message, 'answer', new_callable=AsyncMock):
         # Act
         await reset_req_limit(message, redis_client)
-        
+# noqa: W293
         # Assert: ключ больше не существует
         exists = await redis_client.exists(redis_key)
         assert exists == 0
@@ -280,7 +280,7 @@ async def test_reset_req_limit_sends_success_message(redis_client):
     user_tg_id = 777777
     redis_key = RedisKeys.rate_limit(user_tg_id)
     await redis_client.set(redis_key, "10", ex=60)
-    
+# noqa: W293
     user = TgUser(id=env.admin_tg_id, username='admin', first_name='Admin', is_bot=False)
     message = Message(
         message_id=12,
@@ -289,11 +289,11 @@ async def test_reset_req_limit_sends_success_message(redis_client):
         from_user=user,
         text=f"/reset_req_limit {user_tg_id}"
     )
-    
+# noqa: W293
     with patch.object(Message, 'answer', new_callable=AsyncMock) as mock_answer:
         # Act
         await reset_req_limit(message, redis_client)
-        
+# noqa: W293
         # Assert
         mock_answer.assert_called_once()
         call_text = mock_answer.call_args[0][0]
@@ -315,11 +315,11 @@ async def test_reset_req_limit_error_missing_tg_id(redis_client):
         from_user=user,
         text="/reset_req_limit"  # Без параметра
     )
-    
+# noqa: W293
     with patch.object(Message, 'answer', new_callable=AsyncMock) as mock_answer:
         # Act
         await reset_req_limit(message, redis_client)
-        
+# noqa: W293
         # Assert
         mock_answer.assert_called_once()
         call_text = mock_answer.call_args[0][0]
@@ -340,11 +340,11 @@ async def test_reset_req_limit_error_invalid_tg_id(redis_client):
         from_user=user,
         text="/reset_req_limit abc123"  # Невалидный tg_id
     )
-    
+# noqa: W293
     with patch.object(Message, 'answer', new_callable=AsyncMock) as mock_answer:
         # Act
         await reset_req_limit(message, redis_client)
-        
+# noqa: W293
         # Assert
         mock_answer.assert_called_once()
         call_text = mock_answer.call_args[0][0]
@@ -357,7 +357,7 @@ async def test_reset_req_limit_error_user_not_found_in_redis(redis_client):
     """Тест: отправляет ошибку если пользователь не найден в Redis"""
     # Arrange
     user_tg_id = 999999  # Не существует в Redis
-    
+# noqa: W293
     user = TgUser(id=env.admin_tg_id, username='admin', first_name='Admin', is_bot=False)
     message = Message(
         message_id=15,
@@ -366,11 +366,11 @@ async def test_reset_req_limit_error_user_not_found_in_redis(redis_client):
         from_user=user,
         text=f"/reset_req_limit {user_tg_id}"
     )
-    
+# noqa: W293
     with patch.object(Message, 'answer', new_callable=AsyncMock) as mock_answer:
         # Act
         await reset_req_limit(message, redis_client)
-        
+# noqa: W293
         # Assert
         mock_answer.assert_called_once()
         call_text = mock_answer.call_args[0][0]
@@ -388,12 +388,12 @@ async def test_flush_shop_cache_success(redis_client):
     """Тест: успешно очищает кэш магазина"""
     # Arrange
     redis_key = RedisKeys.shop_sub_plans
-    
+# noqa: W293
     # Создаём кэш в Redis
     import orjson
     test_data = [{'id': 1, 'title': 'Basic Plan'}]
     await redis_client.set(redis_key, orjson.dumps(test_data))
-    
+# noqa: W293
     user = TgUser(id=env.admin_tg_id, username='admin', first_name='Admin', is_bot=False)
     message = Message(
         message_id=20,
@@ -402,16 +402,16 @@ async def test_flush_shop_cache_success(redis_client):
         from_user=user,
         text="/flush_shop_cache"
     )
-    
+# noqa: W293
     with patch.object(Message, 'answer', new_callable=AsyncMock) as mock_answer:
         # Act
         await flush_shop_cache(message, redis_client)
-        
+# noqa: W293
         # Assert
         # 1. Ключ удалён из Redis
         exists = await redis_client.exists(redis_key)
         assert exists == 0
-        
+# noqa: W293
         # 2. Успешное сообщение отправлено
         mock_answer.assert_called_once()
         call_text = mock_answer.call_args[0][0]
@@ -424,12 +424,12 @@ async def test_flush_shop_cache_deletes_redis_key(redis_client):
     """Тест: корректно удаляет ключ из Redis"""
     # Arrange
     redis_key = RedisKeys.shop_sub_plans
-    
+# noqa: W293
     # Предварительно создаём ключ
     import orjson
     await redis_client.set(redis_key, orjson.dumps([{'id': 2}]))
     assert await redis_client.exists(redis_key) == 1
-    
+# noqa: W293
     user = TgUser(id=env.admin_tg_id, username='admin', first_name='Admin', is_bot=False)
     message = Message(
         message_id=21,
@@ -438,11 +438,11 @@ async def test_flush_shop_cache_deletes_redis_key(redis_client):
         from_user=user,
         text="/flush_shop_cache"
     )
-    
+# noqa: W293
     with patch.object(Message, 'answer', new_callable=AsyncMock):
         # Act
         await flush_shop_cache(message, redis_client)
-        
+# noqa: W293
         # Assert: ключ больше не существует
         exists = await redis_client.exists(redis_key)
         assert exists == 0
@@ -455,7 +455,7 @@ async def test_flush_shop_cache_sends_success_message(redis_client):
     redis_key = RedisKeys.shop_sub_plans
     import orjson
     await redis_client.set(redis_key, orjson.dumps([{'id': 3}]))
-    
+# noqa: W293
     user = TgUser(id=env.admin_tg_id, username='admin', first_name='Admin', is_bot=False)
     message = Message(
         message_id=22,
@@ -464,11 +464,11 @@ async def test_flush_shop_cache_sends_success_message(redis_client):
         from_user=user,
         text="/flush_shop_cache"
     )
-    
+# noqa: W293
     with patch.object(Message, 'answer', new_callable=AsyncMock) as mock_answer:
         # Act
         await flush_shop_cache(message, redis_client)
-        
+# noqa: W293
         # Assert
         mock_answer.assert_called_once()
         call_text = mock_answer.call_args[0][0]
@@ -481,10 +481,10 @@ async def test_flush_shop_cache_error_key_not_found(redis_client):
     """Тест: отправляет ошибку если ключ не найден"""
     # Arrange
     redis_key = RedisKeys.shop_sub_plans
-    
+# noqa: W293
     # Убеждаемся что ключа нет в Redis
     await redis_client.delete(redis_key)
-    
+# noqa: W293
     user = TgUser(id=env.admin_tg_id, username='admin', first_name='Admin', is_bot=False)
     message = Message(
         message_id=23,
@@ -493,11 +493,11 @@ async def test_flush_shop_cache_error_key_not_found(redis_client):
         from_user=user,
         text="/flush_shop_cache"
     )
-    
+# noqa: W293
     with patch.object(Message, 'answer', new_callable=AsyncMock) as mock_answer:
         # Act
         await flush_shop_cache(message, redis_client)
-        
+# noqa: W293
         # Assert
         mock_answer.assert_called_once()
         call_text = mock_answer.call_args[0][0]

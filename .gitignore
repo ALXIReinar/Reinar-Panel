@@ -178,3 +178,7 @@ graphify-out/
 !/node_client/tests/utils/base_configs
 *.sql
 check_env_imports.py
+.vscode/
+.zed/
+.ruff_cache/
+run.py

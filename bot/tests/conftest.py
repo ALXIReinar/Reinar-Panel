@@ -7,11 +7,11 @@
 - Настоящий Redis (в тестовом окружении)
 """
 
-import pytest
+import pytest  # noqa: I001
 import pytest_asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock  # noqa: F401
 from redis.asyncio import Redis
-from aiohttp import ClientSession
+from aiohttp import ClientSession  # noqa: F401
 
 from bot.config_dir.config import env
 from bot.core.api.aiohttp_conn import SubServiceConn
@@ -26,14 +26,14 @@ class FakeAiohttpResponse:
     def __init__(self, json_data: dict, status: int = 200):
         self.json_data = json_data
         self.status = status
-    
+# noqa: W293
     async def json(self):
         return self.json_data
-    
+# noqa: W293
     async def text(self):
         import json
         return json.dumps(self.json_data)
-    
+# noqa: W293
     def raise_for_status(self):
         """Имитация raise_for_status - выбрасывает исключение для статусов >= 400"""
         if self.status >= 400:
@@ -44,14 +44,14 @@ class FakeAiohttpResponse:
                 status=self.status,
                 message=f'HTTP {self.status}'
             )
-    
+# noqa: W293
     def release(self):
         """Имитация release для освобождения соединения"""
         pass
-    
+# noqa: W293
     async def __aenter__(self):
         return self
-    
+# noqa: W293
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         pass
 
@@ -77,18 +77,18 @@ class FakeAiohttpSession:
     - Spy-функционал (отслеживание вызовов)
     - Настройка status и json_data
     - Имитация ошибок
-    """
+    """  # noqa: W293
     def __init__(self, json_data: dict | None = None, status: int = 200, raise_error: bool = False):
         self.json_data = {} if json_data is None else json_data
         self.status = status
         self.raise_error = raise_error
-        
+# noqa: W293
         # Spy attributes - для проверки что было вызвано
         self.post_calls = []
         self.delete_calls = []
         self.get_calls = []
         self.request_calls = []
-    
+# noqa: W293
     def request(self, method: str, url: str, *args, **kwargs):
         """Universal request method (используется в BaseAioHTTPClient)"""
         self.request_calls.append({
@@ -97,43 +97,43 @@ class FakeAiohttpSession:
             'args': args,
             'kwargs': kwargs
         })
-        
+# noqa: W293
         if self.raise_error:
             from aiohttp import ClientError
             raise ClientError("Simulated connection error")
-        
+# noqa: W293
         return FakeAiohttpContext(self.json_data, self.status)
 
     def post(self, url: str, *args, **kwargs):
         """POST request spy"""
         self.post_calls.append({'url': url, 'args': args, 'kwargs': kwargs})
-        
+# noqa: W293
         if self.raise_error:
             from aiohttp import ClientError
             raise ClientError("Simulated connection error")
-        
+# noqa: W293
         return FakeAiohttpContext(self.json_data, self.status)
 
     def delete(self, url: str, *args, **kwargs):
         """DELETE request spy"""
         self.delete_calls.append({'url': url, 'args': args, 'kwargs': kwargs})
-        
+# noqa: W293
         if self.raise_error:
             from aiohttp import ClientError
             raise ClientError("Simulated connection error")
-        
+# noqa: W293
         return FakeAiohttpContext(self.json_data, self.status)
 
     def get(self, url: str, *args, **kwargs):
         """GET request spy"""
         self.get_calls.append({'url': url, 'args': args, 'kwargs': kwargs})
-        
+# noqa: W293
         if self.raise_error:
             from aiohttp import ClientError
             raise ClientError("Simulated connection error")
-        
+# noqa: W293
         return FakeAiohttpContext(self.json_data, self.status)
-    
+# noqa: W293
     async def close(self):
         """Имитация close"""
         pass
@@ -155,9 +155,9 @@ async def redis_client():
         password=env.redis_password if env.app_mode != 'local' else None,
         decode_responses=True
     )
-    
+# noqa: W293
     yield redis
-    
+# noqa: W293
     # Cleanup: удаляем все тестовые ключи (используем паттерн с app_mode и service_name)
     # Паттерн: {app_mode}:{service_name}:rate_limit:*
     pattern = f'{env.app_mode}:{env.service_name}:rate_limit:*'
@@ -168,7 +168,7 @@ async def redis_client():
             await redis.delete(*keys)
         if cursor == 0:
             break
-    
+# noqa: W293
     await redis.aclose()
 
 
@@ -189,7 +189,7 @@ def fake_http_session():
         'sub_count': 2,
         'registered_date': '2024-01-01T10:00:00'
     }
-    
+# noqa: W293
     return FakeAiohttpSession(json_data=default_user_data, status=200)
 
 
@@ -277,7 +277,7 @@ async def handler_environment(redis_client, sub_service_conn):
     - Фейковый SubService API
     
     Возвращает словарь с зависимостями, которые хэндлеры ожидают.
-    """
+    """  # noqa: W293
     return {
         'redis': redis_client,
         'aio_http': sub_service_conn

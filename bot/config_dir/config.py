@@ -1,4 +1,4 @@
-import logging
+import logging  # noqa: I001
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     message_subscriptions_offers_intro: str
     message_subscriptions_offers_extent: str
     message_pay_window: str
-    
+# noqa: W293
     redis_password: str
     redis_max_connections: int
     redis_host: str
@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     shop_sub_plans_ttl: int
 
     model_config = SettingsConfigDict(extra='allow')
-    
+# noqa: W293
     @property
     def message_templates(self) -> MessageTemplates:
         """Геттер для обратной совместимости с env.message_templates"""
@@ -100,4 +100,4 @@ def get_redis_settings(envs: Settings):
 
     return redis_conf
 
-redis_settings = get_redis_settings(env)
+redis_settings = get_redis_settings(env)  # noqa: W292

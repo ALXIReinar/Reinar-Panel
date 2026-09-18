@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter  # noqa: I001
 from .protocols_api import router as protocols_api_router
 from .proto_commands_api import router as proto_commands_router
 

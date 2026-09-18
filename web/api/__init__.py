@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter  # noqa: I001
 
 from web.api.auth_panel_api import router as auth_panel_router
 from web.api.whitelist_api import router as whitelist_router

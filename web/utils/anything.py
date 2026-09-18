@@ -13,7 +13,10 @@ class NodeUris:
     get_config_file: str = '/api/v1/server/node/config/read'
     write_config_file: str = '/api/v1/server/node/config/write'
     ping: str = '/api/v1/server/node/ping'
-    proto_core_bulk_action: str = '/api/v1/server/proto_core/user/bulk/action' # Experimental. Ещё не добавлено  на нод клиент
+    proto_core_bulk_action: str = (
+        '/api/v1/server/proto_core/user/bulk/action'  # Experimental. Ещё не добавлено  на нод клиент
+    )
+
 
 class CoreProtoActions:
     add: int = 1
@@ -28,9 +31,18 @@ class CoreProtoActions:
     }
     id2name: dict[str, str] = {id: name for name, id in name2id.items()}
 
+
+@dataclass
+class VnodeRegStatuses:
+    pending: int = 1
+    success: int = 2
+    failed: int = 3
+
+
 @dataclass
 class NodeStatus:
     """Статусы нод"""
+
     main: int = 1
     vpn_worker: int = 2
     balancer: int = 3
@@ -43,6 +55,7 @@ class ExecHistoryStatuses:
     failed_on_node: int = 3
     failed_on_admin: int = 4
 
+
 @dataclass
 class TokenTypes:
     access_token: str = 'aT'
@@ -50,28 +63,20 @@ class TokenTypes:
     ws_token: str = 'wT'
 
 
-
-
 @dataclass
 class Constants:
-    token_types = {
-        'access_token': 'aT',
-        'refresh_token': 'rT',
-        'ws_token': 'wT'
+    token_types = {'access_token': 'aT', 'refresh_token': 'rT', 'ws_token': 'wT'}
+    excluded_commands_words = {
+        'sudo',
     }
-    excluded_commands_words = {'sudo', }
-    proto_core_methods = {
-        'add': NodeUris.proto_core_bulk_action,
-        'delete': NodeUris.proto_core_bulk_action
-    }
+    proto_core_methods = {'add': NodeUris.proto_core_bulk_action, 'delete': NodeUris.proto_core_bulk_action}
 
 
 def get_client_ip(request: Request):
     xff = request.headers.get('X-Forwarded-For')
-    ip = xff.split(',')[0].strip() if (
-            xff and request.client.host in env.trusted_proxies
-    ) else request.client.host
+    ip = xff.split(',')[0].strip() if (xff and request.client.host in env.trusted_proxies) else request.client.host
     return ip
+
 
 def get_client_ip_by_scope(scope: Scope):
     # 1. Извлекаем все заголовки из scope
@@ -92,4 +97,4 @@ def get_client_ip_by_scope(scope: Scope):
 
 
 def hide_log_param(param, start=3, end=8):
-    return param[:start] + '*' * len(param[start:-end-1]) + param[-end:]
+    return param[:start] + '*' * len(param[start : -end - 1]) + param[-end:]

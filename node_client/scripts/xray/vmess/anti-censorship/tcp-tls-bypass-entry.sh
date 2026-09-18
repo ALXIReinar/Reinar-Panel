@@ -1,12 +1,8 @@
 #!/bin/bash
 
-CERT_PATH=$1
-KEY_PATH=$2
-DOMAIN=$3
-
 log() { echo -e "$1" >&2; }
 
-log "Переменные окружения для этой вариации"
+#log "Переменные окружения для этой вариации"
 #EXIT_HOST=$5
 #EXIT_PORT=$6
 #EXIT_UUID=$7
@@ -18,10 +14,13 @@ if [ -z "$NODE_ID" ] || [ -z "$PROTO_ID" ]; then
     exit 1
 fi
 
-if [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$DOMAIN" ] || [ -z "$EXIT_UUID" ] || [ -z "$EXIT_DOMAIN" ] || [ -z "$EXIT_PORT" ] || [ -z "$EXIT_HOST" ]; then
-    log "Ошибка: Необходимы параметры для входной ноды: TMP_ID, CERT_PATH, KEY_PATH, DOMAIN!"
+if [ -z "$EXIT_UUID" ] || [ -z "$EXIT_DOMAIN" ] || [ -z "$EXIT_PORT" ] || [ -z "$EXIT_HOST" ]; then
     log "Ошибка: Необходимы параметры для оутбаунда выходной ноды: EXIT_HOST, EXIT_POST, EXIT_PORT, EXIT_DOMAIN!"
-    log "Использование: bash xray-vmess-entry-install.sh <cert_path> <key_path> <domain>"
+    exit 1
+fi
+
+if [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$DOMAIN" ] || [ -z "$SERVICES_LIST" ]; then
+    log "Ошибка: Необходимо предварительно выпустить сертификат (bash issue_cert_acme.sh)!"
     exit 1
 fi
 
@@ -226,6 +225,11 @@ if ! systemctl is-active --quiet "$SERVICE_NAME"; then
          -d '{"node_proto_id": '"$NODE_PROTO_ID"', "status": 3}' >/dev/null || true
     exit 1
 fi
+
+# Хук на авто-рестарт виртуальной ноды при обновлении сертификата acme
+if ! grep -Fxq "$SERVICE_NAME" "$SERVICES_LIST" 2>/dev/null; then
+        echo "$SERVICE_NAME" >> "$SERVICES_LIST"
+    fi
 
 # 6. Финализация статуса в панели
 curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \

@@ -1,27 +1,16 @@
 from typing import Literal
 
-from asyncpg import Connection, UniqueViolationError, ForeignKeyViolationError
+from asyncpg import Connection, ForeignKeyViolationError, UniqueViolationError
 
-from web.utils.anything import CoreProtoActions
+from web.utils.anything import CoreProtoActions, VnodeRegStatuses
 
 
 class NodesProtocolsQueries:
     """Запросы для работы с виртуальными нодами (протоколы на физических нодах)"""
-    
+
     def __init__(self, conn: Connection):
         self.conn = conn
-    
-    async def create_node_protocol(self, node_id: int, proto_id: int, title: str, sub_node_address: str | None):
-        """Добавить впн ядро"""
-        query = """
-        INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address) VALUES ($1, $2, $3, $4) RETURNING id
-        """
-        try:
-            return await self.conn.fetchval(query, node_id, proto_id, title, sub_node_address), "Успешно добавили виртуальную ноду"
-        except ForeignKeyViolationError:
-            return None, "Ноды или протокола с таким id не существует"
-    
-    
+
     async def get_node_protocol(self, np_id: int):
         """Получить виртуальную ноду по ID"""
         query = """
@@ -36,7 +25,6 @@ class NodesProtocolsQueries:
         """
         return await self.conn.fetchrow(query, np_id)
 
-
     async def get_node_protocols(self, node_id: int, limit: int, offset: int):
         """Получить все виртуальные ноды на физической ноде"""
         query = """
@@ -49,7 +37,6 @@ class NodesProtocolsQueries:
         """
         return await self.conn.fetch(query, node_id, limit, offset)
 
-    
     async def update_node_protocol(
         self,
         np_id: int,
@@ -64,7 +51,7 @@ class NodesProtocolsQueries:
     ) -> tuple[int, str]:
         """
         Универсальное обновление виртуальной ноды
-        
+
         Returns:
             tuple[status_code, message]
             - 200, 'Нода обновлена' - успех
@@ -132,19 +119,16 @@ class NodesProtocolsQueries:
             result = await self.conn.fetchval(query, *params)
             if not result:
                 return 404, 'Виртуальная нода не найдена'
-            
+
             return 200, 'Виртуальная нода обновлена'
 
         except UniqueViolationError:
             return 409, 'Конфликт портов: какой-то из (metrics_port, proto_port) уже занят на этом сервере'
 
-
-
     async def delete_node_protocol(self, np_id: int):
         """Удалить протокол с ноды"""
         query = "DELETE FROM nodes_protocols WHERE id = $1"
         await self.conn.execute(query, np_id)
-
 
     async def get_node_for_file_edit(self, node_proto_id: int):
         query = '''
@@ -156,36 +140,15 @@ class NodesProtocolsQueries:
         JOIN protocols p ON np.proto_id = p.id
         JOIN proto_templates pt ON p.tmp_id = pt.id
         WHERE np.id = $1
-        '''
+        '''  # noqa: W291
         return await self.conn.fetchrow(query, node_proto_id)
-
-
-    async def get_proto_tmp_w_spec_params(self, node_proto_id: int) -> tuple:
-        tmp_link_query = '''
-        SELECT pt.url_tmp, np.title, np.sub_node_address, n.ip
-        FROM proto_templates pt
-        JOIN protocols p on pt.id = p.tmp_id
-        JOIN nodes_protocols np ON np.proto_id = p.id
-        JOIN nodes n ON n.id = np.node_id
-        WHERE np.id = $1
-        '''
-
-        "Ищем в БД"
-        tmp_record = await self.conn.fetchrow(tmp_link_query, node_proto_id)
-
-        "Обрабатываем в нужный формат"
-        config_link_tmp, node_title, node_ip_or_domain = tmp_record['url_tmp'], tmp_record['title'], tmp_record['sub_node_address'] or tmp_record['ip']
-
-        return config_link_tmp, node_ip_or_domain, node_title
-
 
     async def update_config_link(self, node_proto_id: int, sub_ready_link: str):
         query = 'UPDATE nodes_protocols SET updated_at = NOW(), config_link = $2 WHERE id = $1'
         await self.conn.execute(query, node_proto_id, sub_ready_link)
 
-
     async def get_core_proto_deps_by_user_sub(
-            self, user_uuid: str, user_sub_id: int, node_proto_id: int, operation: Literal['add', 'delete']
+        self, user_uuid: str, user_sub_id: int, node_proto_id: int, operation: Literal['add', 'delete']
     ):
         query = '''
         WITH outbox_insert AS (
@@ -193,6 +156,7 @@ class NodesProtocolsQueries:
             SELECT $1, $2, $3, $4
             FROM nodes_protocols np
             JOIN nodes n ON n.id = np.node_id AND n.is_active = true
+            WHERE np.reg_status = $5
             RETURNING id, node_proto_id
         ),
         pre_agg_user_injectors AS (
@@ -219,23 +183,24 @@ class NodesProtocolsQueries:
         JOIN proto_templates pt ON p.tmp_id = pt.id
         LEFT JOIN pre_agg_user_injectors aui ON pt.id = aui.tmp_id
         JOIN outbox_insert oi ON oi.node_proto_id = np.id
-        WHERE np.id = $4
-        '''
-        return await self.conn.fetchrow(query, user_uuid, user_sub_id, CoreProtoActions.name2id[operation], node_proto_id)
-
+        WHERE np.id = $4 AND np.reg_status = $5
+        '''  # noqa: W291
+        return await self.conn.fetchrow(
+            query, user_uuid, user_sub_id, CoreProtoActions.name2id[operation], node_proto_id, VnodeRegStatuses.success
+        )
 
     async def reserve_place(
-            self,
-            proto_id,
-            node_id,
-            title,
-            metrics_port,
-            proto_port,
-            config_path,
-            constant_node_data_obj,
-            sub_node_address,
-            metrics_command,
-            reload_core_command,
+        self,
+        proto_id,
+        node_id,
+        title,
+        metrics_port,
+        proto_port,
+        config_path,
+        constant_node_data_obj,
+        sub_node_address,
+        metrics_command,
+        reload_core_command,
     ):
         if constant_node_data_obj is None:
             constant_node_data_obj = {}
@@ -247,24 +212,31 @@ class NodesProtocolsQueries:
         '''
         try:
             vnode = await self.conn.fetchrow(
-                query, proto_id, node_id, title,
-                config_path, metrics_port, proto_port, sub_node_address,
-                reload_core_command, metrics_command, constant_node_data_obj
+                query,
+                proto_id,
+                node_id,
+                title,
+                config_path,
+                metrics_port,
+                proto_port,
+                sub_node_address,
+                reload_core_command,
+                metrics_command,
+                constant_node_data_obj,
             )
             return True, vnode
         except ForeignKeyViolationError:
             return False, None
 
-
     async def confirm_place(
-            self,
-            node_proto_id: int,
-            status: int,
-            title: str | None,
-            constant_node_data_obj: dict | None | int,
-            reload_core_command: str | None,
-            metrics_command: str | None,
-            config_path: str | None,
+        self,
+        node_proto_id: int,
+        status: int,
+        title: str | None,
+        constant_node_data_obj: dict | None | int,
+        reload_core_command: str | None,
+        metrics_command: str | None,
+        config_path: str | None,
     ):
         if constant_node_data_obj is None:
             constant_node_data_obj = {}
@@ -303,7 +275,6 @@ class NodesProtocolsQueries:
             params.append(constant_node_data_obj)
             param_idx += 1
 
-
         updates.append("updated_at = NOW()")
         query = f"""
         UPDATE nodes_protocols SET {', '.join(updates)}
@@ -312,5 +283,5 @@ class NodesProtocolsQueries:
         """
         params.append(node_proto_id)
 
-        vnode = await self.conn.fetchval(query, node_proto_id, status)
+        vnode = await self.conn.fetchval(query, *params)
         return vnode

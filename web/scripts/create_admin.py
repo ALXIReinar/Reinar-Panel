@@ -1,4 +1,4 @@
-import getpass
+import getpass  # noqa: I001
 import requests
 
 
@@ -32,22 +32,31 @@ try:
                 print("\033[33mPasswords do not match!\033[0m")
 
         if password_is_set and login_is_set:
-            print(f'Your admin login: \033[36m{login}\033[0m\nYour admin password length: \033[32m{len(password_1)}\033[0m')
+            print(
+                f'Your admin login: \033[36m{login}\033[0m\nYour admin password length: \033[32m{len(password_1)}\033[0m'
+            )
             confirmation = input('Create an admin?(Y/n): ')
 
             if confirmation == '' or confirmation.lower() == 'y':
                 try:
                     print('\033[32mCreate an admin...\033[0m')
-                    res = requests.post(f'http://localhost:{admin_port}/api/v1/server/admins/sign_up', json={'login': login, 'passw': password_1})
+                    res = requests.post(
+                        f'http://localhost:{admin_port}/api/v1/server/admins/sign_up',
+                        json={'login': login, 'passw': password_1},
+                    )
                     if 200 <= res.status_code < 300:
-                        print(f'\033[34mUser successfully created!\033[0m\nLogin: \033[33m{login}\033[0m\nPassword: \033[31m{password_1}\033[0m')
+                        print(
+                            f'\033[34mUser successfully created!\033[0m\nLogin: \033[33m{login}\033[0m\nPassword: \033[31m{password_1}\033[0m'
+                        )
                     else:
                         print(f'\033[31m{repr(res.json())}\033[0m')
 
                     break
 
                 except ConnectionError:
-                    print(f'Failed to connect to \033[31mhttp://localhost:{admin_port}\033[0m. Make sure the admin panel is running')
+                    print(
+                        f'Failed to connect to \033[31mhttp://localhost:{admin_port}\033[0m. Make sure the admin panel is running'
+                    )
 
             elif confirmation in ['N', 'n']:
                 print('\n\n\033[34mAdmin create cancelled!\033[0m')

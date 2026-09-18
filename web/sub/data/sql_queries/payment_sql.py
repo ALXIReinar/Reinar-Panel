@@ -12,7 +12,6 @@ class PaymentQueries:
     def __init__(self, conn: Connection):
         self.conn = conn
 
-
     async def order_subscription(self, user_id: int, tg_id: int, sub_plan_id: int, offer_id: int):
         query_tg_id2user_id = 'SELECT id FROM users WHERE tg_id = $1 AND is_deleted = false'
         query = '''
@@ -25,7 +24,7 @@ class PaymentQueries:
         SELECT $1, $4, infinite_expire, infinite_traffic, traffic_limit_mb, traffic_limit_day_mb, ttl_days, cost
         FROM pay_meta
         RETURNING id, cost, user_id
-        '''
+        '''  # noqa: W291
         try:
             if not user_id:
                 user_id = await self.conn.fetchval(query_tg_id2user_id, tg_id)
@@ -33,7 +32,6 @@ class PaymentQueries:
             return await self.conn.fetchrow(query, user_id, sub_plan_id, offer_id, PayStatuses.pending)
         except ForeignKeyViolationError:
             return None
-
 
     async def activate_subscription(self, order_id: int, user_id: int, sub_plan_id: int, offer_id: int):
         """
@@ -117,7 +115,7 @@ class PaymentQueries:
             traffic_used_day_mb = 0
         
         RETURNING id, uuid;
-        """
+        """  # noqa: W291, W293
         uuid = str(uuid4())
         b64_id = base64.urlsafe_b64encode(secrets.token_bytes(env.sub_link_bytes)).decode('utf-8').rstrip('=')
         return await self.conn.fetchrow(

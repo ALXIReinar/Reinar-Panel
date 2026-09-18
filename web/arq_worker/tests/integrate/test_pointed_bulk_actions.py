@@ -7,6 +7,7 @@ Integration тесты для pointed_bulk_action - функции-менедж�
 - Постановку задач в ARQ для bulk операций
 - Фильтрацию неактивных/невидимых нод и удалённых пользователей
 """
+
 import pytest
 
 from web.arq_worker.funcs.pointed_bulk_actions import pointed_bulk_action
@@ -16,11 +17,11 @@ pytestmark = pytest.mark.asyncio
 
 class TestPointedBulkAction:
     """Тесты для функции-менеджера pointed_bulk_action"""
-    
+
     async def test_pointed_bulk_add_action(self, mock_arq_ctx, pointed_bulk_seed, db_pool):
         """
         Проверка ADD операции через pointed_bulk_action.
-        
+
         Сценарий:
         - 2 пользователя с outbox записями для ADD (operation=1)
         - Пользователи распределены на 2 разные ноды
@@ -28,32 +29,19 @@ class TestPointedBulkAction:
         - Проверяем параметры задач (node_proto_id, users, api_bulk_add_user_script)
         """
         # Arrange
-        outbox_ids = [
-            pointed_bulk_seed['outbox_user3_add_vnode10'],
-            pointed_bulk_seed['outbox_user5_add_vnode11']
-        ]
-        
+        outbox_ids = [pointed_bulk_seed['outbox_user3_add_vnode10'], pointed_bulk_seed['outbox_user5_add_vnode11']]
         # Act
-        result = await pointed_bulk_action(
-            ctx=mock_arq_ctx,
-            outbox_event_ids=outbox_ids,
-            action='add'
-        )
-        
+        result = await pointed_bulk_action(ctx=mock_arq_ctx, outbox_event_ids=outbox_ids, action='add')
         # Assert
         assert result['success'] is True
         assert 'Бульк запросы полетели' in result['message']
-        
         # Проверяем что arq.enqueue_job вызван 2 раза (для каждой ноды)
         assert mock_arq_ctx['arq_redis'].enqueue_job.call_count == 2
-        
         # Проверяем параметры каждого вызова
         calls = mock_arq_ctx['arq_redis'].enqueue_job.call_args_list
-        
         # Находим вызовы по node_proto_id (порядок не детерминирован в SQL без ORDER BY)
         call_vnode_10 = [c for c in calls if c[0][1] == pointed_bulk_seed['vnode_id_10']][0]
         call_vnode_11 = [c for c in calls if c[0][1] == pointed_bulk_seed['vnode_id_11']][0]
-        
         # Проверяем вызов для vnode_id_10
         assert call_vnode_10[0][0] == 'bulk_action_users_by_node'  # Имя функции
         assert call_vnode_10[0][1] == pointed_bulk_seed['vnode_id_10']  # node_proto_id
@@ -61,28 +49,24 @@ class TestPointedBulkAction:
         # Проверяем наличие api_bulk_action_script (позиция 6) - это теперь код скрипта, не строка вызова
         assert call_vnode_10[0][6] is not None  # api_bulk_action_script
         assert call_vnode_10[0][8] == 1  # operation=1 (ADD)
-        
         # Проверяем что в users есть правильный пользователь
         users_node_10 = call_vnode_10[0][9]  # users параметр на позиции 9
         assert len(users_node_10) == 1
         assert users_node_10[0]['uuid'] == pointed_bulk_seed['user3_uuid']
         assert users_node_10[0]['user_sub_id'] == pointed_bulk_seed['user3_order_active']
-        
         # Проверяем вызов для vnode_id_11
         assert call_vnode_11[0][0] == 'bulk_action_users_by_node'
         assert call_vnode_11[0][1] == pointed_bulk_seed['vnode_id_11']
         assert call_vnode_11[0][6] is not None  # api_bulk_action_script
         assert call_vnode_11[0][8] == 1  # operation=1 (ADD)
-        
         users_node_11 = call_vnode_11[0][9]
         assert len(users_node_11) == 1
         assert users_node_11[0]['uuid'] == pointed_bulk_seed['user5_uuid']
-    
-    
+
     async def test_pointed_bulk_delete_action(self, mock_arq_ctx, pointed_bulk_seed, db_pool):
         """
         Проверка DELETE операции через pointed_bulk_action.
-        
+
         Сценарий:
         - 2 пользователя с outbox записями для DELETE (operation=2)
         - Ожидаем ARQ задачи с bulk_action_users_by_node (operation=DELETE)
@@ -90,71 +74,51 @@ class TestPointedBulkAction:
         # Arrange
         outbox_ids = [
             pointed_bulk_seed['outbox_user4_delete_vnode10'],
-            pointed_bulk_seed['outbox_user6_delete_vnode11']
+            pointed_bulk_seed['outbox_user6_delete_vnode11'],
         ]
-        
         # Act
-        result = await pointed_bulk_action(
-            ctx=mock_arq_ctx,
-            outbox_event_ids=outbox_ids,
-            action='delete'
-        )
-        
+        result = await pointed_bulk_action(ctx=mock_arq_ctx, outbox_event_ids=outbox_ids, action='delete')
         # Assert
         assert result['success'] is True
-        
         # Проверяем что arq.enqueue_job вызван 2 раза
         assert mock_arq_ctx['arq_redis'].enqueue_job.call_count == 2
-        
         calls = mock_arq_ctx['arq_redis'].enqueue_job.call_args_list
-        
         # Находим вызовы по node_proto_id (порядок не детерминирован в SQL без ORDER BY)
         call_vnode_10 = [c for c in calls if c[0][1] == pointed_bulk_seed['vnode_id_10']][0]
         call_vnode_11 = [c for c in calls if c[0][1] == pointed_bulk_seed['vnode_id_11']][0]
-        
         # Проверяем что вызывается bulk_action_users_by_node с operation=2 (DELETE) для vnode_10
         assert call_vnode_10[0][0] == 'bulk_action_users_by_node'
         assert call_vnode_10[0][1] == pointed_bulk_seed['vnode_id_10']
         assert call_vnode_10[0][6] is not None  # api_bulk_action_script для DELETE
         assert call_vnode_10[0][8] == 2  # operation=2 (DELETE)
-        
         users_node_10 = call_vnode_10[0][9]  # users на позиции 9
         assert len(users_node_10) == 1
         assert users_node_10[0]['uuid'] == pointed_bulk_seed['user4_uuid']
-        
         # Проверяем что вызывается bulk_action_users_by_node с operation=2 (DELETE) для vnode_11
         assert call_vnode_11[0][0] == 'bulk_action_users_by_node'
         assert call_vnode_11[0][1] == pointed_bulk_seed['vnode_id_11']
         assert call_vnode_11[0][8] == 2  # operation=2 (DELETE)
-    
-    
+
     async def test_pointed_bulk_empty_outbox_ids(self, mock_arq_ctx, pointed_bulk_seed, db_pool):
         """
         Проверка обработки пустого списка outbox_ids.
-        
+
         Ожидаем:
         - success=False
         - ARQ задачи НЕ созданы
         """
         # Act
-        result = await pointed_bulk_action(
-            ctx=mock_arq_ctx,
-            outbox_event_ids=[],
-            action='add'
-        )
-        
+        result = await pointed_bulk_action(ctx=mock_arq_ctx, outbox_event_ids=[], action='add')
         # Assert
         assert result['success'] is False
         assert 'Нет оутбоксов' in result['message']
-        
         # Проверяем что ARQ задачи НЕ созданы
         mock_arq_ctx['arq_redis'].enqueue_job.assert_not_called()
-    
-    
+
     async def test_pointed_bulk_groups_by_nodes(self, mock_arq_ctx, pointed_bulk_seed, db_pool):
         """
         Проверка группировки пользователей по нодам.
-        
+
         Сценарий:
         - 3 пользователя: 2 на vnode_10, 1 на vnode_11
         - Ожидаем 2 ARQ задачи
@@ -163,13 +127,17 @@ class TestPointedBulkAction:
         # Arrange - создаём дополнительного пользователя на vnode_10
         async with db_pool.acquire() as conn:
             # User 7 на той же ноде что и User 3
-            user7_id = await conn.fetchval("""
+            user7_id = await conn.fetchval(
+                """
                 INSERT INTO users (tg_id, tg_username, is_deleted)
                 VALUES ($1, $2, false)
                 RETURNING id
-            """, 100007, "user7_grouping")
-            
-            pay_order7 = await conn.fetchval("""
+            """,
+                100007,
+                "user7_grouping",
+            )
+            pay_order7 = await conn.fetchval(
+                """
                 INSERT INTO pay_orders (
                     user_id, status,
                     infinite_expire, infinite_traffic,
@@ -183,9 +151,12 @@ class TestPointedBulkAction:
                 FROM sub_plan_offers
                 WHERE id = $2
                 RETURNING id
-            """, user7_id, pointed_bulk_seed['offer_id'])
-            
-            user7_row = await conn.fetchrow("""
+            """,
+                user7_id,
+                pointed_bulk_seed['offer_id'],
+            )
+            user7_row = await conn.fetchrow(
+                """
                 INSERT INTO user_subs (
                     user_id, sub_plan_id, order_id, is_active, expire_date,
                     uuid, b64_id, infinite_traffic, infinite_expire,
@@ -193,60 +164,56 @@ class TestPointedBulkAction:
                 )
                 VALUES ($1, $2, $3, true, now() + interval '30 days', $4, $5, false, false, 10240, NULL, 0, 0, false)
                 RETURNING id, uuid
-            """, user7_id, pointed_bulk_seed['plan_id'], pay_order7, "uuid-pointed-user7", "b64-user7")
-            
+            """,
+                user7_id,
+                pointed_bulk_seed['plan_id'],
+                pay_order7,
+                "uuid-pointed-user7",
+                "b64-user7",
+            )
             user7_order = user7_row['id']
             user7_uuid = user7_row['uuid']
-            
             # Создаём outbox записи для vnode_10
-            outbox_user7_vnode10 = await conn.fetchval("""
+            outbox_user7_vnode10 = await conn.fetchval(
+                """
                 INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
                 VALUES ($1, $2, 1, $3)
                 RETURNING id
-            """, user7_uuid, user7_order, pointed_bulk_seed['vnode_id_10'])
-        
+            """,
+                user7_uuid,
+                user7_order,
+                pointed_bulk_seed['vnode_id_10'],
+            )
         outbox_ids = [
             pointed_bulk_seed['outbox_user3_add_vnode10'],  # User 3 на vnode_10
-            outbox_user7_vnode10,                           # User 7 на vnode_10
-            pointed_bulk_seed['outbox_user5_add_vnode11']   # User 5 на vnode_11
+            outbox_user7_vnode10,  # User 7 на vnode_10
+            pointed_bulk_seed['outbox_user5_add_vnode11'],  # User 5 на vnode_11
         ]
-        
         # Act
-        result = await pointed_bulk_action(
-            ctx=mock_arq_ctx,
-            outbox_event_ids=outbox_ids,
-            action='add'
-        )
-        
+        result = await pointed_bulk_action(ctx=mock_arq_ctx, outbox_event_ids=outbox_ids, action='add')
         # Assert
         assert result['success'] is True
-        
         # Проверяем что созданы задачи для 2 нод
         assert mock_arq_ctx['arq_redis'].enqueue_job.call_count == 2
-        
         calls = mock_arq_ctx['arq_redis'].enqueue_job.call_args_list
-        
         # Находим задачу для vnode_10 (должна содержать 2 пользователей)
         vnode_10_call = [c for c in calls if c[0][1] == pointed_bulk_seed['vnode_id_10']][0]
         users_vnode_10 = vnode_10_call[0][9]  # users на позиции 9
         assert len(users_vnode_10) == 2, "vnode_10 должна содержать 2 пользователей"
-        
         # Проверяем UUID пользователей
         uuids_vnode_10 = {u['uuid'] for u in users_vnode_10}
         assert pointed_bulk_seed['user3_uuid'] in uuids_vnode_10
         assert user7_uuid in uuids_vnode_10
-        
         # Находим задачу для vnode_11 (должна содержать 1 пользователя)
         vnode_11_call = [c for c in calls if c[0][1] == pointed_bulk_seed['vnode_id_11']][0]
         users_vnode_11 = vnode_11_call[0][9]  # users на позиции 9
         assert len(users_vnode_11) == 1, "vnode_11 должна содержать 1 пользователя"
         assert users_vnode_11[0]['uuid'] == pointed_bulk_seed['user5_uuid']
-    
-    
+
     async def test_pointed_bulk_filters_inactive_nodes(self, mock_arq_ctx, pointed_bulk_seed, db_pool):
         """
         Проверка фильтрации неактивных физических нод (is_active=false).
-        
+
         Сценарий:
         - Создаём outbox запись на неактивную ноду
         - Ожидаем что SQL get_users_by_sub_plan НЕ вернёт эту ноду
@@ -254,67 +221,46 @@ class TestPointedBulkAction:
         """
         # Arrange - outbox_user8_inactive_node уже создан в фикстуре
         outbox_ids = [pointed_bulk_seed['outbox_user8_inactive_node']]
-        
         # Act
-        result = await pointed_bulk_action(
-            ctx=mock_arq_ctx,
-            outbox_event_ids=outbox_ids,
-            action='add'
-        )
-        
+        result = await pointed_bulk_action(ctx=mock_arq_ctx, outbox_event_ids=outbox_ids, action='add')
         # Assert
         assert result['success'] is True
-        
         # Проверяем что ARQ задачи НЕ созданы (нода неактивна)
         mock_arq_ctx['arq_redis'].enqueue_job.assert_not_called()
-    
-    
+
     async def test_pointed_bulk_filters_invisible_nodes(self, mock_arq_ctx, pointed_bulk_seed, db_pool):
         """
         Проверка фильтрации невидимых нод (user_visible=false).
-        
+
         Сценарий:
         - Создаём outbox запись на ноду с user_visible=false
         - Ожидаем что SQL НЕ вернёт эту ноду
         """
         # Arrange - outbox_user9_invisible_node уже создан в фикстуре
         outbox_ids = [pointed_bulk_seed['outbox_user9_invisible_node']]
-        
         # Act
-        result = await pointed_bulk_action(
-            ctx=mock_arq_ctx,
-            outbox_event_ids=outbox_ids,
-            action='add'
-        )
-        
+        result = await pointed_bulk_action(ctx=mock_arq_ctx, outbox_event_ids=outbox_ids, action='add')
         # Assert
         assert result['success'] is True
         mock_arq_ctx['arq_redis'].enqueue_job.assert_not_called()
-    
-    
+
     async def test_pointed_bulk_filters_deleted_users(self, mock_arq_ctx, pointed_bulk_seed, db_pool):
         """
         Проверка что удалённые пользователи могут быть в outbox (is_deleted=true).
-        
+
         Сценарий:
         - Создаём outbox запись для пользователя с is_deleted=true
         - SQL get_meta_for_bulk НЕ фильтрует is_deleted (фильтрация на уровне создания outbox)
         - ARQ задачи будут созданы (если запись в outbox существует)
-        
+
         ПРИМЕЧАНИЕ: Фильтрация is_deleted происходит на этапе создания outbox записей,
         а не в get_meta_for_bulk. Этот тест проверяет что если outbox запись существует,
         то задача будет поставлена независимо от is_deleted.
         """
         # Arrange - outbox_user10_deleted уже создан в фикстуре
         outbox_ids = [pointed_bulk_seed['outbox_user10_deleted']]
-        
         # Act
-        result = await pointed_bulk_action(
-            ctx=mock_arq_ctx,
-            outbox_event_ids=outbox_ids,
-            action='delete'
-        )
-        
+        result = await pointed_bulk_action(ctx=mock_arq_ctx, outbox_event_ids=outbox_ids, action='delete')
         # Assert: SQL get_meta_for_bulk не фильтрует is_deleted, так что задача будет создана
         assert result['success'] is True
         # Задача будет создана, т.к. outbox запись существует

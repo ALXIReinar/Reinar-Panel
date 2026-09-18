@@ -1,4 +1,4 @@
-import logging
+import logging  # noqa: I001
 import os
 from enum import Enum
 from functools import lru_cache
@@ -42,7 +42,7 @@ class CoreProtoActions:
 
 class AuditModes(str, Enum):
     lite = 'lite'                        # Сравнение длины. Лог при расхождении. Нод клиент продолжает работать
-    medium = 'medium'                    # Глубокое сравнение каждого пользователя из State файла с пользователем из Конфиг-файла впн-ядра
+    medium = 'medium'                    # Глубокое сравнение каждого пользователя из State файла с пользователем из Конфиг-файла впн-ядра  # noqa: E501
     strict = 'strict'                    # Как Medium, но нод клиент прекращает работу и падает с ValueError
 
     medium_advanced = 'medium_advanced'  # Medium. Расхождения отправляются на админку

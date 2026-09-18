@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime  # noqa: I001
 
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
@@ -6,30 +6,38 @@ from typing import Optional, Literal
 
 class UserCreateItem(BaseModel):
     """Один пользователь для bulk insert"""
+
     tg_username: str = Field(..., max_length=32, description="Уникальный ник пользователя в ТГ")
     tg_id: Optional[int] = Field(None, description="Telegram ID (опционально)")
 
 
 class UserBulkCreateSchema(BaseModel):
     """Схема для bulk insert пользователей"""
+
     users: list[UserCreateItem]
 
 
 class UserBulkUpdateSchema(BaseModel):
     """Схема для bulk update пользователей"""
+
     user_ids: list[int] = Field(..., description="ID пользователей для операции")
-    action: Literal['activate', 'deactivate', 'reset_traffic'] = Field(..., description="Действие: activate | deactivate | reset_traffic")
+    action: Literal['activate', 'deactivate', 'reset_traffic'] = Field(
+        ..., description="Действие: activate | deactivate | reset_traffic"
+    )
 
 
 class UserBulkDeleteSchema(BaseModel):
     """Схема для bulk delete пользователей"""
+
     user_ids: list[int]
 
 
 class UserUpdateSchema(BaseModel):
     tg_username: str | None = Field(None, max_length=32, min_length=5, description="Telegram username")
     tg_id: int | None = Field(None, gt=0)
-    online_status: int | None = Field(None, ge=1, le=3, description="Online status: 1 - Not connect yet, 2 - Offline, 3 - Online")
+    online_status: int | None = Field(
+        None, ge=1, le=3, description="Online status: 1 - Not connect yet, 2 - Offline, 3 - Online"
+    )
     registered_at: datetime | None = None
 
 
@@ -44,6 +52,7 @@ class UserSubUpdItem(BaseModel):
     - uuid - его изменение в созданной подписке - потеря связи с впн-ядрами. Они не разберут, кто это. Это primary_key для впн-ядер
     - is_active, is_limited - та же ерунда. Возня с арком, функционал для изменения этих флагов есть
     """
+
     user_sub_id: int
     b64_id: Optional[str] = Field(None, max_length=90, min_length=10)
     order_id: int | None = Field(0, ge=0)
@@ -54,6 +63,7 @@ class UserSubUpdItem(BaseModel):
     infinite_traffic: Optional[bool] = None
     expire_date: Optional[datetime] = None
     infinite_expire: Optional[bool] = None
+
 
 class UserSubAddItem(BaseModel):
     b64_id: str = Field(max_length=90, min_length=10)
@@ -69,6 +79,7 @@ class UserSubAddItem(BaseModel):
     infinite_expire: bool
     is_active: Optional[bool] = None
     is_limited: Optional[bool] = None
+
 
 class UserSubsUpdateSchema(BaseModel):
     user_subs_to_delete: Optional[list[int]] = Field([])

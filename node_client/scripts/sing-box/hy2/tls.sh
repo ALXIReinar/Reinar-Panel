@@ -4,7 +4,7 @@ set -e
 
 CERT_PATH=$1
 KEY_PATH=$2
-SNI_DOMAIN=$3
+DOMAIN=$3
 
 log() { echo -e "$1" >&2; }
 
@@ -13,9 +13,8 @@ if [ -z "$NODE_ID" ] || [ -z "$PROTO_ID" ]; then
     exit 1
 fi
 
-if [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$SNI_DOMAIN" ]; then
-    log "Ошибка: Необходимы параметры CERT_PATH, KEY_PATH и SNI_DOMAIN!"
-    log "Использование: bash node_client/scripts/hysteria2-native/hy2/tls.sh <cert_path> <key_path> <sni_domain>"
+if [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$DOMAIN" ] || [ -z "$SERVICES_LIST" ]; then
+    log "Ошибка: Необходимо предварительно выпустить сертификат (bash issue_cert_acme.sh)!"
     exit 1
 fi
 
@@ -104,7 +103,7 @@ cat <<EOF > "$CONFIG_PATH"
       "users": [],
       "tls": {
         "enabled": true,
-        "server_name": "$SNI_DOMAIN",
+        "server_name": "$DOMAIN",
         "certificate_path": "$CERT_PATH",
         "key_path": "$KEY_PATH",
         "alpn": ["h3"]
@@ -165,6 +164,11 @@ if ! systemctl is-active --quiet "$SERVICE_NAME"; then
          -d '{"node_proto_id": '"$NODE_PROTO_ID"', "status": 3}' >/dev/null || true
     exit 1
 fi
+
+# Хук на авто-рестарт виртуальной ноды при обновлении сертификата acme
+if ! grep -Fxq "$SERVICE_NAME" "$SERVICES_LIST" 2>/dev/null; then
+        echo "$SERVICE_NAME" >> "$SERVICES_LIST"
+    fi
 
 # 6. Финализация статуса в панели
 curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \

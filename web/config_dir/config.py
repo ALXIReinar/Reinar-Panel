@@ -1,4 +1,4 @@
-import logging
+import logging  # noqa: I001
 import os
 from datetime import timedelta
 from functools import lru_cache
@@ -11,19 +11,16 @@ from arq.connections import ArqRedis, RedisSettings
 from asyncpg import Connection
 from fastapi import Depends
 from passlib.context import CryptContext
-from pydantic import BaseModel, Field, field_validator, IPvAnyAddress
+from pydantic import BaseModel, Field, field_validator, IPvAnyAddress  # noqa: F401
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 from starlette.requests import Request
 
 from web.config_dir.env_modes import AppMode, APP_MODE_CONFIG
 
-env_files = (
-    os.getenv('ENV_FILE') or
-    'web/.env.api.prod'
-)
+env_files = os.getenv('ENV_FILE') or 'web/.env.api.prod'
 load_dotenv(env_files, override=True)
-logging.critical(f'\033[35m{env_files}\033[0m | app_mode: \033[32m{os.getenv('APP_MODE')}\033[0m')
+logging.critical(f'\033[35m{env_files}\033[0m | app_mode: \033[32m{os.getenv("APP_MODE")}\033[0m')
 
 "Создаём директории"
 WORKDIR = Path(__file__).resolve().parent.parent
@@ -67,6 +64,7 @@ def get_pubkey():
 
     raise FileNotFoundError("Public key not found in Docker secrets or local paths")
 
+
 class AuthConfig(BaseModel):
     private_key: str = get_pkey()
     public_key: str = get_pubkey()
@@ -96,10 +94,9 @@ class Settings(BaseSettings):
     uvicorn_port: int
     post_processing_responses: bool
     app_mode: AppMode
-    trusted_proxies:  set[str] | list[str] | str
+    trusted_proxies: set[str] | list[str] | str
     allowed_ips: set[str] | list[str] | str
     domain: str
-    
     # ARQ Settings
     arq_queue_name: str
     arq_max_jobs: int
@@ -115,15 +112,17 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra='allow', env_file_encoding='utf-8')
 
 
-
 @lru_cache
 def get_env_vars():
     return Settings()
+
 
 env = get_env_vars()
 
 
 "PostgreSQL"
+
+
 async def init(conn: Connection):
     await conn.set_type_codec(
         'jsonb',
@@ -138,12 +137,14 @@ async def init(conn: Connection):
         schema='pg_catalog',
     )
 
+
 def get_pg_settings(envs: Settings):
     cfg = APP_MODE_CONFIG[envs.app_mode]
     host = getattr(envs, cfg["pg_host"])
     port = getattr(envs, cfg["pg_port"])
 
     return {"host": host, "port": port}
+
 
 pool_settings = dict(
     user=env.pg_user,
@@ -152,11 +153,13 @@ pool_settings = dict(
     **get_pg_settings(env),
     command_timeout=60,
     init=init,
-    max_size=env.pg_max_connections # connections on pool
+    max_size=env.pg_max_connections,  # connections on pool
 )
 
 
 "Redis"
+
+
 def get_redis_settings(envs: Settings):
     cfg = APP_MODE_CONFIG[envs.app_mode]
 
@@ -169,10 +172,13 @@ def get_redis_settings(envs: Settings):
         redis_conf['password'] = envs.redis_password
     return redis_conf
 
+
 redis_settings = get_redis_settings(env)
 
 
 "ARQ для фоновых задач"
+
+
 def get_arq_redis_settings():
     return RedisSettings(
         host=redis_settings['host'],
@@ -181,19 +187,25 @@ def get_arq_redis_settings():
         database=0,
     )
 
+
 def get_arq_worker_settings():
     return {
         'default_queue_name': env.arq_queue_name,
     }
 
+
 async def get_arq_pool(request: Request) -> ArqRedis:
     return request.app.state.arq_pool
+
 
 ArqDep = Annotated[ArqRedis, Depends(get_arq_pool)]
 
 
 "AioHttp для Исполнения команд на Нодах"
+
+
 async def get_cmd_exec_aiohttp(request: Request) -> ClientSession:
     return request.app.state.cmd_center_aiohttp
+
 
 NodeExecAiohttpDep = Annotated[ClientSession, Depends(get_cmd_exec_aiohttp)]

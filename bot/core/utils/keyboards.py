@@ -1,4 +1,4 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton  # noqa: I001
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.config_dir.config import env
@@ -18,8 +18,8 @@ def main_kb():
 def subs_intro_kb():
     kb = InlineKeyboardBuilder()
     kb.button(text='🔄 Продлить', callback_data='subs-upd-intro')
-    kb.button(text='➕ Купить новую', callback_data=f'subs-shop-intro')
-    kb.button(text='⬅️ Назад', callback_data=f'back')
+    kb.button(text='➕ Купить новую', callback_data=f'subs-shop-intro')  # noqa: F541
+    kb.button(text='⬅️ Назад', callback_data=f'back')  # noqa: F541
     kb.adjust(1)
     return kb.as_markup()
 
@@ -36,12 +36,12 @@ def user_subs_slider(cur_user_sub_idx: int, total_subs: int):
 
     kb = InlineKeyboardBuilder()
     kb.button(text='<', callback_data=f'subs-user-pagen_{prev_idx}')
-    kb.button(text=f'{cur_user_sub_idx + 1}/{total_subs}', callback_data=f'None')
+    kb.button(text=f'{cur_user_sub_idx + 1}/{total_subs}', callback_data=f'None')  # noqa: F541
     kb.button(text='>', callback_data=f'subs-user-pagen_{next_idx}')
     kb.button(text='🔄 Продлить', callback_data=f'subs-user-upd_{cur_user_sub_idx}', style='primary')
 
     kb.adjust(3, 1)
-    log_event(f'Построили слайдер подписок пользователя | cur_page: {cur_user_sub_idx + 1}; total_len: \033[34m{total_subs}\033[0m')
+    log_event(f'Построили слайдер подписок пользователя | cur_page: {cur_user_sub_idx + 1}; total_len: \033[34m{total_subs}\033[0m')  # noqa: E501
     return kb.as_markup()
 
 def shop_subs_slider(cur_sub_plan_idx: int, total_subs: int, offer_prices):
@@ -52,7 +52,7 @@ def shop_subs_slider(cur_sub_plan_idx: int, total_subs: int, offer_prices):
 
     "Перемещение по слайдеру"
     kb.button(text='<', callback_data=f'subs-shop-pagen_{prev_idx}')
-    kb.button(text=f'{cur_sub_plan_idx + 1}/{total_subs}', callback_data=f'None')
+    kb.button(text=f'{cur_sub_plan_idx + 1}/{total_subs}', callback_data=f'None')  # noqa: F541
     kb.button(text='>', callback_data=f'subs-shop-pagen_{next_idx}')
 
     "Тарифные предложения по стоимости/длительности и т.д."
@@ -62,7 +62,7 @@ def shop_subs_slider(cur_sub_plan_idx: int, total_subs: int, offer_prices):
         kb.button(text=text.strip(), callback_data=f'subs-shop-offer_{cur_sub_plan_idx}_{offer_idx}')
 
     kb.adjust(3, 1)
-    log_event(f'Построили слайдер тарифных планов магазина | cur_page: {cur_sub_plan_idx + 1}; total_len: \033[34m{total_subs}\033[0m; price_offers: \033[36m{str(offer_prices)[:150]}\033[0m')
+    log_event(f'Построили слайдер тарифных планов магазина | cur_page: {cur_sub_plan_idx + 1}; total_len: \033[34m{total_subs}\033[0m; price_offers: \033[36m{str(offer_prices)[:150]}\033[0m')  # noqa: E501
     return kb.as_markup()
 
 
@@ -104,4 +104,4 @@ def profile_kb():
 def about_kb():
     kb = InlineKeyboardBuilder()
     kb.button(text='⬅️ Назад', callback_data='back')
-    return kb.as_markup()
+    return kb.as_markup()  # noqa: W292

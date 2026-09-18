@@ -1,4 +1,4 @@
-from typing import Any, Union
+from typing import Any, Union  # noqa: I001
 
 from aiogram.types import Message, CallbackQuery
 from pydantic import BaseModel, Field, ConfigDict
@@ -63,11 +63,11 @@ class MessageTemplates(BaseModel):
             
             # Только кастомные данные
             text = msg_tmps.render('admin_notify', admin_name='Иван', status='OK')
-        """
-        
+        """  # noqa: W293
+# noqa: W293
         template = getattr(self, template_name)
         resolver = PlaceholderResolver()
-        
+# noqa: W293
         if event:
             if isinstance(event, Message):
                 resolver.add_message(event)
@@ -88,5 +88,5 @@ class MessageTemplates(BaseModel):
 
         if custom:
             resolver.add_custom(**custom)
-        
-        return resolver.resolve(template)
+# noqa: W293
+        return resolver.resolve(template)  # noqa: W292

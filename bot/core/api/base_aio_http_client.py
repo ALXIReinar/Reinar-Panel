@@ -23,22 +23,22 @@ class BaseAioHTTPClient:
         """
         try:
             async with self.session.request(method, url, **kwargs) as resp:
-                log_event(f'[Base Http Client] Ответ от Апи | status: \033[31m{resp.status}\033[0m; method: \033[34m{method}\033[0m; url: \033[35m{url}\033[0m')
+                log_event(f'[Base Http Client] Ответ от Апи | status: \033[31m{resp.status}\033[0m; method: \033[34m{method}\033[0m; url: \033[35m{url}\033[0m')  # noqa: E501
 
                 if raise_for_status:
                     resp.raise_for_status()
 
                 if release_request:
-                    log_event(f'[Base Http Client] Сбросили http conn | method: \033[34m{method}\033[0m; url: \033[35m{url}\033[0m', level='WARNING')
+                    log_event(f'[Base Http Client] Сбросили http conn | method: \033[34m{method}\033[0m; url: \033[35m{url}\033[0m', level='WARNING')  # noqa: E501
                     resp.release()
                     return True, None
 
                 data = await resp.json()
-                log_event(f'[Base Http Client] Json тело ответа | json: \033[34m{str(data)[:150]}\033[0m; method: \033[34m{method}\033[0m; url: \033[35m{url}\033[0m')
+                log_event(f'[Base Http Client] Json тело ответа | json: \033[34m{str(data)[:150]}\033[0m; method: \033[34m{method}\033[0m; url: \033[35m{url}\033[0m')  # noqa: E501
                 return True, data
 
         except (ClientError, Exception) as e:
             # Ошибки сети, таймауты, DNS, сервис упал/не отвечает
-            log_event(f'Ошибка на Sub-Service | err: \033[31m{repr(e)}\033[0m; method: \033[34m{method}\033[0m; url: \033[36m{url}\033[0m; kwargs: {kwargs}')
+            log_event(f'Ошибка на Sub-Service | err: \033[31m{repr(e)}\033[0m; method: \033[34m{method}\033[0m; url: \033[36m{url}\033[0m; kwargs: {kwargs}')  # noqa: E501
             return False, e
 

@@ -5,7 +5,8 @@ Revises: bfc8c7642691
 Create Date: 2026-09-03 21:25:32.313183
 
 """
-from typing import Sequence, Union
+
+from typing import Sequence, Union  # noqa: I001
 
 from alembic import op
 import sqlalchemy as sa
@@ -25,20 +26,40 @@ def upgrade() -> None:
 
     # Проверяем существование таблицы templates_users_extractors
 
-    op.create_table('vnodes_reg_statuses',
-    sa.Column('id', sa.SmallInteger(), sa.Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=32767, cycle=False, cache=1), autoincrement=True, nullable=False),
-    sa.Column('title', sa.String(length=20), nullable=False),
-    sa.PrimaryKeyConstraint('id', name='vnodes_reg_statuses_pkey'),
-    if_not_exists=True,
+    op.create_table(
+        'vnodes_reg_statuses',
+        sa.Column(
+            'id',
+            sa.SmallInteger(),
+            sa.Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=32767, cycle=False, cache=1),
+            autoincrement=True,
+            nullable=False,
+        ),
+        sa.Column('title', sa.String(length=20), nullable=False),
+        sa.PrimaryKeyConstraint('id', name='vnodes_reg_statuses_pkey'),
+        if_not_exists=True,
     )
     select = conn.execute(text('SELECT * FROM vnodes_reg_statuses')).fetchall()
     if not select:
-        conn.execute(text("INSERT INTO vnodes_reg_statuses OVERRIDING SYSTEM VALUE VALUES (1, 'pendig'), (2, 'success'), (3, 'failed')"))
+        conn.execute(
+            text(
+                "INSERT INTO vnodes_reg_statuses OVERRIDING SYSTEM VALUE VALUES (1, 'pendig'), (2, 'success'), (3, 'failed')"
+            )
+        )
 
+    op.add_column(
+        'nodes_protocols',
+        sa.Column(
+            'reg_status',
+            sa.SmallInteger(),
+            server_default=sa.text('1'),
+            nullable=True,
+        ),
+        if_not_exists=True,
+    )
 
-    op.add_column('nodes_protocols', sa.Column('reg_status', sa.SmallInteger(), server_default=sa.text('1'), nullable=True,), if_not_exists=True)
-
-    conn.execute(text("""
+    conn.execute(
+        text("""
             DO $$ BEGIN
             IF NOT EXISTS (
                 SELECT 1 FROM pg_constraint WHERE conname = 'nodes_protocols_reg_status_fkey'
@@ -48,7 +69,8 @@ def upgrade() -> None:
                 FOREIGN KEY (reg_status) REFERENCES vnodes_reg_statuses(id);
             END IF;
         END $$;
-    """))
+    """)
+    )
     # op.create_foreign_key('nodes_protocols_reg_status_fkey', 'nodes_protocols', 'vnodes_reg_statuses', ['reg_status'], ['id'])
     # ### end Alembic commands ###
 

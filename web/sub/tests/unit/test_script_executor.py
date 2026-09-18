@@ -10,47 +10,48 @@ Unit тесты для ScriptExecutor с реальными скриптами �
 
 Тесты адаптированы из node_client/tests/unit/test_hot_reload_executor.py
 """
-import pytest
+
+import pytest  # noqa: I001
 
 from web.sub.sandbox.script_executor import ScriptExecutor
 
 
 # ========== Локальные фикстуры ==========
 
+
 @pytest.fixture
 def get_script_from_template(protocol_templates):
     """
     ВНИМАНИЕ: Возвращает getter для ПЕРВОГО шаблона из списка!
-    
+
     Не использовать для тестов которые должны проверять ВСЕ шаблоны.
     Только для unit тестов где достаточно проверить логику на одном шаблоне.
-    
+
     Usage:
         script = get_script_from_template('sub_prepare_script')
         lib_names = get_script_from_template('sub_required_libs')
-    
+
     Returns:
         Callable: Функция принимающая field name и возвращающая значение из первого шаблона
     """
     if not protocol_templates:
         pytest.skip("Нет доступных шаблонов для тестирования")
-    
     # Берём ПЕРВЫЙ шаблон из списка
     template = protocol_templates[0]
-    
+
     def getter(field: str):
         """Извлекает поле из первого шаблона"""
         return template.get(field)
-    
+
     return getter
 
 
 # ========== Группа 1: Успешное выполнение с реальными скриптами из БД ==========
 
+
 @pytest.mark.asyncio
 async def test_execute_prepare_sub_script():
     """Успешное выполнение prepare_sub скрипта (unit тест с mock данными)"""
-    
     # Простой статический скрипт для проверки механизма
     script = """
 def prepare_sub(user_obj, config_link, n_address, n_title):
@@ -62,26 +63,17 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     )
     return result
 """
-    
     # Mock user_obj
-    user_obj = {
-        "user_uuid": "550e8400-e29b-41d4-a716-446655440000"
-    }
-    
+    user_obj = {"user_uuid": "550e8400-e29b-41d4-a716-446655440000"}
     # Mock config_link как dict (новый формат)
     config_link = {
         "conf_url": "vless://{user_uuid}@{n_address}:443#{n_title}",
         "n_address": "1.2.3.4",
-        "n_title": "Test Node"
+        "n_title": "Test Node",
     }
-    
     success, result = await ScriptExecutor.executing_link_processing(
-        sub_prepare_script=script,
-        required_libs=None,
-        user_obj=user_obj,
-        config_link=config_link
+        sub_prepare_script=script, required_libs=None, user_obj=user_obj, config_link=config_link
     )
-    
     assert success is True, f"Expected success, got: {result}"
     assert isinstance(result, str), "Result should be a string (processed link)"
     # Проверяем что плейсхолдеры подставлены
@@ -102,29 +94,22 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     )
     return result
 """
-    
-    user_obj = {
-        "user_uuid": "550e8400-e29b-41d4-a716-446655440000"
-    }
+    user_obj = {"user_uuid": "550e8400-e29b-41d4-a716-446655440000"}
     # Специальные символы в n_title
     config_link = {
         "conf_url": "vless://{user_uuid}@{n_address}:443#{n_title}",
         "n_address": "test.com",
-        "n_title": "Тест с пробелами & спецсимволы!"
+        "n_title": "Тест с пробелами & спецсимволы!",
     }
-    
     success, result = await ScriptExecutor.executing_link_processing(
-        sub_prepare_script=script,
-        required_libs=None,
-        user_obj=user_obj,
-        config_link=config_link
+        sub_prepare_script=script, required_libs=None, user_obj=user_obj, config_link=config_link
     )
-    
     assert success is True
     assert isinstance(result, str)
 
 
 # ========== Группа 2: Импорт и global scope ==========
+
 
 @pytest.mark.asyncio
 async def test_library_imported_to_global_scope():
@@ -143,21 +128,18 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     )
     return result
 """
-    
     user_obj = {"user_uuid": "test-uuid-123"}
     config_link = {
         "conf_url": "vless://{user_uuid}@{n_address}:443#{n_title}",
         "n_address": "1.2.3.4",
-        "n_title": "Test"
+        "n_title": "Test",
     }
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs='base64',  # Явно указываем библиотеку
         user_obj=user_obj,
-        config_link=config_link
+        config_link=config_link,
     )
-    
     # Если скрипт выполнился успешно, значит библиотека импортирована корректно
     assert success is True
     assert "dGVzdC11dWlkLTEyMw==" in message  # base64 encoded "test-uuid-123"
@@ -177,22 +159,12 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     pattern = re.compile(r'\\d+')
     
     return f"test://{n_address}:{result}"
-"""
-    
+"""  # noqa: W293
     user_obj = {}
-    config_link = {
-        "conf_url": "test://{n_address}:443",
-        "n_address": "1.2.3.4",
-        "n_title": "Test"
-    }
-    
+    config_link = {"conf_url": "test://{n_address}:443", "n_address": "1.2.3.4", "n_title": "Test"}
     success, message = await ScriptExecutor.executing_link_processing(
-        sub_prepare_script=script,
-        required_libs='json,re,math',
-        user_obj=user_obj,
-        config_link=config_link
+        sub_prepare_script=script, required_libs='json,re,math', user_obj=user_obj, config_link=config_link
     )
-    
     assert success is True
     assert "test://1.2.3.4:4.0" in message
 
@@ -206,24 +178,19 @@ async def prepare_sub(user_obj, config_link, n_address, n_title):
     await asyncio.sleep(0.001)
     return "async_result"
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs='asyncio',
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is True
     assert message == "async_result"
 
 
 # ========== Группа 3: Sandbox безопасности ==========
 # Эти тесты проверяют что sandbox БЛОКИРУЕТ опасные операции
+
 
 @pytest.mark.asyncio
 @pytest.mark.security
@@ -239,18 +206,12 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
         # open не доступен в sandbox
         return "blocked_correctly"
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is True
     assert message == "blocked_correctly"
 
@@ -267,18 +228,12 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     except NameError:
         return "blocked_correctly"
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is True
     assert message == "blocked_correctly"
 
@@ -295,18 +250,12 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     except NameError:
         return "blocked_correctly"
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is True
     assert message == "blocked_correctly"
 
@@ -325,18 +274,12 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
             return "blocked_correctly"
         return "UNEXPECTED_ERROR"
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     # Должно быть False так как ImportError не обрабатывается внутри и вырывается наружу
     assert success is False
     assert "запрещен" in message
@@ -351,18 +294,12 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     import os
     return os.getcwd()
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is False
     assert "запрещен" in message.lower()
 
@@ -386,24 +323,19 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     assert len(d) == 5
     assert e["key"] == "value"
     return "all_builtins_work"
-"""
-    
+"""  # noqa: W293
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is True
     assert message == "all_builtins_work"
 
 
 # ========== Группа 4: AST Validator (безопасность) ==========
+
 
 @pytest.mark.asyncio
 @pytest.mark.security
@@ -414,18 +346,12 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     # Попытка получить все подклассы object для обхода sandbox
     return object.__subclasses__()
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is False
     assert "безопасности" in message.lower() or "SecurityError" in message
 
@@ -440,18 +366,12 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     x = []
     return x.__class__.__bases__[0].__subclasses__()
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is False
     assert "безопасности" in message.lower() or "__class__" in message
 
@@ -465,18 +385,12 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     # Попытка получить globals для доступа к builtins
     return prepare_sub.__globals__
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is False
     assert "безопасности" in message.lower() or "__globals__" in message
 
@@ -490,18 +404,12 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     # Попытка получить code object функции
     return prepare_sub.__code__
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is False
     assert "безопасности" in message.lower() or "__code__" in message
 
@@ -515,18 +423,12 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     # Попытка получить MRO (Method Resolution Order)
     return object.__mro__
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is False
     assert "безопасности" in message.lower() or "__mro__" in message
 
@@ -539,23 +441,18 @@ async def test_ast_blocks_dict_access():
 def prepare_sub(user_obj, config_link, n_address, n_title):
     return user_obj.__dict__
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is False
     assert "безопасности" in message.lower() or "__dict__" in message
 
 
 # ========== Группа 5: Обработка ошибок ==========
+
 
 @pytest.mark.asyncio
 @pytest.mark.error_handling
@@ -567,18 +464,12 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     if True
         return "test"
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is False
     assert "Синтаксическая ошибка" in message or "SyntaxError" in message
 
@@ -592,18 +483,12 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     # Намеренная runtime ошибка
     raise ValueError("Тестовая ошибка в скрипте")
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is False
     assert "ValueError" in message
     assert "Тестовая ошибка" in message
@@ -617,18 +502,12 @@ async def test_missing_function_in_script():
 def wrong_function_name(user_obj, config_link):
     return "test"
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is False
     assert "prepare_sub" in message and "не найдена" in message
 
@@ -642,23 +521,18 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     import nonexistent_library_12345
     return "test"
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs='nonexistent_library_12345',
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is False
     assert "не найдена" in message.lower() or "not found" in message.lower()
 
 
 # ========== Группа 6: Async/Sync функции ==========
+
 
 @pytest.mark.asyncio
 async def test_async_function_execution():
@@ -668,18 +542,12 @@ async def prepare_sub(user_obj, config_link, n_address, n_title):
     await asyncio.sleep(0.001)
     return "async_works"
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs='asyncio',
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is True
     assert message == "async_works"
 
@@ -692,23 +560,18 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     # Обычная синхронная функция
     return "sync_works"
 """
-    
     success, message = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
-    
     assert success is True
     assert message == "sync_works"
 
 
 # ========== Группа 7: Проверка изоляции global scope ==========
+
 
 @pytest.mark.asyncio
 async def test_isolated_global_scope():
@@ -720,7 +583,6 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     test_var = "first_execution"
     return test_var
 """
-    
     script2 = """
 def prepare_sub(user_obj, config_link, n_address, n_title):
     # Пытаемся получить переменную из предыдущего выполнения
@@ -729,37 +591,28 @@ def prepare_sub(user_obj, config_link, n_address, n_title):
     except NameError:
         return "isolated_correctly"
 """
-    
     # Первое выполнение
     success1, message1 = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script1,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
     assert success1 is True
     assert message1 == "first_execution"
-    
     # Второе выполнение - должно быть изолировано
     success2, message2 = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script2,
         required_libs=None,
         user_obj={},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
     assert success2 is True
     assert message2 == "isolated_correctly"
 
 
 # ========== Группа 8: Проверка кэширования компиляции ==========
+
 
 @pytest.mark.asyncio
 async def test_script_compilation_caching():
@@ -768,34 +621,23 @@ async def test_script_compilation_caching():
 def prepare_sub(user_obj, config_link, n_address, n_title):
     return f"user_{user_obj.get('id', 'unknown')}"
 """
-    
     # Первое выполнение (компиляция + кэширование)
     success1, message1 = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={'id': '1'},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
     assert success1 is True
     assert message1 == "user_1"
-    
     # Второе выполнение того же скрипта (должно использовать кэш)
     success2, message2 = await ScriptExecutor.executing_link_processing(
         sub_prepare_script=script,
         required_libs=None,
         user_obj={'id': '2'},
-        config_link={
-            "conf_url": "test://link",
-            "n_address": "1.2.3.4",
-            "n_title": "Test"
-        }
+        config_link={"conf_url": "test://link", "n_address": "1.2.3.4", "n_title": "Test"},
     )
     assert success2 is True
     assert message2 == "user_2"
-    
     # Оба выполнения должны быть успешными
     assert success1 is True and success2 is True

@@ -1,4 +1,4 @@
-from functools import wraps
+from functools import wraps  # noqa: I001
 from typing import Union
 from redis.asyncio import Redis
 from aiogram.types import Message, CallbackQuery
@@ -24,14 +24,14 @@ def rate_limit(max_requests: int = 25, window_seconds: int = 60):
         @rate_limit(max_requests=5, window_seconds=60)
         async def my_callback(callback: CallbackQuery, redis: Redis, ...):
             ...
-    """
+    """  # noqa: W293
 
     def decorator(handler):
         @wraps(handler)
         async def wrapper(event: Union[Message, CallbackQuery], redis: Redis, *args, **kwargs):
             # Извлекаем user_id в зависимости от типа события
             user_id = event.from_user.id
-            
+# noqa: W293
             key = RedisKeys.rate_limit(user_id)
 
             "Редис транзакция"
@@ -44,14 +44,14 @@ def rate_limit(max_requests: int = 25, window_seconds: int = 60):
 
             current_count = results[0]  # ответ от инкремента
             if current_count > max_requests:
-                warning_message = f"⏳ Слишком много запросов. Подождите некоторое время"
-                
+                warning_message = f"⏳ Слишком много запросов. Подождите некоторое время"  # noqa: F541
+# noqa: W293
                 # Отправляем предупреждение в зависимости от типа события
                 if isinstance(event, Message):
                     await event.answer(warning_message)
                 elif isinstance(event, CallbackQuery):
                     await event.answer(warning_message, show_alert=True)
-                
+# noqa: W293
                 return
 
             return await handler(event, redis, *args, **kwargs)

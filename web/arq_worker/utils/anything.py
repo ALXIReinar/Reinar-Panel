@@ -11,9 +11,10 @@ class DeleteReasons:
     sub_revoke: str = 'sub_revoke'
     admin_bulk_delete: str = 'admin_bulk_delete'
 
+
 @dataclass
-class AddReasons:
-    ...
+class AddReasons: ...
+
 
 class CoreProtoActions:
     reason_del: DeleteReasons = DeleteReasons
@@ -31,9 +32,19 @@ class CoreProtoActions:
     }
     id2name: dict[str, str] = {id: name for name, id in name2id.items()}
 
+
+@dataclass
+class VnodeRegStatuses:
+    pending: int = 1
+    success: int = 2
+    failed: int = 3
+
+
 @dataclass
 class NodeUris:
-    proto_core_bulk_action: str = '/api/v1/server/proto_core/user/bulk/action' # Experimental. Ещё не добавлено  на нод клиент
+    proto_core_bulk_action: str = (
+        '/api/v1/server/proto_core/user/bulk/action'  # Experimental. Ещё не добавлено  на нод клиент
+    )
 
     get_metrics: str = '/api/v1/server/node/metrics'
 

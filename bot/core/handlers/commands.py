@@ -1,4 +1,4 @@
-from aiogram.types import BotCommand, BotCommandScopeDefault
+from aiogram.types import BotCommand, BotCommandScopeDefault  # noqa: I001
 from aiogram import Bot
 
 
@@ -8,4 +8,4 @@ async def set_commands(bot: Bot):
         BotCommand(command='/help', description='Помощь'),
     ]
 
-    await bot.set_my_commands(commands, BotCommandScopeDefault())
+    await bot.set_my_commands(commands, BotCommandScopeDefault())  # noqa: W292

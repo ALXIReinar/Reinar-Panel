@@ -1,4 +1,3 @@
-
 from asyncpg import Connection
 
 from web.sub.anything import CoreProtoActions
@@ -7,7 +6,6 @@ from web.sub.anything import CoreProtoActions
 class SubscriptionQueries:
     def __init__(self, conn: Connection):
         self.conn = conn
-
 
     async def get_sub_links(self, b64_string: str):
         query_sub_meta = '''
@@ -30,7 +28,7 @@ class SubscriptionQueries:
           )
           AND (us.infinite_expire = true OR us.expire_date > now())
           AND us.b64_id = $1
-        '''
+        '''  # noqa: W291
         sub_meta = await self.conn.fetchrow(query_sub_meta, b64_string)
         if not sub_meta:
             return None, []
@@ -46,17 +44,14 @@ class SubscriptionQueries:
         JOIN protocols p ON p.id = np.proto_id
         JOIN proto_templates pt ON p.tmp_id = pt.id
         WHERE sp.id = $1
-        '''
+        '''  # noqa: W291
         locations = await self.conn.fetch(query_locations, sub_meta['sub_plan_id'])
         return sub_meta, locations
 
-
-    async def get_core_proto_deps_by_user_id(
-            self, user_sub_id: int, operation: CoreProtoActions | int
-    ):
+    async def get_core_proto_deps_by_user_id(self, user_sub_id: int, operation: CoreProtoActions | int):
         """
         Получить ноды для действия над пользователем в ядре протокола + зафиксировать в outbox
-        
+
         Использует Outbox pattern:
         1. Читает ноды из подписки
         2. Вставляет записи в sub_nodes_outbox
@@ -98,5 +93,5 @@ class SubscriptionQueries:
         LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id
         JOIN insert_outbox io ON io.node_proto_id = np.id
         WHERE np.user_visible = true
-        '''
+        '''  # noqa: W291
         return await self.conn.fetch(query, user_sub_id, operation)

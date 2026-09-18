@@ -1,6 +1,6 @@
 from asyncpg import Connection
 
-from web.arq_worker.utils.anything import CoreProtoActions
+from web.arq_worker.utils.anything import CoreProtoActions, VnodeRegStatuses
 
 
 class TrafficResetQueries:
@@ -62,10 +62,10 @@ class TrafficResetQueries:
             COALESCE(aui.user_injectors, '[]'::json) AS user_injectors,
             COALESCE(pau.users, '[]'::json) AS users
         FROM pre_aggregated_users pau
-        JOIN nodes_protocols np ON np.id = pau.node_proto_id AND np.user_visible = true 
+        JOIN nodes_protocols np ON np.id = pau.node_proto_id AND np.user_visible = true AND np.reg_status = $2
         JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
         JOIN protocols p ON np.proto_id = p.id 
         JOIN proto_templates pt ON p.tmp_id = pt.id
         LEFT JOIN pre_agg_user_injectors aui ON pt.id = aui.tmp_id
-        '''
-        return await self.conn.fetch(query, CoreProtoActions.add)
+        '''  # noqa: W291
+        return await self.conn.fetch(query, CoreProtoActions.add, VnodeRegStatuses.success)

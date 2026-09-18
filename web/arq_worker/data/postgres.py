@@ -16,11 +16,9 @@ class PgSql:
         self.outbox = OutboxQueries(conn)
         self.traffic_reset = TrafficResetQueries(conn)
 
-
     async def slam_refresh_tokens(self):
         query = 'DELETE FROM sessions_admins WHERE exp < now()'
         await self.conn.execute(query)
-
 
     async def get_user_tg_notify(self, user_id: int, user_sub_id: int):
         query = '''

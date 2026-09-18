@@ -1,9 +1,6 @@
 #!/bin/bash
 
 METHOD_CHOICE=${1}
-CERT_PATH=$2
-KEY_PATH=$3
-DOMAIN=$4
 
 log() { echo -e "$1" >&2; }
 log "Переменные окружения для этой вариации"
@@ -19,9 +16,8 @@ if [ -z "$NODE_ID" ] || [ -z "$PROTO_ID" ] || [ -z "$EXIT_PORT" ] || [ -z "$EXIT
     exit 1
 fi
 
-if [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$DOMAIN" ]; then
-    log "Ошибка: Не указан TMP_ID!"
-    log "Использование: bash node_client/scripts/xray/ss/anti-censorship/entry-node.sh <METHOD_CHOICE> <cert_path> <key_path> <domain>"
+if [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$DOMAIN" ] || [ -z "$SERVICES_LIST" ]; then
+    log "Ошибка: Необходимо предварительно выпустить сертификат (bash issue_cert_acme.sh)!"
     exit 1
 fi
 
@@ -300,6 +296,11 @@ if ! systemctl is-active --quiet "$SERVICE_NAME"; then
          -d '{"node_proto_id": '"$NODE_PROTO_ID"', "status": 3}' >/dev/null || true
     exit 1
 fi
+
+# Хук на авто-рестарт виртуальной ноды при обновлении сертификата acme
+if ! grep -Fxq "$SERVICE_NAME" "$SERVICES_LIST" 2>/dev/null; then
+        echo "$SERVICE_NAME" >> "$SERVICES_LIST"
+    fi
 
 # 6. Финализация статуса в панели
 curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \

@@ -5,11 +5,7 @@ Helper функции для работы с user_obj в тестах
 """
 
 
-def resolve_user_template(
-        template: dict,
-        uuid: str,
-        user_sub_id: int | None = None
-) -> dict:
+def resolve_user_template(template: dict, uuid: str, user_sub_id: int | None = None) -> dict:
     """
     Подставляет значения в шаблон пользователя
 
@@ -46,8 +42,8 @@ def resolve_user_template(
     # Проверяем что user_sub_id передан, если он требуется в шаблоне
     if '{USER_SUB_ID}' in template.values() and user_sub_id is None:
         raise ValueError(
-            f"Одно из полей шаблона требует user_sub_id (плейсхолдер {{USER_SUB_ID}}), "
-            f"но оно не передано"
+            f"Одно из полей шаблона требует user_sub_id (плейсхолдер {{USER_SUB_ID}}), "  # noqa: F541
+            f"но оно не передано"  # noqa: F541
         )
 
     resolved = {}
@@ -68,29 +64,29 @@ def resolve_user_template(
 
 
 def create_vpn_like_user(
-        user_uuid: str,
-        user_sub_id: int | str,
-        required_user_data_obj: dict,
-        constant_user_data_obj: dict,
-        constant_node_data_obj: dict,
+    user_uuid: str,
+    user_sub_id: int | str,
+    required_user_data_obj: dict,
+    constant_user_data_obj: dict,
+    constant_node_data_obj: dict,
 ):
     """
     Собирает готовый объект пользователя (суперобъект) из шаблон-скриптов
-    
+
     Используется для создания user_obj который затем:
     - Передаётся в extractor_script инжекторов
     - Используется в prepare_sub скриптах
-    
+
     Args:
         user_uuid: UUID пользователя
         user_sub_id: ID подписки пользователя
         required_user_data_obj: Шаблон с плейсхолдерами {USER_UUID}, {USER_SUB_ID}
         constant_user_data_obj: Константные данные пользователя (flow, level, etc.)
         constant_node_data_obj: Константные данные ноды (public_key, fp, etc.)
-    
+
     Returns:
         tuple[bool, dict | str]: (success, user_obj | error_message)
-    
+
     Example:
         >>> ok, user_obj = create_vpn_like_user(
         ...     user_uuid="abc-123",
@@ -108,7 +104,7 @@ def create_vpn_like_user(
             'node_public_key': 'key123',
             'sub_link_fp': 'chrome'
         }
-    """
+    """  # noqa: W293
     try:
         # 1. Подстановка значений в шаблон через плейсхолдеры
         required_user_obj = resolve_user_template(
@@ -116,14 +112,12 @@ def create_vpn_like_user(
             uuid=user_uuid,
             user_sub_id=user_sub_id,
         )
-        
         # 2. Объединяем все 3 data_obj в один суперобъект
         final_user_obj = {
             **required_user_obj,
             **constant_user_data_obj,
             **constant_node_data_obj,
         }
-        
         return True, final_user_obj
     except Exception as e:
         return False, repr(e)

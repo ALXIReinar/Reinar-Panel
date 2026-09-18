@@ -5,11 +5,10 @@ class RemoteCommandHistoryQueries:
     def __init__(self, conn: Connection):
         self.conn = conn
 
-
     async def save_action(self, node_proto_id: int, private_ip: str, api_port: int, command: str) -> int:
         """
         Сохранить запись о начале выполнения команды
-        
+
         Returns:
             action_id - ID созданной записи
         """
@@ -20,7 +19,6 @@ class RemoteCommandHistoryQueries:
         """
         return await self.conn.fetchval(query, node_proto_id, private_ip, api_port, command)
 
-
     async def update_action(
         self,
         action_id: int,
@@ -30,7 +28,7 @@ class RemoteCommandHistoryQueries:
         exit_code: int | None = None,
         status_code: int | None = None,
         node_success: bool | None = None,
-        exception_text: str | None = None
+        exception_text: str | None = None,
     ):
         """Обновить запись о выполнении команды"""
         updates = ['status = $2', 'updated_at = NOW()']
@@ -72,9 +70,7 @@ class RemoteCommandHistoryQueries:
         SET {', '.join(updates)}
         WHERE id = $1
         """
-        
         await self.conn.execute(query, *params)
-
 
     async def get_history_all(self, last_id: int | None, sort_by: str, limit: int):
         """Получить историю выполнения команд с пагинацией"""

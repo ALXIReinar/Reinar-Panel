@@ -1,4 +1,4 @@
-import secrets
+import secrets  # noqa: I001
 from datetime import datetime, UTC
 from uuid import uuid4
 
@@ -16,14 +16,13 @@ from web.utils.logger_config import log_event
 
 
 def set_jwt_encode(payload: dict[str, Any]):
-    encoded = jwt.encode(
-        payload=payload,
-        key=env.JWTs.private_key,
-        algorithm=env.JWTs.algorithm
-    )
+    encoded = jwt.encode(payload=payload, key=env.JWTs.private_key, algorithm=env.JWTs.algorithm)
     return encoded
 
-def get_jwt_decode_payload(encoded_jwt: str, public_key: str | None=None, verify_exp: bool=False, audience: str | None=None):
+
+def get_jwt_decode_payload(
+    encoded_jwt: str, public_key: str | None = None, verify_exp: bool = False, audience: str | None = None
+):
     try:
         decoded = jwt.decode(
             jwt=encoded_jwt,
@@ -31,7 +30,7 @@ def get_jwt_decode_payload(encoded_jwt: str, public_key: str | None=None, verify
             algorithms=[env.JWTs.algorithm],
             audience=audience,
             options={'verify_exp': verify_exp},
-            leeway=10
+            leeway=10,
         )
     except DecodeError:
         decoded = 401
@@ -40,11 +39,9 @@ def get_jwt_decode_payload(encoded_jwt: str, public_key: str | None=None, verify
     return decoded
 
 
-
 def add_ttl_limit(data: dict, token_ttl: str):
     created_at = datetime.now(UTC)
     # created_at = datetime.utcnow()
-    
     ttl = env.JWTs.ttl_aT
     if Constants.token_types[token_ttl] == TokenTypes.refresh_token:
         ttl = env.JWTs.ttl_rT
@@ -52,25 +49,24 @@ def add_ttl_limit(data: dict, token_ttl: str):
         ttl = env.JWTs.ttl_wT
     expired_at = created_at + ttl
 
-    data.update(
-        iat=created_at,
-        exp=expired_at
-    )
+    data.update(iat=created_at, exp=expired_at)
     return data
 
 
 async def issue_token(
-        payload: dict,
-        token: TokenTypes | str,
-        db: PgSqlDep = None,
-        session_id: str | None=None,
-        client: TokenPayloadSchema=None
+    payload: dict,
+    token: TokenTypes | str,
+    db: PgSqlDep = None,
+    session_id: str | None = None,
+    client: TokenPayloadSchema = None,
 ):
     if Constants.token_types[token] == TokenTypes.refresh_token:
         rT = add_ttl_limit(payload, token)
         encoded_rT = set_jwt_encode(rT)
         hashed_rT = encryption.hash(encoded_rT)
-        await db.auth.make_session(session_id, int(payload['sub']), rT['iat'], rT['exp'], client.user_agent, client.ip, hashed_rT)
+        await db.auth.make_session(
+            session_id, int(payload['sub']), rT['iat'], rT['exp'], client.user_agent, client.ip, hashed_rT
+        )
         return hashed_rT
     elif Constants.token_types[token] == TokenTypes.access_token:
         payload['s_id'] = session_id if not payload.get('s_id') else payload['s_id']
@@ -80,8 +76,6 @@ async def issue_token(
     return set_jwt_encode(wT)
 
 
-
-
 async def issue_aT_rT(db: PgSqlDep, token_schema: TokenPayloadSchema):
     session_id = await db.auth.check_exist_session(token_schema.id, token_schema.user_agent)
     if session_id:
@@ -89,9 +83,12 @@ async def issue_aT_rT(db: PgSqlDep, token_schema: TokenPayloadSchema):
         log_event('Существующая сессия: user_id: %s; s_id: %s; ip: %s', token_schema.id, session_id, token_schema.ip)
     else:
         session_id = str(uuid4())
-        log_event('Новая сессия | user_id: %s; user_agent: %s; ip: %s',
-                  token_schema.id, token_schema.user_agent, token_schema.ip)
-
+        log_event(
+            'Новая сессия | user_id: %s; user_agent: %s; ip: %s',
+            token_schema.id,
+            token_schema.user_agent,
+            token_schema.ip,
+        )
 
     frame_token = {
         'sub': str(token_schema.id),
@@ -112,10 +109,7 @@ async def reissue_aT(access_token: dict, refresh_token: str, db: PgSqlDep):
     if db_rT and secrets.compare_digest(db_rT['refresh_token'], refresh_token):
         # рефреш_токен СОВПАЛ с выданным и ещё НЕ ИСТЁК
         log_event(f"Выпущен новый access_token | s_id: {s_id}; user_id: {sub}")
-        new_access_token = await issue_token(
-            {'sub': sub, 's_id': s_id},
-            'access_token'
-        )
+        new_access_token = await issue_token({'sub': sub, 's_id': s_id}, 'access_token')
         return new_access_token
 
     if db_rT is None:

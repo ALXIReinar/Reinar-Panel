@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter  # noqa: I001
 
 from node_client.config import env
 from .node_config.node_config_api import router as node_config_router
@@ -13,4 +13,4 @@ main_router.include_router(proto_core_users_router)
 
 @main_router.get('/node/ping')
 async def health_check():
-    return {"success": True, "message": "pong", "service": env.node_name, "version": "0.1"}
+    return {"success": True, "message": "pong", "service": env.node_name, "version": "0.1"}  # noqa: W292

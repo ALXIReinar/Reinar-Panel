@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter  # noqa: I001
 from .nodes_api import router as phys_nodes_router
 from .nodes_protocols import router as virtual_nodes_router
 

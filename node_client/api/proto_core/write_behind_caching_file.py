@@ -27,8 +27,8 @@ class ConfigWriteBuffer:
     - Отдельный буфер для каждой виртуальной ноды
     - Отдельный воркер для каждой ноды (изоляция)
     - Динамическая регистрация нод при первом обращении
-    """
-    
+    """  # noqa: W293
+# noqa: W293
     def __init__(self, max_batch: int = 5, timeout: float = 10.0):
         """
         Args:
@@ -50,10 +50,10 @@ class ConfigWriteBuffer:
 
         # Очереди операций для каждой ноды {node_proto_id: Queue}
         self.node_queues: dict[int, asyncio.Queue] = {}
-        
+# noqa: W293
         # Воркеры для каждой ноды {node_proto_id: Task}
         self.worker_tasks: dict[int, asyncio.Task] = {}
-        
+# noqa: W293
         # Активные задачи записи для каждой ноды {node_proto_id: set[Task]}
         self.pending_writes: dict[int, set[asyncio.Task]] = {}
 
@@ -88,20 +88,20 @@ class ConfigWriteBuffer:
             config2json_script: Скрипт для конвертации конфиг-файла в json структуру для нод клиента. Плюсы - поддержка любого конфига
             json2config_script: Скрипт для конвертации из джсон структуры в формат файла для впн-ядра
             conf_converter_libs: Либы для файл-конвертеров
-        """
+        """  # noqa: E501, W293
         # 0. Проверяем значения перед сохранением
         injectors = []
         try:
             # По дефолту используем json формат(не указан в БД = JsonConverter)
             if config2json_script is None:
-                config_loader = lambda x: orjson.loads(x)
+                config_loader = lambda x: orjson.loads(x)  # noqa: E731
             else:
-                config_loader = HotReloadExecutor.get_compiled_func(config2json_script, 'config2json', conf_converter_libs)
+                config_loader = HotReloadExecutor.get_compiled_func(config2json_script, 'config2json', conf_converter_libs)  # noqa: E501
 
             if json2config_script is None:
-                config_dumper = lambda x: orjson.dumps(x, option=orjson.OPT_INDENT_2)
+                config_dumper = lambda x: orjson.dumps(x, option=orjson.OPT_INDENT_2)  # noqa: E731
             else:
-                config_dumper = HotReloadExecutor.get_compiled_func(json2config_script, 'json2config', conf_converter_libs)
+                config_dumper = HotReloadExecutor.get_compiled_func(json2config_script, 'json2config', conf_converter_libs)  # noqa: E501
 
 
             # Проверка существования файла-конфига
@@ -115,12 +115,12 @@ class ConfigWriteBuffer:
                    "flatten_array_cursor": inj['flatten_array_cursor'],
 
                    # Внутри сидит код, который выдаст user_obj в нужном формате
-                   "extractor_script": HotReloadExecutor.get_compiled_func(inj['extractor_script'], 'transform', inj['libs'])
+                   "extractor_script": HotReloadExecutor.get_compiled_func(inj['extractor_script'], 'transform', inj['libs'])  # noqa: E501
                })
 
 
         except Exception as e:
-            log_event(f'\033[35m[Worker]\033[0m Валидация параметров перед регистрацией провалилась | user_injectors: \033[34m{user_injectors}\033[0m; error: \033[34m{e}\033[0m', level='ERROR')
+            log_event(f'\033[35m[Worker]\033[0m Валидация параметров перед регистрацией провалилась | user_injectors: \033[34m{user_injectors}\033[0m; error: \033[34m{e}\033[0m', level='ERROR')  # noqa: E501
             return False, 500, str(repr(e))
 
         # 1. Сохраняем метаданные
@@ -132,19 +132,19 @@ class ConfigWriteBuffer:
             'reload_command': reload_command,
             'queue_limited': True,  # Флаг для контроля лимитов конкретной ноды
         }
-        
+# noqa: W293
         # 2. Создаём очередь
         self.node_queues[node_proto_id] = asyncio.Queue()
-        
+# noqa: W293
         # 2.1. Создаём set для отслеживания pending writes
         self.pending_writes[node_proto_id] = set()
-        
+# noqa: W293
         # 3. Загружаем существующих пользователей из файла
         await self._load_users_from_config(node_proto_id)
-        
+# noqa: W293
         # 3.1. Инициализируем local_state для этой ноды
         self.local_state[node_proto_id] = {}
-        
+# noqa: W293
         # 4. Запускаем воркер для этой ноды
         task = asyncio.create_task(self._node_worker(node_proto_id))
         self.worker_tasks[node_proto_id] = task
@@ -152,12 +152,12 @@ class ConfigWriteBuffer:
         # 5. Запускаем аудит state конфига
         await self._audit_state(node_proto_id)
 
-        log_event(f"Нода зарегистрирована | node_proto_id: \033[33m{node_proto_id}\033[0m | users_len: \033[32m{len(self.buffer_storage[node_proto_id])}\033[0m")
+        log_event(f"Нода зарегистрирована | node_proto_id: \033[33m{node_proto_id}\033[0m | users_len: \033[32m{len(self.buffer_storage[node_proto_id])}\033[0m")  # noqa: E501
         return True, 200, f'Зарегистрирована очередь | node_proto_id: \033[32m{node_proto_id}\033[0m'
 
 
     async def add_user(
-        self, 
+        self,  # noqa: W291
         node_proto_id: int,
         user_obj: dict | str,
         filepath: str,
@@ -186,12 +186,12 @@ class ConfigWriteBuffer:
             config2json_script: Скрипт для конвертации конфиг-файла в json структуру для нод клиента. Плюсы - поддержка любого конфига
             json2config_script: Скрипт для конвертации из джсон структуры в формат файла для впн-ядра
             conf_converter_libs: Либы для файл-конвертеров
-        """
+        """  # noqa: E501, W293
         uuid = user_obj['user_uuid']
 
         # Сценарий 1: Пользователь УЖЕ в буфере
         if node_proto_id in self.buffer_storage and uuid in self.buffer_storage[node_proto_id]:
-            log_event(f"Пользователь УЖЕ в буфере | node_proto_id: \033[35m{node_proto_id}\033[0m | uuid: \033[32m{uuid}\033[0m")
+            log_event(f"Пользователь УЖЕ в буфере | node_proto_id: \033[35m{node_proto_id}\033[0m | uuid: \033[32m{uuid}\033[0m")  # noqa: E501
 
             "Опциональный апдейт пользователя в ядре"
             # self.buffer_storage[node_proto_id][uuid] = user_obj
@@ -200,7 +200,7 @@ class ConfigWriteBuffer:
 
         # Сценарий 2: Очередь существует, пользователя нет
         if node_proto_id in self.node_queues:
-            log_event(f"Добавление пользователя | node_proto_id: \033[32m{node_proto_id}\033[0m | uuid: \033[33m{uuid}\033[0m")
+            log_event(f"Добавление пользователя | node_proto_id: \033[32m{node_proto_id}\033[0m | uuid: \033[33m{uuid}\033[0m")  # noqa: E501
             self.buffer_storage[node_proto_id][uuid] = user_obj
             await self.node_queues[node_proto_id].put({'op': 'add', 'uuid': uuid})
             return True, 200, 'Пользователь добавлен'
@@ -208,17 +208,17 @@ class ConfigWriteBuffer:
         if not all([filepath, user_injectors]):
             raise ValueError(
                 f"При первом обращении к node_proto_id={node_proto_id} "
-                f"нужен список user_injectors. Он состоит из словарей с ключами(extractor_script: str, libs: str | None, flatten_array_cursor: str)"
+                f"нужен список user_injectors. Он состоит из словарей с ключами(extractor_script: str, libs: str | None, flatten_array_cursor: str)"  # noqa: E501
             )
 
         # Сценарий 3: Первое обращение к ноде
         # Регистрируем ноду (загружаем существующих пользователей)
         log_event(f"Первое обращение к ноде | node_proto_id: \033[35m{node_proto_id}\033[0m | регистрируем")
         reg_res, status_code, msg = await self.register_node(
-            node_proto_id, filepath, user_injectors, reload_command, config2json_script, json2config_script, conf_converter_libs
+            node_proto_id, filepath, user_injectors, reload_command, config2json_script, json2config_script, conf_converter_libs  # noqa: E501
         )
         if not reg_res:
-            log_event(f'Не удалось зарегистрировать ноду | node_proto_id: \033[31m{node_proto_id}\033[0m', level='WARNING')
+            log_event(f'Не удалось зарегистрировать ноду | node_proto_id: \033[31m{node_proto_id}\033[0m', level='WARNING')  # noqa: E501
             return False, status_code, str(msg)
 
         # Добавляем нового пользователя
@@ -251,29 +251,29 @@ class ConfigWriteBuffer:
             config2json_script: Скрипт для конвертации конфиг-файла в json структуру для нод клиента. Плюсы - поддержка любого конфига
             json2config_script: Скрипт для конвертации из джсон структуры в формат файла для впн-ядра
             conf_converter_libs: Либы для файл-конвертеров
-        """
+        """  # noqa: E501, W293
         "Проверяем очередь node_proto_id в буфере"
         if node_proto_id not in self.buffer_storage:
-            log_event(f"Попытка удаления из незарегистрированной ноды, пробуем подгрузить её | node_proto_id: \033[33m{node_proto_id}\033[0m", level='WARNING')
+            log_event(f"Попытка удаления из незарегистрированной ноды, пробуем подгрузить её | node_proto_id: \033[33m{node_proto_id}\033[0m", level='WARNING')  # noqa: E501
             reg_res, status_code, msg = await self.register_node(
-                node_proto_id, filepath, user_injectors, reload_command, config2json_script, json2config_script, conf_converter_libs
+                node_proto_id, filepath, user_injectors, reload_command, config2json_script, json2config_script, conf_converter_libs  # noqa: E501
             )
 
             "Если нет, пытаемся зарегать"
             if not reg_res:
-                log_event(f'Не удалось зарегистрировать ноду | node_proto_id: \033[31m{node_proto_id}\033[0m', level='WARNING')
+                log_event(f'Не удалось зарегистрировать ноду | node_proto_id: \033[31m{node_proto_id}\033[0m', level='WARNING')  # noqa: E501
                 return False, status_code, msg
 
         uuid = user_obj['user_uuid']
 
         "Проверяем наличие пользователя"
-        if not uuid in self.buffer_storage[node_proto_id]:
-            log_event(f'Пользователя с uuid не существует в этом конфиге | uuid: \033[33m{uuid}\033[0m; config_file: \033[32m{filepath}\033[0m', level='WARNING')
+        if not uuid in self.buffer_storage[node_proto_id]:  # noqa: E713
+            log_event(f'Пользователя с uuid не существует в этом конфиге | uuid: \033[33m{uuid}\033[0m; config_file: \033[32m{filepath}\033[0m', level='WARNING')  # noqa: E501
             return True, 200, 'Пользователя уже не было'
 
         "Удаляем из кэша и Добавляем в очередь"
         del self.buffer_storage[node_proto_id][uuid]
-        log_event(f"Пользователь удалён из буфера | node_proto_id: \033[32m{node_proto_id}\033[0m | uuid: \033[32m{uuid}\033[0m")
+        log_event(f"Пользователь удалён из буфера | node_proto_id: \033[32m{node_proto_id}\033[0m | uuid: \033[32m{uuid}\033[0m")  # noqa: E501
 
         await self.node_queues[node_proto_id].put({'op': 'delete', 'uuid': uuid})
         return True, 200, 'Пользователь удалён'
@@ -282,34 +282,34 @@ class ConfigWriteBuffer:
     async def stop(self):
         """Останавливает все воркеры и безопасно сбрасывает остатки на диск"""
         log_event("Остановка ConfigWriteBuffer...")
-        
+# noqa: W293
         # 1. ОСТАНАВЛИВАЕМ ВОРКЕРЫ ПЕРВЫМ ДЕЛОМ
         # Чтобы они перестали читать очереди и порождать новые pending_writes
         worker_tasks = list(self.worker_tasks.values())
         if worker_tasks:
             for task in worker_tasks:
                 task.cancel()
-            
+# noqa: W293
             # Дожидаемся фактической остановки всех воркеров
             await asyncio.gather(*worker_tasks, return_exceptions=True)
             self.worker_tasks.clear()
-        
+# noqa: W293
         # 2. ДОЖИДАЕМСЯ ЗАВЕРШЕНИЯ АКТИВНЫХ ЗАПИСЕЙ
         # Теперь воркеры мертвы, список pending_writes больше не будет пополняться
         all_pending_writes = [
             task for tasks in self.pending_writes.values() for task in tasks
         ]
-        
+# noqa: W293
         if all_pending_writes:
             log_event(f"Ожидание завершения {len(all_pending_writes)} активных записей I/O...")
             results = await asyncio.gather(*all_pending_writes, return_exceptions=True)
-            
+# noqa: W293
             for result in results:
                 if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
                     log_event(f"Ошибка при завершении pending записи: {repr(result)}", level='ERROR')
-                    
+# noqa: W293
             self.pending_writes.clear()
-        
+# noqa: W293
         # 3. СБРАСЫВАЕМ ОСТАТКИ НА ДИСК
         # Очереди теперь заморожены, можно безопасно сбросить остатки
         for node_id in list(self.node_metadata.keys()):
@@ -317,7 +317,7 @@ class ConfigWriteBuffer:
             if queue and not queue.empty():
                 log_event(f"Сброс остатков для node_proto_id: \033[33m{node_id}\033[0m")
                 await self._write_node_to_disk(node_id)
-        
+# noqa: W293
         log_event("ConfigWriteBuffer полностью остановлен")
 
 
@@ -335,7 +335,7 @@ class ConfigWriteBuffer:
     ):
         if not self.node_metadata.get(node_proto_id):
             success, status_code, msg = await self.register_node(
-                node_proto_id, filepath, user_injectors, reload_command, config2json_script, json2config_script, conf_converter_libs
+                node_proto_id, filepath, user_injectors, reload_command, config2json_script, json2config_script, conf_converter_libs  # noqa: E501
             )
             if not success:
                 return False, f"Не удалось выполнить действие. err: {msg}"
@@ -379,9 +379,9 @@ class ConfigWriteBuffer:
         Загружает существующих пользователей из конфиг-файла в память
         
         Создаёт маппинг {uuid: user_obj} для O(1) операций
-        """
+        """  # noqa: W293
         metadata = self.node_metadata[node_id]
-        
+# noqa: W293
         try:
 
             "Читаем конфиг. Если его нет, начинаем с чистого листа"
@@ -391,25 +391,25 @@ class ConfigWriteBuffer:
 
             # Получаем массив clients
             if not ok:
-                log_event(f'State Конфиг файл не найден! Начинаем с чистого листа! | node_proto_id: \033[33m{node_id}\033[0m', level='WARNING')
+                log_event(f'State Конфиг файл не найден! Начинаем с чистого листа! | node_proto_id: \033[33m{node_id}\033[0m', level='WARNING')  # noqa: E501
 
             users_arr = state_config.get('users', [])
-            
+# noqa: W293
             # Создаём маппинг {uuid: user_obj}
             self.buffer_storage[node_id] = {}
             for user_obj in users_arr:
                 # Парсим flatten ключ к user_identifier, составляем пару {user_identifier: user_obj}
                 user_identifier_value = user_obj['user_uuid']
                 self.buffer_storage[node_id][user_identifier_value] = user_obj
-            
-            log_event(f"Загружено пользователей из конфига | node_proto_id: \033[32m{node_id}\033[0m; count: \033[32m{len(self.buffer_storage[node_id])}\033[0m")
-            
+# noqa: W293
+            log_event(f"Загружено пользователей из конфига | node_proto_id: \033[32m{node_id}\033[0m; count: \033[32m{len(self.buffer_storage[node_id])}\033[0m")  # noqa: E501
+# noqa: W293
         except Exception as e:
-            log_event(f"Ошибка загрузки пользователей из State-конфига. Убедитесь, что существует файл \"\033[33m{metadata.get('filepath')}.state.json\033[0m\" | node_proto_id: \033[31m{node_id}\033[0m; error: \033[34m{e}\033[0m", level='ERROR')
+            log_event(f"Ошибка загрузки пользователей из State-конфига. Убедитесь, что существует файл \"\033[33m{metadata.get('filepath')}.state.json\033[0m\" | node_proto_id: \033[31m{node_id}\033[0m; error: \033[34m{e}\033[0m", level='ERROR')  # noqa: E501
             # Продолжаем с пустым буфером
             self.buffer_storage[node_id] = {}
 
-    
+# noqa: W293
     async def _node_worker(self, node_id: int):
         """
         Воркер для конкретной ноды
@@ -418,7 +418,7 @@ class ConfigWriteBuffer:
         - Ждёт timeout секунд или пока очередь не заполнится до max_batch
         - Если очередь >= max_batch → пишет сразу
         - Если таймаут истёк и очередь не пуста → пишет
-        """
+        """  # noqa: W293
         while True:
             try:
                 operations = []
@@ -429,11 +429,11 @@ class ConfigWriteBuffer:
                 # Собираем батч операций
                 while len(operations) < self.max_batch:
                     remaining_time = self.timeout - (time.time() - start_time)
-                    
+# noqa: W293
                     # Если таймаут истёк
                     if remaining_time <= 0:
                         break
-                    
+# noqa: W293
                     try:
                         # Пытаемся забрать операцию с таймаутом
                         op = await asyncio.wait_for(
@@ -442,7 +442,7 @@ class ConfigWriteBuffer:
                         )
                         operations.append(op)
                         self.node_queues[node_id].task_done()
-                        
+# noqa: W293
                     except asyncio.TimeoutError:
                         # Таймаут истёк, выходим
                         break
@@ -450,19 +450,19 @@ class ConfigWriteBuffer:
                 # Если очередь ограничивается лимитами для этой ноды
                 # Если есть операции → пишем на диск (неблокирующе)
                 if was_limited and self.node_metadata[node_id]['queue_limited'] and operations:
-                    log_event(f"\033[35m[Worker]\033[0m Батч собран | node_proto_id: \033[32m{node_id}\033[0m; opers_len: \033[35m{len(operations)}\033[0m")
-                    
+                    log_event(f"\033[35m[Worker]\033[0m Батч собран | node_proto_id: \033[32m{node_id}\033[0m; opers_len: \033[35m{len(operations)}\033[0m")  # noqa: E501
+# noqa: W293
                     # Создаём задачу и отслеживаем её
                     write_task = asyncio.create_task(self._write_node_to_disk(node_id))
                     self.pending_writes[node_id].add(write_task)
-                    
+# noqa: W293
                     # Удаляем из pending после завершения
                     write_task.add_done_callback(lambda t: self.pending_writes[node_id].discard(t))
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                log_event(f"\033[35m[Worker]\033[0m Ошибка воркера | node_proto_id: \033[31m{node_id}; error: \033[34m{e}\033[0m", level='CRITICAL')
+                log_event(f"\033[35m[Worker]\033[0m Ошибка воркера | node_proto_id: \033[31m{node_id}; error: \033[34m{e}\033[0m", level='CRITICAL')  # noqa: E501
 
 
     async def _write_node_to_disk(self, node_id: int):
@@ -470,14 +470,14 @@ class ConfigWriteBuffer:
         Записывает текущее состояние буфера в конфиг-файл
         
         НЕ читаем конфиг для получения пользователей - используем буфер!
-        """
+        """  # noqa: W293
         metadata = self.node_metadata[node_id]
 
         try:
-            log_event(f"\033[34m[Write]\033[0m Запись на диск | node_proto_id: \033[32m{node_id}\033[0m | users: \033[34m{len(self.buffer_storage[node_id])}\033[0m")
+            log_event(f"\033[34m[Write]\033[0m Запись на диск | node_proto_id: \033[32m{node_id}\033[0m | users: \033[34m{len(self.buffer_storage[node_id])}\033[0m")  # noqa: E501
 
             "0. Бэкап State в файл"
-            json_bytes = orjson.dumps({'users': list(self.buffer_storage[node_id].values())}, option=orjson.OPT_INDENT_2)
+            json_bytes = orjson.dumps({'users': list(self.buffer_storage[node_id].values())}, option=orjson.OPT_INDENT_2)  # noqa: E501
             await self._write_config_atomic(f"{metadata['filepath']}.state.json", json_bytes)
 
             "1. Читаем конфиги. Стейт - для формирирован (только для получения структуры)"
@@ -489,7 +489,7 @@ class ConfigWriteBuffer:
             for inj in metadata['injectors']:
                 clients_array = self._navigate_to_path(config, inj['flatten_array_cursor'])
 
-                "3. Заменяем массив на актуальное состояние буфера. Фишка структуры O(1). Готовые пользовательские объекты для ядра получаем благодаря inj['extractor_script']"
+                "3. Заменяем массив на актуальное состояние буфера. Фишка структуры O(1). Готовые пользовательские объекты для ядра получаем благодаря inj['extractor_script']"  # noqa: E501
                 clients_array.clear()
 
                 transformed_clients = [inj['extractor_script'](su) for su in self.buffer_storage[node_id].values()]
@@ -508,27 +508,27 @@ class ConfigWriteBuffer:
             log_event(f"\033[34m[Write]\033[0m Успешная запись | node_proto_id: \033[32m{node_id}\033[0m")
 
         except Exception as e:
-            log_event(f"\033[34m[Write]\033[0m КРИТИЧЕСКАЯ ошибка записи | node_proto_id: \033[31m{node_id}\033[0m | error: \033[34m{repr(e)}\033[0m", level='CRITICAL')
+            log_event(f"\033[34m[Write]\033[0m КРИТИЧЕСКАЯ ошибка записи | node_proto_id: \033[31m{node_id}\033[0m | error: \033[34m{repr(e)}\033[0m", level='CRITICAL')  # noqa: E501
 
 
     async def _reload_core(self, reload_command: str):
         """Выполняет команду перезагрузки ядра"""
         try:
             log_event(f'Выполнение команды перезагрузки: "\033[33m{reload_command}\033[0m"')
-            
+# noqa: W293
             process = await asyncio.create_subprocess_shell(
                 reload_command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            
+# noqa: W293
             stdout, stderr = await process.communicate()
 
             if process.returncode == 0:
                 log_event("Ядро успешно перезагружено")
             else:
                 log_event(f"Ошибка перезагрузки ядра: \033[31m{stderr.decode()}\033[0m", level='CRITICAL')
-                
+# noqa: W293
         except Exception as e:
             log_event(f"Исключение при перезагрузке ядра | error: \033[34m{e}\033[0m", level='CRITICAL')
 
@@ -546,25 +546,25 @@ class ConfigWriteBuffer:
                 await buffer.add_user(...)
                 await buffer.add_user(...)
             # При выходе автоматически записываем накопленные операции
-        """
+        """  # noqa: W293
         # Сохраняем предыдущее состояние конкретной ноды
         previous_state = self.node_metadata[node_proto_id]['queue_limited']
-        
+# noqa: W293
         # Отключаем лимиты для этой ноды
         self.node_metadata[node_proto_id]['queue_limited'] = False
-        
+# noqa: W293
         try:
             yield self
         finally:
             # Восстанавливаем предыдущее состояние
             self.node_metadata[node_proto_id]['queue_limited'] = previous_state
-            
+# noqa: W293
             # Принудительно записываем все накопленные операции на диск
             await self._flush_all_nodes(node_proto_id)
 
     async def _flush_all_nodes(self, node_proto_id: int):
         """Принудительно записывает все ноды на диск (для bulk операций)"""
-        log_event(f"\033[35m[Flush]\033[0m Принудительная запись конфиг-файла на инстансе ядра | node_proto_id: \033[33m{node_proto_id}\033[0m")
+        log_event(f"\033[35m[Flush]\033[0m Принудительная запись конфиг-файла на инстансе ядра | node_proto_id: \033[33m{node_proto_id}\033[0m")  # noqa: E501
         await self._write_node_to_disk(node_proto_id)
         self.queue_limited = True
 
@@ -592,7 +592,7 @@ class ConfigWriteBuffer:
                 config = metadata['config2json_script'](config)
 
             if not state_ok or not core_ok:
-                log_event(f'\033[36m[Audit]\033[0m Предоставлены неправильные конфигурации. Файлы не найдены; node_proto_id: \033[31m{node_id}\033[0m; node_meta: \033[34m{metadata}\033[0m', level='ERROR')
+                log_event(f'\033[36m[Audit]\033[0m Предоставлены неправильные конфигурации. Файлы не найдены; node_proto_id: \033[31m{node_id}\033[0m; node_meta: \033[34m{metadata}\033[0m', level='ERROR')  # noqa: E501
                 raise
 
             state_users = state_users['users']
@@ -604,7 +604,7 @@ class ConfigWriteBuffer:
                 "Режим 1: Быстрая проверка длины"
                 if len(state_users) != len(target_array):
                     msg = f"Дрифт длины! Ожидалось {len(state_users)}, в ядре {len(target_array)}"
-                    log_event(f"\033[36m[Audit]\033[0m Дрифт длины! Ожидалось {len(state_users)}, в ядре {len(target_array)}", level='CRITICAL')
+                    log_event(f"\033[36m[Audit]\033[0m Дрифт длины! Ожидалось {len(state_users)}, в ядре {len(target_array)}", level='CRITICAL')  # noqa: E501
                     if env.audit_mode == AuditModes.strict:
                         raise ValueError(msg)
 
@@ -615,7 +615,7 @@ class ConfigWriteBuffer:
 
                 # Крутим фарш в ожидаемые котлеты и сериализуем в строки/байты
                 expected_cutlets = set(
-                    orjson.dumps(injector['extractor_script'](u), option=orjson.OPT_SORT_KEYS)#.decode() # Если байты не подойдут
+                    orjson.dumps(injector['extractor_script'](u), option=orjson.OPT_SORT_KEYS)#.decode() # Если байты не подойдут  # noqa: E501
                     for u in state_users
                 )
 
@@ -633,7 +633,7 @@ class ConfigWriteBuffer:
                     missing = expected_cutlets - actual_cutlets
                     alien = actual_cutlets - expected_cutlets
 
-                    msg = f'\033[36m[Audit]\033[0m Статистика расхождений | total_mismatches: \033[35m{len(mismatches)}\033[0m; missing: \033[33m{len(missing)}\033[0m; alien: \033[31m{len(alien)}\033[0m'
+                    msg = f'\033[36m[Audit]\033[0m Статистика расхождений | total_mismatches: \033[35m{len(mismatches)}\033[0m; missing: \033[33m{len(missing)}\033[0m; alien: \033[31m{len(alien)}\033[0m'  # noqa: E501
                     log_event(msg, level='CRITICAL')
 
                     if env.audit_mode == AuditModes.strict:
@@ -643,14 +643,14 @@ class ConfigWriteBuffer:
             return True
 
         except Exception as e:
-            log_event(f"Ошибка аудита | node_proto_id: \033[32m{node_id}\033[0m; err: \033[31m{repr(e)}\033[0m", level='ERROR')
+            log_event(f"Ошибка аудита | node_proto_id: \033[32m{node_id}\033[0m; err: \033[31m{repr(e)}\033[0m", level='ERROR')  # noqa: E501
             if env.audit_mode == AuditModes.strict:
                 raise
             return False
 
 
     # ========== Утилиты для работы с конфиг-файлами ==========
-    
+# noqa: W293
     @staticmethod
     async def _read_config(filepath: str, raise_exc: bool = False) -> tuple[bool, str]:
         """
@@ -673,7 +673,7 @@ class ConfigWriteBuffer:
                 return False, ''
 
             raise
-    
+# noqa: W293
     @staticmethod
     async def _write_config_atomic(filepath: str, bytes_content: bytes):
         """
@@ -691,13 +691,13 @@ class ConfigWriteBuffer:
             # 1. Пишем во временный файл
             async with aiofiles.open(tmp_filepath, mode='wb') as f:
                 await f.write(bytes_content)
-            
+# noqa: W293
             # 2. Атомарно подменяем старый файл новым. mv в POSIX - один такт процессорного времени, - либо да, либо нет
             os.replace(str(tmp_filepath), filepath)
             log_event(f"Конфиг атомарно обновлён: \033[33m{filepath}\033[0m")
-            
+# noqa: W293
         except Exception as e:
-            log_event(f'Ошибка атомарной записи "\033[35m{filepath}\033[0m"; error: \033[34m{e}\033[0m', level='CRITICAL')
+            log_event(f'Ошибка атомарной записи "\033[35m{filepath}\033[0m"; error: \033[34m{e}\033[0m', level='CRITICAL')  # noqa: E501
             # Удаляем временный файл при ошибке
             if tmp_filepath.exists():
                 tmp_filepath.unlink()
@@ -714,16 +714,16 @@ class ConfigWriteBuffer:
             
         Returns:
             list: Ссылка на массив пользователей
-        """
+        """  # noqa: W293
         current = flatten_key2value(config, flatten_path)
         if not isinstance(current, list):
             raise TypeError(f"Путь '{flatten_path}' не указывает на массив")
-        
+# noqa: W293
         return current
 
 
 def flatten_key2value(
-        json_obj: dict, flatten_key: str, new_last_obj: dict = None, replace_last_obj: bool = False, delete_obj: bool = False
+        json_obj: dict, flatten_key: str, new_last_obj: dict = None, replace_last_obj: bool = False, delete_obj: bool = False  # noqa: E501
 ):
     """
     Ультимативная функция для парсинга flatten-json ключей
@@ -742,7 +742,7 @@ def flatten_key2value(
     :param replace_last_obj: Флаг для подмены
     :param delete_obj: Флаг для удаления последнего объекта
     :return:
-    """
+    """  # noqa: E501
     keys = flatten_key.split('___')
     current = json_obj
 
@@ -780,7 +780,7 @@ def flatten_key2value(
 @dataclass
 class AuditModes:
     lite: str = 'lite'                       # Сравнение длины. Лог при расхождении. Нод клиент продолжает работать
-    medium: str = 'medium'                   # Глубокое сравнение каждого пользователя из State файла с пользователем из Конфиг-файла впн-ядра
+    medium: str = 'medium'                   # Глубокое сравнение каждого пользователя из State файла с пользователем из Конфиг-файла впн-ядра  # noqa: E501
     strict: str = 'strict'                   # Как Medium, но нод клиент прекращает работу и падает с ValueError
 
     medium_advanced: str = 'medium_advanced' # Medium. Расхождения отправляются на админку
@@ -790,4 +790,4 @@ class AuditModes:
 def get_proto_cores_buffer(request: Request):
     return request.app.state.core_buffer
 
-CoreBuffersDep = Annotated[ConfigWriteBuffer, Depends(get_proto_cores_buffer)]
+CoreBuffersDep = Annotated[ConfigWriteBuffer, Depends(get_proto_cores_buffer)]  # noqa: W292

@@ -1,9 +1,11 @@
 from enum import Enum
 
+
 class AppMode(str, Enum):
     LOCAL = "local"
     PROD = "prod"
     DOCKER = "docker"
+
 
 class PayMode(str, Enum):
     TEST = "test"

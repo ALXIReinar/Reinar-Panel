@@ -6,38 +6,39 @@ Helper функции для тестирования prepare_sub скрипто
 2. Генерация mock constant_node_data_obj
 3. Рендеринг config_link через локальную копию generate_link_from_json
 """
-import re
-from urllib.parse import quote
+
+import re  # noqa: I001
+from urllib.parse import quote  # noqa: F401
 from jinja2 import Template
 from flatten_json import flatten
-from pydantic import IPvAnyAddress
+from pydantic import IPvAnyAddress  # noqa: F401
 import orjson
 
 
 def extract_user_obj_keys(script_code: str) -> list[str]:
     """
     Парсит prepare_sub скрипт и извлекает используемые ключи из constant_node_data_obj
-    
+
     Ищет паттерны:
     - user_obj['key']
     - user_obj["key"]
     - user_obj.get('key')
     - user_obj.get("key")
-    
+
     Возвращает ТОЛЬКО ключи с префиксами:
     - 'sub_link_*' → параметры для подписки (fp, grpc_mode, и т.д.)
     - 'node_*' → параметры ноды (public_key, и т.д.)
-    
+
     НЕ включает:
     - 'user_uuid', 'user_sub_id' → идут из required_user_data_obj
     - 'node_address', 'node_title' → подставляются через generate_link_from_json
-    
+
     Args:
         script_code: Код prepare_sub функции
-    
+
     Returns:
         Список уникальных ключей для constant_node_data_obj
-    
+
     Example:
         >>> script = "return config_link.format(user_uuid=user_obj['user_uuid'], fp=user_obj['sub_link_fp'])"
         >>> extract_user_obj_keys(script)
@@ -45,48 +46,38 @@ def extract_user_obj_keys(script_code: str) -> list[str]:
     """
     # Регулярка для поиска user_obj['key'] или user_obj.get('key')
     pattern = r"user_obj(?:\['([^']+)'\]|\[\"([^\"]+)\"\]|\.get\('([^']+)'\)|\.get\(\"([^\"]+)\"\))"
-    
     matches = re.findall(pattern, script_code)
-    
     # Flatten список кортежей (из-за групп в regex)
     keys = [match for group in matches for match in group if match]
-    
     # Убираем дубликаты
     keys = list(set(keys))
-    
     # Фильтруем ТОЛЬКО ключи из constant_node_data_obj (с префиксами)
-    constant_keys = [
-        key for key in keys 
-        if key.startswith('sub_link_') or key.startswith('node_')
-    ]
-    
+    constant_keys = [key for key in keys if key.startswith('sub_link_') or key.startswith('node_')]
     return constant_keys
 
 
 def generate_constant_node_data_obj(script_code: str) -> dict:
     """
     Генерирует mock constant_node_data_obj на основе ключей из prepare_sub скрипта
-    
+
     Извлекает только ключи с префиксами 'sub_link_' и 'node_'.
     Для каждого ключа подставляет типовое mock значение.
-    
+
     НЕ включает 'node_address' и 'node_title' - они подставляются через generate_link_from_json.
-    
+
     Args:
         script_code: Код prepare_sub функции
-    
+
     Returns:
         dict для constant_node_data_obj
-    
+
     Example:
         >>> script = "return config_link.format(fp=user_obj['sub_link_fp'], public_key=user_obj['node_public_key'])"
         >>> generate_constant_node_data_obj(script)
         {'sub_link_fp': 'chrome', 'node_public_key': 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop'}
     """
     keys = extract_user_obj_keys(script_code)
-    
     result = {}
-    
     # Mock значения для типовых ключей
     mock_values = {
         'sub_link_fp': 'chrome',
@@ -98,27 +89,25 @@ def generate_constant_node_data_obj(script_code: str) -> dict:
         'node_hop_end': 20000,  # Конечный порт для port hopping
         'node_hash_salt': 'test_salt_for_wg_keys',  # Salt для генерации WireGuard ключей
     }
-    
     # Добавляем все ключи из constant_node_data_obj
     for key in keys:
         result[key] = mock_values.get(key, f'mock_{key}')
-    
     return result
 
 
 def extract_jinja_placeholders(url_tmp: str) -> list[str]:
     """
     Парсит url_tmp и извлекает все Jinja2 плейсхолдеры (двойные {{...}})
-    
+
     Ищет паттерны: {{placeholder}}
     НЕ извлекает одинарные {placeholder} - они обрабатываются в prepare_sub
-    
+
     Args:
         url_tmp: Шаблон config_link из proto_templates.url_tmp
-    
+
     Returns:
         Список уникальных двойных плейсхолдеров (без {{}} скобок)
-    
+
     Example:
         >>> url_tmp = "vless://{user_uuid}@{n_address}:{{inbounds___0___port}}#{n_title}"
         >>> extract_jinja_placeholders(url_tmp)
@@ -132,7 +121,7 @@ def extract_jinja_placeholders(url_tmp: str) -> list[str]:
 def generate_mock_value(key: str) -> str | int | bool:
     """
     Генерирует mock значение для плейсхолдера на основе его имени
-    
+
     Типовые паттерны:
     - *___port → int (443, 8443, и т.д.)
     - *___address → str (IP адрес)
@@ -146,15 +135,14 @@ def generate_mock_value(key: str) -> str | int | bool:
     - *___hop_start / *___hop_end → int (диапазон портов для hopping)
     - *___hash_salt → str (salt для WireGuard)
     - остальное → str ('mock_value')
-    
+
     Args:
         key: Название плейсхолдера (например, 'inbounds___0___port')
-    
+
     Returns:
         Mock значение подходящего типа
     """
     key_lower = key.lower()
-    
     # Паттерны для определения типа
     if 'hop_start' in key_lower:
         return 10000  # Начальный порт для hopping
@@ -199,38 +187,35 @@ def generate_mock_value(key: str) -> str | int | bool:
 def generate_mock_node_config(placeholders: list[str]) -> dict:
     """
     Генерирует минимальный mock JSON конфиг на основе плейсхолдеров
-    
+
     Использует flatten() обратную логику:
     - 'inbounds___0___port' → {'inbounds': [{'port': 443}]}
     - 'node___address' → {'node': {'address': '192.168.1.100'}}
     - 'shortIds___0' → {'shortIds': ['value']}
     - 'serverNames___0' → {'serverNames': ['value']}
-    
+
     Args:
         placeholders: Список плейсхолдеров из extract_jinja_placeholders()
-    
+
     Returns:
         Nested dict структура для Jinja2 рендеринга
-    
+
     Example:
         >>> placeholders = ['node___address', 'inbounds___0___port']
         >>> generate_mock_node_config(placeholders)
         {'node': {'address': '192.168.1.100'}, 'inbounds': [{'port': 443}]}
-        
+
         >>> placeholders = ['shortIds___0']
         >>> generate_mock_node_config(placeholders)
         {'shortIds': ['709c400f8da05efa']}
     """
     nested_config = {}
-    
     for placeholder in placeholders:
         # Пропускаем системные плейсхолдеры (обрабатываются отдельно)
         if placeholder in ('node___address', 'node___title'):
             continue
-        
         parts = placeholder.split('___')
         value = generate_mock_value(placeholder)
-        
         # Специальный случай: если последняя часть - индекс (например, shortIds___0)
         # Это означает что предпоследний ключ должен быть массивом
         if len(parts) >= 2 and parts[-1].isdigit():
@@ -239,100 +224,81 @@ def generate_mock_node_config(placeholders: list[str]) -> dict:
             for i in range(len(parts) - 2):  # до предпоследнего
                 part = parts[i]
                 next_part = parts[i + 1]
-                
                 if part.isdigit():
                     # Индекс - пропускаем (обработан ранее)
                     continue
-                
                 if next_part.isdigit():
                     # Следующий элемент - индекс массива
                     if part not in current:
                         current[part] = []
-                    
                     index = int(next_part)
                     while len(current[part]) <= index:
                         current[part].append({})
-                    
                     current = current[part][index]
                 else:
                     # Обычный вложенный ключ
                     if part not in current:
                         current[part] = {}
                     current = current[part]
-            
             # Теперь устанавливаем предпоследний ключ как массив
             array_key = parts[-2]
             array_index = int(parts[-1])
-            
             if array_key not in current:
                 current[array_key] = []
-            
             # Расширяем массив если нужно
             while len(current[array_key]) <= array_index:
                 current[array_key].append(None)
-            
             current[array_key][array_index] = value
-            
         else:
             # Обычный случай: последняя часть - обычный ключ
             current = nested_config
-            
             for i in range(len(parts)):
                 part = parts[i]
-                is_last = (i == len(parts) - 1)
-                
+                is_last = i == len(parts) - 1
                 if part.isdigit():
                     # Индекс - пропускаем (обработано ранее)
                     continue
-                
                 if is_last:
                     # Последняя часть - устанавливаем значение
                     current[part] = value
                 else:
                     # Проверяем следующую часть
                     next_part = parts[i + 1]
-                    
                     if next_part.isdigit():
                         # Следующая часть - индекс массива
                         if part not in current:
                             current[part] = []
-                        
                         index = int(next_part)
                         while len(current[part]) <= index:
                             current[part].append({})
-                        
                         current = current[part][index]
                     else:
                         # Обычный вложенный ключ
                         if part not in current:
                             current[part] = {}
                         current = current[part]
-    
     return nested_config
 
 
-def render_config_link_for_test(
-    url_tmp: str,
-    node_config_json: dict
-) -> str:
+def render_config_link_for_test(url_tmp: str, node_config_json: dict) -> str:
     """
     Рендерит config_link (локальная копия generate_link_from_json)
-    
+
     Имитирует работу node_client/utils/tmp_url_render.py:generate_link_from_json()
-    
-    ВАЖНО: 
+
+    ВАЖНО:
     - Рендерит ТОЛЬКО двойные плейсхолдеры {{inbounds___0___port}} через Jinja2
     - НЕ трогает одинарные {n_address}, {n_title}, {user_uuid} и т.д.
     - Одинарные плейсхолдеры подставляются в prepare_sub скриптах
-    
+
     Args:
         url_tmp: Шаблон из proto_templates.url_tmp
         node_config_json: Mock конфиг ноды (dict структура)
-    
+
     Returns:
         Отрендеренная config_link с замененными двойными плейсхолдерами,
         одинарные остаются как есть (БЕЗ URL encoding и БЕЗ punycode!)
-    
+
     Example:
         >>> url_tmp = "vless://{user_uuid}@{n_address}:{{inbounds___0___port}}#{n_title}"
         >>> mock_config = {'inbounds': [{'port': 443}]}
@@ -341,14 +307,10 @@ def render_config_link_for_test(
     """
     if not url_tmp:
         raise ValueError('url_tmp не может быть пустым')
-    
     if isinstance(node_config_json, str):
         node_config_json = orjson.loads(node_config_json)
-    
     flat_config = flatten(node_config_json, separator='___')
-    
     # Рендерим через Jinja2 ТОЛЬКО двойные плейсхолдеры {{...}}
     template = Template(url_tmp)
     config_url = template.render(flat_config)
-    
     return config_url

@@ -16,7 +16,9 @@ async def get_redis_connection():
     finally:
         await redis.aclose()
 
+
 async def redis_pool(request: Request) -> Redis:
     return request.app.state.redis
+
 
 RedisDep = Annotated[Redis, Depends(redis_pool)]

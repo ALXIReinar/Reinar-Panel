@@ -1,6 +1,6 @@
 from asyncpg import Connection
 
-from web.arq_worker.utils.anything import CoreProtoActions, PayStatuses
+from web.arq_worker.utils.anything import CoreProtoActions, PayStatuses, VnodeRegStatuses
 
 
 class BulkActionsQueries:
@@ -51,10 +51,9 @@ class BulkActionsQueries:
         JOIN protocols p ON np.proto_id = p.id 
         JOIN proto_templates pt ON pt.id = p.tmp_id 
         LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id
-        WHERE np.user_visible = true
-        '''
-        return await self.conn.fetch(query, outbox_event_ids)
-
+        WHERE np.user_visible = true AND np.reg_status = $2
+        '''  # noqa: W291
+        return await self.conn.fetch(query, outbox_event_ids, VnodeRegStatuses.success)
 
     async def get_and_lock_expired_subs_grouped_by_node(self):
         """
@@ -126,10 +125,9 @@ class BulkActionsQueries:
         JOIN pre_agg_users pau ON pau.node_proto_id = np.id
         JOIN proto_templates pt ON p.tmp_id = pt.id 
         LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id 
-        WHERE np.user_visible = true
-        '''
-        return await self.conn.fetch(query, CoreProtoActions.delete, PayStatuses.expired)
-
+        WHERE np.user_visible = true AND np.reg_status = $3
+        '''  # noqa: W291
+        return await self.conn.fetch(query, CoreProtoActions.delete, PayStatuses.expired, VnodeRegStatuses.success)
 
     async def success_bulk_action_core_proto_users(self, outbox_event_ids: list[int]):
         if not outbox_event_ids:

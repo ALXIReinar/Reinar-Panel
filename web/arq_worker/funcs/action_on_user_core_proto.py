@@ -1,4 +1,4 @@
-import asyncio
+import asyncio  # noqa: I001
 from typing import Literal
 
 from aiohttp import ClientSession, ClientResponseError
@@ -12,33 +12,36 @@ from web.arq_worker.utils.arq_logger_config import log_event
 from web.arq_worker.utils.anything import NodeUris
 
 
-
-
 @aiohttp_dep
 @arq_dep
 @pg_sql_dep
 async def action_on_core_proto_by_sub_plan(
-        ctx: dict,
-        user_uuid: str, user_sub_id: int, sub_nodes: list[dict], operation: Literal['add', 'delete'], current_attempt: int = 1,
-        db: PgSql = None,
-        aio_http: ClientSession = None,
-        arq: ArqRedis = None
+    ctx: dict,
+    user_uuid: str,
+    user_sub_id: int,
+    sub_nodes: list[dict],
+    operation: Literal['add', 'delete'],
+    current_attempt: int = 1,
+    db: PgSql = None,
+    aio_http: ClientSession = None,
+    arq: ArqRedis = None,
 ):
-    log_event(f'\033[33m[ARQ]\033[0m Операция на Core Proto | uuid: \033[35m{user_uuid}\033[0m; nodes_count: \033[32m{len(sub_nodes)}\033[0m', job_id=ctx.get('job_id'), task_name='add_user_core_proto_by_sub_plan')
-    
+    log_event(
+        f'\033[33m[ARQ]\033[0m Операция на Core Proto | uuid: \033[35m{user_uuid}\033[0m; nodes_count: \033[32m{len(sub_nodes)}\033[0m',
+        job_id=ctx.get('job_id'),
+        task_name='add_user_core_proto_by_sub_plan',
+    )
     sem = asyncio.Semaphore(env.action_on_core_proto_limit)  # Батчинг нод
     trouble_nodes = []  # Критические ошибки (не ретраим)
-    retry_nodes = []    # Временные ошибки (ретраим)
+    retry_nodes = []  # Временные ошибки (ретраим)
     success_events = []  # Ноды, где вставка пользователя прошла успешно
     success_count = 0
-    
+
     async def worker(node: dict):
         """Обработка одной ноды"""
         nonlocal success_count
-        
         async with sem:
             try:
-
                 "1. Формируем готовый объект-пользователя списка впн-ядра"
                 ok, final_user_obj = create_vpn_like_user(
                     user_uuid=user_uuid,
@@ -48,21 +51,30 @@ async def action_on_core_proto_by_sub_plan(
                     constant_node_data_obj=node['constant_node_data_obj'],
                 )
                 if not ok:
-                    log_event(f'Некорректный скрипт обработки объекта пользователя | user_sub_id: \033[31m{user_sub_id}\033[0m; user_uuid: \033[33m{user_uuid}\033[0m; node_proto_id: \033[33m{node["node_proto_id"]}\033[0m', level='CRITICAL')
+                    log_event(
+                        f'Некорректный скрипт обработки объекта пользователя | user_sub_id: \033[31m{user_sub_id}\033[0m; user_uuid: \033[33m{user_uuid}\033[0m; node_proto_id: \033[33m{node["node_proto_id"]}\033[0m',
+                        level='CRITICAL',
+                    )
                     raise ValueError("Не удалось обработать объект пользователя для Списка Впн-ядра")
 
             except ValueError as e:
                 "Ошибка валидации шаблона (не ретраим, ошибка скрипта админа)"
-                log_event(f'\033[33m[ARQ]\033[0m Ошибка валидации шаблона | node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; error: \033[31m{str(e)}\033[0m', level='CRITICAL')
-                trouble_nodes.append({
-                    'node_proto_id': node['node_proto_id'],
-                    'status_code': 400,
-                    'response_json': {'error': f'Template validation error: {str(e)}'}
-                })
+                log_event(
+                    f'\033[33m[ARQ]\033[0m Ошибка валидации шаблона | node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; error: \033[31m{str(e)}\033[0m',
+                    level='CRITICAL',
+                )
+                trouble_nodes.append(
+                    {
+                        'node_proto_id': node['node_proto_id'],
+                        'status_code': 400,
+                        'response_json': {'error': f'Template validation error: {str(e)}'},
+                    }
+                )
                 return
-            
             "2. Подбираем тело запроса и эндпоинт в соответствии с operation"
-            log_event(f'\033[33m[ARQ]\033[0m Добавление юзера в ядро | uuid: \033[35m{user_uuid}\033[0m; node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; private_ip: \033[33m{node["private_ip"]}\033[0m; api_port: \033[35m{node['api_port']}\033[0m')
+            log_event(
+                f'\033[33m[ARQ]\033[0m Добавление юзера в ядро | uuid: \033[35m{user_uuid}\033[0m; node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; private_ip: \033[33m{node["private_ip"]}\033[0m; api_port: \033[35m{node["api_port"]}\033[0m'
+            )
 
             log_event(f'\033[31m{node.keys()}\033[0m')
             log_event(f'\033[34m{node.values()}\033[0m')
@@ -71,7 +83,7 @@ async def action_on_core_proto_by_sub_plan(
             json_body = {
                 'node_proto_id': node['node_proto_id'],
                 'core_lib': node['proto_python_lib'],
-                'users': [final_user_obj], # Список, т.к. используется бульк-эндпоинт
+                'users': [final_user_obj],  # Список, т.к. используется бульк-эндпоинт
                 'core_port': node['metrics_port'],
                 'reload_core_command': node['reload_core_command'],
                 'config_file_path': node['config_path'],
@@ -105,52 +117,67 @@ async def action_on_core_proto_by_sub_plan(
                     resp.raise_for_status()
 
                 success_count += 1
-                log_event(f'\033[33m[ARQ]\033[0m Пользователь добавлен | node_proto_id: \033[36m{node["node_proto_id"]}\033[0m')
+                log_event(
+                    f'\033[33m[ARQ]\033[0m Пользователь добавлен | node_proto_id: \033[36m{node["node_proto_id"]}\033[0m'
+                )
                 success_events.append(node['event_id'])
 
             except ClientResponseError as e:
                 "3.2.1. Шаблон некорректно настроен. Ошибки в параметрах для управления конфиг-файлом ядра"
                 if e.status == 422:
-                    log_event(f'Ошибка валидации в Инстансе ядре. Неправильные настройки для конфиг-файла, ключа к пользователям или ключа к идентификатору в объекте пользователя | node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m', level='WARNING')
-                    trouble_nodes.append({
-                        'node_proto_id': node['node_proto_id'],
-                        'event_id': node['event_id'],
-                        'status_code': 422,
-                        'response_json': str(e)
-                    })
+                    log_event(
+                        f'Ошибка валидации в Инстансе ядре. Неправильные настройки для конфиг-файла, ключа к пользователям или ключа к идентификатору в объекте пользователя | node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m',
+                        level='WARNING',
+                    )
+                    trouble_nodes.append(
+                        {
+                            'node_proto_id': node['node_proto_id'],
+                            'event_id': node['event_id'],
+                            'status_code': 422,
+                            'response_json': str(e),
+                        }
+                    )
                 # "3.2.2. HTTP ошибка - ретраим"
                 else:
-                    log_event(f'\033[33m[ARQ]\033[0m HTTP ошибка | node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; status: \033[31m{e.status}\033[0m', level='ERROR')
-                    retry_nodes.append({
-                        'node_proto_id': node['node_proto_id'],
-                        'node_data': node,  # Уже dict, не нужно преобразовывать
-                        'status_code': e.status,
-                        'response_json': {'error': str(e)}
-                    })
-            
+                    log_event(
+                        f'\033[33m[ARQ]\033[0m HTTP ошибка | node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; status: \033[31m{e.status}\033[0m',
+                        level='ERROR',
+                    )
+                    retry_nodes.append(
+                        {
+                            'node_proto_id': node['node_proto_id'],
+                            'node_data': node,  # Уже dict, не нужно преобразовывать
+                            'status_code': e.status,
+                            'response_json': {'error': str(e)},
+                        }
+                    )
             except Exception as e:
                 "3.3. Неожиданная ошибка - ретраим"
-                log_event(f'\033[33m[ARQ]\033[0m Неожиданная ошибка | node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; error: \033[31m{e}\033[0m', level='CRITICAL')
-                retry_nodes.append({
-                    'node_proto_id': node['node_proto_id'],
-                    'event_id': node['event_id'],
-                    'node_data': node,  # Уже dict, не нужно преобразовывать
-                    'status_code': 500,
-                    'response_json': {'error': str(e)}
-                })
-    
+                log_event(
+                    f'\033[33m[ARQ]\033[0m Неожиданная ошибка | node_proto_id: \033[33m{node["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m; error: \033[31m{e}\033[0m',
+                    level='CRITICAL',
+                )
+                retry_nodes.append(
+                    {
+                        'node_proto_id': node['node_proto_id'],
+                        'event_id': node['event_id'],
+                        'node_data': node,  # Уже dict, не нужно преобразовывать
+                        'status_code': 500,
+                        'response_json': {'error': str(e)},
+                    }
+                )
+
     "Запускаем воркеры параллельно"
     await asyncio.gather(*(worker(node) for node in sub_nodes))
-    
     "Итоговая статистика"
     total = len(sub_nodes)
     failed = len(trouble_nodes) + len(retry_nodes)
     level = 'INFO' if failed == 0 else 'WARNING'
-    
-    log_event(f'\033[33m[ARQ]\033[0m Операция над впн-пользователем завершена | operation: \033[36m{operation}\033[0m; success: \033[32m{success_count}\033[0m; trouble: \033[31m{len(trouble_nodes)}\033[0m; retry: \033[33m{len(retry_nodes)}\033[0m',
+    log_event(
+        f'\033[33m[ARQ]\033[0m Операция над впн-пользователем завершена | operation: \033[36m{operation}\033[0m; success: \033[32m{success_count}\033[0m; trouble: \033[31m{len(trouble_nodes)}\033[0m; retry: \033[33m{len(retry_nodes)}\033[0m',
         level=level,
         success_count=success_count,
-        error_count=failed
+        error_count=failed,
     )
 
     "Фиксируем в БД успешные вставки (удаляем маркеры для кроны на повторную вставку)"
@@ -163,10 +190,13 @@ async def action_on_core_proto_by_sub_plan(
         if current_attempt < max_tries:
             "Данные нод для retry"
             retry_sub_nodes = [node['node_data'] for node in retry_nodes]
-            log_event(f'\033[33m[ARQ]\033[0m \033[31mПланируем retry\033[0m | попытка: \033[33m{current_attempt + 1}/{max_tries}\033[0m; nodes_count: \033[33m{len(retry_sub_nodes)}\033[0m; operation: \033[36m{operation}\033[0m', level='WARNING')
+            log_event(
+                f'\033[33m[ARQ]\033[0m \033[31mПланируем retry\033[0m | попытка: \033[33m{current_attempt + 1}/{max_tries}\033[0m; nodes_count: \033[33m{len(retry_sub_nodes)}\033[0m; operation: \033[36m{operation}\033[0m',
+                level='WARNING',
+            )
 
             "Повторяем задачу с экспоненциальной задержкой: 60, 120, 240 секунд"
-            defer_seconds = 60 * (2 ** current_attempt)
+            defer_seconds = 60 * (2**current_attempt)
 
             "2. Запуск новой задачи с ретрай-набором нод (уже dict, не Record)"
             await arq.enqueue_job(
@@ -176,12 +206,15 @@ async def action_on_core_proto_by_sub_plan(
                 retry_sub_nodes,
                 operation,
                 current_attempt + 1,  # Инкрементируем попытку
-                _defer_by=defer_seconds  # Откладываем выполнение
+                _defer_by=defer_seconds,  # Откладываем выполнение
             )
 
         else:
             "3. Попытки кончились. Крона попробует снова"
-            log_event(f'\033[33m[ARQ]\033[0m Превышено количество попыток | max_tries: {max_tries}; failed_nodes: \033[31m{len(retry_nodes)}\033[0m; operation: \033[36m{operation}\033[0m', level='ERROR')
+            log_event(
+                f'\033[33m[ARQ]\033[0m Превышено количество попыток | max_tries: {max_tries}; failed_nodes: \033[31m{len(retry_nodes)}\033[0m; operation: \033[36m{operation}\033[0m',
+                level='ERROR',
+            )
 
     return {
         'success': True,
@@ -190,5 +223,5 @@ async def action_on_core_proto_by_sub_plan(
         'total': total,
         'success_count': success_count,
         'trouble_nodes': trouble_nodes,
-        'retry_nodes': retry_nodes
+        'retry_nodes': retry_nodes,
     }

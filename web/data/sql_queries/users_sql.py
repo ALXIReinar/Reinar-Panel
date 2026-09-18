@@ -1,12 +1,12 @@
-from datetime import datetime
+from datetime import datetime  # noqa: I001
 from typing import Literal
 from asyncpg import Connection, UniqueViolationError
-import secrets
-import base64
+import secrets  # noqa: F401
+import base64  # noqa: F401
 
 from web.schemas.user_schema import UserSubUpdItem, UserSubAddItem
-from web.utils.anything import CoreProtoActions
-from web.config_dir.config import env
+from web.utils.anything import CoreProtoActions, VnodeRegStatuses
+from web.config_dir.config import env  # noqa: F401
 from web.utils.logger_config import log_event
 
 
@@ -14,9 +14,9 @@ class UsersQueries:
     def __init__(self, conn: Connection):
         self.conn = conn
 
-
     async def bulk_create(
-        self, users_data: list[dict]  # [{tg_username, tg_id}, ...]
+        self,
+        users_data: list[dict],  # [{tg_username, tg_id}, ...]
     ):
         """Bulk создание пользователей"""
         query = """
@@ -29,8 +29,7 @@ class UsersQueries:
         tg_ids = tuple(u['tg_id'] for u in users_data)
         tg_usernames = tuple(u['tg_username'] for u in users_data)
 
-        return await self.conn.fetch(query,tg_ids, tg_usernames)
-
+        return await self.conn.fetch(query, tg_ids, tg_usernames)
 
     async def bulk_update_action(self, user_ids: list[int], action: str):
         """3 upd-варианта"""
@@ -70,8 +69,16 @@ class UsersQueries:
         "Outbox-фиксация перед отправкой в фон"
         action_map = {
             'activate': (query_activate, CoreProtoActions.add, ''),
-            'deactivate': (query_deactivate, CoreProtoActions.delete, 'WHERE a.is_limited = false'), # ограниченные пользователи уже удалены из ядер
-            'reset_traffic': (query_reset_traffic, CoreProtoActions.add, 'WHERE a.is_limited = true'), # Те, кто не блокнут и так в ядрах
+            'deactivate': (
+                query_deactivate,
+                CoreProtoActions.delete,
+                'WHERE a.is_limited = false',
+            ),  # ограниченные пользователи уже удалены из ядер
+            'reset_traffic': (
+                query_reset_traffic,
+                CoreProtoActions.add,
+                'WHERE a.is_limited = true',
+            ),  # Те, кто не блокнут и так в ядрах
         }
         action_query, action_param, is_limited_filter = action_map[action]
         base_query = f'''
@@ -82,7 +89,7 @@ class UsersQueries:
             SELECT a.uuid, a.user_sub_id, a.sub_plan_id, np.id AS node_proto_id
             FROM action a
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = a.sub_plan_id 
-            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
+            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true AND np.reg_status = $3
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
             {is_limited_filter}
         )
@@ -90,9 +97,8 @@ class UsersQueries:
         SELECT uuid, user_sub_id, $2, node_proto_id
         FROM sub_nodes_info
         RETURNING id AS event_id
-        '''
-        return await self.conn.fetch(base_query, user_ids, action_param)
-
+        '''  # noqa: W291
+        return await self.conn.fetch(base_query, user_ids, action_param, VnodeRegStatuses.success)
 
     async def bulk_delete(self, user_ids: list[int]):
         """Удаление пользователей"""
@@ -114,20 +120,18 @@ class UsersQueries:
             JOIN user_subs us ON us.user_id = so.user_id AND us.is_limited = false -- Сборный фильтр, который поставит удаляться в фон только тех пользователей, которые точно есть в впн-ядрах
             -- Это те пользователи, которые не удалены из-за лимита (is_limited = false) и те, у которых была активна подписка(is_active = true)
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = us.sub_plan_id 
-            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true 
+            JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true AND np.reg_status = $3
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
         )
         INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
         SELECT uuid, user_sub_id, $2, node_proto_id
         FROM sub_nodes_info
         RETURNING id AS event_id
-        """
-        return await self.conn.fetch(query, user_ids, CoreProtoActions.delete)
-
+        """  # noqa: W291
+        return await self.conn.fetch(query, user_ids, CoreProtoActions.delete, VnodeRegStatuses.success)
 
     async def all(self, last_id: int | None, sort_by: Literal['asc', 'desc'], limit: int) -> list:
         """Получить список пользователей с пагинацией"""
-        
         # Курсор для пагинации
         if last_id is None:
             cursor_condition = 'TRUE'  # Первая страница
@@ -135,7 +139,6 @@ class UsersQueries:
         else:
             cursor_condition = 'u.id > $2' if sort_by == 'asc' else 'u.id < $2'
             params = (limit, last_id)
-        
         query = f'''
         WITH user_subscriptions AS (
             SELECT 
@@ -164,9 +167,8 @@ class UsersQueries:
         WHERE u.is_deleted = false AND {cursor_condition}
         ORDER BY u.id {sort_by}
         LIMIT $1
-        '''
+        '''  # noqa: W291
         return await self.conn.fetch(query, *params)
-
 
     async def get_by_id(self, user_id: int):
         query_user_info = '''
@@ -182,7 +184,7 @@ class UsersQueries:
         JOIN sub_plans sp ON sp.id = us.sub_plan_id
         JOIN pay_orders po ON po.id = us.order_id
         WHERE us.user_id = $1
-        '''
+        '''  # noqa: W291
 
         "Инфо пользователя"
         user = await self.conn.fetchrow(query_user_info, user_id)
@@ -193,13 +195,12 @@ class UsersQueries:
         user_subs = await self.conn.fetch(query_subs, user_id)
         return user, user_subs
 
-
     async def update(
-            self,
-            user_id: int,
-            tg_username: str | None = None,
-            tg_id: int | None = None,
-            registered_at: datetime | None = None
+        self,
+        user_id: int,
+        tg_username: str | None = None,
+        tg_id: int | None = None,
+        registered_at: datetime | None = None,
     ):
         params, updates, param_idx = [], [], 2
 
@@ -218,20 +219,18 @@ class UsersQueries:
             params.append(tg_username)
             param_idx += 1
 
-
-        query = f'UPDATE users SET {','.join(updates)} WHERE id = $1 AND is_deleted = false RETURNING id'
+        query = f'UPDATE users SET {",".join(updates)} WHERE id = $1 AND is_deleted = false RETURNING id'
         try:
             return 200, await self.conn.fetchval(query, user_id, *params)
         except UniqueViolationError as e:
             return 409, repr(e)
 
-
     async def edit_user_subs(
-            self,
-            user_id: int,
-            upd_subs: list[UserSubUpdItem],
-            del_sub_ids: list[int],
-            add_subs: list[UserSubAddItem],
+        self,
+        user_id: int,
+        upd_subs: list[UserSubUpdItem],
+        del_sub_ids: list[int],
+        add_subs: list[UserSubAddItem],
     ):
         deleted_subs, add_sub_ids, upd_sub_ids = [], [], []
 
@@ -247,7 +246,7 @@ class UsersQueries:
             SELECT sc.uuid, sc.user_sub_id, sc.sub_plan_id, vsp.node_proto_id
             FROM sub_changes sc
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = sc.sub_plan_id
-            JOIN nodes_protocols np ON vsp.node_proto_id = np.id AND np.user_visible = true
+            JOIN nodes_protocols np ON vsp.node_proto_id = np.id AND np.user_visible = true AND np.reg_status = $2
             JOIN nodes n ON n.id = np.node_id AND n.is_active = true
         ),
         insert_outbox AS (
@@ -298,38 +297,45 @@ class UsersQueries:
         JOIN proto_templates pt ON p.tmp_id = pt.id 
         LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id 
         WHERE np.user_visible = true
-        '''
+        '''  # noqa: W291
         add_query = '''
         INSERT INTO user_subs (
             order_id, user_id, sub_plan_id, is_active, is_limited, expire_date,
             traffic_used_day_mb, infinite_traffic, uuid, b64_id, infinite_expire,
             traffic_limit_day, used_mb, used_mb_limit
         ) 
-        SELECT order_id, $15 AS user_id, sub_plan_id, is_active, is_limited, expire_date,
+        SELECT order_id, $16 AS user_id, sub_plan_id, is_active, is_limited, expire_date,
             traffic_used_day_mb, infinite_traffic, uuid, b64_id, infinite_expire,
             traffic_limit_day, used_mb, used_mb_limit
         FROM UNNEST(
-            $2::bigint[], $3::integer[], $4::boolean[], $5::boolean[], $6::timestamptz[],
-            $7::bigint[], $8::boolean[], $9::varchar[], $10::varchar[], $11::boolean[],
-            $12::bigint[], $13::bigint[], $14::bigint[]
+            $3::bigint[], $4::integer[], $5::boolean[], $6::boolean[], $7::timestamptz[],
+            $8::bigint[], $9::boolean[], $10::varchar[], $11::varchar[], $12::boolean[],
+            $13::bigint[], $14::bigint[], $15::bigint[]
         ) AS t(
             order_id, sub_plan_id, is_active, is_limited, expire_date,
             traffic_used_day_mb, infinite_traffic, b64_id, uuid, infinite_expire,
             traffic_limit_day, used_mb, used_mb_limit
         )
         ON CONFLICT DO NOTHING
-        '''
+        '''  # noqa: W291
 
         del_query = '''
-        DELETE FROM user_subs WHERE user_id = $2 AND id = ANY($3)
+        DELETE FROM user_subs WHERE user_id = $3 AND id = ANY($4)
         '''
 
         "Удаление (выполняется первым, чтобы освободить constraint UNIQUE (user_id, sub_plan_id))"
         if del_sub_ids:
             deleted_subs = await self.conn.fetch(
-                query.format(edit_query=del_query), CoreProtoActions.delete, user_id, del_sub_ids
+                query.format(edit_query=del_query),
+                CoreProtoActions.delete,
+                VnodeRegStatuses.success,
+                user_id,
+                del_sub_ids,
             )
-            log_event(f'Удалили подписки пользователя | user_sub_ids: \033[31m{del_sub_ids}\033[0m; user_id: \033[35m{user_id}\033[0m', level='WARNING')
+            log_event(
+                f'Удалили подписки пользователя | user_sub_ids: \033[31m{del_sub_ids}\033[0m; user_id: \033[35m{user_id}\033[0m',
+                level='WARNING',
+            )
 
         "Обновление"
         if upd_subs:
@@ -389,31 +395,71 @@ class UsersQueries:
                 if params:
                     sub_upd_id = await self.conn.fetchval(upd_query, user_id, item.user_sub_id, *params)
                     upd_sub_ids.append(sub_upd_id)
-                    log_event(f'Обновили параметры подписки пользователя | user_sub_id: \033[33m{item.user_sub_id}\033[0m; upd_params: \033[34m{list(zip(updates, params))}\033[0m')
+                    log_event(
+                        f'Обновили параметры подписки пользователя | user_sub_id: \033[33m{item.user_sub_id}\033[0m; upd_params: \033[34m{list(zip(updates, params))}\033[0m'
+                    )
 
         "Вставка (выполняется последней, после освобождения constraint через DELETE)"
         if add_subs:
             log_event(f'\033[34m{add_subs[0].model_dump()}\033[0m', level='DEBUG')
             "Явная распаковка полей для соответствия порядку в UNNEST"
-            order_ids, sub_plan_ids, is_actives, is_limiteds, exp_dates, traf_ud_mb, inf_traf, b64_ids, uuids, inf_exp, traf_ld_mb, traf_u_mb, traf_l_mb = zip(
-                *[(
-                    item.order_id, item.sub_plan_id, item.is_active, item.is_limited, item.expire_date,
-                    item.traffic_used_day_mb, item.infinite_traffic, item.b64_id, item.uuid, item.infinite_expire,
-                    item.traffic_limit_day_mb, item.traffic_used_mb, item.traffic_limit_mb
-                ) for item in add_subs]
+            (
+                order_ids,
+                sub_plan_ids,
+                is_actives,
+                is_limiteds,
+                exp_dates,
+                traf_ud_mb,
+                inf_traf,
+                b64_ids,
+                uuids,
+                inf_exp,
+                traf_ld_mb,
+                traf_u_mb,
+                traf_l_mb,
+            ) = zip(
+                *[
+                    (
+                        item.order_id,
+                        item.sub_plan_id,
+                        item.is_active,
+                        item.is_limited,
+                        item.expire_date,
+                        item.traffic_used_day_mb,
+                        item.infinite_traffic,
+                        item.b64_id,
+                        item.uuid,
+                        item.infinite_expire,
+                        item.traffic_limit_day_mb,
+                        item.traffic_used_mb,
+                        item.traffic_limit_mb,
+                    )
+                    for item in add_subs
+                ]
             )
             add_sub_ids = await self.conn.fetch(
-                query.format(edit_query=add_query), CoreProtoActions.add,
-                order_ids, sub_plan_ids, is_actives, is_limiteds, exp_dates,
-                traf_ud_mb, inf_traf, b64_ids, uuids, inf_exp,
-                traf_ld_mb, traf_u_mb, traf_l_mb, user_id
+                query.format(edit_query=add_query),
+                CoreProtoActions.add,
+                VnodeRegStatuses.success,
+                order_ids,
+                sub_plan_ids,
+                is_actives,
+                is_limiteds,
+                exp_dates,
+                traf_ud_mb,
+                inf_traf,
+                b64_ids,
+                uuids,
+                inf_exp,
+                traf_ld_mb,
+                traf_u_mb,
+                traf_l_mb,
+                user_id,
             )
             # Извлекаем user_sub_id из JSON поля 'users' (массив пользователей на нодах)
-            added_user_sub_ids = set([
-                user['user_sub_id']
-                for node in add_sub_ids
-                for user in node['users']
-            ])
-            log_event(f'Добавили новую подписку пользователю | user_sub_ids: \033[34m{added_user_sub_ids}\033[0m; user_id: \033[32m{user_id}\033[0m')
+            added_user_sub_ids = set([user['user_sub_id'] for node in add_sub_ids for user in node['users']])
+            log_event(
+                f'Добавили новую подписку пользователю | user_sub_ids: \033[34m{added_user_sub_ids}\033[0m; user_id: \033[32m{user_id}\033[0m'
+            )
 
         return deleted_subs, add_sub_ids, upd_sub_ids

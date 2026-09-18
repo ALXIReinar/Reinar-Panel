@@ -1,4 +1,4 @@
-import logging
+import logging  # noqa: I001
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -16,11 +16,7 @@ from starlette.requests import Request
 
 from web.sub.config_dir.env_modes import APP_MODE_CONFIG, AppMode, PayMode
 
-env_files = (
-    os.getenv('ENV_FILE') or
-    os.getenv('ENV_LOCAL_TEST_FILE') or
-    'web/sub/.env.sub.prod'
-)
+env_files = os.getenv('ENV_FILE') or os.getenv('ENV_LOCAL_TEST_FILE') or 'web/sub/.env.sub.prod'
 load_dotenv(env_files, override=True)
 logging.critical(f'\033[35m{env_files}\033[0m | node_port: \033[32m{os.getenv("UVICORN_PORT")}\033[0m')
 
@@ -36,6 +32,7 @@ ARQ_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 class Settings(BaseSettings):
     """Настройки Node Client"""
+
     # Postgresql
     pg_user: str
     pg_password: str
@@ -68,7 +65,7 @@ class Settings(BaseSettings):
     tg_bot_token: str | None = os.getenv('TG_BOT_TOKEN')
     lru_cache_max_size: int | None = os.getenv('LRU_CACHE_MAX_SIZE', 512)
     tg_bot_link: str
-    tg_bot_service_private_ip: str | set[str] | list[str] # коллекция для удобства разработки и проверки в сваггере
+    tg_bot_service_private_ip: str | set[str] | list[str]  # коллекция для удобства разработки и проверки в сваггере
 
     app_mode: AppMode
     pay_mode: PayMode
@@ -89,10 +86,14 @@ class Settings(BaseSettings):
 @lru_cache
 def get_env_vars():
     return Settings()
+
+
 env = get_env_vars()
 
 
 "PostgreSQL"
+
+
 async def init(conn: Connection):
     await conn.set_type_codec(
         'jsonb',
@@ -107,12 +108,14 @@ async def init(conn: Connection):
         schema='pg_catalog',
     )
 
+
 def get_pg_settings(envs: Settings):
     cfg = APP_MODE_CONFIG[envs.app_mode]
     host = getattr(envs, cfg["pg_host"])
     port = getattr(envs, cfg["pg_port"])
 
     return {"host": host, "port": port}
+
 
 pool_settings = dict(
     user=env.pg_user,
@@ -121,11 +124,13 @@ pool_settings = dict(
     **get_pg_settings(env),
     command_timeout=60,
     init=init,
-    max_size=env.pg_max_connections # connections on pool
+    max_size=env.pg_max_connections,  # connections on pool
 )
 
 
 "Redis"
+
+
 def get_redis_settings(envs: Settings):
     cfg = APP_MODE_CONFIG[envs.app_mode]
 
@@ -138,10 +143,13 @@ def get_redis_settings(envs: Settings):
         redis_conf['password'] = envs.redis_password
     return redis_conf
 
+
 redis_settings = get_redis_settings(env)
 
 
 "ARQ для фоновых задач"
+
+
 def get_arq_redis_settings():
     return RedisSettings(
         host=redis_settings['host'],
@@ -150,19 +158,25 @@ def get_arq_redis_settings():
         database=0,
     )
 
+
 def get_arq_worker_settings():
     return {
         'default_queue_name': env.arq_queue_name,
     }
 
+
 async def get_arq_pool(request: Request) -> ArqRedis:
     return request.app.state.arq_pool
+
 
 ArqDep = Annotated[ArqRedis, Depends(get_arq_pool)]
 
 
 "AioHttp для вызова эндпоинтов админки"
+
+
 def get_robo_aiohttp(request: Request) -> ClientSession:
     return request.app.state.robo_aiohttp
+
 
 RoboAiohttpDep = Annotated[ClientSession, Depends(get_robo_aiohttp)]

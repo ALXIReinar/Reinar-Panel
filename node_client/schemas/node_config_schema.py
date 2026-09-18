@@ -5,7 +5,7 @@ class ConfigReadSchema(BaseModel):
     """Схема для чтения конфига"""
     node_proto_id: int
     path: str = Field(..., min_length=1, description="Путь к конфигурационному файлу")
-    flatten_json_users_key: list[str] | None = Field(default=None, description="Ключ к списку пользователей в конфиге. При чтении с админки этот объект вырезается во избежание лишних сетевых расходов")
+    flatten_json_users_key: list[str] | None = Field(default=None, description="Ключ к списку пользователей в конфиге. При чтении с админки этот объект вырезается во избежание лишних сетевых расходов")  # noqa: E501
     config2json_script: str | None = Field(None, description='По умолчанию конвертация в JSON(Null значение)')
     json2config_script: str | None = Field(None, description='По умолчанию конвертация из JSON(Null значение)')
     conf_converter_libs: str | None = Field(None)
@@ -16,7 +16,7 @@ class ConfigWriteSchema(BaseModel):
     tmp_link: str
     path: str = Field(..., min_length=1, description="Путь к конфигурационному файлу")
     content: str = Field(..., description="Содержимое файла")
-    flatten_json_users_key: list[str] | None = Field(default=None, description='Ключ к списку пользователей в конфиге. При записи этот объект переносится из старого файла')
+    flatten_json_users_key: list[str] | None = Field(default=None, description='Ключ к списку пользователей в конфиге. При записи этот объект переносится из старого файла')  # noqa: E501
     config2json_script: str | None = Field(None, description='По умолчанию конвертация в JSON(Null значение)')
     json2config_script: str | None = Field(None, description='По умолчанию конвертация из JSON(Null значение)')
     conf_converter_libs: str | None = Field(None)
