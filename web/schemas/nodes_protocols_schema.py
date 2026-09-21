@@ -89,6 +89,7 @@ class VNodeRegisterResultSchema(BaseModel):
     reload_core_command: str | None = Field(None)
     metrics_command: str | None = Field(None)
     config_path: str | None = Field(None)
+    service_name: str | None = Field(None)
 
     @field_validator('title', mode='after')
     @classmethod

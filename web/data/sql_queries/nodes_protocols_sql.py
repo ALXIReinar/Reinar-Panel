@@ -172,7 +172,7 @@ class NodesProtocolsQueries:
             GROUP BY tmp_id
         )
         SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib, pt.api_bulk_add_user_script,
-               pt.api_bulk_delete_user_script, COALESCE(np.reload_core_command, pt.reload_core_command) AS reload_core_command, -- Предпочтение индивидуальной команде, фоллбек на шаблонную
+               pt.api_bulk_delete_user_script, np.reload_core_command,
                np.config_path, pt.required_user_data_obj,
                pt.constant_user_data_obj, pt.bulk_delete_script_custom_params, pt.bulk_add_script_custom_params, oi.id AS event_id,
                np.constant_node_data_obj, pt.json2config_script, pt.config2json_script, pt.conf_converter_libs,
@@ -237,6 +237,7 @@ class NodesProtocolsQueries:
         reload_core_command: str | None,
         metrics_command: str | None,
         config_path: str | None,
+        service_name: str | None,
     ):
         if constant_node_data_obj is None:
             constant_node_data_obj = {}
@@ -268,6 +269,11 @@ class NodesProtocolsQueries:
         if metrics_command is not None:
             updates.append(f"metrics_command = ${param_idx}")
             params.append(metrics_command)
+            param_idx += 1
+
+        if service_name is not None:
+            updates.append(f"service_name = ${param_idx}")
+            params.append(service_name)
             param_idx += 1
 
         if constant_node_data_obj != 0:

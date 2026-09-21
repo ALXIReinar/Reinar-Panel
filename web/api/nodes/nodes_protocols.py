@@ -62,6 +62,7 @@ async def confirm_vnode(body: VNodeRegisterResultSchema, db: PgSqlDep, request: 
         reload_core_command=body.reload_core_command,
         metrics_command=body.metrics_command,
         config_path=body.config_path,
+        service_name=body.service_name,
     )
     if not vnode:
         log_event(

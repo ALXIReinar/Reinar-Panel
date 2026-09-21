@@ -61,7 +61,7 @@ class ProtoTemplatesQueries:
             GROUP BY tmp_id
         
         )
-        SELECT pt.id, pt.title, pt.url_tmp, pt.status, pt.is_accepted, pt.reload_core_command, pt.required_user_data_obj, pt.constant_user_data_obj,
+        SELECT pt.id, pt.title, pt.url_tmp, pt.status, pt.is_accepted, pt.required_user_data_obj, pt.constant_user_data_obj,
                pt.proto_python_lib, pt.sub_prepare_script, pt.sub_required_libs, pt.api_bulk_delete_user_script, pt.metrics_parser_code, pt.metrics_command,
                pt.bulk_delete_script_custom_params, pt.api_metrics_script, pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, pt.description,
                pt.json2config_script, pt.config2json_script, pt.conf_converter_libs, pt.metrics_parser_libs,
@@ -100,7 +100,6 @@ class ProtoTemplatesQueries:
         tmp_id: int,
         title: str | None,
         url_tmp: str | None,
-        reload_core_command: str | None,
         required_user_data_obj: dict | None,
         constant_user_data_obj: dict | None,
         proto_python_lib: str | None,
@@ -143,11 +142,6 @@ class ProtoTemplatesQueries:
         if url_tmp is not None:
             updates.append(f"url_tmp = ${param_idx}")
             params.append(url_tmp)
-            param_idx += 1
-
-        if reload_core_command is not None and reload_core_command != 0:
-            updates.append(f"reload_core_command = ${param_idx}")
-            params.append(reload_core_command)
             param_idx += 1
 
         if required_user_data_obj is not None:

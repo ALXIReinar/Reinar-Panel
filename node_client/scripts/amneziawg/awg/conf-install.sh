@@ -176,7 +176,7 @@ fi
 
 # 6. Финализация статуса в панели
 curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
-     -d '{"node_proto_id": '"$NODE_PROTO_ID"', "status": 2}' >/dev/null
+     -d '{"node_proto_id": '"$NODE_PROTO_ID"', "status": 2, "service_name": "'$SERVICE_NAME'"}' >/dev/null
 
 
 
