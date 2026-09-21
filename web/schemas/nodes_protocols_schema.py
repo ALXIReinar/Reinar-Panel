@@ -47,7 +47,7 @@ class UpdateNodeProtoSchema(BaseModel):
 
 
 class VNodeRegisterSchema(BaseModel):
-    proto_id: int
+    tmp_id: int = Field(description='Выступает как np.tmp_id. Protocols были вырезаны', alias='proto_id')
     node_id: int
     title: str  # Убрал max_length - контроль в валидаторе
     metrics_port: int | None = Field(None, le=65535, gt=0)

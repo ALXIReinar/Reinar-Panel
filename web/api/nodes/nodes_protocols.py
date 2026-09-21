@@ -19,7 +19,7 @@ router = APIRouter(tags=['Virtual Nodes-Protocols Variations'])
 @router.post('/server/nodes/protocols/register')
 async def register_vnode(body: VNodeRegisterSchema, db: PgSqlDep, request: Request):
     success, vnode = await db.nodes_protocols.reserve_place(
-        proto_id=body.proto_id,
+        tmp_id=body.tmp_id,
         node_id=body.node_id,
         title=body.title,
         metrics_port=body.metrics_port,
@@ -32,7 +32,7 @@ async def register_vnode(body: VNodeRegisterSchema, db: PgSqlDep, request: Reque
     )
     if not success:
         log_event(
-            f'Не удалось поставить на регистрацию виртуальную ноду. Физическая нода или протокол не существуют | node_id: \033[33m{body.node_id}\033[0m; proto_id: \033[34m{body.proto_id}\033[0m; title: \033[31m{body.title}\033[0m',
+            f'Не удалось поставить на регистрацию виртуальную ноду. Физическая нода или протокол не существуют | node_id: \033[33m{body.node_id}\033[0m; proto_id: \033[34m{body.tmp_id}\033[0m; title: \033[31m{body.title}\033[0m',
             request=request,
             level='WARNING',
         )

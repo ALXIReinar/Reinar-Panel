@@ -115,6 +115,7 @@ class ProtoTemplatesQueries:
         json2config_script: str | None | int,
         config2json_script: str | None | int,
         conf_converter_libs: str | None | int,
+        cli_cmds: list | None | int,
     ) -> tuple[int, str]:
         """
         Обновить шаблон (универсальный метод для всех полей)
@@ -217,6 +218,11 @@ class ProtoTemplatesQueries:
         if conf_converter_libs is not None and conf_converter_libs != 0:
             updates.append(f"conf_converter_libs = ${param_idx}")
             params.append(conf_converter_libs)
+            param_idx += 1
+
+        if cli_cmds is not None:
+            updates.append(f"cli_cmds = ${param_idx}")
+            params.append({"commands": cli_cmds}) # По дефолту в столбце лежит {"commands": []}
             param_idx += 1
 
         if not updates:

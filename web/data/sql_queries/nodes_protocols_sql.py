@@ -15,12 +15,11 @@ class NodesProtocolsQueries:
         """Получить виртуальную ноду по ID"""
         query = """
         SELECT
-            np.node_id, np.proto_id, p.name as proto_name, n.ip, n.private_ip, n.api_port, np.sub_node_address, np.proto_port,
+            np.node_id, n.ip, n.private_ip, n.api_port, np.sub_node_address, np.proto_port,
             np.metrics_port, n.is_active, np.user_visible, np.title, np.config_link, np.config_path, n.title as node_title,
             np.created_at, np.constant_node_data_obj, np.reload_core_command
         FROM nodes_protocols np
         JOIN nodes n ON np.node_id = n.id
-        JOIN protocols p ON np.proto_id = p.id
         WHERE np.id = $1
         """
         return await self.conn.fetchrow(query, np_id)
@@ -28,9 +27,8 @@ class NodesProtocolsQueries:
     async def get_node_protocols(self, node_id: int, limit: int, offset: int):
         """Получить все виртуальные ноды на физической ноде"""
         query = """
-        SELECT np.id as node_proto_id, np.proto_id, p.name as proto_name, np.sub_node_address, np.proto_port, np.metrics_port, np.user_visible, np.title
+        SELECT np.id as node_proto_id, np.tmp_id, np.sub_node_address, np.proto_port, np.metrics_port, np.user_visible, np.title
         FROM nodes_protocols np
-        JOIN protocols p ON np.proto_id = p.id
         JOIN nodes n ON np.node_id = n.id
         WHERE np.node_id = $1
         LIMIT $2 OFFSET $3
@@ -137,8 +135,7 @@ class NodesProtocolsQueries:
                pt.config2json_script, pt.json2config_script, pt.conf_converter_libs, pt.url_tmp
         FROM nodes_protocols np 
         JOIN nodes n ON np.node_id = n.id
-        JOIN protocols p ON np.proto_id = p.id
-        JOIN proto_templates pt ON p.tmp_id = pt.id
+        JOIN proto_templates pt ON np.tmp_id = pt.id
         WHERE np.id = $1
         '''  # noqa: W291
         return await self.conn.fetchrow(query, node_proto_id)
@@ -178,9 +175,8 @@ class NodesProtocolsQueries:
                np.constant_node_data_obj, pt.json2config_script, pt.config2json_script, pt.conf_converter_libs,
                COALESCE(aui.user_injectors, '[]'::json) AS user_injectors
         FROM nodes_protocols np
-        JOIN protocols p ON np.proto_id = p.id
         JOIN nodes n ON np.node_id = n.id AND n.is_active = true
-        JOIN proto_templates pt ON p.tmp_id = pt.id
+        JOIN proto_templates pt ON np.tmp_id = pt.id
         LEFT JOIN pre_agg_user_injectors aui ON pt.id = aui.tmp_id
         JOIN outbox_insert oi ON oi.node_proto_id = np.id
         WHERE np.id = $4 AND np.reg_status = $5
@@ -191,7 +187,7 @@ class NodesProtocolsQueries:
 
     async def reserve_place(
         self,
-        proto_id,
+        tmp_id,
         node_id,
         title,
         metrics_port,
@@ -206,14 +202,14 @@ class NodesProtocolsQueries:
             constant_node_data_obj = {}
 
         query = '''
-        INSERT INTO nodes_protocols (proto_id, node_id, title, config_path, metrics_port, proto_port, sub_node_address, reload_core_command, metrics_command, constant_node_data_obj)
+        INSERT INTO nodes_protocols (tmp_id, node_id, title, config_path, metrics_port, proto_port, sub_node_address, reload_core_command, metrics_command, constant_node_data_obj)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING id, title
         '''
         try:
             vnode = await self.conn.fetchrow(
                 query,
-                proto_id,
+                tmp_id,
                 node_id,
                 title,
                 config_path,

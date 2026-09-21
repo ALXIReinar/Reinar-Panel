@@ -13,15 +13,14 @@ class CommandInsertItemSchema(BaseModel):
 class CommandsBulkInsertSchema(BaseModel):
     """Схема для массовой вставки команд"""
 
-    proto_id: int = Field(..., gt=0, description="ID протокола")
+    tmp_id: int = Field(..., gt=0, description="ID протокола")
     commands: list[CommandInsertItemSchema] = Field(..., min_length=1, description="Список команд для вставки")
 
 
 class CommandUpdateItemSchema(BaseModel):
     """Схема элемента для bulk update"""
 
-    id: int = Field(..., gt=0, description="ID команды")
-    cmd_title: str = Field(..., min_length=1, max_length=200, description="Название команды")
+    title: str = Field(..., min_length=1, max_length=200, description="Название команды")
     command: str = Field(..., min_length=1, description="CLI команда для выполнения")
 
 

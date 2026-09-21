@@ -29,7 +29,7 @@ class TestVNodeRegisterSchema:
 
         schema = VNodeRegisterSchema(**data)
 
-        assert schema.proto_id == 1
+        assert schema.tmp_id == 1
         assert schema.node_id == 2
         assert schema.metrics_port == 9090
         assert schema.proto_port == 8443
@@ -51,7 +51,7 @@ class TestVNodeRegisterSchema:
 
         schema = VNodeRegisterSchema(**data)
 
-        assert schema.proto_id == 1
+        assert schema.tmp_id == 1
         assert schema.node_id == 2
         assert schema.proto_port == 8443
         assert schema.config_path == "/etc/vpn/config.json"

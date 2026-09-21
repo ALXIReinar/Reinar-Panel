@@ -197,6 +197,7 @@ curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
      -d '{
         "node_proto_id": '"$NODE_PROTO_ID"',
         "status": 2,
+        "service_name": "'$SERVICE_NAME'",
         "reload_core_command": "systemctl restart '"$SERVICE_NAME"'",
         "config_path": "'"$CONFIG_PATH"'",
      }' >/dev/null

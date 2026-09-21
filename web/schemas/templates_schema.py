@@ -17,6 +17,10 @@ class AddTmpSchema(BaseModel):
     title: str = Field(..., min_length=1, max_length=32, description='Имя шаблона')
 
 
+class CommandUpdateItemSchema(BaseModel):
+    title: str = Field(..., min_length=1, max_length=256, description="Название команды")
+    command: str = Field(..., min_length=1, description="CLI команда для выполнения")
+
 class UpdateTmpSchema(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=32, description='Имя шаблона')
     url_tmp: str | None = Field(None, min_length=1, description='Шаблон URL конфиг-ссылки')
@@ -49,6 +53,7 @@ class UpdateTmpSchema(BaseModel):
     )
     json2config_script: str | None | int = Field(0, description='Конвертер-скрпт из json-структуры в dict')
     conf_converter_libs: str | None | int = Field(0)
+    cli_cmds: list[CommandUpdateItemSchema] | None = Field(None)
 
     @field_validator('url_tmp')
     @classmethod

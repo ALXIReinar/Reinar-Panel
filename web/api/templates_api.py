@@ -86,6 +86,7 @@ async def update_template(tmp_id: int, body: UpdateTmpSchema, request: Request, 
         json2config_script=body.json2config_script,
         config2json_script=body.config2json_script,
         conf_converter_libs=body.conf_converter_libs,
+        cli_cmds=body.cli_cmds,
     )
     "Шаблон не найден"
     if status_code == 404:

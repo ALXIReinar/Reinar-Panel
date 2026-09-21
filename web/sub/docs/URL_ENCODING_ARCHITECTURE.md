@@ -33,7 +33,7 @@ generate_link_from_json(
     tmp_link="vless://{user_uuid}@{{node___address}}:{{port}}#{{node___title}}",
     node_config_json={"port": 443},
     node_ip_or_domain="пример.рф",  # ← Кириллица
-    node_title="My Node 🚀"  # ← Пробелы и эмодзи
+    node_title="My Node 🚀",  # ← Пробелы и эмодзи
 )
 # → "vless://{user_uuid}@xn--e1afmkfd.xn--p1ai:443#My%20Node%20%F0%9F%9A%80"
 ```
@@ -97,7 +97,7 @@ def prepare_sub(user_obj: dict, config_link: str):
     return config_link.format(
         user_uuid=user_obj['user_uuid'],
         fp=user_obj['sub_link_fp'],
-        public_key=user_obj['node_public_key']  # ← НЕ кодируем здесь!
+        public_key=user_obj['node_public_key'],  # ← НЕ кодируем здесь!
     )
 ```
 
