@@ -7,7 +7,7 @@ from fastapi.params import Query
 from web.config_dir.config import NodeExecAiohttpDep
 from web.data.postgres import PgSqlDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
-from web.schemas.node_schema import NodeCreateSchema, NodeUpdateSchema, NodesGetSchema
+from web.schemas.node_schema import NodeCreateSchema, NodeUpdateSchema, NodesGetSchema, GetNodeProtoSchema
 from web.utils.anything import NodeUris
 from web.utils.logger_config import log_event
 
@@ -136,3 +136,15 @@ async def delete_node_api(node_id: int, db: PgSqlDep, request: Request, _: JWTCo
         level='WARNING',
     )
     return {'success': True, 'message': 'Нода удалена'}
+
+
+@router.get('/{node_id}/vnodes', summary="Получить все протоколы на ноде")
+async def get_node_protocols_api(
+    node_id: int, q_params: Annotated[GetNodeProtoSchema, Query()], request: Request, db: PgSqlDep, _: JWTCookieDep
+):
+    protocols = await db.nodes.get_node_protocols(node_id, q_params.limit, q_params.offset)
+    log_event(
+        f'Отдали виртуальные ноды на физической протоколы ноды | node_id: \033[33m{node_id}\033[0m; count: \033[32m{len(protocols)}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
+        request=request,
+    )
+    return {'protocols': protocols}

@@ -21,6 +21,7 @@ class CommandUpdateItemSchema(BaseModel):
     title: str = Field(..., min_length=1, max_length=256, description="Название команды")
     command: str = Field(..., min_length=1, description="CLI команда для выполнения")
 
+
 class UpdateTmpSchema(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=32, description='Имя шаблона')
     url_tmp: str | None = Field(None, min_length=1, description='Шаблон URL конфиг-ссылки')
@@ -110,6 +111,3 @@ class UserInjector(BaseModel):
             raise ValueError('Extractor Script должен быть синхронным (не async)')
         return v
 
-
-class DeleteTmpSchema(BaseModel):
-    tmp_id: int = Field(..., gt=0, description='ID шаблона')

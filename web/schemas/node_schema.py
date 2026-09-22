@@ -32,3 +32,8 @@ class NodeUpdateSchema(BaseModel):
     api_port: int | None = Field(None, gt=0, le=65535, description="Порт Node Client API")
     title: str | None = Field(None, min_length=1, max_length=200, description="Название ноды")
     is_active: bool | None = Field(None, description="Активна ли нода")
+
+
+class GetNodeProtoSchema(BaseModel):
+    limit: int = Field(le=30)
+    offset: int = Field(0, ge=0)

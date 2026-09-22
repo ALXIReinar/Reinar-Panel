@@ -222,7 +222,7 @@ class ProtoTemplatesQueries:
 
         if cli_cmds is not None:
             updates.append(f"cli_cmds = ${param_idx}")
-            params.append({"commands": cli_cmds}) # По дефолту в столбце лежит {"commands": []}
+            params.append({"commands": cli_cmds})  # По дефолту в столбце лежит {"commands": []}
             param_idx += 1
 
         if not updates:
@@ -278,10 +278,10 @@ class ProtoTemplatesQueries:
         # Если список пустой - просто возвращаем успех (все инжекторы удалены)
         if not injs_state:
             # Проверяем что шаблон существует
-            template_exists = await self.conn.fetchval(
-                'SELECT EXISTS(SELECT 1 FROM proto_templates WHERE id = $1)', tmp_id
-            )
-            return template_exists
+            # template_exists = await self.conn.fetchval(
+            #     'SELECT EXISTS(SELECT 1 FROM proto_templates WHERE id = $1)', tmp_id
+            # )
+            return True
         # Вставляем новые инжекторы
         insert_query = '''
         INSERT INTO templates_users_extractors (tmp_id, flatten_array_cursor, extractor_script, libs)

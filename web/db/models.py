@@ -1,9 +1,27 @@
-from typing import Optional
 import datetime
+from typing import Optional
 
-from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKeyConstraint, Identity, Index, Integer, JSON, PrimaryKeyConstraint, SmallInteger, String, Text, Time, UniqueConstraint, text
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKeyConstraint,
+    Identity,
+    Index,
+    Integer,
+    PrimaryKeyConstraint,
+    SmallInteger,
+    String,
+    Text,
+    Time,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
 
 class Base(DeclarativeBase):
     pass
@@ -11,12 +29,14 @@ class Base(DeclarativeBase):
 
 class Admins(Base):
     __tablename__ = 'admins'
-    __table_args__ = (
-        PrimaryKeyConstraint('id', name='users_pkey'),
-        UniqueConstraint('login', name='admins_login_key')
-    )
+    __table_args__ = (PrimaryKeyConstraint('id', name='users_pkey'), UniqueConstraint('login', name='admins_login_key'))
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     passw: Mapped[str] = mapped_column(String(97), nullable=False)
     login: Mapped[str] = mapped_column(String(128), nullable=False)
     date_register: Mapped[Optional[datetime.date]] = mapped_column(Date, server_default=text('(now())::date'))
@@ -29,10 +49,15 @@ class Nodes(Base):
     __table_args__ = (
         PrimaryKeyConstraint('id', name='nodes_pkey1'),
         UniqueConstraint('ip', name='nodes_ip_key'),
-        UniqueConstraint('private_ip', name='nodes_private_ip_key')
+        UniqueConstraint('private_ip', name='nodes_private_ip_key'),
     )
 
-    id: Mapped[int] = mapped_column(SmallInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=32767, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        SmallInteger,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=32767, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     ip: Mapped[str] = mapped_column(String(45), nullable=False)
     api_port: Mapped[int] = mapped_column(Integer, nullable=False)
     private_ip: Mapped[Optional[str]] = mapped_column(String(45))
@@ -47,11 +72,14 @@ class Nodes(Base):
 
 class OnlineStatuses(Base):
     __tablename__ = 'online_statuses'
-    __table_args__ = (
-        PrimaryKeyConstraint('id', name='online_statuses_pkey'),
-    )
+    __table_args__ = (PrimaryKeyConstraint('id', name='online_statuses_pkey'),)
 
-    id: Mapped[int] = mapped_column(SmallInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=32767, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        SmallInteger,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=32767, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     title: Mapped[str] = mapped_column(String(32), nullable=False)
 
     users: Mapped[list['Users']] = relationship('Users', back_populates='online_statuses')
@@ -61,10 +89,15 @@ class PayStatuses(Base):
     __tablename__ = 'pay_statuses'
     __table_args__ = (
         PrimaryKeyConstraint('id', name='pay_statuses_pkey'),
-        UniqueConstraint('name', name='pay_statuses_name_key')
+        UniqueConstraint('name', name='pay_statuses_name_key'),
     )
 
-    id: Mapped[int] = mapped_column(SmallInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=32767, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        SmallInteger,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=32767, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     name: Mapped[str] = mapped_column(String(20), nullable=False)
 
     pay_orders: Mapped[list['PayOrders']] = relationship('PayOrders', back_populates='pay_statuses')
@@ -72,11 +105,14 @@ class PayStatuses(Base):
 
 class RemoteExecuteHistory(Base):
     __tablename__ = 'remote_execute_history'
-    __table_args__ = (
-        PrimaryKeyConstraint('id', name='remote_execute_history_pkey'),
-    )
+    __table_args__ = (PrimaryKeyConstraint('id', name='remote_execute_history_pkey'),)
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     status: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     command: Mapped[str] = mapped_column(String(1024), nullable=False)
     stdout: Mapped[Optional[str]] = mapped_column(Text)
@@ -94,11 +130,14 @@ class RemoteExecuteHistory(Base):
 
 class SubNodesOperations(Base):
     __tablename__ = 'sub_nodes_operations'
-    __table_args__ = (
-        PrimaryKeyConstraint('id', name='add_core_proto_statuses_pkey'),
-    )
+    __table_args__ = (PrimaryKeyConstraint('id', name='add_core_proto_statuses_pkey'),)
 
-    id: Mapped[int] = mapped_column(SmallInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=32767, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        SmallInteger,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=32767, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     title: Mapped[str] = mapped_column(String(20), nullable=False)
 
 
@@ -107,10 +146,21 @@ class SubPlans(Base):
     __table_args__ = (
         PrimaryKeyConstraint('id', name='sub_plans_pkey'),
         UniqueConstraint('title', name='sub_plans_title_key'),
-        Index('sub_plans_position_idx', 'position', postgresql_where='(is_active = true)', postgresql_with={'deduplicate_items': 'true'}, unique=True)
+        Index(
+            'sub_plans_position_idx',
+            'position',
+            postgresql_where='(is_active = true)',
+            postgresql_with={'deduplicate_items': 'true'},
+            unique=True,
+        ),
     )
 
-    id: Mapped[int] = mapped_column(Integer, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=2147483647, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=2147483647, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     title: Mapped[str] = mapped_column(String(25), nullable=False)
     is_active: Mapped[Optional[bool]] = mapped_column(Boolean)
     description: Mapped[Optional[str]] = mapped_column(String(200))
@@ -123,36 +173,51 @@ class SubPlans(Base):
 
 class TemplatesStatuses(Base):
     __tablename__ = 'templates_statuses'
-    __table_args__ = (
-        PrimaryKeyConstraint('id', name='pattern_statuses_pkey'),
-    )
+    __table_args__ = (PrimaryKeyConstraint('id', name='pattern_statuses_pkey'),)
 
-    id: Mapped[int] = mapped_column(SmallInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=32767, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        SmallInteger,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=32767, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     name: Mapped[str] = mapped_column(String(32), nullable=False)
 
-    proto_templates: Mapped[list['ProtoTemplates']] = relationship('ProtoTemplates', back_populates='templates_statuses')
+    proto_templates: Mapped[list['ProtoTemplates']] = relationship(
+        'ProtoTemplates', back_populates='templates_statuses'
+    )
 
 
 class VnodesRegStatuses(Base):
     __tablename__ = 'vnodes_reg_statuses'
-    __table_args__ = (
-        PrimaryKeyConstraint('id', name='vnodes_reg_statuses_pkey'),
-    )
+    __table_args__ = (PrimaryKeyConstraint('id', name='vnodes_reg_statuses_pkey'),)
 
-    id: Mapped[int] = mapped_column(SmallInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=32767, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        SmallInteger,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=32767, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     title: Mapped[str] = mapped_column(String(20), nullable=False)
 
-    nodes_protocols: Mapped[list['NodesProtocols']] = relationship('NodesProtocols', back_populates='vnodes_reg_statuses')
+    nodes_protocols: Mapped[list['NodesProtocols']] = relationship(
+        'NodesProtocols', back_populates='vnodes_reg_statuses'
+    )
 
 
 class WhitelistCommands(Base):
     __tablename__ = 'whitelist_commands'
     __table_args__ = (
         PrimaryKeyConstraint('id', name='whitelist_commands_pkey'),
-        UniqueConstraint('command', name='whitelist_commands_command_key')
+        UniqueConstraint('command', name='whitelist_commands_command_key'),
     )
 
-    id: Mapped[int] = mapped_column(Integer, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=2147483647, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=2147483647, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     command: Mapped[str] = mapped_column(String(1000), nullable=False)
     is_active: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('true'))
 
@@ -160,12 +225,19 @@ class WhitelistCommands(Base):
 class ProtoTemplates(Base):
     __tablename__ = 'proto_templates'
     __table_args__ = (
-        ForeignKeyConstraint(['status'], ['templates_statuses.id'], ondelete='RESTRICT', name='proto_templates_status_fkey'),
+        ForeignKeyConstraint(
+            ['status'], ['templates_statuses.id'], ondelete='RESTRICT', name='proto_templates_status_fkey'
+        ),
         PrimaryKeyConstraint('id', name='proto_templates_pkey'),
-        UniqueConstraint('title', name='proto_templates_title_key')
+        UniqueConstraint('title', name='proto_templates_title_key'),
     )
 
-    id: Mapped[int] = mapped_column(Integer, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=2147483647, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=2147483647, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     title: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text('2'))
     url_tmp: Mapped[Optional[str]] = mapped_column(Text)
@@ -189,9 +261,13 @@ class ProtoTemplates(Base):
     conf_converter_libs: Mapped[Optional[str]] = mapped_column(String(512))
     cli_cmds: Mapped[Optional[dict]] = mapped_column(JSON, server_default=text('\'{"commands": []}\'::json'))
 
-    templates_statuses: Mapped['TemplatesStatuses'] = relationship('TemplatesStatuses', back_populates='proto_templates')
+    templates_statuses: Mapped['TemplatesStatuses'] = relationship(
+        'TemplatesStatuses', back_populates='proto_templates'
+    )
     nodes_protocols: Mapped[list['NodesProtocols']] = relationship('NodesProtocols', back_populates='tmp')
-    templates_users_extractors: Mapped[list['TemplatesUsersExtractors']] = relationship('TemplatesUsersExtractors', back_populates='tmp')
+    templates_users_extractors: Mapped[list['TemplatesUsersExtractors']] = relationship(
+        'TemplatesUsersExtractors', back_populates='tmp'
+    )
 
 
 class SessionsAdmins(Base):
@@ -200,7 +276,7 @@ class SessionsAdmins(Base):
         ForeignKeyConstraint(['admin_id'], ['admins.id'], ondelete='CASCADE', name='sessions_users_user_id_fkey'),
         PrimaryKeyConstraint('session_id', name='sessions_users_pkey'),
         UniqueConstraint('refresh_token', name='sessions_users_refresh_token_key'),
-        UniqueConstraint('session_id', 'admin_id', name='sessions_users_session_id_user_id_key')
+        UniqueConstraint('session_id', 'admin_id', name='sessions_users_session_id_user_id_key'),
     )
 
     session_id: Mapped[str] = mapped_column(Text, primary_key=True)
@@ -217,12 +293,26 @@ class SessionsAdmins(Base):
 class SubPlanOffers(Base):
     __tablename__ = 'sub_plan_offers'
     __table_args__ = (
-        ForeignKeyConstraint(['sub_plan_id'], ['sub_plans.id'], ondelete='CASCADE', name='sub_plan_offers_sub_plan_id_fkey'),
+        ForeignKeyConstraint(
+            ['sub_plan_id'], ['sub_plans.id'], ondelete='CASCADE', name='sub_plan_offers_sub_plan_id_fkey'
+        ),
         PrimaryKeyConstraint('id', name='sub_plan_offers_pkey'),
-        Index('sub_plan_offers_position_sub_plan_id_idx', 'position', 'sub_plan_id', postgresql_where='(is_active = true)', postgresql_with={'deduplicate_items': 'true'}, unique=True)
+        Index(
+            'sub_plan_offers_position_sub_plan_id_idx',
+            'position',
+            'sub_plan_id',
+            postgresql_where='(is_active = true)',
+            postgresql_with={'deduplicate_items': 'true'},
+            unique=True,
+        ),
     )
 
-    id: Mapped[int] = mapped_column(Integer, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=2147483647, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=2147483647, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     sub_plan_id: Mapped[int] = mapped_column(Integer, nullable=False)
     ttl_days: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     cost: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -239,15 +329,34 @@ class SubPlanOffers(Base):
 class Users(Base):
     __tablename__ = 'users'
     __table_args__ = (
-        ForeignKeyConstraint(['online_status'], ['online_statuses.id'], ondelete='RESTRICT', name='users_online_status_fkey'),
+        ForeignKeyConstraint(
+            ['online_status'], ['online_statuses.id'], ondelete='RESTRICT', name='users_online_status_fkey'
+        ),
         PrimaryKeyConstraint('id', name='users_pkey1'),
         UniqueConstraint('tg_id', name='users_tg_id_key'),
         UniqueConstraint('tg_username', name='users_tg_username_key'),
-        Index('users_tg_id_idx', 'tg_id', postgresql_where='(is_deleted = false)', postgresql_with={'deduplicate_items': 'true'}, unique=True),
-        Index('users_tg_username_idx', 'tg_username', postgresql_where='(is_deleted = false)', postgresql_with={'deduplicate_items': 'true'}, unique=True)
+        Index(
+            'users_tg_id_idx',
+            'tg_id',
+            postgresql_where='(is_deleted = false)',
+            postgresql_with={'deduplicate_items': 'true'},
+            unique=True,
+        ),
+        Index(
+            'users_tg_username_idx',
+            'tg_username',
+            postgresql_where='(is_deleted = false)',
+            postgresql_with={'deduplicate_items': 'true'},
+            unique=True,
+        ),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     online_status: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text('1'))
     tg_id: Mapped[Optional[int]] = mapped_column(BigInteger)
     tg_username: Mapped[Optional[str]] = mapped_column(String(32))
@@ -265,14 +374,21 @@ class NodesProtocols(Base):
     __table_args__ = (
         ForeignKeyConstraint(['node_id'], ['nodes.id'], ondelete='CASCADE', name='nodes_protocols_node_id_fkey'),
         ForeignKeyConstraint(['reg_status'], ['vnodes_reg_statuses.id'], name='nodes_protocols_reg_status_fkey'),
-        ForeignKeyConstraint(['tmp_id'], ['proto_templates.id'], ondelete='RESTRICT', name='nodes_protocols_tmp_id_fkey'),
+        ForeignKeyConstraint(
+            ['tmp_id'], ['proto_templates.id'], ondelete='RESTRICT', name='nodes_protocols_tmp_id_fkey'
+        ),
         PrimaryKeyConstraint('id', name='nodes_pkey'),
         UniqueConstraint('config_path', 'node_id', name='nodes_protocols_config_path_node_id_key'),
         UniqueConstraint('node_id', 'metrics_port', name='nodes_protocols_node_id_metrics_port_key'),
-        UniqueConstraint('node_id', 'proto_port', name='nodes_protocols_node_id_proto_port_key')
+        UniqueConstraint('node_id', 'proto_port', name='nodes_protocols_node_id_proto_port_key'),
     )
 
-    id: Mapped[int] = mapped_column(Integer, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=2147483647, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=2147483647, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     node_id: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     title: Mapped[str] = mapped_column(String(30), nullable=False, server_default=text("''::character varying"))
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
@@ -291,7 +407,9 @@ class NodesProtocols(Base):
     tmp_id: Mapped[Optional[int]] = mapped_column(Integer)
 
     node: Mapped['Nodes'] = relationship('Nodes', back_populates='nodes_protocols')
-    vnodes_reg_statuses: Mapped[Optional['VnodesRegStatuses']] = relationship('VnodesRegStatuses', back_populates='nodes_protocols')
+    vnodes_reg_statuses: Mapped[Optional['VnodesRegStatuses']] = relationship(
+        'VnodesRegStatuses', back_populates='nodes_protocols'
+    )
     tmp: Mapped[Optional['ProtoTemplates']] = relationship('ProtoTemplates', back_populates='nodes_protocols')
     vnodes_sub_plans: Mapped[list['VnodesSubPlans']] = relationship('VnodesSubPlans', back_populates='node_proto')
     sub_nodes_outbox: Mapped[list['SubNodesOutbox']] = relationship('SubNodesOutbox', back_populates='node_proto')
@@ -302,10 +420,15 @@ class PayOrders(Base):
     __table_args__ = (
         ForeignKeyConstraint(['status'], ['pay_statuses.id'], name='pay_orders_status_fkey'),
         ForeignKeyConstraint(['user_id'], ['users.id'], name='pay_orders_user_id_fkey'),
-        PrimaryKeyConstraint('id', name='pay_orders_pkey')
+        PrimaryKeyConstraint('id', name='pay_orders_pkey'),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     infinite_expire: Mapped[bool] = mapped_column(Boolean, nullable=False)
     infinite_traffic: Mapped[bool] = mapped_column(Boolean, nullable=False)
@@ -324,12 +447,21 @@ class PayOrders(Base):
 class TemplatesUsersExtractors(Base):
     __tablename__ = 'templates_users_extractors'
     __table_args__ = (
-        ForeignKeyConstraint(['tmp_id'], ['proto_templates.id'], ondelete='CASCADE', name='templates_users_extractors_tmp_id_fkey'),
+        ForeignKeyConstraint(
+            ['tmp_id'], ['proto_templates.id'], ondelete='CASCADE', name='templates_users_extractors_tmp_id_fkey'
+        ),
         PrimaryKeyConstraint('id', name='templates_users_extractors_pkey'),
-        UniqueConstraint('tmp_id', 'flatten_array_cursor', name='templates_users_extractors_tmp_id_flatten_array_cursor_key')
+        UniqueConstraint(
+            'tmp_id', 'flatten_array_cursor', name='templates_users_extractors_tmp_id_flatten_array_cursor_key'
+        ),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     tmp_id: Mapped[int] = mapped_column(Integer, nullable=False)
     flatten_array_cursor: Mapped[str] = mapped_column(String(1024), nullable=False)
     extractor_script: Mapped[str] = mapped_column(Text, nullable=False)
@@ -347,10 +479,15 @@ class UserSubs(Base):
         PrimaryKeyConstraint('id', name='user_subs_pkey'),
         UniqueConstraint('b64_id', name='user_subs_b64_id_key'),
         UniqueConstraint('user_id', 'sub_plan_id', name='user_subs_user_id_sub_plan_id_key'),
-        UniqueConstraint('uuid', name='user_subs_uuid_key')
+        UniqueConstraint('uuid', name='user_subs_uuid_key'),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     sub_plan_id: Mapped[int] = mapped_column(Integer, nullable=False)
     infinite_traffic: Mapped[bool] = mapped_column(Boolean, nullable=False)
@@ -377,12 +514,19 @@ class VnodesSubPlans(Base):
     __tablename__ = 'vnodes_sub_plans'
     __table_args__ = (
         ForeignKeyConstraint(['node_proto_id'], ['nodes_protocols.id'], name='vnodes_sub_plans_node_proto_id_fkey'),
-        ForeignKeyConstraint(['sub_plan_id'], ['sub_plans.id'], ondelete='CASCADE', name='vnodes_sub_plans_sub_plan_id_fkey'),
+        ForeignKeyConstraint(
+            ['sub_plan_id'], ['sub_plans.id'], ondelete='CASCADE', name='vnodes_sub_plans_sub_plan_id_fkey'
+        ),
         PrimaryKeyConstraint('id', name='vnodes_sub_plans_pkey'),
-        UniqueConstraint('node_proto_id', 'sub_plan_id', name='vnodes_sub_plans_node_proto_id_sub_plan_id_key')
+        UniqueConstraint('node_proto_id', 'sub_plan_id', name='vnodes_sub_plans_node_proto_id_sub_plan_id_key'),
     )
 
-    id: Mapped[int] = mapped_column(Integer, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=2147483647, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=2147483647, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     node_proto_id: Mapped[int] = mapped_column(Integer, nullable=False)
     sub_plan_id: Mapped[int] = mapped_column(Integer, nullable=False)
 
@@ -393,12 +537,21 @@ class VnodesSubPlans(Base):
 class SubNodesOutbox(Base):
     __tablename__ = 'sub_nodes_outbox'
     __table_args__ = (
-        ForeignKeyConstraint(['node_proto_id'], ['nodes_protocols.id'], ondelete='CASCADE', name='sub_nodes_outbox_node_proto_id_fkey'),
-        ForeignKeyConstraint(['user_sub_id'], ['user_subs.id'], ondelete='CASCADE', name='sub_nodes_outbox_user_sub_id_fkey'),
-        PrimaryKeyConstraint('id', name='sub_nodes_outbox_pkey')
+        ForeignKeyConstraint(
+            ['node_proto_id'], ['nodes_protocols.id'], ondelete='CASCADE', name='sub_nodes_outbox_node_proto_id_fkey'
+        ),
+        ForeignKeyConstraint(
+            ['user_sub_id'], ['user_subs.id'], ondelete='CASCADE', name='sub_nodes_outbox_user_sub_id_fkey'
+        ),
+        PrimaryKeyConstraint('id', name='sub_nodes_outbox_pkey'),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        Identity(always=True, start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1),
+        primary_key=True,
+        autoincrement=True,
+    )
     user_uuid: Mapped[str] = mapped_column(String(36), nullable=False)
     operation: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     user_sub_id: Mapped[int] = mapped_column(BigInteger, nullable=False)

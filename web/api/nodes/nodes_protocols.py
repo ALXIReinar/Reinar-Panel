@@ -6,11 +6,11 @@ from starlette.requests import Request
 from web.data.postgres import PgSqlDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
 from web.schemas.nodes_protocols_schema import (
-    GetNodeProtoSchema,
     UpdateNodeProtoSchema,
     VNodeRegisterResultSchema,
     VNodeRegisterSchema,
 )
+from web.schemas.node_schema import GetNodeProtoSchema
 from web.utils.logger_config import log_event
 
 router = APIRouter(tags=['Virtual Nodes-Protocols Variations'])
@@ -76,18 +76,6 @@ async def confirm_vnode(body: VNodeRegisterResultSchema, db: PgSqlDep, request: 
 
     log_event(f'Виртуальная нода подтверждена | node_proto_id: \033[33m{body.node_proto_id}\033[0m', request=request)
     return {'success': True, 'message': 'Виртуальная нода поставлена на регистрацию'}
-
-
-@router.get('/private/protocols/info/{np_id}', summary="Получить все протоколы на ноде")
-async def get_node_protocols_api(
-    np_id: int, q_params: Annotated[GetNodeProtoSchema, Query()], request: Request, db: PgSqlDep, _: JWTCookieDep
-):
-    protocols = await db.nodes_protocols.get_node_protocols(np_id, q_params.limit, q_params.offset)
-    log_event(
-        f'Отдали протоколы ноды | node_id: \033[33m{np_id}\033[0m; count: \033[32m{len(protocols)}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
-        request=request,
-    )
-    return {'protocols': protocols}
 
 
 @router.get('/private/nodes/protocols/{np_id}', summary="Получить виртуальную ноду")

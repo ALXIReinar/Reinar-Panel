@@ -2,11 +2,6 @@ from pydantic import BaseModel, Field, field_validator
 from pydantic_core.core_schema import ValidationInfo
 
 
-class GetNodeProtoSchema(BaseModel):
-    limit: int = Field(le=30)
-    offset: int = Field(0, ge=0)
-
-
 class UpdateNodeProtoSchema(BaseModel):
     """
     Схема для обновления виртуальной ноды

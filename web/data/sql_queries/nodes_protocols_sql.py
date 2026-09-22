@@ -24,17 +24,6 @@ class NodesProtocolsQueries:
         """
         return await self.conn.fetchrow(query, np_id)
 
-    async def get_node_protocols(self, node_id: int, limit: int, offset: int):
-        """Получить все виртуальные ноды на физической ноде"""
-        query = """
-        SELECT np.id as node_proto_id, np.tmp_id, np.sub_node_address, np.proto_port, np.metrics_port, np.user_visible, np.title
-        FROM nodes_protocols np
-        JOIN nodes n ON np.node_id = n.id
-        WHERE np.node_id = $1
-        LIMIT $2 OFFSET $3
-        """
-        return await self.conn.fetch(query, node_id, limit, offset)
-
     async def update_node_protocol(
         self,
         np_id: int,
