@@ -386,16 +386,16 @@ class TestBulkDeleteEdgeCases:
         async with db_pool.acquire() as conn:
             # Создаём невидимую vnode
             node_id = virtual_node_seed["node_id_1"]
-            protocol_id = virtual_node_seed["proto_id"]
+            tmp_id = virtual_node_seed["tmp_id"]
 
             invisible_vnode_id = await conn.fetchval(
                 """
-                INSERT INTO nodes_protocols (node_id, proto_id, title, user_visible, reg_status)
+                INSERT INTO nodes_protocols (node_id, tmp_id, title, user_visible, reg_status)
                 VALUES ($1, $2, $3, false, $4)
                 RETURNING id
                 """,
                 node_id,
-                protocol_id,
+                tmp_id,
                 "Invisible VNode Delete",
                 2,  # reg_status = 2 (success)
             )
@@ -472,17 +472,17 @@ class TestBulkDeleteEdgeCases:
                 "Inactive Node Delete",
             )
 
-            protocol_id = virtual_node_seed["proto_id"]
+            tmp_id = virtual_node_seed["tmp_id"]
 
             # Создаём vnode на неактивной ноде
             vnode_id = await conn.fetchval(
                 """
-                INSERT INTO nodes_protocols (node_id, proto_id, title, user_visible, reg_status)
+                INSERT INTO nodes_protocols (node_id, tmp_id, title, user_visible, reg_status)
                 VALUES ($1, $2, $3, true, $4)
                 RETURNING id
                 """,
                 inactive_node_id,
-                protocol_id,
+                tmp_id,
                 "VNode on Inactive Node Delete",
                 2,  # reg_status = 2 (success)
             )

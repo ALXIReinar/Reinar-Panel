@@ -41,7 +41,7 @@ def get_core_type(template_title: str) -> str:
 
     Returns:
         str: Тип ядра (lowercase)
-    """  # noqa: W293
+    """
     return template_title.split('-')[0].lower()
 
 
@@ -79,7 +79,7 @@ def create_test_user_for_template(template: dict, index: int = 0) -> dict:
         >>> user = create_test_user_for_template(template, index=1)
         >>> assert 'user_uuid' in user
         >>> assert 'node_method' in user  # Автоматически добавлено!
-    """  # noqa: W293
+    """
     import uuid as uuid_lib  # noqa: I001
     from node_client.tests.utils.test_helpers import generate_mock_node_data
 
@@ -120,7 +120,7 @@ class MockUniversalCoreClient:
 
     Имитирует API для добавления/удаления пользователей и получения метрик.
     Хранит "добавленных" пользователей в памяти для проверки в тестах.
-    """  # noqa: W293
+    """
 
     def __init__(self, host, port):
         self.host = host
@@ -177,7 +177,7 @@ def mock_universal_core(is_mock_mode):
 
     ВАЖНО: Мок применяется ТОЛЬКО в mock режиме (--mode=mock или по умолчанию).
     В real режиме (--mode=real) библиотеки должны быть установлены реально.
-    """  # noqa: W293
+    """
     if not is_mock_mode:
         # Real режим - не подменяем, используем настоящие библиотеки
         yield None
@@ -207,7 +207,7 @@ async def test_template_has_extractors(protocol_templates_with_extractors):
     Обязательные поля extractor:
     - flatten_array_cursor: путь к массиву пользователей в конфиге
     - extractor_script: Python код для трансформации
-    """  # noqa: W293
+    """
     for template in protocol_templates_with_extractors:
         extractors = template.get('extractors', [])
         assert len(extractors) > 0, (
@@ -232,7 +232,7 @@ async def test_template_required_user_data_obj_valid(protocol_templates_with_ext
     Обязательные поля (должны быть в КАЖДОМ шаблоне):
     - user_uuid: "{USER_UUID}" - системный UUID пользователя
     - user_sub_id: "{USER_SUB_ID}" - ID подписки пользователя
-    """  # noqa: W293
+    """
     for template in protocol_templates_with_extractors:
         required_data = template.get('required_user_data_obj', {})
         assert 'user_uuid' in required_data, (
@@ -263,7 +263,7 @@ async def test_template_constant_user_data_obj_valid(protocol_templates_with_ext
 
     Проверяем что:
     - Если поле присутствует, все значения - базовые типы (str, int, bool, None)
-    """  # noqa: W293
+    """
     for template in protocol_templates_with_extractors:
         const_data = template.get('constant_user_data_obj', {})
         # constant_user_data_obj может быть пустым - это нормально
@@ -292,7 +292,7 @@ async def test_template_has_required_scripts(protocol_templates_with_extractors)
     через конфиг-файлы и не имеют API скриптов - это нормально.
 
     Этот тест просто подсчитывает шаблоны с/без API скриптов для статистики.
-    """  # noqa: W293
+    """
     with_scripts = []
     without_scripts = []
     for template in protocol_templates_with_extractors:
@@ -316,7 +316,7 @@ async def test_template_custom_params_optional(protocol_templates_with_extractor
     Проверка: custom_params - опциональное поле (может быть None или dict)
 
     Если custom_params присутствует, он должен быть dict.
-    """  # noqa: W293
+    """
     for template in protocol_templates_with_extractors:
         bulk_add_params = template.get('bulk_add_script_custom_params')
         bulk_delete_params = template.get('bulk_delete_script_custom_params')
@@ -350,7 +350,7 @@ async def test_template_bulk_add_execution(
 
     ВАЖНО: Проверяются только шаблоны с is_accepted = true И с API скриптами.
     Шаблоны без api_bulk_add_user_script пропускаются (skip).
-    """  # noqa: W293
+    """
     for template in protocol_templates_with_extractors:
         # Пропускаем шаблоны без API скриптов
         if not template.get('api_bulk_add_user_script'):
@@ -403,7 +403,7 @@ async def test_template_bulk_delete_execution(
 
     ВАЖНО: Проверяются только шаблоны с is_accepted = true И с API скриптами.
     Шаблоны без api_bulk_delete_user_script пропускаются (skip).
-    """  # noqa: W293
+    """
     for template in protocol_templates_with_extractors:
         # Пропускаем шаблоны без API скриптов
         if not template.get('api_bulk_delete_user_script'):
@@ -482,7 +482,7 @@ SAMPLE_AWG_METRICS = {
     'with_traffic': (
         "pub_key\tpsk\tendpoint\tallowed_ips\tlast_handshake\trx_bytes\ttx_bytes\tkeepalive\n"
         "key1abc\t(none)\t1.2.3.4:51820\tfd00:1::1/128\t1234567890\t1048576\t2097152\t25\n"  # user 1: rx=1MB, tx=2MB
-        "key2def\t(none)\t5.6.7.8:51820\tfd00:1::2/128\t1234567891\t524288\t1572864\t25\n"  # user 2: rx=0.5MB, tx=1.5MB  # noqa: E501
+        "key2def\t(none)\t5.6.7.8:51820\tfd00:1::2/128\t1234567891\t524288\t1572864\t25\n"  # user 2: rx=0.5MB, tx=1.5MB
         "key3ghi\t(none)\t9.10.11.12:51820\tfd00:1::3/128\t1234567892\t3145728\t0\t25\n"  # user 3: rx=3MB, tx=0
     ),
     # Пустой dump (только заголовок, пиров нет)
@@ -523,7 +523,7 @@ def get_sample_metrics_for_core(core_type: str) -> dict:
 
     Returns:
         dict: Словарь с ключами 'with_traffic', 'empty', 'with_troubles'
-    """  # noqa: W293
+    """
     if core_type in ['xray', 'singbox']:
         return SAMPLE_XRAY_METRICS
     elif core_type == 'amneziawg':
@@ -547,7 +547,7 @@ def prepare_mock_vpn_users_for_core(core_type: str) -> dict:
 
     Returns:
         list: Mock vpn_users объект (список пользователей)
-    """  # noqa: W293
+    """
     if core_type == 'amneziawg':
         # AWG парсер требует node_ipv6_subnet для вычисления IP
         # ВАЖНО: используем одну подсеть для всех пользователей (как в реальности)
@@ -584,7 +584,7 @@ async def test_template_metrics_parsing(protocol_templates_with_extractors, use_
     - Корректно обрабатывает пустые данные
 
     ВАЖНО: Проверяются только шаблоны с is_accepted = true
-    """  # noqa: W293
+    """
     for template in protocol_templates_with_extractors:
         core_type = get_core_type(template['title'])
         parser_code = template.get('metrics_parser_code')
@@ -771,7 +771,7 @@ async def test_template_metrics_collection_execution(
     Real режим: только с --mode=real (пропускается в mock режиме)
 
     ВАЖНО: Проверяются только шаблоны с is_accepted = true
-    """  # noqa: W293
+    """
     if not is_real_mode:
         pytest.skip("Real core tests require --mode=real")
     for template in protocol_templates_with_extractors:

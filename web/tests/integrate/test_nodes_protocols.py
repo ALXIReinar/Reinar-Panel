@@ -14,7 +14,7 @@ class TestGetNodeProtocols:
         """Получение пустого списка (нет виртуальных нод на физической ноде)"""
         # У node_id_3 нет виртуальных нод
         node_id = physical_node_seed['node_id_3']
-        response = await client.get(f"/api/v1/private/protocols/info/{node_id}", params={"limit": 10, "offset": 0})
+        response = await client.get(f"/api/v1/private/nodes/{node_id}/vnodes", params={"limit": 10, "offset": 0})
 
         assert response.status_code == 200
         data = response.json()
@@ -25,7 +25,7 @@ class TestGetNodeProtocols:
     async def test_get_node_protocols_with_data(self, client, virtual_node_seed):
         """Получение списка виртуальных нод на физической ноде"""
         node_id = virtual_node_seed['node_id_1']
-        response = await client.get(f"/api/v1/private/protocols/info/{node_id}", params={"limit": 10, "offset": 0})
+        response = await client.get(f"/api/v1/private/nodes/{node_id}/vnodes", params={"limit": 10, "offset": 0})
 
         assert response.status_code == 200
         data = response.json()
@@ -35,8 +35,7 @@ class TestGetNodeProtocols:
         # Проверяем структуру данных
         protocol = data["protocols"][0]
         assert "node_proto_id" in protocol
-        assert "proto_id" in protocol
-        assert "proto_name" in protocol
+        assert "tmp_id" in protocol
         assert "title" in protocol
         assert "sub_node_address" in protocol
 
@@ -45,13 +44,13 @@ class TestGetNodeProtocols:
         """Пагинация списка виртуальных нод"""
         node_id = virtual_node_seed['node_id_1']
         # Получаем первую виртуальную ноду
-        response1 = await client.get(f"/api/v1/private/protocols/info/{node_id}", params={"limit": 1, "offset": 0})
+        response1 = await client.get(f"/api/v1/private/nodes/{node_id}/vnodes", params={"limit": 1, "offset": 0})
         assert response1.status_code == 200
         data1 = response1.json()
         assert len(data1["protocols"]) == 1
 
         # Получаем вторую виртуальную ноду
-        response2 = await client.get(f"/api/v1/private/protocols/info/{node_id}", params={"limit": 1, "offset": 1})
+        response2 = await client.get(f"/api/v1/private/nodes/{node_id}/vnodes", params={"limit": 1, "offset": 1})
         assert response2.status_code == 200
         data2 = response2.json()
         assert len(data2["protocols"]) == 1
@@ -282,20 +281,14 @@ class TestRegisterVirtualNode:
     @pytest.mark.asyncio
     async def test_register_vnode_success_full_params(self, client, physical_node_seed, proto_template_seed, db_pool):
         """Успешная регистрация виртуальной ноды со всеми параметрами"""
-        # Создаём протокол для тестирования
-        async with db_pool.acquire() as conn:
-            proto_id = await conn.fetchval(
-                "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
-                proto_template_seed["tmp_id"],
-                "Test Proto for Register",
-            )
-
+        # Используем tmp_id напрямую из фикстуры (protocols таблица удалена)
+        tmp_id = proto_template_seed["tmp_id"]
         node_id = physical_node_seed["node_id_1"]
 
         response = await client.post(
             "/api/v1/server/nodes/protocols/register",
             json={
-                "proto_id": proto_id,
+                "proto_id": tmp_id,  # API принимает proto_id как alias для tmp_id
                 "node_id": node_id,
                 "title": "Full Params Virtual Node Test",
                 "metrics_port": 9095,
@@ -322,7 +315,7 @@ class TestRegisterVirtualNode:
             vnode = await conn.fetchrow("SELECT * FROM nodes_protocols WHERE id = $1", node_proto_id)
             assert vnode is not None
             assert vnode["node_id"] == node_id
-            assert vnode["proto_id"] == proto_id
+            assert vnode["tmp_id"] == tmp_id
             assert vnode["metrics_port"] == 9095
             assert vnode["proto_port"] == 8450
             assert vnode["config_path"] == "/etc/vpn/config-test.json"
@@ -337,19 +330,14 @@ class TestRegisterVirtualNode:
         self, client, physical_node_seed, proto_template_seed, db_pool
     ):
         """Успешная регистрация с минимальными обязательными параметрами"""
-        async with db_pool.acquire() as conn:
-            proto_id = await conn.fetchval(
-                "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
-                proto_template_seed["tmp_id"],
-                "Minimal Proto",
-            )
-
+        # Используем tmp_id напрямую из фикстуры
+        tmp_id = proto_template_seed["tmp_id"]
         node_id = physical_node_seed["node_id_1"]
 
         response = await client.post(
             "/api/v1/server/nodes/protocols/register",
             json={
-                "proto_id": proto_id,
+                "proto_id": tmp_id,  # API принимает proto_id как alias для tmp_id
                 "node_id": node_id,
                 "title": "Minimal Node",
                 "proto_port": 8451,
@@ -378,19 +366,13 @@ class TestRegisterVirtualNode:
         self, client, physical_node_seed, proto_template_seed, db_pool
     ):
         """Регистрация с кастомными командами метрик и перезагрузки"""
-        async with db_pool.acquire() as conn:
-            proto_id = await conn.fetchval(
-                "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
-                proto_template_seed["tmp_id"],
-                "Proto with Commands",
-            )
-
+        tmp_id = proto_template_seed["tmp_id"]
         node_id = physical_node_seed["node_id_2"]
 
         response = await client.post(
             "/api/v1/server/nodes/protocols/register",
             json={
-                "proto_id": proto_id,
+                "proto_id": tmp_id,  # API принимает proto_id как alias для tmp_id
                 "node_id": node_id,
                 "title": "Node with Commands",
                 "proto_port": 8452,
@@ -415,17 +397,13 @@ class TestRegisterVirtualNode:
         self, client, physical_node_seed, proto_template_seed, db_pool
     ):
         """Проверка что constant_node_data_obj по умолчанию устанавливается как {}"""
-        async with db_pool.acquire() as conn:
-            proto_id = await conn.fetchval(
-                "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
-                proto_template_seed["tmp_id"],
-                "Proto Default Data",
-            )
+
+        tmp_id = proto_template_seed["tmp_id"]
 
         response = await client.post(
             "/api/v1/server/nodes/protocols/register",
             json={
-                "proto_id": proto_id,
+                "proto_id": tmp_id,  # API принимает proto_id как alias для tmp_id
                 "node_id": physical_node_seed["node_id_1"],
                 "title": "Default Data Node",
                 "proto_port": 8453,
@@ -466,17 +444,12 @@ class TestRegisterVirtualNode:
     @pytest.mark.asyncio
     async def test_register_vnode_invalid_node_id(self, client, proto_template_seed, db_pool):
         """Регистрация с несуществующим node_id (404)"""
-        async with db_pool.acquire() as conn:
-            proto_id = await conn.fetchval(
-                "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
-                proto_template_seed["tmp_id"],
-                "Proto Invalid Node",
-            )
+        tmp_id = proto_template_seed["tmp_id"]
 
         response = await client.post(
             "/api/v1/server/nodes/protocols/register",
             json={
-                "proto_id": proto_id,
+                "proto_id": tmp_id,  # API принимает proto_id как alias для tmp_id
                 "node_id": 32000,  # Несуществующая физическая нода (в диапазоне smallint)
                 "title": "Invalid Node",
                 "proto_port": 8455,
@@ -494,17 +467,12 @@ class TestRegisterVirtualNode:
         self, client, physical_node_seed, proto_template_seed, db_pool
     ):
         """Проверка что reg_status устанавливается в 1 (pending) по умолчанию"""
-        async with db_pool.acquire() as conn:
-            proto_id = await conn.fetchval(
-                "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
-                proto_template_seed["tmp_id"],
-                "Proto Status Check",
-            )
+        tmp_id = proto_template_seed["tmp_id"]
 
         response = await client.post(
             "/api/v1/server/nodes/protocols/register",
             json={
-                "proto_id": proto_id,
+                "proto_id": tmp_id,  # API принимает proto_id как alias для tmp_id
                 "node_id": physical_node_seed["node_id_1"],
                 "title": "Status Pending Node",
                 "proto_port": 8456,
@@ -529,19 +497,14 @@ class TestConfirmVirtualNode:
         """Успешное подтверждение со статусом success (2)"""
         # Создаём виртуальную ноду в статусе pending
         async with db_pool.acquire() as conn:
-            proto_id = await conn.fetchval(
-                "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
-                proto_template_seed["tmp_id"],
-                "Proto Confirm Success",
-            )
             node_proto_id = await conn.fetchval(
                 """
-                INSERT INTO nodes_protocols (node_id, proto_id, title, proto_port, config_path, reg_status)
+                INSERT INTO nodes_protocols (node_id, tmp_id, title, proto_port, config_path, reg_status)
                 VALUES ($1, $2, $3, $4, $5, 1)
                 RETURNING id
                 """,
                 physical_node_seed["node_id_1"],
-                proto_id,
+                proto_template_seed["tmp_id"],
                 "Pending Node",
                 8460,
                 "/tmp/pending.json",
@@ -573,19 +536,14 @@ class TestConfirmVirtualNode:
     async def test_confirm_vnode_failed_status(self, client, physical_node_seed, proto_template_seed, db_pool):
         """Подтверждение со статусом failed (3)"""
         async with db_pool.acquire() as conn:
-            proto_id = await conn.fetchval(
-                "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
-                proto_template_seed["tmp_id"],
-                "Proto Confirm Failed",
-            )
             node_proto_id = await conn.fetchval(
                 """
-                INSERT INTO nodes_protocols (node_id, proto_id, title, proto_port, config_path, reg_status)
+                INSERT INTO nodes_protocols (node_id, tmp_id, title, proto_port, config_path, reg_status)
                 VALUES ($1, $2, $3, $4, $5, 1)
                 RETURNING id
                 """,
                 physical_node_seed["node_id_1"],
-                proto_id,
+                proto_template_seed["tmp_id"],
                 "Pending Failed Node",
                 8461,
                 "/tmp/pending-fail.json",
@@ -613,19 +571,14 @@ class TestConfirmVirtualNode:
     async def test_confirm_vnode_string_status(self, client, physical_node_seed, proto_template_seed, db_pool):
         """Поддержка строковых статусов: "success" → 2, "failed" → 3"""
         async with db_pool.acquire() as conn:
-            proto_id = await conn.fetchval(
-                "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
-                proto_template_seed["tmp_id"],
-                "Proto String Status",
-            )
             node_proto_id = await conn.fetchval(
                 """
-                INSERT INTO nodes_protocols (node_id, proto_id, title, proto_port, config_path, reg_status)
+                INSERT INTO nodes_protocols (node_id, tmp_id, title, proto_port, config_path, reg_status)
                 VALUES ($1, $2, $3, $4, $5, 1)
                 RETURNING id
                 """,
                 physical_node_seed["node_id_1"],
-                proto_id,
+                proto_template_seed["tmp_id"],
                 "String Status Node",
                 8462,
                 "/tmp/string-status.json",
@@ -650,19 +603,14 @@ class TestConfirmVirtualNode:
     async def test_confirm_vnode_update_params(self, client, physical_node_seed, proto_template_seed, db_pool):
         """Обновление параметров при подтверждении (config_path, commands)"""
         async with db_pool.acquire() as conn:
-            proto_id = await conn.fetchval(
-                "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
-                proto_template_seed["tmp_id"],
-                "Proto Update Params",
-            )
             node_proto_id = await conn.fetchval(
                 """
-                INSERT INTO nodes_protocols (node_id, proto_id, title, proto_port, config_path, reg_status)
+                INSERT INTO nodes_protocols (node_id, tmp_id, title, proto_port, config_path, reg_status)
                 VALUES ($1, $2, $3, $4, $5, 1)
                 RETURNING id
                 """,
                 physical_node_seed["node_id_1"],
-                proto_id,
+                proto_template_seed["tmp_id"],
                 "Update Params Node",
                 8463,
                 "/tmp/old-config.json",
@@ -694,19 +642,14 @@ class TestConfirmVirtualNode:
     async def test_confirm_vnode_partial_update(self, client, physical_node_seed, proto_template_seed, db_pool):
         """Частичное обновление - только status и title"""
         async with db_pool.acquire() as conn:
-            proto_id = await conn.fetchval(
-                "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
-                proto_template_seed["tmp_id"],
-                "Proto Partial Update",
-            )
             node_proto_id = await conn.fetchval(
                 """
-                INSERT INTO nodes_protocols (node_id, proto_id, title, proto_port, config_path, reg_status, metrics_command)
+                INSERT INTO nodes_protocols (node_id, tmp_id, title, proto_port, config_path, reg_status, metrics_command)
                 VALUES ($1, $2, $3, $4, $5, 1, $6)
                 RETURNING id
                 """,
                 physical_node_seed["node_id_1"],
-                proto_id,
+                proto_template_seed["tmp_id"],
                 "Old Title",
                 8464,
                 "/etc/vpn/partial.json",
@@ -748,25 +691,20 @@ class TestConfirmVirtualNode:
         assert response.status_code == 404
         data = response.json()
         assert data["detail"]["success"] is False
-        assert "не найдены" in data["detail"]["message"]
+        assert "нода не найдена" in data["detail"]["message"]
 
     @pytest.mark.asyncio
     async def test_confirm_vnode_updates_reg_status(self, client, physical_node_seed, proto_template_seed, db_pool):
         """Проверка что reg_status корректно обновляется в БД"""
         async with db_pool.acquire() as conn:
-            proto_id = await conn.fetchval(
-                "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
-                proto_template_seed["tmp_id"],
-                "Proto Status Update",
-            )
             node_proto_id = await conn.fetchval(
                 """
-                INSERT INTO nodes_protocols (node_id, proto_id, title, proto_port, config_path, reg_status)
+                INSERT INTO nodes_protocols (node_id, tmp_id, title, proto_port, config_path, reg_status)
                 VALUES ($1, $2, $3, $4, $5, 1)
                 RETURNING id
                 """,
                 physical_node_seed["node_id_1"],
-                proto_id,
+                proto_template_seed["tmp_id"],
                 "Status Update Node",
                 8465,
                 "/tmp/status-update.json",
@@ -799,19 +737,12 @@ class TestRegisterConfirmFlow:
     @pytest.mark.asyncio
     async def test_full_registration_flow_success(self, client, physical_node_seed, proto_template_seed, db_pool):
         """Полный цикл: register → confirm success → проверка БД"""
-        # Создаём протокол
-        async with db_pool.acquire() as conn:
-            proto_id = await conn.fetchval(
-                "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
-                proto_template_seed["tmp_id"],
-                "Proto Full Flow",
-            )
 
         # Шаг 1: Регистрация
         register_response = await client.post(
             "/api/v1/server/nodes/protocols/register",
             json={
-                "proto_id": proto_id,
+                "proto_id": proto_template_seed["tmp_id"],
                 "node_id": physical_node_seed["node_id_1"],
                 "title": "Full Flow Node",
                 "proto_port": 8470,
@@ -854,18 +785,11 @@ class TestRegisterConfirmFlow:
     @pytest.mark.asyncio
     async def test_full_registration_flow_failed(self, client, physical_node_seed, proto_template_seed, db_pool):
         """Полный цикл с неудачной регистрацией: register → confirm failed → проверка БД"""
-        async with db_pool.acquire() as conn:
-            proto_id = await conn.fetchval(
-                "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
-                proto_template_seed["tmp_id"],
-                "Proto Failed Flow",
-            )
-
         # Регистрация
         register_response = await client.post(
             "/api/v1/server/nodes/protocols/register",
             json={
-                "proto_id": proto_id,
+                "proto_id": proto_template_seed["tmp_id"],
                 "node_id": physical_node_seed["node_id_1"],
                 "title": "Failed Flow Node",
                 "proto_port": 8471,
@@ -898,19 +822,14 @@ class TestRegisterConfirmFlow:
     async def test_confirm_idempotency(self, client, physical_node_seed, proto_template_seed, db_pool):
         """Повторное подтверждение одной и той же ноды (идемпотентность)"""
         async with db_pool.acquire() as conn:
-            proto_id = await conn.fetchval(
-                "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
-                proto_template_seed["tmp_id"],
-                "Proto Idempotency",
-            )
             node_proto_id = await conn.fetchval(
                 """
-                INSERT INTO nodes_protocols (node_id, proto_id, title, proto_port, config_path, reg_status)
+                INSERT INTO nodes_protocols (node_id, tmp_id, title, proto_port, config_path, reg_status)
                 VALUES ($1, $2, $3, $4, $5, 1)
                 RETURNING id
                 """,
                 physical_node_seed["node_id_1"],
-                proto_id,
+                proto_template_seed["tmp_id"],
                 "Idempotent Node",
                 8472,
                 "/tmp/idempotent.json",

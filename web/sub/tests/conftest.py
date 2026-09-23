@@ -342,30 +342,17 @@ async def user_seed(db_pool):
 async def virtual_node_seed(db_pool, physical_node_seed, proto_template_seed):
     """Создаёт тестовые виртуальные ноды (nodes_protocols)"""
     async with db_pool.acquire() as conn:
-        # Используем существующий протокол из seed_data
-        proto_id = await conn.fetchval(
-            """
-            SELECT id 
-            FROM protocols 
-            WHERE tmp_id = $1 
-            ORDER BY id 
-            LIMIT 1
-            """,  # noqa: W291
-            proto_template_seed["tmp_id"],
-        )
-        if not proto_id:
-            raise RuntimeError(
-                f"Не найдено протокола для tmp_id={proto_template_seed['tmp_id']} в protocols! "
-                f"Запустите: python -m web.db.seed_data"
-            )
+        # Используем tmp_id напрямую из шаблона
+        tmp_id = proto_template_seed["tmp_id"]
+
         vnode_id_1 = await conn.fetchval(
             """
-            INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, proto_port, config_path, user_visible, reg_status)
+            INSERT INTO nodes_protocols (node_id, tmp_id, title, sub_node_address, metrics_port, proto_port, config_path, user_visible, reg_status)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id
             """,
             physical_node_seed["node_id_1"],
-            proto_id,
+            tmp_id,
             "VNode1",
             "vnode1.example.com",
             9090,
@@ -375,7 +362,7 @@ async def virtual_node_seed(db_pool, physical_node_seed, proto_template_seed):
             VnodeRegStatuses.success,
         )
         return {
-            "proto_id": proto_id,
+            "tmp_id": tmp_id,
             "vnode_id_1": vnode_id_1,
             "node_id_1": physical_node_seed["node_id_1"],
         }
@@ -537,35 +524,19 @@ async def sub_infrastructure_seed(db_pool, db_seed):
         if not tmp_id:
             raise RuntimeError("Не найдено активных шаблонов в proto_templates! Запустите: python -m web.db.seed_data")
 
-        # 4. Используем существующий протокол из seed_data (связанный с tmp_id)
-        proto_id = await conn.fetchval(
-            """
-            SELECT id
-            FROM protocols
-            WHERE tmp_id = $1
-            ORDER BY id
-            LIMIT 1
-        """,
-            tmp_id,
-        )
-        if not proto_id:
-            raise RuntimeError(
-                f"Не найдено протокола для tmp_id={tmp_id} в protocols! Запустите: python -m web.db.seed_data"
-            )
-
-        # 5. Создаём виртуальные ноды
-        # 5.1. Активная виртуальная нода на активной физической ноде (user_visible=true)
+        # 4. Создаём виртуальные ноды, используя tmp_id напрямую
+        # 4.1. Активная виртуальная нода на активной физической ноде (user_visible=true)
         vnode_id_10 = await conn.fetchval(
             """
             INSERT INTO nodes_protocols (
-                node_id, proto_id, title, sub_node_address,
+                node_id, tmp_id, title, sub_node_address,
                 metrics_port, config_path, user_visible, reg_status
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
         """,
             node_id_active,
-            proto_id,
+            tmp_id,
             "VNode 10 Active",
             "vnode10.test.com",
             9090,
@@ -574,18 +545,18 @@ async def sub_infrastructure_seed(db_pool, db_seed):
             VnodeRegStatuses.success,
         )
 
-        # 5.2. Вторая активная виртуальная нода на активной физической ноде
+        # 4.2. Вторая активная виртуальная нода на активной физической ноде
         vnode_id_11 = await conn.fetchval(
             """
             INSERT INTO nodes_protocols (
-                node_id, proto_id, title, sub_node_address,
+                node_id, tmp_id, title, sub_node_address,
                 metrics_port, config_path, user_visible, reg_status
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
         """,
             node_id_active,
-            proto_id,
+            tmp_id,
             "VNode 11 Active",
             "vnode11.test.com",
             9091,
@@ -594,18 +565,18 @@ async def sub_infrastructure_seed(db_pool, db_seed):
             VnodeRegStatuses.success,
         )
 
-        # 5.3. Невидимая виртуальная нода на активной физической ноде (user_visible=false)
+        # 4.3. Невидимая виртуальная нода на активной физической ноде (user_visible=false)
         vnode_id_invisible = await conn.fetchval(
             """
             INSERT INTO nodes_protocols (
-                node_id, proto_id, title, sub_node_address,
+                node_id, tmp_id, title, sub_node_address,
                 metrics_port, config_path, user_visible, reg_status
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
         """,
             node_id_active,
-            proto_id,
+            tmp_id,
             "VNode Invisible",
             "vnode-invisible.test.com",
             9092,
@@ -614,18 +585,18 @@ async def sub_infrastructure_seed(db_pool, db_seed):
             VnodeRegStatuses.success,
         )
 
-        # 5.4. Активная виртуальная нода на неактивной физической ноде
+        # 4.4. Активная виртуальная нода на неактивной физической ноде
         vnode_id_on_inactive = await conn.fetchval(
             """
             INSERT INTO nodes_protocols (
-                node_id, proto_id, title, sub_node_address,
+                node_id, tmp_id, title, sub_node_address,
                 metrics_port, config_path, user_visible, reg_status
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
         """,
             node_id_inactive,
-            proto_id,
+            tmp_id,
             "VNode On Inactive Node",
             "vnode-inactive.test.com",
             9093,
@@ -634,18 +605,18 @@ async def sub_infrastructure_seed(db_pool, db_seed):
             VnodeRegStatuses.success,
         )
 
-        # 5.5. Виртуальная нода с pending статусом (для разнообразия тестовых данных)
+        # 4.5. Виртуальная нода с pending статусом (для разнообразия тестовых данных)
         _vnode_id_pending = await conn.fetchval(
             """
             INSERT INTO nodes_protocols (
-                node_id, proto_id, title, sub_node_address,
+                node_id, tmp_id, title, sub_node_address,
                 metrics_port, config_path, user_visible, reg_status
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
         """,
             node_id_active,
-            proto_id,
+            tmp_id,
             "VNode Pending",
             "vnode-pending.test.com",
             9094,
@@ -654,18 +625,18 @@ async def sub_infrastructure_seed(db_pool, db_seed):
             VnodeRegStatuses.pending,
         )
 
-        # 5.6. Виртуальная нода с failed статусом (для разнообразия тестовых данных)
+        # 4.6. Виртуальная нода с failed статусом (для разнообразия тестовых данных)
         _vnode_id_failed = await conn.fetchval(
             """
             INSERT INTO nodes_protocols (
-                node_id, proto_id, title, sub_node_address,
+                node_id, tmp_id, title, sub_node_address,
                 metrics_port, config_path, user_visible, reg_status
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
         """,
             node_id_active,
-            proto_id,
+            tmp_id,
             "VNode Failed",
             "vnode-failed.test.com",
             9095,
@@ -705,7 +676,6 @@ async def sub_infrastructure_seed(db_pool, db_seed):
             "node_id_inactive": node_id_inactive,
             # Протокол и шаблон
             "tmp_id": tmp_id,
-            "proto_id": proto_id,
             # Виртуальные ноды
             "vnode_id_10": vnode_id_10,  # Активная, видимая
             "vnode_id_11": vnode_id_11,  # Активная, видимая
@@ -815,9 +785,8 @@ async def sub_api_seed(db_pool, sub_infrastructure_seed):
             """
             SELECT pt.sub_prepare_script
             FROM proto_templates pt
-            JOIN protocols p ON p.tmp_id = pt.id
-            WHERE p.id = (
-                SELECT proto_id FROM nodes_protocols WHERE id = $1
+            WHERE pt.id = (
+                SELECT tmp_id FROM nodes_protocols WHERE id = $1
             )
         """,
             vnode_id_10,
@@ -856,8 +825,7 @@ async def sub_api_seed(db_pool, sub_infrastructure_seed):
             """
             SELECT pt.url_tmp
             FROM proto_templates pt
-            JOIN protocols p ON p.tmp_id = pt.id
-            WHERE p.id = (SELECT proto_id FROM nodes_protocols WHERE id = $1)
+            WHERE pt.id = (SELECT tmp_id FROM nodes_protocols WHERE id = $1)
         """,
             vnode_id_10,
         )
@@ -1412,34 +1380,19 @@ async def pointed_bulk_seed(db_pool, db_seed):
         """)  # noqa: W291
         if not tmp_id:
             raise RuntimeError("Не найдено активных шаблонов в proto_templates! Запустите: python -m web.db.seed_data")
-        # 4. Используем существующий протокол из seed_data (связанный с tmp_id)
-        proto_id = await conn.fetchval(
-            """
-            SELECT id
-            FROM protocols
-            WHERE tmp_id = $1
-            ORDER BY id
-            LIMIT 1
-        """,
-            tmp_id,
-        )
-        if not proto_id:
-            raise RuntimeError(
-                f"Не найдено протокола для tmp_id={tmp_id} в protocols! Запустите: python -m web.db.seed_data"
-            )
-        # 5. Создаём виртуальные ноды
-        # 5.1. Активная виртуальная нода 10
+        # 4. Создаём виртуальные ноды, используя tmp_id напрямую
+        # 4.1. Активная виртуальная нода 10
         vnode_id_10 = await conn.fetchval(
             """
             INSERT INTO nodes_protocols (
-                node_id, proto_id, title, sub_node_address,
+                node_id, tmp_id, title, sub_node_address,
                 metrics_port, config_path, user_visible, reg_status
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
         """,
             node_id_active,
-            proto_id,
+            tmp_id,
             "Pointed VNode 10",
             "vnode10.pointed.com",
             9090,
@@ -1447,18 +1400,18 @@ async def pointed_bulk_seed(db_pool, db_seed):
             True,
             VnodeRegStatuses.success,
         )
-        # 5.2. Активная виртуальная нода 11
+        # 4.2. Активная виртуальная нода 11
         vnode_id_11 = await conn.fetchval(
             """
             INSERT INTO nodes_protocols (
-                node_id, proto_id, title, sub_node_address,
+                node_id, tmp_id, title, sub_node_address,
                 metrics_port, config_path, user_visible, reg_status
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
         """,
             node_id_active,
-            proto_id,
+            tmp_id,
             "Pointed VNode 11",
             "vnode11.pointed.com",
             9091,
@@ -1466,18 +1419,18 @@ async def pointed_bulk_seed(db_pool, db_seed):
             True,
             VnodeRegStatuses.success,
         )
-        # 5.3. Невидимая виртуальная нода (user_visible=false)
+        # 4.3. Невидимая виртуальная нода (user_visible=false)
         vnode_id_invisible = await conn.fetchval(
             """
             INSERT INTO nodes_protocols (
-                node_id, proto_id, title, sub_node_address,
+                node_id, tmp_id, title, sub_node_address,
                 metrics_port, config_path, user_visible, reg_status
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
         """,
             node_id_active,
-            proto_id,
+            tmp_id,
             "Pointed VNode Invisible",
             "vnode-invis.pointed.com",
             9092,
@@ -1485,18 +1438,18 @@ async def pointed_bulk_seed(db_pool, db_seed):
             False,
             VnodeRegStatuses.success,
         )
-        # 5.4. Виртуальная нода на неактивной физической ноде
+        # 4.4. Виртуальная нода на неактивной физической ноде
         vnode_id_on_inactive = await conn.fetchval(
             """
             INSERT INTO nodes_protocols (
-                node_id, proto_id, title, sub_node_address,
+                node_id, tmp_id, title, sub_node_address,
                 metrics_port, config_path, user_visible, reg_status
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
         """,
             node_id_inactive,
-            proto_id,
+            tmp_id,
             "Pointed VNode On Inactive",
             "vnode-inactive.pointed.com",
             9093,
@@ -2026,31 +1979,13 @@ async def sub_prepare_infrastructure(db_pool):
             template_dict = dict(template)
             # 3.1. Генерируем constant_node_data_obj из скрипта
             const_node_data = generate_constant_node_data_obj(template['sub_prepare_script'])
-            # 3.2. Получаем или создаём протокол для этого шаблона
-            proto_id = await conn.fetchval(
-                """
-                SELECT id FROM protocols WHERE tmp_id = $1 LIMIT 1
-            """,
-                template['id'],
-            )
-            if not proto_id:
-                # Создаём новый протокол
-                proto_id = await conn.fetchval(
-                    """
-                    INSERT INTO protocols (name, tmp_id)
-                    VALUES ($1, $2)
-                    RETURNING id
-                """,
-                    f"test-proto-{template['title']}",
-                    template['id'],
-                )
-            # 3.3. Создаём или обновляем nodes_protocols с constant_node_data_obj
+            # 3.2. Создаём или обновляем nodes_protocols с constant_node_data_obj
             import orjson
 
             node_proto_id = await conn.fetchval(
                 """
                 INSERT INTO nodes_protocols (
-                    node_id, proto_id, title, sub_node_address,
+                    node_id, tmp_id, title, sub_node_address,
                     metrics_port, config_path, user_visible, constant_node_data_obj, reg_status
                 )
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -2059,7 +1994,7 @@ async def sub_prepare_infrastructure(db_pool):
                 RETURNING id
             """,
                 node_id,
-                proto_id,
+                template['id'],  # Используем tmp_id напрямую
                 f"VN-{template['id']}",  # Короткое название (VN = VNode)
                 f"vnode-{template['id']}.test.com",
                 5566 + template['id'],

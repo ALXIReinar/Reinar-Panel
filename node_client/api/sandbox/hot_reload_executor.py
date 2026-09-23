@@ -21,8 +21,10 @@ from node_client.utils.logger_config import log_event
 # Принудительная очистка кэша - для библиотек из шаблонов-скриптов
 importlib.invalidate_caches()
 
+
 class HotReloadExecutor:
     """Выполнение Python скриптов для hot-reload операций"""
+
     allowed_packages = {
         "json",
         "asyncio",
@@ -46,13 +48,32 @@ class HotReloadExecutor:
     }
 
     safe_builtins = {
-        "int": int, "str": str, "float": float, "list": list, "dict": dict,
-        "set": set, "len": len, "range": range, "round": round, "print": print,
-        "enumerate": enumerate, "zip": zip, "map": map, "filter": filter,
-        "isinstance": isinstance, "all": all, "any": any, "bool": bool,
-        "bytes": bytes, "bytearray": bytearray,
-        "Exception": Exception, "ValueError": ValueError, "KeyError": KeyError,
-        "NameError": NameError, "TypeError": TypeError, "AttributeError": AttributeError,
+        "int": int,
+        "str": str,
+        "float": float,
+        "list": list,
+        "dict": dict,
+        "set": set,
+        "len": len,
+        "range": range,
+        "round": round,
+        "print": print,
+        "enumerate": enumerate,
+        "zip": zip,
+        "map": map,
+        "filter": filter,
+        "isinstance": isinstance,
+        "all": all,
+        "any": any,
+        "bool": bool,
+        "bytes": bytes,
+        "bytearray": bytearray,
+        "Exception": Exception,
+        "ValueError": ValueError,
+        "KeyError": KeyError,
+        "NameError": NameError,
+        "TypeError": TypeError,
+        "AttributeError": AttributeError,
         "__name__": "__main__",  # Безопасный dunder атрибут
         "__doc__": None,  # Безопасный dunder атрибут
     }
@@ -91,19 +112,18 @@ class HotReloadExecutor:
 
     @classmethod
     async def execute_action_script(
-            cls,
-            script: str,
-            lib_names: str | None,
-            node_ip: str,
-            core_api_port: int,
-            action: Literal["user_core_operation", "get_metrics", "parse_metrics"],
-            custom_params: dict | None = None,
-            user_obj: dict | str | list[dict] = None,
-
+        cls,
+        script: str,
+        lib_names: str | None,
+        node_ip: str,
+        core_api_port: int,
+        action: Literal["user_core_operation", "get_metrics", "parse_metrics"],
+        custom_params: dict | None = None,
+        user_obj: dict | str | list[dict] = None,
     ) -> tuple[bool, str]:
         """
         Выполняет скрипт добавления пользователя через API
-        
+
         Args:
             script: Python код с функцией add_user()
             lib_names: Имя библиотеки для импорта (grpcio, requests)
@@ -115,7 +135,7 @@ class HotReloadExecutor:
         Returns:
             tuple[success, message]
 
-        """  # noqa: W293
+        """
         if custom_params is None:
             custom_params = {}
 
@@ -134,21 +154,32 @@ class HotReloadExecutor:
 
             "Вызываем функцию из скрипта"
             action_user_func = (
-                    global_scope.get('bulk_delete_users') or
-                    global_scope.get('bulk_add_users') or
-                    global_scope.get('get_metrics') or
-                    global_scope.get('parse_metrics')
+                global_scope.get('bulk_delete_users')
+                or global_scope.get('bulk_add_users')
+                or global_scope.get('get_metrics')
+                or global_scope.get('parse_metrics')
             )
             if not action_user_func:
-                msg = "Ни одна из функций: (bulk_delete_users, bulk_add_users, get_metrics, parse) - не найдена в скрипте"  # noqa: E501
+                msg = (
+                    "Ни одна из функций: (bulk_delete_users, bulk_add_users, get_metrics, parse) - не найдена в скрипте"
+                )
                 log_event(msg, level='ERROR')
                 return False, msg
 
             "Подбираем набор аргументов исходя от действия скрипта"
             args_func_map = {
-                "user_core_operation": (user_obj, node_ip, core_api_port, custom_params), # Подходит для бульк/обычных вставок/удалений  # noqa: E501
+                "user_core_operation": (
+                    user_obj,
+                    node_ip,
+                    core_api_port,
+                    custom_params,
+                ),  # Подходит для бульк/обычных вставок/удалений
                 "get_metrics": (node_ip, core_api_port, custom_params),
-                "parse_metrics": (custom_params.get('raw_metrics'), custom_params.get('vpn_users'), custom_params.get('local_state')),  # noqa: E501
+                "parse_metrics": (
+                    custom_params.get('raw_metrics'),
+                    custom_params.get('vpn_users'),
+                    custom_params.get('local_state'),
+                ),
             }
             result = action_user_func(*args_func_map[action])
 
@@ -165,40 +196,44 @@ class HotReloadExecutor:
 
         except ImportError as e:
             error_msg = str(e)
-            log_event(f"\033[31mОШИБКА ИМПОРТА БИБЛИОТЕКИ\033[0m\nБиблиотека: {lib_names}\nAction: {action}\nДетали: {repr(e)}", level='CRITICAL')  # noqa: E501
-# noqa: W293
+            log_event(
+                f"\033[31mОШИБКА ИМПОРТА БИБЛИОТЕКИ\033[0m\nБиблиотека: {lib_names}\nAction: {action}\nДетали: {repr(e)}",
+                level='CRITICAL',
+            )
             # Если это ошибка от restricted_import - возвращаем оригинальное сообщение
             if "запрещен в песочнице" in error_msg:
                 return False, error_msg
-# noqa: W293
             # Иначе стандартное сообщение
             return False, f"Библиотека {lib_names} не найдена. Убедитесь что она установлена в виртуальном окружении."
-# noqa: W293
         except SyntaxError as e:
             script_lines = script.split('\n')
             error_line = script_lines[e.lineno - 1] if e.lineno and e.lineno <= len(script_lines) else "???"
 
-            log_event(f"\033[31mСИНТАКСИЧЕСКАЯ ОШИБКА В СКРИПТЕ\033[0m\nAction: {action}\nСтрока {e.lineno}: {error_line}\nОшибка: {e.msg}\nПозиция: {' ' * (e.offset - 1) if e.offset else ''}^\n", level='CRITICAL')  # noqa: E501
+            log_event(
+                f"\033[31mСИНТАКСИЧЕСКАЯ ОШИБКА В СКРИПТЕ\033[0m\nAction: {action}\nСтрока {e.lineno}: {error_line}\nОшибка: {e.msg}\nПозиция: {' ' * (e.offset - 1) if e.offset else ''}^\n",
+                level='CRITICAL',
+            )
 
             return False, f"Синтаксическая ошибка в скрипте: {e.msg} (строка {e.lineno})"
-# noqa: W293
         except Exception as e:
             tb_str = traceback.format_exc()
 
-            log_event(f"\033[31mОШИБКА ВЫПОЛНЕНИЯ СКРИПТА\033[0m\nAction: {action}\nБиблиотеки: {lib_names}\nТип ошибки: {type(e).__name__}\nСообщение: {str(e)}\n\nTraceback:\n{tb_str}\n", level='CRITICAL')  # noqa: E501
+            log_event(
+                f"\033[31mОШИБКА ВЫПОЛНЕНИЯ СКРИПТА\033[0m\nAction: {action}\nБиблиотеки: {lib_names}\nТип ошибки: {type(e).__name__}\nСообщение: {str(e)}\n\nTraceback:\n{tb_str}\n",
+                level='CRITICAL',
+            )
             return False, f"Ошибка выполнения скрипта ({type(e).__name__}): {str(e)}"
-
 
     @staticmethod
     def _create_restricted_import(allowed_libs: set[str]):
         """
         Создает безопасную функцию __import__, разрешающую импорт только из allowed_libs.
-        
+
         Поддерживает:
         - import module
         - from module import attr
         - from module.submodule import attr as alias
-        """  # noqa: W293
+        """
 
         def restricted_import(name, globals=None, locals=None, fromlist=(), level=0):
             # Получаем корневое имя пакета (например, 'cryptography' из 'cryptography.hazmat.primitives')
@@ -209,14 +244,12 @@ class HotReloadExecutor:
 
             # Выполняем импорт через встроенный __import__
             module = __import__(name, globals, locals, fromlist, level)
-# noqa: W293
             # ВАЖНО: если fromlist не пустой (т.е. это from X import Y),
             # __import__ возвращает самый глубокий модуль, а не корневой
             # Например:
             # - import json → возвращает json
             # - from json import dumps → возвращает json (с атрибутом dumps)
             # - from json.encoder import JSONEncoder → возвращает json.encoder
-# noqa: W293
             return module
 
         return restricted_import
@@ -264,8 +297,8 @@ class HotReloadExecutor:
         "Достаём рабочую функцию"
         compiled_func = global_scope.get(func_name)
         if not compiled_func:
-            msg = f"Функция не найдена в скрипте | func_name: \033[33m{func_name}\033[0m; \033[36m{func_script[:150]}\033[0m"  # noqa: E501
+            msg = f"Функция не найдена в скрипте | func_name: \033[33m{func_name}\033[0m; \033[36m{func_script[:150]}\033[0m"
             log_event(msg, level='ERROR')
             raise ValueError(msg)
 
-        return compiled_func  # noqa: W292
+        return compiled_func

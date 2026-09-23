@@ -39,7 +39,7 @@ def extract_flatten_keys_from_template(template: dict) -> list[str]:
         >>> template = {'extractors': [{'flatten_array_cursor': 'inbounds___0___settings___clients'}]}
         >>> extract_flatten_keys_from_template(template)
         ['inbounds___0___settings___clients']
-    """  # noqa: W293
+    """
     if not template.get('extractors'):
         return []
     return [ext['flatten_array_cursor'] for ext in template['extractors']]
@@ -57,7 +57,7 @@ def has_custom_converters(template: dict) -> bool:
 
     Returns:
         True если хотя бы один конвертер кастомный (не NULL)
-    """  # noqa: W293
+    """
     return template.get('config2json_script') is not None or template.get('json2config_script') is not None
 
 
@@ -78,7 +78,7 @@ def create_nested_config_from_flatten_keys(flatten_keys: list[str], add_test_use
     Example:
         >>> create_nested_config_from_flatten_keys(["level1___0___users"], add_test_users=2)
         {'level1': [{'users': [{'id': 'test-uuid-0', 'email': 'user0@test'}, ...]}]}
-    """  # noqa: W293
+    """
     config = {}
     for flatten_key in flatten_keys:
         parts = flatten_key.split('___')
@@ -183,7 +183,7 @@ async def test_read_config_with_custom_converters_from_db(protocol_templates_wit
     ❌ v2fly-shadowsocks: KeyError 'method'
 
     Итого: 2/3 шаблонов passed
-    """  # noqa: W293
+    """
     results = []
     errors = []
     # ОТЛАДКА: Проверяем что фикстура вообще что-то вернула
@@ -237,7 +237,7 @@ async def test_read_config_with_custom_converters_from_db(protocol_templates_wit
                 users = flatten_key2value(returned_dict, flatten_array_cursor)
                 assert users is None or users == Exception or (isinstance(users, list) and len(users) == 0), (
                     f"Пользователи должны быть удалены для {flatten_array_cursor}, получено: {users}"
-                )  # noqa: E721
+                )
             results.append(f"✅ {template_title}: OK")
         except Exception as e:
             errors.append(f"❌ {template_title}: {str(e)}")
@@ -269,7 +269,7 @@ async def test_write_config_with_custom_converters_from_db(protocol_templates_wi
     ❌ v2fly-shadowsocks: AssertionError: Expected 4 users, got 3
 
     Итого: 2/3 шаблонов passed
-    """  # noqa: W293
+    """
     results = []
     errors = []
     custom_converters_templates = 0
@@ -356,7 +356,7 @@ async def test_write_config_with_custom_converters_from_db(protocol_templates_wi
                 users = flatten_key2value(saved_dict, flatten_array_cursor)
                 assert isinstance(users, list) and len(users) == 4, (
                     f"Должно быть 4 пользователя для {flatten_array_cursor}, получено {len(users) if isinstance(users, list) else 'not a list'}"
-                )  # noqa: E501
+                )
             results.append(f"✅ {template_title}: OK (4 users)")
         except Exception as e:
             errors.append(f"❌ {template_title}: {str(e)}")
@@ -369,4 +369,4 @@ async def test_write_config_with_custom_converters_from_db(protocol_templates_wi
 
     assert len(results) == custom_converters_templates, (
         "Часть шаблонов обошла проверку конвертер скриптов: скрипты не указаны!"
-    )  # noqa: E501
+    )

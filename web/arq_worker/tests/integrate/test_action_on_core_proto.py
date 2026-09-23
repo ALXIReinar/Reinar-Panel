@@ -61,14 +61,13 @@ class TestActionOnCoreProtoBySubPlan:
                 )
                 SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib, 
                        pt.api_bulk_delete_user_script, pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, 
-                       COALESCE(np.reload_core_command, pt.reload_core_command) AS reload_core_command, np.config_path, pt.bulk_delete_script_custom_params, 
+                       np.reload_core_command, np.config_path, pt.bulk_delete_script_custom_params, 
                        pt.constant_user_data_obj, pt.required_user_data_obj, np.constant_node_data_obj,
                        pt.json2config_script, pt.config2json_script, pt.conf_converter_libs,
                        COALESCE(aui.user_injectors, '[]'::json) AS user_injectors, io.event_id
                 FROM nodes_protocols np
                 JOIN nodes n ON n.id = np.node_id AND n.is_active = true
-                JOIN protocols p ON p.id = np.proto_id
-                JOIN proto_templates pt ON p.tmp_id = pt.id 
+                JOIN proto_templates pt ON np.tmp_id = pt.id 
                 LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id
                 JOIN insert_outbox io ON io.node_proto_id = np.id
                 WHERE np.user_visible = true AND np.reg_status = $4

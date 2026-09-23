@@ -131,7 +131,6 @@ async def insert_proto_templates(conn: Connection, templates: list[dict[str, Any
         # Конвертируем datetime строки в объекты datetime
         template_data = convert_datetime_strings(template_data)
         # Извлекаем вложенные данные
-        protocols = template_data.pop("protocols", [])
         extractors = template_data.pop("templates_users_extractors", [])
         # Проверяем существование шаблона по title
         existing_id = await conn.fetchval("SELECT id FROM proto_templates WHERE title = $1", template_data["title"])
@@ -155,26 +154,6 @@ async def insert_proto_templates(conn: Connection, templates: list[dict[str, Any
         inserted_templates += 1
         print(f"  Шаблон '{template_data['title']}' вставлен (id={template_id})")
 
-        # Вставляем protocols
-        for protocol in protocols:
-            # Заменяем tmp_id на реальный template_id
-            protocol_data = protocol.copy()
-            protocol_data.pop("tmp_id", None)
-            protocol_data["tmp_id"] = template_id
-            # Проверяем существование протокола
-            exists = await conn.fetchval(
-                "SELECT 1 FROM protocols WHERE name = $1 AND tmp_id = $2", protocol_data["name"], template_id
-            )
-            if not exists:
-                columns = list(protocol_data.keys())
-                placeholders = [f"${i + 1}" for i in range(len(columns))]
-                values = [protocol_data[col] for col in columns]
-                query = f"""
-                    INSERT INTO protocols ({', '.join(columns)})
-                    VALUES ({', '.join(placeholders)})
-                """
-                await conn.execute(query, *values)
-                inserted_protocols += 1
         # Вставляем templates_users_extractors (НОВАЯ ТАБЛИЦА!)
         for extractor in extractors:
             # Заменяем tmp_id на реальный template_id

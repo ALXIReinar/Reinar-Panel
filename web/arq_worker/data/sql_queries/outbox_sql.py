@@ -53,8 +53,7 @@ class OutboxQueries:
         FROM pre_agg_events pae
         JOIN nodes_protocols np ON np.id = pae.node_proto_id AND np.user_visible = true AND np.reg_status = $1
         JOIN nodes n ON np.node_id = n.id AND n.is_active = true
-        JOIN protocols p ON np.proto_id = p.id
-        JOIN proto_templates pt ON p.tmp_id = pt.id
+        JOIN proto_templates pt ON np.tmp_id = pt.id
         LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id
         '''  # noqa: W291
         return await self.conn.fetch(query, VnodeRegStatuses.success)

@@ -14,8 +14,7 @@ class MetricsQueries:
                pt.metrics_parser_code, pt.metrics_parser_libs
         FROM nodes n
         JOIN nodes_protocols np ON np.node_id = n.id AND np.user_visible = true AND np.reg_status = $1
-        JOIN protocols p ON np.proto_id = p.id
-        JOIN proto_templates pt ON p.tmp_id = pt.id
+        JOIN proto_templates pt ON np.tmp_id = pt.id
         WHERE n.is_active = true AND np.metrics_port IS NOT NULL
         '''  # noqa: W291
         return await self.conn.fetch(query, VnodeRegStatuses.success)

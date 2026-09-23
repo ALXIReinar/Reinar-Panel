@@ -3,6 +3,7 @@ import ast
 
 class SecurityError(Exception):
     """Исключение при попытке обхода песочницы"""
+
     pass
 
 
@@ -11,6 +12,7 @@ class CodeSandboxValidator(ast.NodeVisitor):
     AST-анализатор, проверяющий код на опасные конструкции
     до его передачи в exec().
     """
+
     # Запрещенные имена атрибутов, используемые для интроспекции и обхода
     FORBIDDEN_ATTRS = {
         "__subclasses__",
@@ -25,9 +27,7 @@ class CodeSandboxValidator(ast.NodeVisitor):
 
     def visit_Attribute(self, node: ast.Attribute):
         if node.attr in self.FORBIDDEN_ATTRS:
-            raise SecurityError(
-                f"Использование атрибута '{node.attr}' запрещено в целях безопасности."
-            )
+            raise SecurityError(f"Использование атрибута '{node.attr}' запрещено в целях безопасности.")
         self.generic_visit(node)
 
     def visit_Name(self, node: ast.Name):

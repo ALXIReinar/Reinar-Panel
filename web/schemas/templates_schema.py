@@ -25,9 +25,6 @@ class CommandUpdateItemSchema(BaseModel):
 class UpdateTmpSchema(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=32, description='Имя шаблона')
     url_tmp: str | None = Field(None, min_length=1, description='Шаблон URL конфиг-ссылки')
-    reload_core_command: str | None | int = Field(
-        0, min_length=2, max_length=256, description='Команда перезагрузки ядра'
-    )
     required_user_data_obj: dict | None = Field(None, description='Обязательные данные пользователя с маркерами')
     constant_user_data_obj: dict | None = Field(None, description='Константные данные пользователя')
     proto_python_lib: str | None | int = Field(
@@ -110,4 +107,3 @@ class UserInjector(BaseModel):
         if 'async' in v:
             raise ValueError('Extractor Script должен быть синхронным (не async)')
         return v
-

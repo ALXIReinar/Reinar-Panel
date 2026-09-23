@@ -43,12 +43,12 @@ async def subscription_data(db_pool, virtual_node_seed, sub_plan_seed):
         # Создаём виртуальную ноду на НЕАКТИВНОЙ физической ноде (должна быть отфильтрована)
         vnode_on_inactive = await conn.fetchval(
             """
-            INSERT INTO nodes_protocols (node_id, proto_id, title, user_visible, reg_status)
+            INSERT INTO nodes_protocols (node_id, tmp_id, title, user_visible, reg_status)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING id
             """,
             inactive_node_id,
-            virtual_node_seed["proto_id"],
+            virtual_node_seed["tmp_id"],
             "VNode on Inactive",
             True,
             2,  # reg_status = 2 (success)
@@ -57,12 +57,12 @@ async def subscription_data(db_pool, virtual_node_seed, sub_plan_seed):
         # Создаём НЕВИДИМУЮ виртуальную ноду на активной физической ноде (должна быть отфильтрована)
         invisible_vnode = await conn.fetchval(
             """
-            INSERT INTO nodes_protocols (node_id, proto_id, title, user_visible, reg_status)
+            INSERT INTO nodes_protocols (node_id, tmp_id, title, user_visible, reg_status)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING id
             """,
             virtual_node_seed["node_id_1"],
-            virtual_node_seed["proto_id"],
+            virtual_node_seed["tmp_id"],
             "Invisible VNode",
             False,
             2,  # user_visible = False, reg_status = 2

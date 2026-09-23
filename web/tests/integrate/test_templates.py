@@ -110,7 +110,7 @@ async def test_get_template_by_id_full(client: AsyncClient, proto_template_seed)
     assert template["id"] == tmp_id
     assert template["title"] == "test-TestProtocol-1"
     assert "url_tmp" in template
-    assert "reload_core_command" in template
+    # reload_core_command был удалён из proto_templates (теперь только в nodes_protocols)
 
 
 @pytest.mark.asyncio
@@ -182,7 +182,6 @@ async def test_update_template_success(client: AsyncClient, proto_template_seed,
     update_data = {
         # НЕ обновляем title - оставляем как есть, чтобы шаблон не попал под очистку
         "url_tmp": "vless://{user_uuid}@{{node___address}}:{{inbounds___0___port}}?encryption=none#{{node___title}}",
-        "reload_core_command": "systemctl reload xray-updated",
         "proto_python_lib": "grpcio-updated",
         "required_user_data_obj": {"email": "{email}", "uuid": "{uuid}", "updated": "true"},
         "constant_user_data_obj": {"protocol": "vless", "encryption": "none", "updated": "true"},
@@ -199,7 +198,7 @@ async def test_update_template_success(client: AsyncClient, proto_template_seed,
     async with db_pool.acquire() as conn:
         template = await conn.fetchrow(
             """
-            SELECT url_tmp, reload_core_command, proto_python_lib, 
+            SELECT url_tmp, proto_python_lib, 
                    required_user_data_obj, constant_user_data_obj 
             FROM proto_templates WHERE id = $1
             """,  # noqa: W291
@@ -208,7 +207,6 @@ async def test_update_template_success(client: AsyncClient, proto_template_seed,
         assert template is not None
         assert "{{node___address}}" in template["url_tmp"]
         assert "{{node___title}}" in template["url_tmp"]
-        assert template["reload_core_command"] == "systemctl reload xray-updated"
         assert template["proto_python_lib"] == "grpcio-updated"
         assert template["required_user_data_obj"]["updated"] == "true"
         assert template["constant_user_data_obj"]["updated"] == "true"
@@ -283,13 +281,23 @@ async def test_delete_template_not_found(client: AsyncClient, db_seed):
 
 
 @pytest.mark.asyncio
-async def test_delete_template_used_by_protocol(client: AsyncClient, proto_template_seed, db_pool):
-    """Удаление шаблона, используемого протоколом (409 Conflict)"""
+async def test_delete_template_used_by_protocol(client: AsyncClient, proto_template_seed, physical_node_seed, db_pool):
+    """Удаление шаблона, используемого виртуальной нодой (409 Conflict)"""
     tmp_id = proto_template_seed["tmp_id"]
 
-    # Создаём протокол, использующий этот шаблон
+    # Создаём виртуальную ноду, использующую этот шаблон (через tmp_id)
     async with db_pool.acquire() as conn:
-        await conn.execute("INSERT INTO protocols (name, tmp_id) VALUES ($1, $2)", "UsedProtocol", tmp_id)
+        await conn.execute(
+            """
+            INSERT INTO nodes_protocols (node_id, tmp_id, title, proto_port, config_path)
+            VALUES ($1, $2, $3, $4, $5)
+            """,
+            physical_node_seed["node_id_1"],
+            tmp_id,
+            "Test VNode Using Template",
+            8888,
+            "/tmp/test.json",
+        )
 
     # Пытаемся удалить используемый шаблон
     response = await client.delete(f"/api/v1/private/templates/{tmp_id}")

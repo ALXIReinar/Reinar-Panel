@@ -65,7 +65,7 @@ def compile_extractor(script: str, libs: str = None):
 
 def create_vless_superuser(
     user_uuid: str = None, user_sub_id: int = None, flow: str = "xtls-rprx-vision", level: int = 0
-):  # noqa: E501
+):
     """Создаёт суперобъект для vless"""
     if user_uuid is None:
         user_uuid = str(uuid_lib.uuid4())
@@ -113,7 +113,7 @@ async def registered_vless_node(buffer, tmp_path, vless_extractor):
     Зарегистрированная нода с vless конфигом
 
     Возвращает: (node_id, state_path, config_path, superusers, cutlets)
-    """  # noqa: W293
+    """
     node_id = 1
     config_path = tmp_path / "vless_config.json"
     state_path = tmp_path / "vless_config.json.state.json"
@@ -160,7 +160,7 @@ async def registered_shadowsocks_node(buffer, tmp_path, shadowsocks_extractor):
     Зарегистрированная нода с shadowsocks конфигом
 
     Возвращает: (node_id, state_path, config_path, superusers, cutlets)
-    """  # noqa: W293
+    """
     node_id = 2
     config_path = tmp_path / "ss_config.json"
     state_path = tmp_path / "ss_config.json.state.json"
@@ -215,7 +215,7 @@ async def test_lite_audit_success_same_length(buffer, registered_vless_node):
     - Аудит проходит успешно
     - Возвращается True
     - Содержимое НЕ проверяется (только длина)
-    """  # noqa: W293
+    """
     node_id, state_path, config_path, superusers, cutlets = registered_vless_node
     with patch('node_client.config.env.audit_mode', AuditModes.lite):
         result = await buffer._audit_state(node_id)
@@ -231,7 +231,7 @@ async def test_lite_audit_length_mismatch_logs_only(buffer, registered_vless_nod
     - Логируется CRITICAL сообщение о дрифте
     - Возвращается False (т.к. в strict mode был бы exception, но мы в lite)
     - Exception НЕ выбрасывается
-    """  # noqa: W293
+    """
     node_id, state_path, config_path, superusers, cutlets = registered_vless_node
     # Меняем длину в конфиге (удаляем одного клиента)
     config = orjson.loads(config_path.read_bytes())
@@ -255,7 +255,7 @@ async def test_lite_audit_ignores_content_differences(buffer, registered_vless_n
     - Длина совпадает
     - Содержимое отличается (чужой пользователь)
     - Аудит проходит успешно (т.к. lite проверяет только длину)
-    """  # noqa: W293
+    """
     node_id, state_path, config_path, superusers, cutlets = registered_vless_node
     # Меняем содержимое одного клиента в конфиге (но не длину)
     config = orjson.loads(config_path.read_bytes())
@@ -283,7 +283,7 @@ async def test_medium_audit_success_exact_match(buffer, registered_vless_node):
     Проверяем:
     - Длина и содержимое совпадают
     - Аудит проходит успешно
-    """  # noqa: W293
+    """
     node_id, state_path, config_path, superusers, cutlets = registered_vless_node
     with patch('node_client.config.env.audit_mode', AuditModes.medium):
         result = await buffer._audit_state(node_id)
@@ -299,7 +299,7 @@ async def test_medium_audit_length_mismatch_continues(buffer, registered_vless_n
     - Логируется дрифт
     - Exception НЕ выбрасывается (в отличие от strict)
     - Возвращается False
-    """  # noqa: W293
+    """
     node_id, state_path, config_path, superusers, cutlets = registered_vless_node
     # Добавляем клиента в конфиг
     config = orjson.loads(config_path.read_bytes())
@@ -323,7 +323,7 @@ async def test_medium_audit_content_mismatch_logs_missing_alien(buffer, register
     - Содержимое отличается
     - Логируется статистика: missing и alien
     - Exception НЕ выбрасывается
-    """  # noqa: W293
+    """
     node_id, state_path, config_path, superusers, cutlets = registered_vless_node
     # Заменяем одного клиента в конфиге на чужого (длина не меняется)
     config = orjson.loads(config_path.read_bytes())
@@ -355,7 +355,7 @@ async def test_strict_audit_success(buffer, registered_vless_node):
     - Всё совпадает
     - Аудит проходит
     - Exception НЕ выбрасывается
-    """  # noqa: W293
+    """
     node_id, state_path, config_path, superusers, cutlets = registered_vless_node
     with patch('node_client.config.env.audit_mode', AuditModes.strict):
         result = await buffer._audit_state(node_id)
@@ -371,7 +371,7 @@ async def test_strict_audit_length_mismatch_raises_exception(buffer, registered_
     - Длина не совпадает
     - Выбрасывается ValueError
     - Сообщение содержит детали
-    """  # noqa: W293
+    """
     node_id, state_path, config_path, superusers, cutlets = registered_vless_node
     # Удаляем клиента из конфига
     config = orjson.loads(config_path.read_bytes())
@@ -391,7 +391,7 @@ async def test_strict_audit_content_mismatch_raises_exception(buffer, registered
     - Длина совпадает, но содержимое отличается
     - Выбрасывается ValueError
     - Сообщение содержит статистику missing/alien
-    """  # noqa: W293
+    """
     node_id, state_path, config_path, superusers, cutlets = registered_vless_node
     # Подменяем всех клиентов на чужих (длина та же)
     config = orjson.loads(config_path.read_bytes())
@@ -418,7 +418,7 @@ async def test_audit_state_file_not_found(buffer, registered_vless_node):
     - Логируется ошибка
     - В lite/medium режиме возвращается False
     - В strict режиме выбрасывается exception
-    """  # noqa: W293
+    """
     node_id, state_path, config_path, superusers, cutlets = registered_vless_node
     # Удаляем state файл
     state_path.unlink()
@@ -440,7 +440,7 @@ async def test_audit_config_file_not_found(buffer, registered_vless_node):
     Проверяем:
     - Логируется ошибка
     - Возвращается False или exception
-    """  # noqa: W293
+    """
     node_id, state_path, config_path, superusers, cutlets = registered_vless_node
     # Удаляем config файл
     config_path.unlink()
@@ -457,7 +457,7 @@ async def test_audit_with_vless_extractor(buffer, registered_vless_node):
     Проверяем:
     - Extractor правильно трансформирует фарш в котлеты
     - Аудит проходит успешно
-    """  # noqa: W293
+    """
     node_id, state_path, config_path, superusers, cutlets = registered_vless_node
     with patch('node_client.config.env.audit_mode', AuditModes.medium):
         result = await buffer._audit_state(node_id)
@@ -472,7 +472,7 @@ async def test_audit_with_shadowsocks_extractor(buffer, registered_shadowsocks_n
     Проверяем:
     - Crypto трансформация (UUID -> sha256 -> base64)
     - Аудит проходит успешно
-    """  # noqa: W293
+    """
     node_id, state_path, config_path, superusers, cutlets = registered_shadowsocks_node
     with patch('node_client.config.env.audit_mode', AuditModes.medium):
         result = await buffer._audit_state(node_id)
@@ -490,7 +490,7 @@ async def test_audit_multiple_injectors_all_pass(buffer, tmp_path, vless_extract
     Проверяем:
     - Каждый инжектор проверяется отдельно
     - Все проходят успешно
-    """  # noqa: W293
+    """
     node_id = 10
     config_path = tmp_path / "multi_config.json"
     state_path = tmp_path / "multi_config.json.state.json"
@@ -560,7 +560,7 @@ async def test_audit_multiple_injectors_one_fails(buffer, tmp_path, vless_extrac
     - Первый инжектор проходит
     - Второй инжектор проваливается (расхождение)
     - В medium режиме логируется, но не падает
-    """  # noqa: W293
+    """
     node_id = 11
     config_path = tmp_path / "multi_fail_config.json"
     state_path = tmp_path / "multi_fail_config.json.state.json"

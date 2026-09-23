@@ -52,7 +52,7 @@ async def test_extractor_scripts_execution(protocol_templates_with_extractors):
     Итого: 18/20 extractors passed
 
     ВАЖНО: Проверяются только шаблоны с is_accepted = true + singbox-wg (id=83)
-    """  # noqa: W293
+    """
     results = []
     errors = []
     for template in protocol_templates_with_extractors:

@@ -86,8 +86,7 @@ class TestTrafficSyncScheduler:
                 SELECT COUNT(*) 
                 FROM nodes n
                 JOIN nodes_protocols np ON np.node_id = n.id
-                JOIN protocols p ON np.proto_id = p.id
-                JOIN proto_templates pt ON p.tmp_id = pt.id
+                JOIN proto_templates pt ON np.tmp_id = pt.id
                 WHERE n.is_active = true 
                   AND np.user_visible = true 
                   AND np.reg_status = $1
@@ -131,8 +130,7 @@ class TestTrafficSyncScheduler:
                        pt.metrics_parser_code
                 FROM nodes_protocols np
                 JOIN nodes n ON np.node_id = n.id
-                JOIN protocols p ON np.proto_id = p.id
-                JOIN proto_templates pt ON p.tmp_id = pt.id
+                JOIN proto_templates pt ON np.tmp_id = pt.id
                 WHERE np.id = $1
             """,
                 seed['vnode_id'],
@@ -173,33 +171,16 @@ class TestTrafficSyncScheduler:
             # Получаем существующий парсер и протокол из seed_data
             parser = list(real_parser_scripts.values())[0]
             tmp_id = parser['id']
-            # Получаем существующий протокол из БД (вместо создания нового)
-            proto_id = await conn.fetchval(
-                """
-                SELECT id FROM protocols WHERE tmp_id = $1 LIMIT 1
-            """,
-                tmp_id,
-            )
-            if proto_id is None:
-                # Если протокол не существует, создаём его (только для изолированных тестов)
-                proto_id = await conn.fetchval(
-                    """
-                    INSERT INTO protocols (tmp_id, name)
-                    VALUES ($1, $2)
-                    RETURNING id
-                """,
-                    tmp_id,
-                    f"Test Protocol {tmp_id}",
-                )
-            # Создаём 3 виртуальные ноды
+
+            # Создаём 3 виртуальные ноды (используем tmp_id напрямую, таблица protocols удалена)
             vnode1 = await conn.fetchval(
                 """
-                INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, config_path, user_visible, reg_status)
+                INSERT INTO nodes_protocols (node_id, tmp_id, title, sub_node_address, metrics_port, config_path, user_visible, reg_status)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING id
             """,
                 node_id,
-                proto_id,
+                tmp_id,
                 "VNode Multi 1",
                 "multi1.test.com",
                 9090,
@@ -209,12 +190,12 @@ class TestTrafficSyncScheduler:
             )
             vnode2 = await conn.fetchval(
                 """
-                INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, metrics_port, config_path, user_visible, reg_status)
+                INSERT INTO nodes_protocols (node_id, tmp_id, title, sub_node_address, metrics_port, config_path, user_visible, reg_status)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING id
             """,
                 node_id,
-                proto_id,
+                tmp_id,
                 "VNode Multi 2",
                 "multi2.test.com",
                 9091,
@@ -226,13 +207,13 @@ class TestTrafficSyncScheduler:
             vnode3_no_port = await conn.fetchval(
                 """
                 INSERT INTO nodes_protocols (
-                    node_id, proto_id, title, sub_node_address, config_path, user_visible, reg_status
+                    node_id, tmp_id, title, sub_node_address, config_path, user_visible, reg_status
                 )
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING id
             """,
                 node_id,
-                proto_id,
+                tmp_id,
                 "VNode Multi 3 No Port",
                 "multi3.test.com",
                 "/etc/config3.json",
@@ -256,8 +237,7 @@ class TestTrafficSyncScheduler:
                 SELECT np.id
                 FROM nodes n
                 JOIN nodes_protocols np ON np.node_id = n.id
-                JOIN protocols p ON np.proto_id = p.id
-                JOIN proto_templates pt ON p.tmp_id = pt.id
+                JOIN proto_templates pt ON np.tmp_id = pt.id
                 WHERE n.is_active = true 
                   AND np.user_visible = true 
                   AND np.reg_status = $1

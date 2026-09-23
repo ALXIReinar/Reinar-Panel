@@ -50,6 +50,11 @@ XRAY_TROJAN_SHADOWSOCKS_SCHEMA = {
     "properties": {
         "email": {"type": "string", "description": "ID подписки пользователя (user_sub_id)"},
         "password": {"type": "string", "description": "Пароль (user_uuid для trojan, base64 PSK для shadowsocks)"},
+        "flow": {
+            "type": "string",
+            "description": "XTLS flow control (только для Trojan Reality, опционально)",
+            "enum": ["xtls-rprx-vision", "xtls-rprx-direct", ""],
+        },
     },
     "additionalProperties": False,
 }
@@ -252,7 +257,7 @@ def get_schema_for_template(template_title: str) -> dict:
         >>> schema = get_schema_for_template('xray-trojan-tls-ws')
         >>> schema == XRAY_TROJAN_SHADOWSOCKS_SCHEMA
         True
-    """  # noqa: W293
+    """
     parts = template_title.split('-')
     if len(parts) < 2:
         raise ValueError(
@@ -293,7 +298,7 @@ def get_expected_type_for_cursor(flatten_array_cursor: str) -> str:
 
         >>> get_expected_type_for_cursor('experimental___v2ray_api___stats___users')
         'string'
-    """  # noqa: W293
+    """
     # Специальный случай: v2ray_api статистика ожидает список строк (user_sub_id)
     if 'stats___users' in flatten_array_cursor:
         return 'string'

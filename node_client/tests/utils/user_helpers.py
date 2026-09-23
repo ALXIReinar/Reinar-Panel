@@ -104,7 +104,7 @@ def create_vpn_like_user(
             'node_public_key': 'key123',
             'sub_link_fp': 'chrome'
         }
-    """  # noqa: W293
+    """
     try:
         # 1. Подстановка значений в шаблон через плейсхолдеры
         required_user_obj = resolve_user_template(

@@ -41,8 +41,7 @@ class SubscriptionQueries:
         JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = sp.id
         JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true
         JOIN nodes n ON np.node_id = n.id AND n.is_active = true
-        JOIN protocols p ON p.id = np.proto_id
-        JOIN proto_templates pt ON p.tmp_id = pt.id
+        JOIN proto_templates pt ON np.tmp_id = pt.id
         WHERE sp.id = $1
         '''  # noqa: W291
         locations = await self.conn.fetch(query_locations, sub_meta['sub_plan_id'])
@@ -88,8 +87,7 @@ class SubscriptionQueries:
                COALESCE(aui.user_injectors, '[]'::json) AS user_injectors, io.event_id
         FROM nodes_protocols np
         JOIN nodes n ON n.id = np.node_id AND n.is_active = true
-        JOIN protocols p ON p.id = np.proto_id
-        JOIN proto_templates pt ON p.tmp_id = pt.id 
+        JOIN proto_templates pt ON np.tmp_id = pt.id 
         LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id
         JOIN insert_outbox io ON io.node_proto_id = np.id
         WHERE np.user_visible = true

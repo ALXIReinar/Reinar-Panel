@@ -8,11 +8,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
-env_files = (
-    os.getenv('ENV_FILE') or
-    os.getenv('ENV_LOCAL_TEST_FILE') or
-    'node_client/.env.node.prod'
-)
+env_files = os.getenv('ENV_FILE') or os.getenv('ENV_LOCAL_TEST_FILE') or 'node_client/.env.node.prod'
 load_dotenv(env_files, override=True)
 logging.critical(f'\033[35m{env_files}\033[0m | node_port: \033[32m{os.getenv("NODE_PORT", "8100")}\033[0m')
 
@@ -41,9 +37,9 @@ class CoreProtoActions:
 
 
 class AuditModes(str, Enum):
-    lite = 'lite'                        # Сравнение длины. Лог при расхождении. Нод клиент продолжает работать
-    medium = 'medium'                    # Глубокое сравнение каждого пользователя из State файла с пользователем из Конфиг-файла впн-ядра  # noqa: E501
-    strict = 'strict'                    # Как Medium, но нод клиент прекращает работу и падает с ValueError
+    lite = 'lite'  # Сравнение длины. Лог при расхождении. Нод клиент продолжает работать
+    medium = 'medium'  # Глубокое сравнение каждого пользователя из State файла с пользователем из Конфиг-файла впн-ядра
+    strict = 'strict'  # Как Medium, но нод клиент прекращает работу и падает с ValueError
 
     medium_advanced = 'medium_advanced'  # Medium. Расхождения отправляются на админку
     strict_advanced = 'strict_advanced'  # Strict + Умное уведомление на админку
@@ -57,8 +53,8 @@ class Settings(BaseSettings):
     node_port: int
     command_timeout: int  # секунды
 
-    write_buffer_size: int # Размер очереди пользователей в памяти на удаление/запись в файл
-    write_buffer_interval: int # Интервал записи очереди из памяти на диск (в файл)
+    write_buffer_size: int  # Размер очереди пользователей в памяти на удаление/запись в файл
+    write_buffer_interval: int  # Интервал записи очереди из памяти на диск (в файл)
 
     admin_panel_private_ip: str
     audit_mode: AuditModes = Field(default=AuditModes.lite)
@@ -68,4 +64,6 @@ class Settings(BaseSettings):
 @lru_cache
 def get_env_vars():
     return Settings()
+
+
 env = get_env_vars()

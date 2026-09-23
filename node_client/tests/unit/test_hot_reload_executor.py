@@ -36,11 +36,12 @@ def get_script_from_template(protocol_templates):
 
     Returns:
         Callable: Функция принимающая field name и возвращающая значение из первого шаблона
-    """  # noqa: W293
+    """
     if not protocol_templates:
         pytest.skip("Нет доступных шаблонов для тестирования")
     # Берём ПЕРВЫЙ шаблон из списка
     template = protocol_templates[0]
+    print(f'\033[34m{template}\033[0m')
 
     def getter(field: str):
         """Извлекает поле из первого шаблона"""
@@ -930,7 +931,7 @@ async def bulk_add_users(users_list, node_ip, core_port, custom_params):
 """
     with patch.object(
         HotReloadExecutor, '_compile_script_cached', wraps=HotReloadExecutor._compile_script_cached
-    ) as mock_compile:  # noqa: E501
+    ) as mock_compile:
         success1, msg1 = await HotReloadExecutor.execute_action_script(
             script=script1,
             lib_names=None,
@@ -976,7 +977,7 @@ async def test_lru_cache_respects_whitespace_changes():
     script2 = "async def bulk_add_users(u, n, c, p): return True"  # Лишний пробел
     with patch.object(
         HotReloadExecutor, '_compile_script_cached', wraps=HotReloadExecutor._compile_script_cached
-    ) as mock_compile:  # noqa: E501
+    ) as mock_compile:
         await HotReloadExecutor.execute_action_script(script1, None, [{}], "127.0.0.1", 10085, "user_core_operation")
         await HotReloadExecutor.execute_action_script(script2, None, [{}], "127.0.0.1", 10085, "user_core_operation")
         # Разные скрипты (даже с минимальными отличиями)

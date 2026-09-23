@@ -11,7 +11,9 @@ class OnlyAdminAccessMiddleware:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
-        if scope["type"] not in {"http",}:
+        if scope["type"] not in {
+            "http",
+        }:
             await self.app(scope, receive, send)
             return
 
@@ -23,5 +25,4 @@ class OnlyAdminAccessMiddleware:
             await response(scope, receive, send)
             return
 
-
-        await self.app(scope, receive, send)  # noqa: W292
+        await self.app(scope, receive, send)

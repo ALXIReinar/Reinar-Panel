@@ -62,8 +62,7 @@ class TestCollectTrafficMetrics:
                        pt.metrics_parser_code, pt.metrics_parser_libs, pt.metrics_command, pt.api_metrics_script
                 FROM nodes_protocols np
                 JOIN nodes n ON np.node_id = n.id
-                JOIN protocols p ON np.proto_id = p.id
-                JOIN proto_templates pt ON p.tmp_id = pt.id
+                JOIN proto_templates pt ON np.tmp_id = pt.id
                 WHERE np.id = $1
             """,
                 seed['vnode_id'],
@@ -156,8 +155,7 @@ class TestCollectTrafficMetrics:
                        pt.metrics_parser_code, pt.metrics_parser_libs, pt.metrics_command, pt.api_metrics_script
                 FROM nodes_protocols np
                 JOIN nodes n ON np.node_id = n.id
-                JOIN protocols p ON np.proto_id = p.id
-                JOIN proto_templates pt ON p.tmp_id = pt.id
+                JOIN proto_templates pt ON np.tmp_id = pt.id
                 WHERE np.id = $1
             """,
                 seed['vnode_id'],
@@ -266,8 +264,7 @@ class TestCollectTrafficMetrics:
                        pt.metrics_parser_code, pt.metrics_parser_libs, pt.metrics_command, pt.api_metrics_script
                 FROM nodes_protocols np
                 JOIN nodes n ON np.node_id = n.id
-                JOIN protocols p ON np.proto_id = p.id
-                JOIN proto_templates pt ON p.tmp_id = pt.id
+                JOIN proto_templates pt ON np.tmp_id = pt.id
                 WHERE np.id = $1
             """,
                 seed['vnode_id'],
@@ -311,8 +308,7 @@ class TestCollectTrafficMetrics:
                        pt.metrics_parser_code, pt.metrics_parser_libs, pt.metrics_command, pt.api_metrics_script
                 FROM nodes_protocols np
                 JOIN nodes n ON np.node_id = n.id
-                JOIN protocols p ON np.proto_id = p.id
-                JOIN proto_templates pt ON p.tmp_id = pt.id
+                JOIN proto_templates pt ON np.tmp_id = pt.id
                 WHERE np.id = $1
             """,
                 seed['vnode_id'],
@@ -355,8 +351,7 @@ class TestCollectTrafficMetrics:
                        pt.metrics_parser_code, pt.metrics_parser_libs, pt.metrics_command, pt.api_metrics_script
                 FROM nodes_protocols np
                 JOIN nodes n ON np.node_id = n.id
-                JOIN protocols p ON np.proto_id = p.id
-                JOIN proto_templates pt ON p.tmp_id = pt.id
+                JOIN proto_templates pt ON np.tmp_id = pt.id
                 WHERE np.id = $1
             """,
                 seed['vnode_id'],

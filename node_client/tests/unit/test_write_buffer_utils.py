@@ -74,7 +74,7 @@ def test_flatten_key2value_simple_select(sample_xray_config):
     Тест: Простой select значения по flatten ключу
 
     Проверяем что функция корректно извлекает значение из вложенной структуры
-    """  # noqa: W293
+    """
     # Получаем loglevel
     result = flatten_key2value(sample_xray_config, "log___loglevel")
     assert result == "warning"
@@ -85,7 +85,7 @@ def test_flatten_key2value_array_index(sample_xray_config):
     Тест: Навигация по массиву с индексом
 
     Проверяем что функция корректно обрабатывает числовые индексы
-    """  # noqa: W293
+    """
     # Получаем массив clients из второго inbound (индекс 1)
     clients = flatten_key2value(sample_xray_config, "inbounds___1___settings___clients")
     assert isinstance(clients, list)
@@ -98,7 +98,7 @@ def test_flatten_key2value_nested_value(sample_xray_config):
     Тест: Глубокая вложенность
 
     Проверяем навигацию на 4 уровня вглубь
-    """  # noqa: W293
+    """
     # Получаем email первого клиента
     email = flatten_key2value(sample_xray_config, "inbounds___1___settings___clients___0___email")
     assert email == "user1@test.com"
@@ -109,7 +109,7 @@ def test_flatten_key2value_with_delete(sample_xray_config):
     Тест: Удаление объекта по ключу (delete_obj=True)
 
     Проверяем что объект удаляется из исходного словаря
-    """  # noqa: W293
+    """
     # Удаляем массив clients
     result = flatten_key2value(sample_xray_config, "inbounds___1___settings___clients", delete_obj=True)
     assert result is None  # Функция ничего не возвращает при удалении
@@ -122,7 +122,7 @@ def test_flatten_key2value_with_replace(sample_xray_config):
     Тест: Замена объекта по ключу (replace_last_obj=True)
 
     Проверяем что объект заменяется на новый
-    """  # noqa: W293
+    """
     new_clients = [{"id": "uuid-999", "email": "newuser@test.com"}]
     # Заменяем массив clients
     result = flatten_key2value(
@@ -140,7 +140,7 @@ def test_flatten_key2value_invalid_key(sample_xray_config):
     Тест: Неверный ключ (несуществующий путь)
 
     Ожидаем: Exception (функция возвращает Exception как fallback)
-    """  # noqa: W293
+    """
     result = flatten_key2value(sample_xray_config, "nonexistent___key___path")
     assert result is Exception
 
@@ -151,7 +151,7 @@ def test_flatten_key2value_incorrect_delimiter():
 
     Ожидаем: Exception, т.к. ключ не будет разделён корректно.
     Функция попытается найти ключ "a.b.c" целиком (без разделения) и не найдёт его.
-    """  # noqa: W293
+    """
     config = {"a": {"b": {"c": "value"}}}
     # Используем точку вместо ___
     result = flatten_key2value(config, "a.b.c")
@@ -163,7 +163,7 @@ def test_flatten_key2value_deep_nesting():
     Тест: Очень глубокая вложенность (5+ уровней)
 
     Проверяем что функция справляется с глубокими структурами
-    """  # noqa: W293
+    """
     deep_config = {"level1": {"level2": {"level3": {"level4": {"level5": {"value": "deep_value"}}}}}}
     result = flatten_key2value(deep_config, "level1___level2___level3___level4___level5___value")
     assert result == "deep_value"
@@ -177,7 +177,7 @@ def test_navigate_to_path_success(sample_xray_config):
     Тест: Успешная навигация до массива
 
     Проверяем что функция возвращает ссылку на list
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     clients = buffer._navigate_to_path(sample_xray_config, "inbounds___1___settings___clients")
     assert isinstance(clients, list)
@@ -192,7 +192,7 @@ def test_navigate_to_path_not_array(sample_xray_config):
     Тест: Путь ведёт к dict, а не к list
 
     Ожидаем: TypeError
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     with pytest.raises(TypeError, match="не указывает на массив"):
         # Путь ведёт к dict 'settings', а не к массиву
@@ -208,7 +208,7 @@ async def test_read_config_success(temp_config_file):
 
     Проверяем что файл корректно парсится в dict
     Метод теперь возвращает tuple[bool, dict]
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     success, config_str = await buffer._read_config(str(temp_config_file))
     assert success is True
@@ -225,7 +225,7 @@ async def test_read_config_file_not_found():
 
     Ожидаем: (False, {}) если raise_exc=False
     Ожидаем: FileNotFoundError если raise_exc=True
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     # Сценарий 1: raise_exc=False (по умолчанию)
     success, config_str = await buffer._read_config("/path/to/nonexistent/file.json", raise_exc=False)
@@ -243,7 +243,7 @@ async def test_read_config_invalid_json(temp_invalid_json_file):
     _read_config() просто читает файл как текст и не парсит JSON,
     поэтому файл с невалидным JSON будет успешно прочитан как строка.
     Валидация JSON происходит на уровне вызывающего кода.
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     # Файл успешно читается как строка, даже если содержимое не валидный JSON
     success, config_str = await buffer._read_config(str(temp_invalid_json_file), raise_exc=False)
@@ -265,7 +265,7 @@ async def test_write_config_atomic_success(tmp_path, sample_xray_config):
     Проверяем что:
     1. Файл записан корректно
     2. Содержимое совпадает с исходным
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     target_file = tmp_path / "output_config.json"
     # Записываем конфиг
@@ -285,7 +285,7 @@ async def test_write_config_atomic_uses_tmp_dir(tmp_path, sample_xray_config):
     Тест: Проверка что .tmp файл создаётся в TMP_DIR
 
     Проверяем механизм атомарной записи через временный файл
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     target_file = tmp_path / "atomic_test.json"
     # Записываем конфиг

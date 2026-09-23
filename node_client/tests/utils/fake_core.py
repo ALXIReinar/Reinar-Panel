@@ -14,14 +14,14 @@ class FakeSubprocessResult:
     Фейковый результат выполнения subprocess.run()
 
     Имитирует subprocess.CompletedProcess
-    """  # noqa: W293
+    """
 
     returncode: int
     stdout: str
     stderr: str
 
     def __repr__(self):
-        return f"FakeSubprocessResult(returncode={self.returncode}, stdout='{self.stdout[:50]}...', stderr='{self.stderr[:50]}...')"  # noqa: E501
+        return f"FakeSubprocessResult(returncode={self.returncode}, stdout='{self.stdout[:50]}...', stderr='{self.stderr[:50]}...')"
 
 
 def create_mock_subprocess(
@@ -49,7 +49,7 @@ def create_mock_subprocess(
         >>> result = mock("echo test", shell=True)
         >>> result.returncode
         0
-    """  # noqa: W293
+    """
     mock = MagicMock()
     if raise_timeout:
         mock.side_effect = subprocess.TimeoutExpired(cmd="test_command", timeout=30)
@@ -75,7 +75,7 @@ def create_xray_stats_output(users: list[dict]) -> str:
         >>> output = create_xray_stats_output(users)
         >>> "user>>>test1>>>traffic>>>uplink" in output
         True
-    """  # noqa: W293
+    """
     lines = []
     for user in users:
         email = user.get("email", "unknown")
@@ -105,7 +105,7 @@ class FakeXrayCore:
     Фейковое ядро xray для тестов
 
     Хранит список пользователей в памяти и имитирует операции
-    """  # noqa: W293
+    """
 
     def __init__(self):
         self.users: dict[str, dict] = {}  # {email: user_obj}

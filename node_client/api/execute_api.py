@@ -11,37 +11,36 @@ from node_client.schemas.execute_schema import ExecuteResponseSchema, ExecuteCom
 router = APIRouter(prefix='/node', tags=['Execute'])
 
 
-
 @router.post('/execute', summary="Выполнить команду на ноде")
 def execute_command(body: ExecuteCommandSchema):
     """
     Выполняет команду на ноде через subprocess.
-    
+
     Timeout: 30 секунд по умолчанию
-    """  # noqa: W293
+    """
     try:
-        result = subprocess.run(
-            body.command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=env.command_timeout
-        )
-# noqa: W293
+        result = subprocess.run(body.command, shell=True, capture_output=True, text=True, timeout=env.command_timeout)
         return ExecuteResponseSchema(
             success=result.returncode == 0,
             stdout=result.stdout,
             stderr=result.stderr,
             exit_code=result.returncode,
-            command=body.command
+            command=body.command,
         )
-# noqa: W293
     except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=408, detail={"success": False, "message": f"Команда превысила timeout ({env.command_timeout}s)", "command": body.command})  # noqa: E501
-# noqa: W293
+        raise HTTPException(
+            status_code=408,
+            detail={
+                "success": False,
+                "message": f"Команда превысила timeout ({env.command_timeout}s)",
+                "command": body.command,
+            },
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail={"success": False, "message": f"Ошибка выполнения команды: {str(e)}", "command": body.command})  # noqa: E501
-
+        raise HTTPException(
+            status_code=500,
+            detail={"success": False, "message": f"Ошибка выполнения команды: {str(e)}", "command": body.command},
+        )
 
 
 @router.post('/metrics')
@@ -78,25 +77,29 @@ async def get_metrics(body: MetricsSchema, buffer: CoreBuffersDep, request: Requ
     # xray api statsquery --server=127.0.0.1:{} -pattern "user>>>" -reset
     cmd_str = body.command.format(body.metrics_port)
     # xray api statsquery --server=127.0.0.1:10085 -pattern "user>>>" -reset
-# noqa: W293
     # Проверяем что нода зарегистрирована
     if body.node_proto_id not in buffer.buffer_storage:
-        log_event(f'\033[35m[Metrics Grabbing]\033[0m Нода не зарегистрирована в буфере | node_proto_id: \033[31m{body.node_proto_id}\033[0m', request=request, level='WARNING')  # noqa: E501
-        raise HTTPException(
-            status_code=404,  # noqa: W291
-            detail={
-                "success": False,  # noqa: W291
-                "error": "Node not registered",  # noqa: W291
-                "message": f"Нода {body.node_proto_id} не зарегистрирована в ConfigWriteBuffer. Нет активных пользователей."  # noqa: E501
-            }
+        log_event(
+            f'\033[35m[Metrics Grabbing]\033[0m Нода не зарегистрирована в буфере | node_proto_id: \033[31m{body.node_proto_id}\033[0m',
+            request=request,
+            level='WARNING',
         )
-# noqa: W293
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "success": False,
+                "error": "Node not registered",
+                "message": f"Нода {body.node_proto_id} не зарегистрирована в ConfigWriteBuffer. Нет активных пользователей.",
+            },
+        )
     try:
-
         api_metrics, cli_metrics = None, None
         "1.1. Пробуем получить метрики по Апи ядра"
         if body.metrics_script and body.metrics_port:
-            log_event(f'\033[35m[Metrics Grabbing]\033[0m Сбор метрик Питон-скриптом | node_proto_id: \033[33m{body.node_proto_id}\033[0m; script: \033[34m{body.metrics_script[:200]}\033[0m', request=request)  # noqa: E501
+            log_event(
+                f'\033[35m[Metrics Grabbing]\033[0m Сбор метрик Питон-скриптом | node_proto_id: \033[33m{body.node_proto_id}\033[0m; script: \033[34m{body.metrics_script[:200]}\033[0m',
+                request=request,
+            )
             action_res, api_metrics = await HotReloadExecutor.execute_action_script(
                 script=body.metrics_script,
                 lib_names=body.core_lib,
@@ -105,14 +108,16 @@ async def get_metrics(body: MetricsSchema, buffer: CoreBuffersDep, request: Requ
                 action='get_metrics',
             )
         else:
-
-            log_event(f'\033[35m[Metrics Grabbing]\033[0m] Сбор метрик CLI-командой | node_proto_id: \033[33m{body.node_proto_id}\033[0m; command: \033[34m{cmd_str}\033[0m', request=request)  # noqa: E501
+            log_event(
+                f'\033[35m[Metrics Grabbing]\033[0m] Сбор метрик CLI-командой | node_proto_id: \033[33m{body.node_proto_id}\033[0m; command: \033[34m{cmd_str}\033[0m',
+                request=request,
+            )
             "1.2. Получение метрик по команде в cli, если не удалось по скрипту/нет скрипта"
             result = subprocess.run(
-                cmd_str.split(), # ["xray", "api", "statsquery", "--server=127.0.0.1:10085", "-pattern", '"user>>>"', "-reset"]  # noqa: E501
+                cmd_str.split(),  # ["xray", "api", "statsquery", "--server=127.0.0.1:10085", "-pattern", '"user>>>"', "-reset"]
                 capture_output=True,
                 text=True,
-                timeout=env.command_timeout
+                timeout=env.command_timeout,
             )
             if result.returncode == 0:
                 cli_metrics = result.stdout
@@ -121,37 +126,62 @@ async def get_metrics(body: MetricsSchema, buffer: CoreBuffersDep, request: Requ
         raw_metrics = api_metrics or cli_metrics
         if not raw_metrics:
             approach = "python-script" if body.metrics_script else "cli-command"
-            log_event(f'\033[35m[Metrics Grabbing]\033[0m Не удалось собрать метрики | node_proto_id: \033[33m{body.node_proto_id}\033[0m; approach: \033[32m{approach}\033[0m', request=request, level='ERROR')  # noqa: E501
+            log_event(
+                f'\033[35m[Metrics Grabbing]\033[0m Не удалось собрать метрики | node_proto_id: \033[33m{body.node_proto_id}\033[0m; approach: \033[32m{approach}\033[0m',
+                request=request,
+                level='ERROR',
+            )
             raise HTTPException(status_code=400, detail={"success": False, "error": "Failed to get stats"})
 
-        "2. Парсим ответ впн-ядра до формата"# [{user_sub_id: 1, total_adds_md: 1024}, ...]
-        log_event(f'\033[35m[Metrics Grabbing]\033[0m Парсим метрики | node_proto_id: \033[33m{body.node_proto_id}\033[0m', request=request)  # noqa: E501
+        "2. Парсим ответ впн-ядра до формата"  # [{user_sub_id: 1, total_adds_md: 1024}, ...]
+        log_event(
+            f'\033[35m[Metrics Grabbing]\033[0m Парсим метрики | node_proto_id: \033[33m{body.node_proto_id}\033[0m',
+            request=request,
+        )
         success, traffic_pack = await HotReloadExecutor.execute_action_script(
             script=body.metrics_parser_code,
             lib_names=body.metrics_parser_libs,
-            node_ip='0',                # Затычки для обязательных аргументов
-            core_api_port=0,            # Затычки для обязательных аргументов
+            node_ip='0',  # Затычки для обязательных аргументов
+            core_api_port=0,  # Затычки для обязательных аргументов
             action='parse_metrics',
             custom_params={
                 "raw_metrics": raw_metrics,
-                "vpn_users": copy.deepcopy(buffer.buffer_storage[body.node_proto_id]), # Отдаём копию, Read only!
-                "local_state": buffer.local_state[body.node_proto_id], # А local_state может использовать как хочет
-            }
+                "vpn_users": copy.deepcopy(buffer.buffer_storage[body.node_proto_id]),  # Отдаём копию, Read only!
+                "local_state": buffer.local_state[body.node_proto_id],  # А local_state может использовать как хочет
+            },
         )
 
         if not success:
-            log_event(f'\033[35m[Metrics Grabbing]\033[0m Не удалось обработать метрики | node_proto_id: \033[33m{body.node_proto_id}\033[0m; script: \033[34m{body.metrics_parser_code[:200]}\033[0m', request=request, level='ERROR')  # noqa: E501
+            log_event(
+                f'\033[35m[Metrics Grabbing]\033[0m Не удалось обработать метрики | node_proto_id: \033[33m{body.node_proto_id}\033[0m; script: \033[34m{body.metrics_parser_code[:200]}\033[0m',
+                request=request,
+                level='ERROR',
+            )
             raise HTTPException(status_code=400, detail={"success": False, "error": "Failed to parse stats"})
 
         traffic_consuming, troubles = traffic_pack
         if troubles:
-            log_event(f'\033[35m[Metrics Grabbing]\033[0m Часть stdout не удалось обработать | troubles: {troubles}; node_proto_id: \033[33m{body.node_proto_id}\033[0m', level='WARNING')  # noqa: E501
+            log_event(
+                f'\033[35m[Metrics Grabbing]\033[0m Часть stdout не удалось обработать | troubles: {troubles}; node_proto_id: \033[33m{body.node_proto_id}\033[0m',
+                level='WARNING',
+            )
 
         return {"success": True, "users_traffic": traffic_consuming}
 
     except subprocess.TimeoutExpired:
-        log_event(f'\033[35m[Metrics Grabbing]\033[0m CLI зависла/долго исполняется | node_proto_id: \033[33m{body.node_proto_id}\033[0m', request=request, level='WARNING')  # noqa: E501
-        raise HTTPException(status_code=408, detail={"success": False, "message": f"Команда превысила timeout ({env.command_timeout}s)", "command": cmd_str})  # noqa: E501
+        log_event(
+            f'\033[35m[Metrics Grabbing]\033[0m CLI зависла/долго исполняется | node_proto_id: \033[33m{body.node_proto_id}\033[0m',
+            request=request,
+            level='WARNING',
+        )
+        raise HTTPException(
+            status_code=408,
+            detail={
+                "success": False,
+                "message": f"Команда превысила timeout ({env.command_timeout}s)",
+                "command": cmd_str,
+            },
+        )
 
     except HTTPException:
         # Re-raise HTTPException. Иначе все исключения будут перехватываться как 500 в "Exception as e"
@@ -159,4 +189,7 @@ async def get_metrics(body: MetricsSchema, buffer: CoreBuffersDep, request: Requ
 
     except Exception as e:
         log_event('\033[35m[Metrics Grabbing]\033[0m Ошибка в эндпоинте нод клиента', request=request, level='CRITICAL')
-        raise HTTPException(status_code=500, detail={"success": False, "message": f"Ошибка выполнения команды: {repr(e)}", "command": cmd_str})  # noqa: E501, W292
+        raise HTTPException(
+            status_code=500,
+            detail={"success": False, "message": f"Ошибка выполнения команды: {repr(e)}", "command": cmd_str},
+        )

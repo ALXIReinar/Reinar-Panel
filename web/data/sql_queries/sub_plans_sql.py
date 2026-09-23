@@ -186,7 +186,7 @@ class SubPlansQueries:
                         'link_id', vsp.id, 
                         'node_proto_id', vsp.node_proto_id,
                         'node_id', np.node_id,
-                        'proto_id', np.proto_id,
+                        'proto_id', np.tmp_id,
                         'proto_title', np.title,
                         'config_link', np.config_link,
                         'node_title', n.title,
@@ -197,7 +197,6 @@ class SubPlansQueries:
             FROM vnodes_sub_plans vsp
             LEFT JOIN nodes_protocols np ON np.id = vsp.node_proto_id
             LEFT JOIN nodes n ON n.id = np.node_id
-            LEFT JOIN protocols p ON p.id = np.proto_id
             WHERE vsp.sub_plan_id = $1
             GROUP BY vsp.sub_plan_id
         ),

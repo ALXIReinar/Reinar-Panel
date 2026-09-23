@@ -70,7 +70,7 @@ async def test_worker_triggers_on_max_batch(config_with_2_users):
     - Добавляем 6 пользователей быстро
     - Первые 5 триггерят батч → воркер записывает
     - 6-й остаётся в очереди
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer(max_batch=5, timeout=2.0)
     node_proto_id = 1
     user_injectors = create_user_injectors()
@@ -136,7 +136,7 @@ async def test_worker_triggers_on_timeout(config_with_2_users):
     - Добавляем 2 пользователя (меньше max_batch)
     - Ждём > timeout
     - Проверяем что данные записались на диск
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer(max_batch=10, timeout=1.0)
     node_proto_id = 1
     user_injectors = create_user_injectors()
@@ -162,7 +162,7 @@ async def test_worker_triggers_on_timeout(config_with_2_users):
         config2json_script=None,
         json2config_script=None,
         conf_converter_libs=None,
-    )  # noqa: E501
+    )
     await buffer.add_user(
         node_proto_id=node_proto_id,
         user_obj=user2,
@@ -172,7 +172,7 @@ async def test_worker_triggers_on_timeout(config_with_2_users):
         config2json_script=None,
         json2config_script=None,
         conf_converter_libs=None,
-    )  # noqa: E501
+    )
     # Ждём больше чем timeout для срабатывания воркера
     await asyncio.sleep(1.5)
     # Проверяем что данные записались на диск
@@ -197,7 +197,7 @@ async def test_worker_respects_queue_limited_flag(config_with_2_users):
     - Возвращаем queue_limited=True
     - Принудительно вызываем flush
     - Проверяем что теперь данные записались
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer(max_batch=3, timeout=1.0)
     node_proto_id = 1
     user_injectors = create_user_injectors()
@@ -249,7 +249,7 @@ async def test_worker_handles_empty_queue(config_with_2_users):
     - НЕ добавляем новых пользователей
     - Ждём > timeout
     - Проверяем что воркер работает, но запись не происходит
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer(max_batch=5, timeout=0.5)
     node_proto_id = 1
     # Регистрируем ноду (загружаются 2 пользователя из state.json)
@@ -287,7 +287,7 @@ async def test_worker_isolation_between_nodes(tmp_path):
     - В ноде 2 также добавляем пользователей
     - Искусственно портим путь к файлу ноды 1 (эмулируем ошибку записи)
     - Проверяем что нода 2 всё равно записывает успешно
-    """  # noqa: W293
+    """
     # Создаём 2 конфига
     config1 = tmp_path / "config1.json"
     config2 = tmp_path / "config2.json"
@@ -309,7 +309,7 @@ async def test_worker_isolation_between_nodes(tmp_path):
         config2json_script=None,
         json2config_script=None,
         conf_converter_libs=None,
-    )  # noqa: E501
+    )
     await buffer.register_node(
         node_proto_id=2,
         filepath=str(config2),
@@ -318,7 +318,7 @@ async def test_worker_isolation_between_nodes(tmp_path):
         config2json_script=None,
         json2config_script=None,
         conf_converter_libs=None,
-    )  # noqa: E501
+    )
     # Добавляем по 2 пользователя в каждую ноду
     for i in range(2):
         user1 = create_test_user(email=f"node1_user_{i}@test.com", uuid=f"uuid-n1-{i}", as_superuser=True)
@@ -332,7 +332,7 @@ async def test_worker_isolation_between_nodes(tmp_path):
             config2json_script=None,
             json2config_script=None,
             conf_converter_libs=None,
-        )  # noqa: E501
+        )
         await buffer.add_user(
             node_proto_id=2,
             user_obj=user2,
@@ -342,7 +342,7 @@ async def test_worker_isolation_between_nodes(tmp_path):
             config2json_script=None,
             json2config_script=None,
             conf_converter_libs=None,
-        )  # noqa: E501
+        )
 
     # Портим путь к файлу ноды 1 (эмулируем ошибку)
     buffer.node_metadata[1]['filepath'] = str(tmp_path / "nonexistent.json")
@@ -371,7 +371,7 @@ async def test_write_to_disk_success(config_with_2_users):
     - Добавляем 3 новых пользователя в буфер
     - Принудительно вызываем _write_node_to_disk()
     - Проверяем что данные записались корректно (2 + 3 = 5)
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer(max_batch=10, timeout=10.0)
     node_proto_id = 1
     user_injectors = create_user_injectors()
@@ -424,7 +424,7 @@ async def test_write_preserves_file_structure(tmp_path):
     - Добавляем пользователей
     - Записываем на диск
     - Проверяем что все поля сохранились
-    """  # noqa: W293
+    """
     # Конфиг ядра с расширенной структурой
     config = {
         "log": {"loglevel": "info", "access": "/var/log/access.log"},
@@ -461,7 +461,7 @@ async def test_write_preserves_file_structure(tmp_path):
         config2json_script=None,
         json2config_script=None,
         conf_converter_libs=None,
-    )  # noqa: E501
+    )
     # Добавляем пользователя
     new_user = create_test_user(email="new@test.com", uuid="uuid-new", as_superuser=True)
     await buffer.add_user(
@@ -473,7 +473,7 @@ async def test_write_preserves_file_structure(tmp_path):
         config2json_script=None,
         json2config_script=None,
         conf_converter_libs=None,
-    )  # noqa: E501
+    )
     # Записываем на диск
     await buffer._write_node_to_disk(node_proto_id)
     # Читаем полный конфиг
@@ -528,7 +528,7 @@ async def test_write_with_reload_command(config_with_2_users, tmp_path):
         config2json_script=None,
         json2config_script=None,
         conf_converter_libs=None,
-    )  # noqa: E501
+    )
     # Проверяем что маркера ещё нет
     assert not marker_file.exists()
     # Записываем на диск (должна выполниться команда перезагрузки)
@@ -558,7 +558,7 @@ async def test_write_without_reload_command(config_with_2_users):
         config2json_script=None,
         json2config_script=None,
         conf_converter_libs=None,
-    )  # noqa: E501
+    )
     # Добавляем пользователя
     user = create_test_user(email="no_reload@test.com", uuid="uuid-noreload", as_superuser=True)
     await buffer.add_user(
@@ -570,7 +570,7 @@ async def test_write_without_reload_command(config_with_2_users):
         config2json_script=None,
         json2config_script=None,
         conf_converter_libs=None,
-    )  # noqa: E501
+    )
     # Записываем на диск
     await buffer._write_node_to_disk(node_proto_id)
     # Проверяем что данные записались
@@ -600,7 +600,7 @@ async def test_unlimit_queue_disables_limits(config_with_2_users):
         config2json_script=None,
         json2config_script=None,
         conf_converter_libs=None,
-    )  # noqa: E501
+    )
     # Изначально True
     assert buffer.node_metadata[node_proto_id]['queue_limited'] is True
     # Входим в контекст
@@ -629,7 +629,7 @@ async def test_unlimit_queue_flushes_on_exit(config_with_2_users):
         config2json_script=None,
         json2config_script=None,
         conf_converter_libs=None,
-    )  # noqa: E501
+    )
     # Используем unlimit режим
     async with buffer.unlimit_queue(node_proto_id):
         # Добавляем 3 пользователя (не достигаем max_batch=10)
@@ -644,7 +644,7 @@ async def test_unlimit_queue_flushes_on_exit(config_with_2_users):
                 config2json_script=None,
                 json2config_script=None,
                 conf_converter_libs=None,
-            )  # noqa: E501
+            )
     # После выхода из контекста данные ДОЛЖНЫ записаться
     await asyncio.sleep(0.3)
     users_on_disk = read_config_users(config_with_2_users)
@@ -671,7 +671,7 @@ async def test_unlimit_queue_restores_flag(config_with_2_users):
         config2json_script=None,
         json2config_script=None,
         conf_converter_libs=None,
-    )  # noqa: E501
+    )
     # Изначально True
     assert buffer.node_metadata[node_proto_id]['queue_limited'] is True
     # Сценарий 1: Нормальный выход
@@ -707,7 +707,7 @@ async def test_bulk_operations_without_intermediate_writes(config_with_2_users):
         config2json_script=None,
         json2config_script=None,
         conf_converter_libs=None,
-    )  # noqa: E501
+    )
     # Запоминаем время изменения файла
     initial_mtime = config_with_2_users.stat().st_mtime
     # Используем unlimit режим
@@ -724,7 +724,7 @@ async def test_bulk_operations_without_intermediate_writes(config_with_2_users):
                 config2json_script=None,
                 json2config_script=None,
                 conf_converter_libs=None,
-            )  # noqa: E501
+            )
         # Ждём больше чем timeout
         await asyncio.sleep(2.5)
         # Файл НЕ должен измениться (промежуточных записей не было)
@@ -766,7 +766,7 @@ async def test_stop_cancels_all_workers(tmp_path):
             config2json_script=None,
             json2config_script=None,
             conf_converter_libs=None,
-        )  # noqa: E501
+        )
     # Проверяем что все воркеры запущены
     for i in range(1, 4):
         assert i in buffer.worker_tasks
@@ -797,7 +797,7 @@ async def test_stop_flushes_pending_operations(config_with_2_users):
         config2json_script=None,
         json2config_script=None,
         conf_converter_libs=None,
-    )  # noqa: E501
+    )
     # Добавляем пользователей (не достигая max_batch и не дожидаясь timeout)
     for i in range(3):
         user = create_test_user(email=f"pending_{i}@test.com", uuid=f"uuid-pend-{i}", as_superuser=True)
@@ -810,7 +810,7 @@ async def test_stop_flushes_pending_operations(config_with_2_users):
             config2json_script=None,
             json2config_script=None,
             conf_converter_libs=None,
-        )  # noqa: E501
+        )
     # Вызываем stop (должен сбросить остатки)
     await buffer.stop()
     # Проверяем что данные записались
@@ -834,7 +834,7 @@ async def test_stop_idempotent(config_with_2_users):
         config2json_script=None,
         json2config_script=None,
         conf_converter_libs=None,
-    )  # noqa: E501
+    )
     # Вызываем stop() три раза
     await buffer.stop()
     await buffer.stop()

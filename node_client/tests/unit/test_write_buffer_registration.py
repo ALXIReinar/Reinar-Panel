@@ -26,7 +26,7 @@ def sample_config_with_users(tmp_path):
 
     Returns:
         tuple: (config_path, config_dict)
-    """  # noqa: W293
+    """
     # Основной конфиг ядра (то что читает xray)
     config = {
         "inbounds": [
@@ -93,7 +93,7 @@ async def test_register_node_success(sample_config_with_users):
     2. Очередь создана
     3. Пользователи загружены в буфер из state.json
     4. Воркер запущен
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer(max_batch=5, timeout=1.0)
     config_path, _ = sample_config_with_users
     node_proto_id = 1
@@ -148,7 +148,7 @@ async def test_register_node_loads_existing_users(sample_config_with_users):
     Тест: Регистрация ноды загружает существующих пользователей из state.json
 
     Проверяем что все 3 пользователя корректно загружены в O(1) структуру
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     config_path, config_dict = sample_config_with_users
     node_proto_id = 1
@@ -181,7 +181,7 @@ async def test_register_node_empty_config(empty_config):
     Тест: Регистрация ноды с пустым массивом clients
 
     Проверяем что нода регистрируется успешно с пустым буфером
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     node_proto_id = 1
     user_injectors = create_user_injectors()
@@ -213,7 +213,7 @@ async def test_register_node_file_not_found():
 
     Ожидаем: (False, 500, error_message)
     Нода НЕ должна быть зарегистрирована
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     node_proto_id = 1
     user_injectors = create_user_injectors()
@@ -243,7 +243,7 @@ async def test_register_node_invalid_users_path(sample_config_with_users):
     Тест: Ошибка регистрации - неверный путь к массиву пользователей
 
     Ожидаем: (False, 500, error_message)
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     config_path, _ = sample_config_with_users
     node_proto_id = 1
@@ -274,7 +274,7 @@ async def test_register_node_invalid_extractor_script_syntax(sample_config_with_
     Файл валидный, пользователи есть, но скрипт содержит синтаксическую ошибку.
 
     Ожидаем: (False, 500, error_message с указанием на ошибку скрипта)
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     config_path, _ = sample_config_with_users
     node_proto_id = 1
@@ -305,7 +305,7 @@ async def test_register_node_missing_transform_function(sample_config_with_users
     Скрипт валидный синтаксически, но не содержит требуемую функцию transform().
 
     Ожидаем: (False, 500, error_message)
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     config_path, _ = sample_config_with_users
     node_proto_id = 1
@@ -335,7 +335,7 @@ async def test_register_node_corrupted_json(tmp_path):
     Тест: Ошибка регистрации - невалидный JSON
 
     Ожидаем: (False, 500, error_message)
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     # Создаём файл с невалидным JSON
     broken_file = tmp_path / "broken.json"
@@ -368,7 +368,7 @@ async def test_load_users_creates_correct_mapping(sample_config_with_users):
     Тест: Создание корректного маппинга {user_uuid: user_obj}
 
     Проверяем что _load_users_from_config загружает из state.json и создаёт O(1) структуру
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     config_path, _ = sample_config_with_users
     node_proto_id = 1
@@ -401,7 +401,7 @@ async def test_load_users_with_uuid_identifier(sample_config_with_users):
     Тест: Загрузка пользователей из state.json всегда использует user_uuid
 
     Проверяем что ключи - это всегда user_uuid
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     config_path, _ = sample_config_with_users
     node_proto_id = 1

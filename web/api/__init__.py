@@ -3,7 +3,6 @@ from fastapi import APIRouter  # noqa: I001
 from web.api.auth_panel_api import router as auth_panel_router
 from web.api.whitelist_api import router as whitelist_router
 from web.api.nodes import nodes_router
-from web.api.protocols import protocols_router
 from web.api.node_commander.node_commander_api import router as node_commander_router
 from web.api.users.users_api import router as users_router
 from web.api.sub_plans_api import router as subscriptions_router
@@ -14,7 +13,6 @@ main_router = APIRouter(prefix="/api/v1")
 
 
 main_router.include_router(auth_panel_router)
-main_router.include_router(protocols_router)
 main_router.include_router(nodes_router)
 main_router.include_router(node_commander_router)
 main_router.include_router(whitelist_router)
@@ -26,4 +24,4 @@ main_router.include_router(templates_router)
 
 @main_router.get('/healthcheck')
 async def healthcheck():
-    return {"status": True, "service": "web-panel", "version": '0.1'}
+    return {"status": True, "service": 'web-panel', "version": '0.1'}

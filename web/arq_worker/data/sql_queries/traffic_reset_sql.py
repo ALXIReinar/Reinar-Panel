@@ -64,8 +64,7 @@ class TrafficResetQueries:
         FROM pre_aggregated_users pau
         JOIN nodes_protocols np ON np.id = pau.node_proto_id AND np.user_visible = true AND np.reg_status = $2
         JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
-        JOIN protocols p ON np.proto_id = p.id 
-        JOIN proto_templates pt ON p.tmp_id = pt.id
+        JOIN proto_templates pt ON np.tmp_id = pt.id
         LEFT JOIN pre_agg_user_injectors aui ON pt.id = aui.tmp_id
         '''  # noqa: W291
         return await self.conn.fetch(query, CoreProtoActions.add, VnodeRegStatuses.success)

@@ -92,19 +92,9 @@ async def db_seed(db_pool):
         # Whitelist будет пересоздан в тестах с нужными командами
         await conn.execute("TRUNCATE TABLE whitelist_commands RESTART IDENTITY")
 
-        # 3. Удаляем ТОЛЬКО тестовые protocols и шаблоны (созданные в тестах)
+        # 3. Удаляем ТОЛЬКО тестовые шаблоны (созданные в тестах)
         # seed_data шаблоны начинаются с 'xray-' или 'singbox-'
-        # Сначала удаляем тестовые protocols (привязанные к тестовым шаблонам)
-        await conn.execute("""
-            DELETE FROM protocols 
-            WHERE tmp_id IN (
-                SELECT id FROM proto_templates 
-                WHERE title NOT ILIKE 'xray-%' 
-                AND title NOT ILIKE 'singbox-%'
-            )
-        """)  # noqa: W291
-
-        # Затем удаляем сами тестовые шаблоны
+        # ВАЖНО: таблица protocols удалена в миграции 8c7b68981995
         await conn.execute("""
             DELETE FROM proto_templates 
             WHERE title NOT ILIKE 'xray-%' 
@@ -367,18 +357,17 @@ async def proto_template_seed(db_pool, db_seed):
             """
             INSERT INTO proto_templates (
                 title, url_tmp, status, is_accepted, 
-                reload_core_command, sub_prepare_script,
+                sub_prepare_script,
                 proto_python_lib, api_bulk_add_user_script, api_bulk_delete_user_script,
                 bulk_add_script_custom_params, bulk_delete_script_custom_params,
                 required_user_data_obj, constant_user_data_obj
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             RETURNING id
             """,  # noqa: W291
             "test-TestProtocol-1",  # Префикс test- для идентификации тестовых шаблонов
             "https://example.com/proto_template",
             1,
             True,
-            "systemctl reload test-proto",
             "#!/bin/bash\necho 'test'",
             "vless",  # proto_python_lib
             "python /opt/add_user.py",  # api_bulk_add_user_script
@@ -394,15 +383,14 @@ async def proto_template_seed(db_pool, db_seed):
             """
             INSERT INTO proto_templates (
                 title, url_tmp, status, is_accepted,
-                reload_core_command, sub_prepare_script
-            ) VALUES ($1, $2, $3, $4, $5, $6)
+                sub_prepare_script
+            ) VALUES ($1, $2, $3, $4, $5)
             RETURNING id
             """,
             "test-AnotherTemplate-2",  # Префикс test-
             "https://example.com/another_template",
             1,
             True,
-            "systemctl reload another",
             "#!/bin/bash\necho 'another'",
         )
 
@@ -501,31 +489,26 @@ async def virtual_node_seed(db_pool, physical_node_seed, proto_template_seed):
     Создаёт тестовые виртуальные ноды (nodes_protocols) в БД.
     Возвращает словарь с vnode_id для использования в тестах.
     Зависит от physical_node_seed и proto_template_seed.
+
+    ВАЖНО: После миграции 8c7b68981995 используется tmp_id напрямую,
+           таблица protocols больше не существует.
     """
     async with db_pool.acquire() as conn:
-        # Создаём протокол для тестирования виртуальных нод
-        proto_id = await conn.fetchval(
-            """
-            INSERT INTO protocols (tmp_id, name)
-            VALUES ($1, $2)
-            RETURNING id
-            """,
-            proto_template_seed["tmp_id"],
-            "Test Protocol for VNodes",
-        )
+        # РЕФАКТОРИНГ: Используем tmp_id напрямую (таблица protocols удалена)
+        tmp_id = proto_template_seed["tmp_id"]
 
         # Создаём виртуальную ноду 1: с портами (для тестов конфликтов), SUCCESS статус
         vnode_id_1 = await conn.fetchval(
             """
             INSERT INTO nodes_protocols (
-                node_id, proto_id, title, sub_node_address, metrics_port, 
+                node_id, tmp_id, title, sub_node_address, metrics_port, 
                 proto_port, config_path, user_visible, reg_status
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id
             """,  # noqa: W291
             physical_node_seed["node_id_1"],
-            proto_id,
+            tmp_id,
             "VNode1 With Ports",  # Укорочено до 30 символов
             "vnode1.example.com",
             9090,  # metrics_port
@@ -538,12 +521,12 @@ async def virtual_node_seed(db_pool, physical_node_seed, proto_template_seed):
         # Создаём виртуальную ноду 2: без портов (для тестов установки портов), PENDING статус
         vnode_id_2 = await conn.fetchval(
             """
-            INSERT INTO nodes_protocols (node_id, proto_id, title, sub_node_address, reg_status)
+            INSERT INTO nodes_protocols (node_id, tmp_id, title, sub_node_address, reg_status)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING id
             """,
             physical_node_seed["node_id_1"],
-            proto_id,
+            tmp_id,
             "VNode2 No Ports",  # Укорочено
             "vnode2.example.com",
             1,  # reg_status = 1 (pending) - нода в процессе регистрации
@@ -553,14 +536,14 @@ async def virtual_node_seed(db_pool, physical_node_seed, proto_template_seed):
         vnode_id_3 = await conn.fetchval(
             """
             INSERT INTO nodes_protocols (
-                node_id, proto_id, title, sub_node_address, 
+                node_id, tmp_id, title, sub_node_address, 
                 metrics_port, proto_port, reg_status
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
             """,  # noqa: W291
             physical_node_seed["node_id_2"],
-            proto_id,
+            tmp_id,
             "VNode3 Other Node",  # Укорочено
             "vnode3.example.com",
             9090,  # Тот же порт что и vnode1, но на другой физ. ноде - это ОК
@@ -569,7 +552,7 @@ async def virtual_node_seed(db_pool, physical_node_seed, proto_template_seed):
         )
 
         return {
-            "proto_id": proto_id,
+            "tmp_id": tmp_id,
             "vnode_id_1": vnode_id_1,
             "vnode_id_2": vnode_id_2,
             "vnode_id_3": vnode_id_3,

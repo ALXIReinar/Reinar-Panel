@@ -81,7 +81,7 @@ async def test_add_user_first_time_with_empty_config(empty_config):
     - Пользователь добавляется в буфер
     - Операция добавлена в очередь
     - Длина: 0 → 1
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     node_proto_id = 1
     new_user = create_test_user(email="new@test.com", uuid="uuid-new-1", as_superuser=True)
@@ -124,7 +124,7 @@ async def test_add_user_first_time_with_existing_users(config_with_3_users):
     - Новый пользователь добавлен
     - Длина: 3 → 4
     - В очереди только 1 операция (для нового пользователя)
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     node_proto_id = 1
     new_user = create_test_user(email="new@test.com", uuid="uuid-new-1", as_superuser=True)
@@ -164,7 +164,7 @@ async def test_add_user_to_existing_node(config_with_3_users):
     - Пользователь добавлен в буфер
     - Операция в очереди
     - Длина: 3 → 4 → 5
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     node_proto_id = 1
     # Первый пользователь - регистрирует ноду
@@ -213,7 +213,7 @@ async def test_add_user_idempotency(config_with_3_users):
     - Операция возвращает успех
     - НО буфер НЕ изменился
     - И ОПЕРАЦИЯ В ОЧЕРЕДЬ НЕ ДОБАВЛЕНА!
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     node_proto_id = 1
     # Регистрируем ноду и добавляем пользователя
@@ -302,7 +302,7 @@ async def test_add_user_registration_fails_invalid_config(tmp_path):
     Тест: ОШИБКА - первое обращение с невалидным конфигом
 
     Ожидаем: (False, 500, error)
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     node_proto_id = 1
     # Создаём невалидный конфиг
@@ -333,7 +333,7 @@ async def test_add_user_registration_fails_invalid_identifier(config_with_3_user
     Тест: ОШИБКА - неверный extractor_script (отсутствует функция transform)
 
     Ожидаем: (False, 500, error)
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     node_proto_id = 1
     user = create_test_user(email="test@test.com", as_superuser=True)
@@ -369,7 +369,7 @@ async def test_delete_user_existing(config_with_3_users):
     - Пользователь удалён из буфера
     - Операция добавлена в очередь
     - Длина: 3 → 2
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     node_proto_id = 1
     # Регистрируем ноду (загрузятся 3 пользователя из state.json)
@@ -425,7 +425,7 @@ async def test_delete_user_nonexistent(config_with_3_users):
     - Операция возвращает успех
     - Буфер НЕ изменился
     - ОПЕРАЦИЯ В ОЧЕРЕДЬ НЕ ДОБАВЛЕНА!
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     node_proto_id = 1
     # Регистрируем ноду
@@ -478,7 +478,7 @@ async def test_delete_user_unregistered_node_success(config_with_3_users):
     - Пользователи загружаются из state.json
     - Пользователь удаляется
     - Длина: 3 (из state.json) → 2
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     node_proto_id = 1
     # Нода НЕ зарегистрирована, пытаемся удалить
@@ -565,7 +565,7 @@ async def test_delete_user_registration_fails(tmp_path):
     Тест: ОШИБКА - автоматическая регистрация проваливается
 
     Ожидаем: (False, 500, error)
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     node_proto_id = 1
     # Создаём невалидный конфиг
@@ -599,7 +599,7 @@ async def test_delete_user_from_empty_buffer(empty_config):
     - Буфер остаётся пустым
     - Операция в очередь НЕ добавлена
     - Длина: 0 → 0
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     node_proto_id = 1
     # Регистрируем ноду с пустым конфигом
@@ -650,7 +650,7 @@ async def test_bulk_action_add_small_batch(config_with_3_users):
     - unlimit_queue НЕ использовался (len(users) < max_batch)
     - Операции добавлены в очередь
     - Длина: 3 → 8 (3 существующих + 5 новых)
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer(max_batch=10, timeout=10.0)
     node_proto_id = 1
     # Создаём 5 новых пользователей (меньше чем max_batch=10)
@@ -693,7 +693,7 @@ async def test_bulk_action_add_large_batch(config_with_3_users):
     - unlimit_queue ИСПОЛЬЗОВАЛСЯ (len(users) >= max_batch)
     - После выхода из контекста произошёл flush
     - Длина: 3 → 23 (3 существующих + 20 новых)
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer(max_batch=10, timeout=10.0)
     node_proto_id = 1
     # Создаём 20 новых пользователей (больше чем max_batch=10)
@@ -731,7 +731,7 @@ async def test_bulk_action_delete_users(config_with_3_users):
     Проверяем:
     - Пользователи удалены из буфера
     - Длина: 3 → 1 (удалили 2 из 3)
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer(max_batch=10, timeout=10.0)
     node_proto_id = 1
     # Регистрируем ноду (загрузятся 3 пользователя)
@@ -779,7 +779,7 @@ async def test_bulk_action_unregistered_node(empty_config):
     Проверяем:
     - Нода автоматически регистрируется
     - Операции выполняются успешно
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer(max_batch=10, timeout=10.0)
     node_proto_id = 1
     # Нода НЕ зарегистрирована
@@ -811,7 +811,7 @@ async def test_bulk_action_registration_fails(tmp_path):
     Тест: ОШИБКА - bulk операция с невалидным конфигом (регистрация проваливается)
 
     Ожидаем: (False, error_message)
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer()
     node_proto_id = 1
     # Создаём невалидный конфиг

@@ -30,19 +30,8 @@ async def vnode_with_template(db_pool, virtual_node_seed):
         if not template_id:
             raise RuntimeError("Шаблон 'xray-vless-reality-tcp' не найден в БД. Запустите: python -m web.db.seed_data")
 
-        # 3. Создаём или получаем протокол с этим шаблоном
-        proto_id = await conn.fetchval("SELECT id FROM protocols WHERE tmp_id = $1 LIMIT 1", template_id)
-
-        if not proto_id:
-            # Создаём протокол если его нет
-            proto_id = await conn.fetchval(
-                "INSERT INTO protocols (tmp_id, name) VALUES ($1, $2) RETURNING id",
-                template_id,
-                "Test VLESS Reality TCP",
-            )
-
-        # 4. Обновляем proto_id виртуальной ноды
-        await conn.execute("UPDATE nodes_protocols SET proto_id = $1 WHERE id = $2", proto_id, vnode_id)
+        # 3. Обновляем tmp_id виртуальной ноды (protocols таблица удалена, используем tmp_id напрямую)
+        await conn.execute("UPDATE nodes_protocols SET tmp_id = $1 WHERE id = $2", template_id, vnode_id)
 
     return vnode_id
 

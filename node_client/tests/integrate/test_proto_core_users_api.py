@@ -70,7 +70,7 @@ def create_bulk_action_payload(**overrides):
         "user_injectors": [
             {
                 "flatten_array_cursor": "inbounds___0___settings___clients",
-                "extractor_script": "def transform(u): return {'id': u['user_uuid'], 'email': u.get('user_sub_id', 'test@test.com')}",  # noqa: E501
+                "extractor_script": "def transform(u): return {'id': u['user_uuid'], 'email': u.get('user_sub_id', 'test@test.com')}",
                 "libs": None,
             }
         ],
@@ -99,7 +99,7 @@ async def test_action_as_string_add(client, mock_buffer, mock_hot_reload):
     Проверяем:
     - HTTP 200
     - buffer.bulk_action вызван с action="add"
-    """  # noqa: W293
+    """
     payload = create_bulk_action_payload(action="add")
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 200
@@ -119,7 +119,7 @@ async def test_action_as_string_delete(client, mock_buffer, mock_hot_reload):
     Проверяем:
     - HTTP 200
     - buffer.bulk_action вызван с action="delete"
-    """  # noqa: W293
+    """
     payload = create_bulk_action_payload(action="delete")
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 200
@@ -140,7 +140,7 @@ async def test_action_as_int_1_converts_to_add(client, mock_buffer, mock_hot_rel
     - HTTP 200
     - action=1 конвертируется в "add" через validator
     - buffer.bulk_action вызван с action="add"
-    """  # noqa: W293
+    """
     payload = create_bulk_action_payload(action=1)
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 200
@@ -161,7 +161,7 @@ async def test_action_as_int_2_converts_to_delete(client, mock_buffer, mock_hot_
     - HTTP 200
     - action=2 конвертируется в "delete" через validator
     - buffer.bulk_action вызван с action="delete"
-    """  # noqa: W293
+    """
     payload = create_bulk_action_payload(action=2)
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 200
@@ -184,7 +184,7 @@ async def test_bulk_action_with_hot_reload_add(client, mock_buffer, mock_hot_rel
     Проверяем:
     - HotReloadExecutor вызван с action="bulk_add_users"
     - Ответ содержит hot_reload=True
-    """  # noqa: W293
+    """
     payload = create_bulk_action_payload(
         action="add",
         core_port=10086,
@@ -211,7 +211,7 @@ async def test_bulk_action_with_hot_reload_delete(client, mock_buffer, mock_hot_
     Проверяем:
     - HotReloadExecutor вызван с action="bulk_delete_users"
     - Ответ содержит hot_reload=True
-    """  # noqa: W293
+    """
     payload = create_bulk_action_payload(
         action="delete",
         core_port=10086,
@@ -238,7 +238,7 @@ async def test_hot_reload_fails_continues_with_file(client, mock_buffer, mock_ho
     - Hot-reload вернул False
     - buffer.bulk_action всё равно вызван
     - Ответ содержит hot_reload=False
-    """  # noqa: W293
+    """
     # Hot-reload провалился
     mock_hot_reload.execute_action_script = AsyncMock(return_value=(False, "Hot-reload ошибка"))
     payload = create_bulk_action_payload(
@@ -268,7 +268,7 @@ async def test_single_user_add(client, mock_buffer, mock_hot_reload):
     Проверяем:
     - Работает с 1 пользователем
     - buffer.bulk_action вызван с правильным списком
-    """  # noqa: W293
+    """
     user = create_test_user(email="single@test.com")
     payload = create_bulk_action_payload(users=[user])
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
@@ -289,7 +289,7 @@ async def test_multiple_users_bulk(client, mock_buffer, mock_hot_reload):
     Проверяем:
     - Работает со списком пользователей
     - buffer.bulk_action получает весь список
-    """  # noqa: W293
+    """
     users = [create_test_user(email=f"user{i}@test.com") for i in range(5)]
     payload = create_bulk_action_payload(users=users)
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
@@ -313,7 +313,7 @@ async def test_buffer_error_returns_500(client, mock_buffer, mock_hot_reload):
     - buffer.bulk_action вернул (False, error_message)
     - HTTP 500
     - Ответ содержит детали ошибки
-    """  # noqa: W293
+    """
     # Буфер возвращает ошибку
     mock_buffer.bulk_action = AsyncMock(return_value=(False, "Ошибка валидации конфига"))
     payload = create_bulk_action_payload()
@@ -334,7 +334,7 @@ async def test_invalid_schema_returns_422(client, mock_buffer):
     - Отсутствует обязательное поле
     - HTTP 422
     - buffer.bulk_action НЕ вызван
-    """  # noqa: W293
+    """
     payload = {
         "node_proto_id": 1,
         # users отсутствует (обязательное поле)
@@ -354,7 +354,7 @@ async def test_invalid_action_value_returns_422(client, mock_buffer):
     Проверяем:
     - action="invalid" не проходит валидацию
     - HTTP 422
-    """  # noqa: W293
+    """
     payload = create_bulk_action_payload(action="invalid")
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 422
@@ -373,7 +373,7 @@ async def test_user_injectors_passed_correctly(client, mock_buffer, mock_hot_rel
     Проверяем:
     - user_injectors конвертируются в list[dict]
     - Каждый инжектор содержит flatten_array_cursor, extractor_script, libs
-    """  # noqa: W293
+    """
     injectors_data = [
         {
             "flatten_array_cursor": "inbounds___0___settings___clients",
@@ -406,7 +406,7 @@ async def test_custom_params_passed_to_hot_reload(client, mock_buffer, mock_hot_
 
     Проверяем:
     - custom_params корректно переданы
-    """  # noqa: W293
+    """
     custom_params = {"inbound_tag": "main", "flow": "xtls-rprx-vision"}
     payload = create_bulk_action_payload(
         custom_params=custom_params,

@@ -51,7 +51,7 @@ def create_test_superuser(user_uuid: str = None, user_sub_id: str = "42", **cons
         ...     flow="xtls-rprx-vision",
         ...     level=0
         ... )
-    """  # noqa: W293
+    """
     import uuid as uuid_lib
 
     if user_uuid is None:
@@ -69,7 +69,7 @@ def create_default_user_injectors(flatten_array_cursor: str = "inbounds___1___se
 
     Returns:
         list[dict]: Список с одним инжектором
-    """  # noqa: W293
+    """
     return [
         {
             "flatten_array_cursor": flatten_array_cursor,
@@ -133,7 +133,7 @@ def create_e2e_request_body(
 
     Returns:
         dict: Валидное тело запроса согласно BaseUserCoreSchema
-    """  # noqa: W293
+    """
     return {
         "node_proto_id": node_proto_id,
         "users": users,
@@ -162,7 +162,7 @@ async def read_config_with_converter(buffer, config_path: str, node_proto_id: in
 
     Returns:
         dict: Десериализованный конфиг
-    """  # noqa: W293
+    """
     _, config_str = await buffer._read_config(config_path)
     # Применяем конвертер config2json (по умолчанию orjson.loads)
     config = buffer.node_metadata[node_proto_id]['config2json_script'](config_str)
@@ -189,7 +189,7 @@ def get_script_from_template(protocol_templates):
 
     Returns:
         Callable: Функция принимающая field name и возвращающая значение из первого шаблона
-    """  # noqa: W293
+    """
     if not protocol_templates:
         pytest.skip("Нет доступных шаблонов для тестирования")
     # Берём ПЕРВЫЙ шаблон из списка
@@ -263,7 +263,7 @@ async def test_add_user_without_api_script_only_file(e2e_client, e2e_config_path
     - Воркер записал на диск
     - Пользователь присутствует в файле
     - Команда перезагрузки ядра выполнена
-    """  # noqa: W293
+    """
     # Мокируем команду перезагрузки
     mock_subprocess = AsyncMock()
     mock_subprocess.return_value.communicate = AsyncMock(return_value=(b'', b''))
@@ -332,7 +332,7 @@ async def test_delete_user_without_api_script_only_file(
     - Воркер записал на диск
     - Пользователь отсутствует в файле
     - Команда перезагрузки ядра выполнена
-    """  # noqa: W293
+    """
     # Сначала добавляем пользователя
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
     # Создаём суперобъект для добавления
@@ -415,7 +415,7 @@ async def test_add_user_with_api_script_success_no_reload(
     - Пользователь добавлен в WBC буфер
     - Пользователь записан в файл
     - Команда перезагрузки НЕ выполнена (т.к. hot-reload успешен)
-    """  # noqa: W293
+    """
     # Мокируем команду перезагрузки
     mock_subprocess = AsyncMock()
     with patch('asyncio.create_subprocess_shell', mock_subprocess):
@@ -481,7 +481,7 @@ async def test_add_user_with_api_script_failure_with_reload(
     - Пользователь всё равно добавлен в WBC буфер (fallback)
     - Пользователь записан в файл
     - Команда перезагрузки выполнена (т.к. hot-reload failed)
-    """  # noqa: W293
+    """
     # Создаём скрипт который провалится (используем bulk_add_users)
     broken_script = """
 async def bulk_add_users(users_list, node_ip, core_port, custom_params):
@@ -553,7 +553,7 @@ async def test_bulk_add_users_with_api_script_unlimit_flush(
     - unlimit_queue отключил лимиты
     - Принудительный flush записал всех сразу
     - Все пользователи в файле
-    """  # noqa: W293
+    """
     # Загружаем bulk скрипт из БД
     bulk_add_script = get_script_from_template(TemplateScriptFields.bulk_add_users)
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
@@ -619,7 +619,7 @@ async def test_bulk_delete_users_without_api_script(e2e_client, e2e_config_path,
     - Все пользователи удалены из буфера
     - Файл обновлён
     - Длина массива уменьшилась на N
-    """  # noqa: W293
+    """
     # Сначала добавляем пользователей для удаления
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
     # Создаём 5 суперобъектов для добавления
@@ -710,7 +710,7 @@ async def test_e2e_add_user_with_hot_reload_and_verify_metrics(
 
     Real режим: проверяем с реальным Xray контейнером
     Mock режим: используем моки библиотек
-    """  # noqa: W293
+    """
     # Определяем ядро
     if use_real_core:
         if not is_real_mode:
@@ -803,7 +803,7 @@ async def test_e2e_delete_user_and_verify_removed(
 
     Real режим: проверяем с реальным Xray
     Mock режим: используем моки
-    """  # noqa: W293
+    """
     # Определяем ядро
     if use_real_core:
         if not is_real_mode:
@@ -896,7 +896,7 @@ async def test_e2e_bulk_operations_with_verification(
 
     Real режим: проверяем с реальным Xray
     Mock режим: используем моки
-    """  # noqa: W293
+    """
     # Определяем ядро
     if use_real_core:
         if not is_real_mode:

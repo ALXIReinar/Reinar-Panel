@@ -53,7 +53,7 @@ def parse_template_name(template_title: str) -> tuple[str, str]:
 
     Raises:
         ValueError: Если формат названия некорректный
-    """  # noqa: W293
+    """
     parts = template_title.split('-')
     if len(parts) < 2:
         raise ValueError(f"Invalid template name format: {template_title}")
@@ -131,7 +131,7 @@ def get_core_container(template_title: str, is_real_mode: bool) -> tuple[str, in
     Example:
         >>> core_ip, api_port = get_core_container('xray-vless-reality-tcp', True)
         >>> print(f"Xray API доступен на {core_ip}:{api_port}")
-    """  # noqa: W293
+    """
     if not is_real_mode:
         # Mock режим - возвращаем фиктивные значения
         return ('127.0.0.1', 10085)
@@ -202,7 +202,7 @@ class TemplateScriptFields:
 
     Используется для унифицированного доступа к полям шаблона в тестах.
     Аналогично ExecHistoryStatuses в web модуле.
-    """  # noqa: W293
+    """
 
     bulk_add_users: str = 'api_bulk_add_user_script'
     bulk_delete_users: str = 'api_bulk_delete_user_script'
@@ -258,7 +258,7 @@ def pytest_collection_modifyitems(config, items):
     Логика:
     1. --mode=mock → пропускаем тесты с маркером real_core
     2. --protocol используется для фильтрации шаблонов при загрузке (в фикстурах)
-    """  # noqa: W293
+    """
     test_mode = config.getoption("--mode")
     # 1. Пропускаем real_core тесты в mock режиме
     if test_mode == "mock":
@@ -320,7 +320,7 @@ def protocol_name(request):
 
     Returns:
         str: Строка с фильтром(ами), разделёнными запятой
-    """  # noqa: W293
+    """
     return request.config.getoption("--protocol")
 
 
@@ -361,7 +361,7 @@ def xray_core_container(is_real_mode):
 
     Raises:
         pytest.skip: Если запущен в mock режиме
-    """  # noqa: W293
+    """
     # Используем новую универсальную функцию
     return get_core_container('xray-vless-tcp', is_real_mode)
 
@@ -393,7 +393,7 @@ async def protocol_templates(db_pool, protocol_name):
 
     Raises:
         pytest.skip: Если шаблоны не найдены в БД
-    """  # noqa: W293
+    """
     templates = await load_templates_by_protocol(db_pool, protocol_name)
 
     if not templates:
@@ -430,7 +430,7 @@ async def protocol_templates_with_extractors(db_pool, protocol_name):
 
     Raises:
         pytest.skip: Если шаблоны не найдены в БД
-    """  # noqa: W293
+    """
     templates = await load_templates_with_extractors(db_pool, protocol_name)
 
     if not templates:
@@ -460,7 +460,7 @@ def test_configs_dir(tmp_path_factory):
     Временная директория для конфиг-файлов на весь session
 
     Создаётся один раз, удаляется после всех тестов
-    """  # noqa: W293
+    """
     temp_dir = tmp_path_factory.mktemp("test_configs")
     yield temp_dir
     # Cleanup происходит автоматически через tmp_path_factory
@@ -473,7 +473,7 @@ def working_config_path(test_configs_dir, base_config_path):
 
     Копируем базовый конфиг в временную директорию.
     Все тесты работают с этой копией.
-    """  # noqa: W293
+    """
     working_path = test_configs_dir / "working_config.json"
     shutil.copy(base_config_path, working_path)
     return working_path
@@ -485,7 +485,7 @@ def temp_config_path(tmp_path):
     Временный конфиг для одного теста (function scope)
 
     Используется когда тесту нужен изолированный конфиг
-    """  # noqa: W293
+    """
     config_path = tmp_path / "test_config.json"
     return config_path
 
@@ -500,7 +500,7 @@ async def fast_buffer(tmp_path):
 
     timeout=1 сек вместо дефолтных 10 для ускорения тестов
     max_batch=5 для проверки батчинга
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer(max_batch=5, timeout=1.0)
     yield buffer
     await buffer.stop()
@@ -512,7 +512,7 @@ async def mock_core_buffer(tmp_path):
     ConfigWriteBuffer с очень быстрым timeout для unit тестов
 
     timeout=0.5 сек для быстрых тестов
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer(max_batch=5, timeout=0.5)
     yield buffer
     await buffer.stop()
@@ -541,7 +541,7 @@ def mock_subprocess():
         def test_execute(mock_subprocess):
             mock_subprocess.return_value.stdout = "custom output"
             # ...
-    """  # noqa: W293
+    """
     mock = create_mock_subprocess(returncode=0, stdout="Success", stderr="")
     with patch('subprocess.run', mock):
         yield mock
@@ -553,7 +553,7 @@ def mock_subprocess_timeout():
     Мок subprocess.run который выбрасывает TimeoutExpired
 
     Используется для тестирования таймаутов команд
-    """  # noqa: W293
+    """
     mock = create_mock_subprocess(raise_timeout=True)
     with patch('subprocess.run', mock):
         yield mock
@@ -565,7 +565,7 @@ def mock_hot_reload_success():
     Мок HotReloadExecutor с успешным выполнением скрипта
 
     Возвращает (True, "success message")
-    """  # noqa: W293
+    """
     mock = AsyncMock(return_value=(True, "Hot-reload успешно выполнен"))
     with patch('node_client.api.sandbox.hot_reload_executor.HotReloadExecutor.execute_action_script', mock):
         yield mock
@@ -577,7 +577,7 @@ def mock_hot_reload_failure():
     Мок HotReloadExecutor с провалом скрипта
 
     Возвращает (False, "error message")
-    """  # noqa: W293
+    """
     mock = AsyncMock(return_value=(False, "Hot-reload провалился"))
     with patch('node_client.api.sandbox.hot_reload_executor.HotReloadExecutor.execute_action_script', mock):
         yield mock
@@ -596,7 +596,7 @@ async def client(mock_core_buffer):
 
     Returns:
         httpx.AsyncClient: Клиент для отправки запросов к API
-    """  # noqa: W293
+    """
     app = FastAPI()
     app.include_router(main_router)
     # Добавляем core_buffer в state приложения
@@ -616,7 +616,7 @@ async def client_with_real_buffer(fast_buffer):
 
     Используется для интеграционных тестов где нужна
     реальная логика батчинга и таймаутов.
-    """  # noqa: W293
+    """
     app = FastAPI()
     app.include_router(main_router)
     app.state.core_buffer = fast_buffer
@@ -635,7 +635,7 @@ async def e2e_buffer(tmp_path):
     ConfigWriteBuffer для E2E тестов с очень быстрым timeout
 
     timeout=0.3 сек для быстрого срабатывания воркера в тестах
-    """  # noqa: W293
+    """
     buffer = ConfigWriteBuffer(max_batch=5, timeout=0.3)
     yield buffer
     await buffer.stop()
@@ -650,7 +650,7 @@ async def e2e_client(e2e_buffer):
 
     Используется для полномасштабных E2E тестов пайплайна:
     HTTP → Hot-reload → WBC → Disk → Reload
-    """  # noqa: W293
+    """
     app = FastAPI()
     app.include_router(main_router)
     app.state.core_buffer = e2e_buffer
@@ -666,7 +666,7 @@ def e2e_config_path(tmp_path, base_config_path):
     Временный конфиг для E2E теста (изолированный для каждого теста)
 
     Копирует базовый конфиг в уникальную временную директорию
-    """  # noqa: W293
+    """
     import shutil
 
     e2e_config = tmp_path / "e2e_config.json"
@@ -683,7 +683,7 @@ def reset_env_vars():
     Автоматическая фикстура для сброса переменных окружения между тестами
 
     Гарантирует что изменения env не влияют на другие тесты
-    """  # noqa: W293
+    """
     original_env = os.environ.copy()
     yield
     os.environ.clear()

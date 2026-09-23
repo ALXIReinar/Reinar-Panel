@@ -304,25 +304,15 @@ class TestDeletePhysicalNode:
 
         # Сначала создаём протокол для FK constraint
         async with db_pool.acquire() as conn:
-            proto_id = await conn.fetchval(
-                """
-                INSERT INTO protocols (tmp_id, name)
-                VALUES ($1, $2)
-                RETURNING id
-                """,
-                proto_template_seed["tmp_id"],
-                "Test Protocol",
-            )
-
             # Создаём виртуальную ноду для node_id_1
             vnode_id = await conn.fetchval(
                 """
-                INSERT INTO nodes_protocols (node_id, proto_id, config_path, user_visible, title, proto_port, sub_node_address, reg_status)
+                INSERT INTO nodes_protocols (node_id, tmp_id, config_path, user_visible, title, proto_port, sub_node_address, reg_status)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING id
                 """,
                 node_id,
-                proto_id,
+                proto_template_seed['tmp_id'],
                 "/etc/test-proto/config.json",
                 True,
                 "Test VNode",

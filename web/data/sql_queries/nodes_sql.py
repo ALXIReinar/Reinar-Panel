@@ -101,7 +101,6 @@ class NodesQueries:
         query = "DELETE FROM nodes WHERE id = $1"
         await self.conn.execute(query, node_id)
 
-
     async def get_node_protocols(self, node_id: int, limit: int, offset: int):
         """Получить все виртуальные ноды на физической ноде"""
         query = """

@@ -7,8 +7,6 @@ from starlette.requests import Request
 from web.data.sql_queries.admins_sql import AdminsQueries, AuthQueries
 from web.data.sql_queries.nodes_protocols_sql import NodesProtocolsQueries
 from web.data.sql_queries.nodes_sql import NodesQueries
-from web.data.sql_queries.proto_cmds_sql import ProtocolCommandsQueries
-from web.data.sql_queries.protocols_sql import ProtocolsQueries
 from web.data.sql_queries.whitelist_sql import WhitelistQueries
 from web.data.sql_queries.users_sql import UsersQueries
 from web.data.sql_queries.sub_plans_sql import SubPlansQueries
@@ -24,8 +22,6 @@ class PgSql:
 
         self.nodes = NodesQueries(conn)
         self.nodes_protocols = NodesProtocolsQueries(conn)
-        self.protocols = ProtocolsQueries(conn)
-        self.protocol_commands = ProtocolCommandsQueries(conn)
         self.whitelist_cmd = WhitelistQueries(conn)
         self.remote_command_history = RemoteCommandHistoryQueries(conn)
 

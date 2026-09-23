@@ -292,9 +292,8 @@ class UsersQueries:
                COALESCE(aui.user_injectors, '[]'::json) AS user_injectors
         FROM nodes_protocols np
         JOIN nodes n ON n.id = np.node_id AND n.is_active = true
-        JOIN protocols p ON p.id = np.proto_id
         JOIN pre_agg_users pau ON pau.node_proto_id = np.id
-        JOIN proto_templates pt ON p.tmp_id = pt.id 
+        JOIN proto_templates pt ON np.tmp_id = pt.id 
         LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id 
         WHERE np.user_visible = true
         '''  # noqa: W291

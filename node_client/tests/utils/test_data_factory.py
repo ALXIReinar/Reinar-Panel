@@ -46,7 +46,7 @@ def create_test_user(
             "flow": "xtls-rprx-vision",
             "level": 0
         }
-    """  # noqa: W293
+    """
     if uuid is None:
         uuid = str(uuid_lib.uuid4())
     if email is None:
@@ -75,7 +75,7 @@ def create_bulk_test_users(count: int, prefix: str = "bulk_user") -> list[dict]:
         >>> users = create_bulk_test_users(3, "test")
         >>> len(users)
         3
-    """  # noqa: W293
+    """
     return [create_test_user(email=f"{prefix}_{i}") for i in range(count)]
 
 
@@ -103,7 +103,7 @@ def create_user_injectors(
     Notes:
         - Дефолтный extractor_script преобразует user_obj в формат xray/vless
         - Скрипт должен содержать функцию transform(user_obj) -> dict
-    """  # noqa: W293
+    """
     if extractor_script is None:
         # Дефолтный скрипт для xray/vless конфигов
         # Преобразует наш внутренний формат в формат ядра
@@ -149,7 +149,7 @@ def create_superuser_object(
         - Суперобъект хранится в buffer_storage
         - Из суперобъекта получаются "котлеты" через extractor_script
         - user_uuid используется как ключ в buffer_storage[node_proto_id][user_uuid]
-    """  # noqa: W293
+    """
     if user_uuid is None:
         user_uuid = str(uuid_lib.uuid4())
     if email is None:

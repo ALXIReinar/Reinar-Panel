@@ -39,7 +39,7 @@ class BulkActionsQueries:
         -- 3. Финальный джойн. 
         -- Декартово произведение не раздувает записи, экономия ресурсов
         SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, 
-               np.reload_core_command,
+               np.reload_core_command, pt.proto_python_lib,
                np.config_path, pt.constant_user_data_obj, pt.required_user_data_obj,
                pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, pt.api_bulk_delete_user_script, np.constant_node_data_obj,
                pt.bulk_delete_script_custom_params, pt.json2config_script, pt.config2json_script, pt.conf_converter_libs,
@@ -48,8 +48,7 @@ class BulkActionsQueries:
         FROM nodes_protocols np
         JOIN pre_aggregated_users pau ON pau.node_proto_id = np.id
         JOIN nodes n ON np.node_id = n.id AND n.is_active = true
-        JOIN protocols p ON np.proto_id = p.id 
-        JOIN proto_templates pt ON pt.id = p.tmp_id 
+        JOIN proto_templates pt ON np.tmp_id = pt.id 
         LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id
         WHERE np.user_visible = true AND np.reg_status = $2
         '''  # noqa: W291
@@ -121,9 +120,8 @@ class BulkActionsQueries:
                COALESCE(aui.user_injectors, '[]'::json) AS user_injectors
         FROM nodes_protocols np
         JOIN nodes n ON n.id = np.node_id AND n.is_active = true
-        JOIN protocols p ON p.id = np.proto_id
         JOIN pre_agg_users pau ON pau.node_proto_id = np.id
-        JOIN proto_templates pt ON p.tmp_id = pt.id 
+        JOIN proto_templates pt ON np.tmp_id = pt.id 
         LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id 
         WHERE np.user_visible = true AND np.reg_status = $3
         '''  # noqa: W291

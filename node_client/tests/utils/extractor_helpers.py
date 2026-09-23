@@ -44,7 +44,7 @@ def extract_node_keys_from_extractor(extractor_script: str) -> list[str]:
         ... '''
         >>> extract_node_keys_from_extractor(script)
         ['node_hash_salt', 'node_ipv4_subnet']
-    """  # noqa: W293
+    """
     # Регулярка для поиска user_obj['key'] или user_obj.get('key')
     pattern = r"user_obj(?:\['([^']+)'\]|\[\"([^\"]+)\"\]|\.get\('([^']+)'\)|\.get\(\"([^\"]+)\"\))"
     matches = re.findall(pattern, extractor_script)
@@ -80,7 +80,7 @@ def generate_mock_value_for_node_key(key: str) -> str | int | bool:
 
         >>> generate_mock_value_for_node_key('node_ipv4_subnet')
         '172.16.0.0/16'
-    """  # noqa: W293
+    """
     key_lower = key.lower()
     # Специфичные паттерны для node_ ключей
     if 'hash_salt' in key_lower or 'salt' in key_lower:
@@ -124,7 +124,7 @@ def generate_constant_node_data_obj_for_extractor(extractor_script: str) -> dict
         ... '''
         >>> generate_constant_node_data_obj_for_extractor(script)
         {'node_hash_salt': 'test_salt_12345', 'node_ipv4_subnet': '172.16.0.0/16'}
-    """  # noqa: W293
+    """
     node_keys = extract_node_keys_from_extractor(extractor_script)
     result = {}
     for key in node_keys:

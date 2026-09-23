@@ -24,8 +24,6 @@ async def export_seed_data():
             # 2. proto_templates
             proto_templates_rows = await conn.fetch("SELECT * FROM proto_templates ORDER BY id")
 
-            # 4. protocols
-            protocols_rows = await conn.fetch("SELECT * FROM protocols ORDER BY tmp_id, id")
             # 5. templates_users_extractors (новая таблица!)
             templates_users_extractors_rows = await conn.fetch(
                 "SELECT * FROM templates_users_extractors ORDER BY tmp_id, id"
@@ -62,18 +60,6 @@ async def export_seed_data():
                 # Удаляем id (будет auto-increment при вставке)
                 del template_dict['id']
 
-                # Находим protocols для этого шаблона
-                protocols = [
-                    {
-                        "name": dict(proto)['name'],
-                        "created_at": dict(proto)['created_at'].strftime("%Y-%m-%d %H:%M:%S.%f")
-                        if dict(proto)['created_at']
-                        else None,
-                        "tmp_id": "proto_templates_CURRENT",
-                    }
-                    for proto in protocols_rows
-                    if dict(proto)['tmp_id'] == template_id
-                ]
                 # Находим extractors для этого шаблона (НОВАЯ ТАБЛИЦА!)
                 extractors = [
                     {
@@ -85,7 +71,7 @@ async def export_seed_data():
                     for ext in templates_users_extractors_rows
                     if dict(ext)['tmp_id'] == template_id
                 ]
-                template_dict['protocols'] = protocols
+
                 template_dict['templates_users_extractors'] = extractors
                 result['proto_templates'].append(template_dict)
             return result
@@ -118,10 +104,8 @@ async def main():
     print(f"   📋 templates_statuses: {len(seed_data['vnodes_reg_statuses'])} записей")
     print(f"   🎯 proto_templates: {len(seed_data['proto_templates'])} записей")
     # Показываем сколько вложенных данных
-    total_protocols = sum(len(t['protocols']) for t in seed_data['proto_templates'])
     total_extractors = sum(len(t['templates_users_extractors']) for t in seed_data['proto_templates'])
 
-    print(f"      ├─ protocols: {total_protocols}")
     print(f"      └─ templates_users_extractors: {total_extractors}")
     print(f"   💰 pay_statuses: {len(seed_data['pay_statuses'])} записей")
     print(f"   🌐 online_statuses: {len(seed_data['online_statuses'])} записей")

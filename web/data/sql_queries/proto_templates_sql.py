@@ -273,15 +273,11 @@ class ProtoTemplatesQueries:
             False - шаблон не существует (ForeignKeyViolationError)
         """
         # Сначала удаляем все старые инжекторы
-        delete_query = 'DELETE FROM templates_users_extractors WHERE tmp_id = $1'
-        await self.conn.execute(delete_query, tmp_id)
+        delete_query = 'DELETE FROM templates_users_extractors WHERE tmp_id = $1 RETURNING id'
+        del_res = await self.conn.fetchval(delete_query, tmp_id)
         # Если список пустой - просто возвращаем успех (все инжекторы удалены)
         if not injs_state:
-            # Проверяем что шаблон существует
-            # template_exists = await self.conn.fetchval(
-            #     'SELECT EXISTS(SELECT 1 FROM proto_templates WHERE id = $1)', tmp_id
-            # )
-            return True
+            return bool(del_res)  # True, если запись удалилась; False - записи не существовало
         # Вставляем новые инжекторы
         insert_query = '''
         INSERT INTO templates_users_extractors (tmp_id, flatten_array_cursor, extractor_script, libs)

@@ -29,7 +29,7 @@ def extract_node_fields_from_script(script_code: str) -> list[str]:
         >>> script = "password = u['node_method'] if u.get('node_method') else 'default'"
         >>> extract_node_fields_from_script(script)
         ['node_method']
-    """  # noqa: W293
+    """
     # Регулярка для user_obj['key'], u['key'], u.get('key') и т.д.
     patterns = [r"(?:user_obj|u)(?:\['([^']+)'\]|\[\"([^\"]+)\"\]|\.get\('([^']+)'\)|\.get\(\"([^\"]+)\"\))"]
     all_keys = []
@@ -59,7 +59,7 @@ def generate_mock_node_data(script_code: str) -> dict:
         >>> script = "password = hashlib.sha256(u['node_method'].encode()).digest()"
         >>> generate_mock_node_data(script)
         {'node_method': 'aes-256-gcm'}
-    """  # noqa: W293
+    """
     keys = extract_node_fields_from_script(script_code)
     # Mock значения для типовых node_* ключей
     mock_values = {

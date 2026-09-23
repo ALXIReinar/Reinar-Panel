@@ -23,7 +23,7 @@ async def load_templates_by_protocol(pool: asyncpg.Pool, protocol_filters: str |
 
     Returns:
         list[dict]: Список шаблонов (может быть пустым)
-    """  # noqa: W293
+    """
     # Нормализуем к списку
     if isinstance(protocol_filters, str):
         filters = [f.strip() for f in protocol_filters.split(',')]
@@ -35,7 +35,7 @@ async def load_templates_by_protocol(pool: asyncpg.Pool, protocol_filters: str |
             SELECT 
                 id, title, proto_python_lib,
                 api_bulk_add_user_script, api_bulk_delete_user_script,
-                reload_core_command, metrics_command, api_metrics_script, metrics_parser_code,
+                api_metrics_script, metrics_command, metrics_parser_code,
                 bulk_add_script_custom_params, bulk_delete_script_custom_params,
                 is_accepted, status
             FROM proto_templates
@@ -53,7 +53,7 @@ async def load_templates_by_protocol(pool: asyncpg.Pool, protocol_filters: str |
         SELECT 
             id, title, proto_python_lib,
             api_bulk_add_user_script, api_bulk_delete_user_script,
-            reload_core_command, metrics_command, api_metrics_script, metrics_parser_code,
+            api_metrics_script, metrics_command, metrics_parser_code,
             bulk_add_script_custom_params, bulk_delete_script_custom_params,
             is_accepted, status
         FROM proto_templates
@@ -77,7 +77,7 @@ async def load_template_by_protocol(pool: asyncpg.Pool, protocol_filters: str | 
 
     Returns:
         dict или None: Первый найденный шаблон или None
-    """  # noqa: W293
+    """
     templates = await load_templates_by_protocol(pool, protocol_filters)
     return templates[0] if templates else None
 
@@ -92,14 +92,14 @@ async def load_template_by_id(pool: asyncpg.Pool, template_id: int) -> Optional[
 
     Returns:
         dict или None: Словарь с полями шаблона или None если не найден
-    """  # noqa: W293
+    """
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
             SELECT 
                 id, title, proto_python_lib,
                 api_bulk_add_user_script, api_bulk_delete_user_script,
-                reload_core_command, metrics_command, api_metrics_script, metrics_parser_code,
+                api_metrics_script, metrics_command, metrics_parser_code,
                 bulk_add_script_custom_params, bulk_delete_script_custom_params,
                 is_accepted, status
             FROM proto_templates
@@ -122,7 +122,7 @@ async def get_all_active_templates(pool: asyncpg.Pool) -> list[dict]:
 
     Returns:
         list[dict]: Список активных шаблонов
-    """  # noqa: W293
+    """
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
@@ -157,7 +157,7 @@ async def load_templates_with_extractors(pool: asyncpg.Pool, protocol_filters: s
         ...     print(t['title'], len(t['extractors']))
         xray-vless-tcp 1
         xray-vmess-ws 2
-    """  # noqa: W293
+    """
     # Нормализуем к списку
     if isinstance(protocol_filters, str):
         filters = [f.strip() for f in protocol_filters.split(',')]
@@ -169,7 +169,7 @@ async def load_templates_with_extractors(pool: asyncpg.Pool, protocol_filters: s
             SELECT 
                 pt.id, pt.title, pt.proto_python_lib,
                 pt.api_bulk_add_user_script, pt.api_bulk_delete_user_script,
-                pt.reload_core_command, pt.metrics_command, pt.api_metrics_script, pt.metrics_parser_code, pt.metrics_parser_libs,
+                pt.api_metrics_script, pt.metrics_command, pt.metrics_parser_code, pt.metrics_parser_libs,
                 pt.bulk_add_script_custom_params, pt.bulk_delete_script_custom_params,
                 pt.constant_user_data_obj, pt.required_user_data_obj,
                 pt.url_tmp, pt.sub_prepare_script, pt.sub_required_libs,
@@ -190,7 +190,7 @@ async def load_templates_with_extractors(pool: asyncpg.Pool, protocol_filters: s
             FROM proto_templates pt
             WHERE pt.is_accepted = true
             ORDER BY pt.id
-        """  # noqa: E501, W291
+        """  # noqa: W291
         async with pool.acquire() as conn:
             rows = await conn.fetch(query)
             return [dict(row) for row in rows]
@@ -201,7 +201,7 @@ async def load_templates_with_extractors(pool: asyncpg.Pool, protocol_filters: s
         SELECT 
             pt.id, pt.title, pt.proto_python_lib,
             pt.api_bulk_add_user_script, pt.api_bulk_delete_user_script,
-            pt.reload_core_command, pt.metrics_command, pt.api_metrics_script, pt.metrics_parser_code, pt.metrics_parser_libs,
+            pt.api_metrics_script, pt.metrics_command, pt.metrics_parser_code, pt.metrics_parser_libs,
             pt.bulk_add_script_custom_params, pt.bulk_delete_script_custom_params,
             pt.constant_user_data_obj, pt.required_user_data_obj,
             pt.url_tmp, pt.sub_prepare_script, pt.sub_required_libs,
@@ -222,7 +222,7 @@ async def load_templates_with_extractors(pool: asyncpg.Pool, protocol_filters: s
         FROM proto_templates pt
         WHERE ({where_conditions}) AND pt.is_accepted = true
         ORDER BY pt.id
-    """  # noqa: E501, W291
+    """  # noqa: W291
     async with pool.acquire() as conn:
         rows = await conn.fetch(query, *like_params)
         return [dict(row) for row in rows]

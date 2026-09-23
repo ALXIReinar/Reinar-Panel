@@ -17,7 +17,7 @@ async def lifespan(web_app: FastAPI):
     try:
         yield
     finally:
-       await web_app.state.core_buffer.stop()
+        await web_app.state.core_buffer.stop()
 
 
 app = FastAPI(lifespan=lifespan)
