@@ -96,7 +96,7 @@ services:
       - ENV_FILE=/run/secrets/env.arq.prod
     network_mode: host
     volumes:
-      - ./arq_logs:/app/web/arq_worker/arq_logs
+      - ./arq_worker/arq_logs:/app/web/arq_worker/arq_logs
     secrets:
       - env.arq.prod
 
