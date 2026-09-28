@@ -168,7 +168,7 @@ fi
 echo -e "\n${YELLOW}Установка WireGuard для приватной сети${NC}"
 echo -e "${BLUE}WireGuard создаст приватную сеть между сервисами (admin, sub, bot)${NC}\n"
 
-WG_SCRIPT="/opt/vpn-panel/wireguard_setup/install_wg_server.sh"
+WG_SCRIPT="${INSTALL_BASE}/wireguard_setup/install_wg_server.sh"
 
 if [ ! -f "$WG_SCRIPT" ]; then
     echo -e "${RED}✗${NC} Скрипт $WG_SCRIPT не найден"

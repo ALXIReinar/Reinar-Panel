@@ -18,8 +18,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/docker-entrypoint:/docker-entrypoint-initdb.d:z
-    ports:
-      - "127.0.0.1:${PG_PORT}:5432"
+    network_mode: host
 
   redis-main:
     image: redis:7.2-alpine
@@ -34,8 +33,7 @@ services:
       - redis_data:/data
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-    ports:
-      - "127.0.0.1:${REDIS_PORT}:6379"
+    network_mode: host
 
   web-service:
     container_name: web-service

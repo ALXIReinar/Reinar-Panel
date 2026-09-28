@@ -133,7 +133,7 @@ echo -e "${GREEN}✓${NC} Приватный IP админки: $ADMIN_PANEL_PRI
 echo -e "\n${YELLOW}Проверка Python...${NC}"
 if ! command -v python3 &> /dev/null; then
     echo -e "${RED}✗${NC} Python 3 не найден"
-    echo "Установите Python 3.10+ и повторите установку"
+    echo "Установите Python 3.12+ и повторите установку"
     exit 1
 fi
 
@@ -143,7 +143,7 @@ echo -e "${GREEN}✓${NC} Python ${PYTHON_VERSION} найден"
 # Проверка версии Python
 PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
 PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
-if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 12 ]); then
+if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 10 ]); then
     echo -e "${RED}✗${NC} Требуется Python 3.12 или выше (найден ${PYTHON_VERSION})"
     exit 1
 fi
@@ -173,17 +173,8 @@ echo -e "\n${YELLOW}Копирование файлов приложения...$
 
 # Копируем папку node_client как пакет
 mkdir -p $INSTALL_DIR/node_client
-cp -r $NODE_CLIENT_DIR/api $INSTALL_DIR/node_client/
-cp -r $NODE_CLIENT_DIR/schemas $INSTALL_DIR/node_client/
-cp $NODE_CLIENT_DIR/*.py $INSTALL_DIR/node_client/ 2>/dev/null || true
+cp -r $NODE_CLIENT_DIR/* $INSTALL_DIR/node_client
 
-# Копируем файлы конфигурации и зависимости в корень
-cp $NODE_CLIENT_DIR/requirements.txt $INSTALL_DIR/
-cp $NODE_CLIENT_DIR/.env.example $INSTALL_DIR/ 2>/dev/null || true
-cp $NODE_CLIENT_DIR/README.md $INSTALL_DIR/ 2>/dev/null || true
-
-# Копируем uninstall.sh в директорию установки
-cp $SCRIPT_DIR/uninstall.sh $INSTALL_DIR/ 2>/dev/null || true
 
 echo -e "${GREEN}✓${NC} Файлы скопированы"
 
@@ -196,19 +187,13 @@ echo -e "${GREEN}✓${NC} Виртуальное окружение создан
 # Права для использования
 sudo chown -R 1000:1000 /opt/reinar_panel/node
 
-# Для всех папок ставим стандартные 755 (читать и заходить могут все, писать - только владелец)
-find /opt/reinar_panel/ -type d -exec sudo chmod 755 {} +
-
-# Для всех файлов ставим стандартные 644 (читать могут все, писать - только владелец)
-find /opt/reinar_panel/ -type f -exec sudo chmod 644 {} +
-
 # Разрешаем запускать весь bin
 chmod 755 -R $INSTALL_DIR/venv/bin
 
 # Активация venv и установка зависимостей
 echo -e "\n${YELLOW}Установка зависимостей...${NC}"
 $INSTALL_DIR/venv/bin/pip install --upgrade pip
-$INSTALL_DIR/venv/bin/pip install -r requirements.txt
+$INSTALL_DIR/venv/bin/pip install -r $INSTALL_DIR/node_client/requirements.txt
 echo -e "${GREEN}✓${NC} Зависимости установлены"
 
 # Создание .env файла если его нет
@@ -262,7 +247,7 @@ fi
 echo -e "\n${YELLOW}Создание systemd service...${NC}"
 cat > /etc/systemd/system/$SERVICE_NAME.service << EOF
 [Unit]
-Description=VPN Node Client API
+Description=Reinar Panel Node Client
 After=network.target
 
 [Service]
