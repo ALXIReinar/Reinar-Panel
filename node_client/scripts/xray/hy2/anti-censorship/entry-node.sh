@@ -17,6 +17,8 @@ if [ -z "$NODE_ID" ] || [ -z "$PROTO_ID" ] || [ -z "$EXIT_PORT" ] || [ -z "$EXIT
     log "Необходимо указать переменные окружения NODE_ID, PROTO_ID, EXIT_HOST, EXIT_PORT, EXIT_UUID, EXIT_SID, EXIT_PKEY !"
     exit 1
 fi
+# Экранирование специальных символов для безопасной вставки в JSON
+PKEY_ESCAPED=$(printf '%s' "$EXIT_PKEY" | sed 's/[\/&]/\\&/g')
 
 if [ -z "$CERT_PATH" ] || [ -z "$KEY_PATH" ] || [ -z "$DOMAIN" ] || [ -z "$SERVICES_LIST" ]; then
     log "Ошибка: Необходимы параметры CERT_PATH, KEY_PATH и DOMAIN!"
@@ -152,7 +154,7 @@ cat <<EOF > "$CONFIG_PATH"
         "security": "reality",
         "realitySettings": {
           "serverName": "www.microsoft.com",
-          "publicKey": "$EXIT_PKEY",
+          "publicKey": "$PKEY_ESCAPED",
           "shortId": "$EXIT_SID",
           "fingerprint": "chrome"
         }

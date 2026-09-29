@@ -40,6 +40,10 @@ INBOUND_PORT=$(find_free_port 443)
 KEYS=$($XRAY_BIN x25519)
 PRIVATE_KEY=$(echo "$KEYS" | grep "PrivateKey: " | awk '{print $NF}')
 PUBLIC_KEY=$(echo "$KEYS" | grep "Password (PublicKey): " | awk '{print $NF}')
+
+# Экранирование специальных символов для безопасной вставки в JSON
+PRIVATE_KEY_ESCAPED=$(printf '%s' "$PRIVATE_KEY" | sed 's/[\/&]/\\&/g')
+PUBLIC_KEY_ESCAPED=$(printf '%s' "$PUBLIC_KEY" | sed 's/[\/&]/\\&/g')
 SHORT_ID=$(openssl rand -hex 8)
 XHTTP_PATH=$(openssl rand -hex 4)
 
@@ -119,7 +123,7 @@ cat <<EOF > "$CONFIG_PATH"
           "mode": "auto",
           "host": "microsoft.com",
           "path": "/xhttp-$XHTTP_PATH-vless"
-        }
+        },
         "security": "reality",
         "realitySettings": {
           "show": false,
@@ -128,7 +132,7 @@ cat <<EOF > "$CONFIG_PATH"
           "serverNames": [
             "$SNI"
           ],
-          "privateKey": "$PRIVATE_KEY",
+          "privateKey": "$PRIVATE_KEY_ESCAPED",
           "shortIds": [
             "$SHORT_ID"
           ]

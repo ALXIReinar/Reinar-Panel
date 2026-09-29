@@ -36,6 +36,11 @@ INBOUND_PORT=$(find_free_port 443)
 KEYS=$($XRAY_BIN x25519)
 PRIVATE_KEY=$(echo "$KEYS" | grep "PrivateKey: " | awk '{print $NF}')
 PUBLIC_KEY=$(echo "$KEYS" | grep "Password (PublicKey): " | awk '{print $NF}')
+
+
+# Экранирование специальных символов для безопасной вставки в JSON
+PRIVATE_KEY_ESCAPED=$(printf '%s' "$PRIVATE_KEY" | sed 's/[\/&]/\\&/g')
+PUBLIC_KEY_ESCAPED=$(printf '%s' "$PUBLIC_KEY" | sed 's/[\/&]/\\&/g')
 SHORT_ID=$(openssl rand -hex 8)
 EXIT_UUID=$($XRAY_BIN uuid)
 
@@ -106,7 +111,7 @@ cat <<EOF > "$CONFIG_PATH"
           "dest": "microsoft.com:443",
           "xver": 0,
           "serverNames": ["microsoft.com", "www.microsoft.com"],
-          "privateKey": "$PRIVATE_KEY",
+          "privateKey": "$PRIVATE_KEY_ESCAPED",
           "shortIds": ["$SHORT_ID"]
         }
       },

@@ -36,6 +36,10 @@ INBOUND_PORT=$(find_free_port 443)
 X25519_KEYPAIR=$($XRAY_BIN x25519)
 PRIVATE_KEY=$(echo "$X25519_KEYPAIR" | grep "PrivateKey: " | awk '{print $NF}')
 PUBLIC_KEY=$(echo "$X25519_KEYPAIR" | grep "Password (PublicKey): " | awk '{print $NF}')
+
+# Экранирование специальных символов для безопасной вставки в JSON
+PRIVATE_KEY_ESCAPED=$(printf '%s' "$PRIVATE_KEY" | sed 's/[\/&]/\\&/g')
+PUBLIC_KEY_ESCAPED=$(printf '%s' "$PUBLIC_KEY" | sed 's/[\/&]/\\&/g')
 SHORT_ID=$(openssl rand -hex 8)
 
 log "Выделен внутренний порт для Xray: $INBOUND_PORT"
@@ -97,7 +101,7 @@ cat <<EOF > "$CONFIG_PATH"
         "realitySettings": {
           "dest": "$SNI:443",
           "serverNames": ["$SNI"],
-          "privateKey": "$PRIVATE_KEY",
+          "privateKey": "$PRIVATE_KEY_ESCAPED",
           "shortIds": ["$SHORT_ID"]
         }
       },
