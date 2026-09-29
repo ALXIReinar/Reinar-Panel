@@ -212,7 +212,7 @@ async def config_file_write(
     "Запись файла на ноде"
     try:
         # url = f'{node_info['private_ip']}:{node_info['api_port']}{NodeUris.write_config_file}' if env.app_mode != AppMode.LOCAL else f'http://localhost:18100{NodeUris.write_config_file}'
-        url = f'{node_info["private_ip"]}:{node_info["api_port"]}{NodeUris.write_config_file}'
+        url = f'http://{node_info["private_ip"]}:{node_info["api_port"]}{NodeUris.write_config_file}'
         json_body = {
             'node_proto_id': body.node_proto_id,
             'tmp_link': node_info['url_tmp'],

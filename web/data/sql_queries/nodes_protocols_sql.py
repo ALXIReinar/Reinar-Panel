@@ -31,7 +31,7 @@ class NodesProtocolsQueries:
         title: str | None = None,
         metrics_port: int | None = None,
         proto_port: int | None = None,
-        sub_node_address: str | None = None,
+        sub_node_address: str | None | int = None,
         user_visible: bool | None = None,
         constant_node_data_obj: dict | None = None,
         reload_core_command: str | int | None = None,
@@ -69,7 +69,7 @@ class NodesProtocolsQueries:
             params.append(proto_port)
             param_idx += 1
 
-        if sub_node_address is not None:
+        if sub_node_address != 0:
             updates.append(f"sub_node_address = ${param_idx}")
             params.append(sub_node_address)
             param_idx += 1

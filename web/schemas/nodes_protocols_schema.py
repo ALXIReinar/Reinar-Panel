@@ -13,8 +13,8 @@ class UpdateNodeProtoSchema(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=30, description="Название виртуальной ноды")
     metrics_port: int | None = Field(None, ge=1024, le=65535, description="Порт для сбора метрик трафика")
     proto_port: int | None = Field(None, ge=1024, le=65535, description="Порт протокола для клиентов")
-    sub_node_address: str | None = Field(
-        None, min_length=4, max_length=255, description="Домен протокола в конфиге клиентов"
+    sub_node_address: str | None | int = Field(
+        0, min_length=3, max_length=255, description="Домен протокола в конфиге клиентов"
     )
     user_visible: bool | None = Field(None, description="Видимость для пользователей")
     constant_node_data_obj: dict | None = Field(
