@@ -47,7 +47,7 @@ class VNodeRegisterSchema(BaseModel):
     title: str  # Убрал max_length - контроль в валидаторе
     metrics_port: int | None = Field(None, le=65535, gt=0)
     proto_port: int = Field(le=65535, gt=0)
-    config_path: str
+    config_path: str = Field(None)
     constant_node_data_obj: dict | None = Field(
         None, description='Входит в состав суперобъекта пользователей(в фарш для котлет нод клиента)'
     )

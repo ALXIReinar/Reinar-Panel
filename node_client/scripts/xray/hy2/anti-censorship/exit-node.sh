@@ -34,8 +34,8 @@ INBOUND_PORT=$(find_free_port 443)
 
 # Генерация ключей и служебного UUID для входных нод
 KEYS=$($XRAY_BIN x25519)
-PRIVATE_KEY=$(echo "$KEYS" | grep "Private key:" | awk '{print $3}')
-PUBLIC_KEY=$(echo "$KEYS" | grep "Public key:" | awk '{print $3}')
+PRIVATE_KEY=$(echo "$KEYS" | grep "PrivateKey: " | awk '{print $NF}')
+PUBLIC_KEY=$(echo "$KEYS" | grep "Password (PublicKey): " | awk '{print $NF}')
 SHORT_ID=$(openssl rand -hex 8)
 EXIT_UUID=$($XRAY_BIN uuid)
 

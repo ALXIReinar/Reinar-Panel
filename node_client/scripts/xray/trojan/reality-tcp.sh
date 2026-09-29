@@ -34,8 +34,8 @@ INBOUND_PORT=$(find_free_port 443)
 
 # Генерация ключей для REALITY
 X25519_KEYPAIR=$($XRAY_BIN x25519)
-PRIVATE_KEY=$(echo "$X25519_KEYPAIR" | grep "Private key:" | awk '{print $3}')
-PUBLIC_KEY=$(echo "$X25519_KEYPAIR" | grep "Public key:" | awk '{print $3}')
+PRIVATE_KEY=$(echo "$X25519_KEYPAIR" | grep "PrivateKey: " | awk '{print $NF}')
+PUBLIC_KEY=$(echo "$X25519_KEYPAIR" | grep "Password (PublicKey): " | awk '{print $NF}')
 SHORT_ID=$(openssl rand -hex 8)
 
 log "Выделен внутренний порт для Xray: $INBOUND_PORT"
