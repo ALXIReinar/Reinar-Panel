@@ -62,7 +62,7 @@ if __name__ == '__main__':
     # uvicorn.run('web.main:app', host="0.0.0.0", port=env.uvicorn_port, log_config=None, workers=env.uvicorn_workers)
     uvicorn.run(
         'web.main:app',
-        host="127.0.0.1",  # Так как используется "network_mode: host", 0.0.0.0 будет принимать любые соединения
+        host="0.0.0.0",  # Так как используется "network_mode: host", 0.0.0.0 будет принимать любые соединения
         port=env.uvicorn_port,
         workers=env.uvicorn_workers,
     )

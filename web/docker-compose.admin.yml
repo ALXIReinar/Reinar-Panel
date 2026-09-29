@@ -54,8 +54,8 @@ services:
       - ENV_FILE=/run/secrets/env.api.prod
     network_mode: host
     volumes:
-      - ./web_logs:/app/web/web_logs
-#      - .:/app/web
+      - web_logs:/app/web/web_logs
+      - .:/app/web
     secrets:
       - env.api.prod
       - private_key.pem
@@ -94,7 +94,7 @@ services:
       - ENV_FILE=/run/secrets/env.arq.prod
     network_mode: host
     volumes:
-      - ./arq_worker/arq_logs:/app/web/arq_worker/arq_logs
+      - arq_logs:/app/web/arq_worker/arq_logs
     secrets:
       - env.arq.prod
 
@@ -129,6 +129,10 @@ volumes:
   caddy_data:
     driver: local
   caddy_config:
+    driver: local
+  web_logs:
+    driver: local
+  arq_logs:
     driver: local
 
 secrets:

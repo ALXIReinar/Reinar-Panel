@@ -5,7 +5,9 @@
 
 
     # 1.1 Эндпоинт выдачи подписки
-    handle /api/v1/public/sub/* {
+    handle /sub/* {
+        rewrite * /api/v1/public{uri}
+
         rate_limit {
             zone public_zone {
                 key {http.request.remote_ip}
