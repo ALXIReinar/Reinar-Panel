@@ -121,7 +121,7 @@ cat <<EOF > "$CONFIG_PATH"
         "network": "xhttp",
         "xhttpSettings": {
           "mode": "auto",
-          "host": "microsoft.com",
+          "host": "$SNI",
           "path": "/xhttp-$XHTTP_PATH-vless"
         },
         "security": "reality",
@@ -232,7 +232,7 @@ curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
         "status": 2,
         "service_name": "'$SERVICE_NAME'",
         "reload_core_command": "systemctl restart '"$SERVICE_NAME"'",
-        "config_path": "'"$CONFIG_PATH"'",
+        "config_path": "'"$CONFIG_PATH"'"
      }' >/dev/null
 
 

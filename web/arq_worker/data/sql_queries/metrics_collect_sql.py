@@ -1,6 +1,6 @@
 from asyncpg import Connection
 
-from web.arq_worker.utils.anything import CoreProtoActions, VnodeRegStatuses
+from web.arq_worker.utils.anything import CoreProtoActions, VnodeRegStatuses, UserStatuses
 
 
 class MetricsQueries:
@@ -26,6 +26,11 @@ class MetricsQueries:
         """
         # Запрос 1: Обновляем трафик
         query_update_traffic = """
+        WITH upd_users_activity  AS (
+            UPDATE users SET online_status = $3, updated_at = NOW()
+            FROM user_subs
+            WHERE users.id = user_subs.user_id AND user_subs.is_active = true
+        )
         UPDATE user_subs us
         SET used_mb = us.used_mb + t.traffic_add,
             traffic_used_day_mb = us.traffic_used_day_mb + t.traffic_add
@@ -62,7 +67,7 @@ class MetricsQueries:
         JOIN nodes_protocols np ON vsp.node_proto_id = np.id AND np.user_visible = true AND np.reg_status = $3
         RETURNING sub_nodes_outbox.id
         """
-        await self.conn.execute(query_update_traffic, user_sub_ids, traffic_add_mbs)
+        await self.conn.execute(query_update_traffic, user_sub_ids, traffic_add_mbs, UserStatuses.online)
         return await self.conn.fetch(
             query_block_and_outbox, user_sub_ids, CoreProtoActions.delete, VnodeRegStatuses.success
         )

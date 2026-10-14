@@ -55,6 +55,6 @@ log "Хук перезапуска охватывает: $(cat $SERVICES_LIST | 
 log "=================================================="
 
 export DOMAIN=$DOMAIN
-export CERT_PATH="$CERT_PATH/fullchain.cer"
-export KEY_PATH="$CERT_PATH/private.key"
+export CERT_PATH="$CERT_DIR/fullchain.cer"
+export KEY_PATH="$CERT_DIR/private.key"
 export SERVICES_LIST=$SERVICES_LIST
