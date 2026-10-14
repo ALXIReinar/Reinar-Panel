@@ -130,6 +130,10 @@ cat <<EOF > "$CONFIG_PATH"
 }
 EOF
 
+# Читаем содержимое конфиг-файла для первого рендеринга config_link
+PROTOCOL_CONFIG_CONTENT=$(cat "$CONFIG_PATH" | jq -Rs .)
+
+
 SERVICE_NAME="reinar-vmess-${NODE_PROTO_ID}"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
 cat <<EOF > "$SERVICE_PATH"
@@ -185,7 +189,8 @@ curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
         "service_name": "'$SERVICE_NAME'",
         "reload_core_command": "systemctl restart '"$SERVICE_NAME"'",
         "config_path": "'"$CONFIG_PATH"'",
-     }' >/dev/null
+        "config_content": '$PROTOCOL_CONFIG_CONTENT'
+      }' >/dev/null
 
 log "=================================================="
 log "✓ Виртуальная нода успешно создана!"
