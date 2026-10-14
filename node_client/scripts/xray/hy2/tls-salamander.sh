@@ -118,7 +118,7 @@ cat <<EOF > "$CONFIG_PATH"
   ],
   "routing": {
     "rules": [
-      { "inboundTag": ["api"], "outboundTag": "api_out", "type": "field" },
+      { "inboundTag": ["api"], "outboundTag": "api", "type": "field" },
       { "ip": ["geoip:private"], "outboundTag": "block", "type": "field" }
     ]
   }

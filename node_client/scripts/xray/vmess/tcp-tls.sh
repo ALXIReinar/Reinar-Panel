@@ -123,7 +123,7 @@ cat <<EOF > "$CONFIG_PATH"
   "routing": {
     "domainStrategy": "IPIfNonMatch",
     "rules": [
-      { "inboundTag": ["api"], "outboundTag": "api_out", "type": "field" },
+      { "inboundTag": ["api"], "outboundTag": "api", "type": "field" },
       { "ip": ["geoip:private"], "outboundTag": "block", "type": "field" },
       { "protocol": ["bittorrent"], "outboundTag": "block", "type": "field" },
       {

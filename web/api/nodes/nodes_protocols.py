@@ -8,6 +8,8 @@ from web.schemas.nodes_protocols_schema import (
     VNodeRegisterResultSchema,
     VNodeRegisterSchema,
 )
+from web.utils.anything import VnodeRegStatuses
+from web.utils.config_renderer import generate_config_link_from_raw_content
 from web.utils.logger_config import log_event
 
 router = APIRouter(tags=['Virtual Nodes-Protocols Variations'])
@@ -64,7 +66,12 @@ async def confirm_vnode(body: VNodeRegisterResultSchema, db: PgSqlDep, request: 
 
     Обновляет статус виртуальной ноды (success/failed) и дополнительные параметры
     после завершения настройки на физическом сервере.
+
+    При успешной регистрации выполняет первый рендеринг config_link из переданного содержимого конфиг-файла.
     """
+    # TODO: оптимизировать. confirm_place должен вернуть метаданные для рендеринга ссылки. В идеале, учитывая status
+    # Если == 2(success) - выдать, если 3 - не возвращать. Стоит составить 2 запроса; использовать CTE
+
     vnode = await db.nodes_protocols.confirm_place(
         node_proto_id=body.node_proto_id,
         title=body.title,
@@ -76,15 +83,36 @@ async def confirm_vnode(body: VNodeRegisterResultSchema, db: PgSqlDep, request: 
         service_name=body.service_name,
     )
     if not vnode:
-        log_event(
-            f'Не удалось подтвердить регистрацию ноды. Виртуальной ноды не существует! | node_proto_id: \033[33m{body.node_proto_id}\033[0m',
-            request=request,
-            level='WARNING',
-        )
+        log_event(f'Не удалось подтвердить регистрацию ноды. Виртуальной ноды не существует! | node_proto_id: \033[33m{body.node_proto_id}\033[0m',request=request,level='WARNING',)
         raise HTTPException(status_code=404, detail={'success': False, 'message': 'Виртуальная нода не найдена!'})
 
-    log_event(f'Виртуальная нода подтверждена | node_proto_id: \033[33m{body.node_proto_id}\033[0m', request=request)
-    return {'success': True, 'message': 'Виртуальная нода поставлена на регистрацию'}
+    log_event(f'Виртуальная нода подтверждена, переходим к конфиг ссылке | node_proto_id: \033[33m{body.node_proto_id}\033[0m', request=request)
+
+    "Если регистрация успешна - выполняем первый рендеринг config_link"
+    if body.status == VnodeRegStatuses.success and body.config_content:
+        try:
+            # Получаем метаданные шаблона для рендеринга
+            node_info = await db.nodes_protocols.get_node_for_file_edit(body.node_proto_id)
+
+            if not node_info or not node_info['url_tmp']:
+                log_event(f'Не удалось получить информацию для первого рендеринга конфиг-ссылки sub-ready состояния | node_proto_id: \033[33m{body.node_proto_id}\033[0m', request=request, level='WARNING')
+            else:
+                # Генерируем config_link из сырого содержимого
+                config_link = generate_config_link_from_raw_content(
+                    raw_config_content=body.config_content,
+                    url_template=node_info['url_tmp'],
+                    config2json_script=node_info['config2json_script'],
+                    conf_converter_libs=node_info['conf_converter_libs'],
+                )
+
+                # Сохраняем в БД
+                await db.nodes_protocols.update_config_link(body.node_proto_id, config_link)
+
+                log_event(f'Первый рендеринг config_link выполнен при подтверждении регистрации | node_proto_id: \033[32m{body.node_proto_id}\033[0m; config_link: \033[35m{config_link}\033[0m', request=request)
+        except Exception as e:
+            log_event(f'Ошибка первого рендеринга config_link | node_proto_id: \033[31m{body.node_proto_id}\033[0m; error: \033[31m{repr(e)}\033[0m', request=request, level='ERROR')
+
+    return {'success': True, 'message': 'Виртуальная нода зарегистрирована'}
 
 
 @router.get('/private/nodes/protocols/{np_id}', summary="Получить виртуальную ноду с данными шаблона")

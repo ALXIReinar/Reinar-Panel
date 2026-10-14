@@ -182,3 +182,4 @@ check_env_imports.py
 .zed/
 .ruff_cache/
 run.py
+windows_vpn_tester/

@@ -161,7 +161,7 @@ cat <<EOF > "$CONFIG_PATH"
     "rules": [
       {
         "inboundTag": ["api"],
-        "outboundTag": "api_out",
+        "outboundTag": "api",
         "type": "field"
       },
       {

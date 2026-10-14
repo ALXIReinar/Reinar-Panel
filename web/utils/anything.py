@@ -40,15 +40,6 @@ class VnodeRegStatuses:
 
 
 @dataclass
-class NodeStatus:
-    """Статусы нод"""
-
-    main: int = 1
-    vpn_worker: int = 2
-    balancer: int = 3
-
-
-@dataclass
 class ExecHistoryStatuses:
     pending: int = 1
     success: int = 2

@@ -85,6 +85,7 @@ class VNodeRegisterResultSchema(BaseModel):
     metrics_command: str | None = Field(None)
     config_path: str | None = Field(None)
     service_name: str | None = Field(None)
+    config_content: str | None = Field(None, description='Сырое содержимое конфиг-файла для первого рендеринга config_link')
 
     @field_validator('title', mode='after')
     @classmethod
