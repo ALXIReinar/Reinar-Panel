@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     """Настройки Node Client"""
 
     node_name: str = Field(max_length=64)
-    lru_cache_max_size: int | None = os.getenv('LRU_CACHE_MAX_SIZE', None)
+    lru_cache_max_size: int | None = os.getenv('LRU_CACHE_MAX_SIZE', 100)
     node_port: int
     command_timeout: int  # секунды
 

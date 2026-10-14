@@ -97,11 +97,15 @@ class Settings(BaseSettings):
     trusted_proxies: set[str] | list[str] | str
     allowed_ips: set[str] | list[str] | str
     domain: str
+
     # ARQ Settings
     arq_queue_name: str
     arq_max_jobs: int
     arq_job_timeout: int
     node_metrics_queue_limit: int = 10
+
+    # Sandbox settings
+    lru_cache_max_size: int = os.getenv("LRU_CACHE_MAX_SIZE", 1000)
 
     @field_validator('allowed_ips', 'trusted_proxies', mode='before')
     @classmethod
