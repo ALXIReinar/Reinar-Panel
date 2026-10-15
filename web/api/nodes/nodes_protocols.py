@@ -112,7 +112,7 @@ async def confirm_vnode(body: VNodeRegisterResultSchema, db: PgSqlDep, request: 
         except Exception as e:
             log_event(f'Ошибка первого рендеринга config_link | node_proto_id: \033[31m{body.node_proto_id}\033[0m; error: \033[31m{repr(e)}\033[0m', request=request, level='ERROR')
 
-    return {'success': True, 'message': 'Виртуальная нода зарегистрирована'}
+    return {'success': True, 'message': 'Виртуальная нода сменила статус регистрации'}
 
 
 @router.get('/private/nodes/protocols/{np_id}', summary="Получить виртуальную ноду с данными шаблона")
