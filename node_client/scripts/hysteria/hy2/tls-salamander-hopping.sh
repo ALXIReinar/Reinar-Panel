@@ -199,15 +199,24 @@ if ! grep -Fxq "$SERVICE_NAME" "$SERVICES_LIST" 2>/dev/null; then
         echo "$SERVICE_NAME" >> "$SERVICES_LIST"
 fi
 # 6. Финализация статуса в панели
-curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
-     -d '{
-        "node_proto_id": '"$NODE_PROTO_ID"',
-        "status": 2,
-        "service_name": "'$SERVICE_NAME'",
-        "reload_core_command": "systemctl restart '"$SERVICE_NAME"'",
-        "config_path": "'"$CONFIG_PATH"'",
-        "config_content": '$PROTOCOL_CONFIG_CONTENT'
-      }' >/dev/null
+CONFIRM_BODY=$(jq -n \
+  --argjson node_proto_id "$NODE_PROTO_ID" \
+  --arg service_name "$SERVICE_NAME" \
+  --arg reload_cmd "systemctl restart $SERVICE_NAME" \
+  --arg config_path "$CONFIG_PATH" \
+  --argjson config_content "$PROTOCOL_CONFIG_CONTENT" \
+  '{
+    node_proto_id: $node_proto_id,
+    status: 2,
+    service_name: $service_name,
+    reload_core_command: $reload_cmd,
+    config_path: $config_path,
+    config_content: $config_content
+  }')
+
+curl -s -X POST "$PANEL_CONFIRM_URL" \
+     -H "Content-Type: application/json" \
+     -d "$CONFIRM_BODY" >/dev/null
 
 log "=================================================="
 log "✓ Виртуальная нода успешно создана!"

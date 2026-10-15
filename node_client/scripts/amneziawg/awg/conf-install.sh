@@ -80,8 +80,8 @@ REG_RESPONSE=$(mktemp)
 HTTP_CODE=$(curl -s -w "%{http_code}" -o "$REG_RESPONSE" -X POST "$PANEL_CALLBACK_URL" \
      -H "Content-Type: application/json" \
      -d '{
-           "proto_id": "'"$PROTO_ID"'",
-           "node_id": "'"$NODE_ID"'",
+           "proto_id": '"$PROTO_ID"',
+           "node_id": '"$NODE_ID"',
            "config_path": "'"$CONFIG_PATH"'",
            "proto_port": '"$WG_PORT"',
            "metrics_port": '$IDX',
@@ -89,7 +89,7 @@ HTTP_CODE=$(curl -s -w "%{http_code}" -o "$REG_RESPONSE" -X POST "$PANEL_CALLBAC
            "metrics_command": "awg show '$IFACE' dump",
            "title": "'"$TITLE"'",
            "constant_node_data_obj": {
-               "node_ipv'"$IP_VERSION"'_subnet": "'"$IP_ADDR"'",
+               "node_ipv'$IP_VERSION'_subnet": "'"$IP_ADDR"'",
                "node_public_key": "'"$PUBLIC_KEY"'",
                "node_hop_start": '"$RANGE_START"',
                "node_hop_end": '"$RANGE_END"',
@@ -152,6 +152,7 @@ PostUp = $POST_UP
 PostDown = $POST_DOWN
 EOF
 
+PROTOCOL_CONFIG_CONTENT=$(cat "$CONFIG_PATH" | jq -Rs .)
 SERVICE_NAME="awg-quick@${IFACE}"
 
 log "2. Запуск юнита $SERVICE_NAME..."
@@ -169,15 +170,31 @@ if ! systemctl is-active --quiet "$SERVICE_NAME"; then
     systemctl daemon-reload
 
     # Оповещаем панель о фейле
-    curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
-         -d '{"node_proto_id": '"$NODE_PROTO_ID"', "status": 3}' >/dev/null || true
+    ROLLBACK_BODY=$(jq -n \
+      --argjson node_proto_id "$NODE_PROTO_ID" \
+      '{node_proto_id: $node_proto_id, status: 3}')
+    
+    curl -s -X POST "$PANEL_CONFIRM_URL" \
+         -H "Content-Type: application/json" \
+         -d "$ROLLBACK_BODY" >/dev/null || true
     exit 1
 fi
 
 # 6. Финализация статуса в панели
-curl -s -X POST "$PANEL_CONFIRM_URL" -H "Content-Type: application/json" \
-     -d '{"node_proto_id": '"$NODE_PROTO_ID"', "status": 2, "service_name": "'$SERVICE_NAME'"}' >/dev/null
+CONFIRM_BODY=$(jq -n \
+  --argjson node_proto_id "$NODE_PROTO_ID" \
+  --arg service_name "$SERVICE_NAME" \
+  --argjson config_content "$PROTOCOL_CONFIG_CONTENT" \
+  '{
+    node_proto_id: $node_proto_id,
+    status: 2,
+    service_name: $service_name,
+    config_content: $config_content
+  }')
 
+curl -s -X POST "$PANEL_CONFIRM_URL" \
+     -H "Content-Type: application/json" \
+     -d "$CONFIRM_BODY" >/dev/null
 
 
 log "=================================================="
