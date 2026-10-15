@@ -78,6 +78,7 @@ HTTP_CODE=$(curl -s -w "%{http_code}" -o "$REG_RESPONSE" -X POST "$PANEL_CALLBAC
            "proto_id": '"$PROTO_ID"',
            "node_id": '"$NODE_ID"',
            "proto_port": '"$INBOUND_PORT"',
+           "metrics_command": "xray api statsquery -server=127.0.0.1:{} -pattern \"user>>>\" -reset",
            "metrics_port": '"$API_PORT"',
            "title": "'"$TITLE"'",
            "constant_node_data_obj": {

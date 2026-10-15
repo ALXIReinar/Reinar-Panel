@@ -84,6 +84,7 @@ HTTP_CODE=$(curl -s -w "%{http_code}" -o "$REG_RESPONSE" -X POST "$PANEL_CALLBAC
            "node_id": '"$NODE_ID"',
            "config_path": "'"$CONFIG_PATH"'",
            "proto_port": '"$INTERNAL_PORT"',
+           "metrics_command": "sing-box api stats -server 127.0.0.1:{}",
            "metrics_port": '"$METRICS_PORT"',
            "constant_node_data_obj": {
                "node_hop_start": '"$RANGE_START"',

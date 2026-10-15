@@ -1,4 +1,5 @@
 import copy  # noqa: I001
+import shlex
 import subprocess
 from fastapi import APIRouter, HTTPException, Request
 
@@ -107,20 +108,27 @@ async def get_metrics(body: MetricsSchema, buffer: CoreBuffersDep, request: Requ
                 core_api_port=body.metrics_port,
                 action='get_metrics',
             )
-        else:
+        if not api_metrics:
             log_event(
                 f'\033[35m[Metrics Grabbing]\033[0m] Сбор метрик CLI-командой | node_proto_id: \033[33m{body.node_proto_id}\033[0m; command: \033[34m{cmd_str}\033[0m',
                 request=request,
             )
             "1.2. Получение метрик по команде в cli, если не удалось по скрипту/нет скрипта"
+            # Используем shlex для корректного разбора команды с кавычками
             result = subprocess.run(
-                cmd_str.split(),  # ["xray", "api", "statsquery", "--server=127.0.0.1:10085", "-pattern", '"user>>>"', "-reset"]
+                shlex.split(cmd_str),
                 capture_output=True,
                 text=True,
                 timeout=env.command_timeout,
             )
             if result.returncode == 0:
                 cli_metrics = result.stdout
+            else:
+                log_event(
+                    f'\033[35m[Metrics Grabbing]\033[0m CLI команда вернула ошибку | returncode: \033[31m{result.returncode}\033[0m; stderr: \033[33m{result.stderr}\033[0m',
+                    request=request,
+                    level='WARNING',
+                )
 
         "1.3. Выбираем результат"
         raw_metrics = api_metrics or cli_metrics

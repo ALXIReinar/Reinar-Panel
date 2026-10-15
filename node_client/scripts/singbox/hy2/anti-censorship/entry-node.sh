@@ -56,6 +56,7 @@ HTTP_CODE=$(curl -s -w "%{http_code}" -o "$REG_RESPONSE" -X POST "$PANEL_CALLBAC
            "proto_id": "'"$PROTO_ID"'",
            "node_id": "'"$NODE_ID"'",
            "proto_port": '"$INTERNAL_PORT"',
+           "metrics_command": "sing-box api stats -server 127.0.0.1:{}",
            "metrics_port": '"$METRICS_PORT"',
            "title": "'"$TITLE"'",
          }')
