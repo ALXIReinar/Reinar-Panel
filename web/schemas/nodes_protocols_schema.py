@@ -11,8 +11,8 @@ class UpdateNodeProtoSchema(BaseModel):
 
     config_path: str | None = Field(None, min_length=1, description="Путь к конфигу протокола")
     title: str | None = Field(None, min_length=1, max_length=30, description="Название виртуальной ноды")
-    metrics_port: int | None = Field(None, ge=1024, le=65535, description="Порт для сбора метрик трафика")
-    proto_port: int | None = Field(None, ge=1024, le=65535, description="Порт протокола для клиентов")
+    metrics_port: int | None = Field(None, ge=1, le=65535, description="Порт для сбора метрик трафика")
+    proto_port: int | None = Field(None, ge=1, le=65535, description="Порт протокола для клиентов")
     sub_node_address: str | None | int = Field(
         0, min_length=3, max_length=255, description="Домен протокола в конфиге клиентов"
     )

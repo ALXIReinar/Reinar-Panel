@@ -20,7 +20,7 @@ class ExecuteResponseSchema(BaseModel):
 class MetricsSchema(BaseModel):
     node_proto_id: int = Field(description='ID виртуальной ноды')
     metrics_port: int = Field(gt=0, le=65535, description='Порт для сбора статистики трафика ядра')
-    command: str = Field(description='CLI команда для получения статистики трафика впн-ядра, сырых метрик')
+    command: str = Field(description='CLI команда для получения статистики трафика впн-ядра, сырых метрик', alias='metrics_command')
     metrics_script: str | None = Field(None, description='Скрипт для получения метрик впн-ядра')
     core_lib: str | None = Field(None, description='Либы для скрипта получения метрик впн-ядра')
     metrics_parser_code: str = Field(

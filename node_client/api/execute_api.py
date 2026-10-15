@@ -146,8 +146,8 @@ async def get_metrics(body: MetricsSchema, buffer: CoreBuffersDep, request: Requ
             action='parse_metrics',
             custom_params={
                 "raw_metrics": raw_metrics,
-                "vpn_users": copy.deepcopy(buffer.buffer_storage[body.node_proto_id]),  # Отдаём копию, Read only!
-                "local_state": buffer.local_state[body.node_proto_id],  # А local_state может использовать как хочет
+                "vpn_users": copy.deepcopy(buffer.buffer_storage.get(body.node_proto_id, [])),  # Отдаём копию, Read only!
+                "local_state": buffer.local_state.get(body.node_proto_id, {}),  # А local_state может использовать как хочет
             },
         )
 
