@@ -13,6 +13,7 @@ from web.schemas.node_schema import (
     NodesGetSchema,
     GetNodeProtoSchema,
     StartupRequest,
+    StartupResponse,
 )
 from web.utils.anything import NodeUris
 from web.utils.logger_config import log_event
@@ -159,7 +160,7 @@ async def get_node_protocols_api(
 
 @server_router.post(
     '/{node_title}/startup',
-    # response_model=StartupResponse,
+    response_model=StartupResponse,
     summary="Выдача служебных данных виртуальных нод для нод-клиента",
 )
 async def get_node_startup_data(

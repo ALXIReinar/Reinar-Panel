@@ -85,3 +85,21 @@ class TestNodeStartup:
             data.get("detail", {}).get("message") if isinstance(data.get("detail"), dict) else data.get("detail", "")
         )
         assert "не найдена" in detail_msg
+
+    @pytest.mark.asyncio
+    async def test_startup_response_fields_match_schema(self, client, virtual_node_seed):
+        """Ответ содержит ровно поля VnodeServiceData: без лишних столбцов (требование 1.9).
+
+        В частности, нет metrics_parser_libs: в dev-базе этого столбца уже нет, а его выборка роняла /startup.
+        """
+        from web.schemas.node_schema import StartupResponse, VnodeServiceData
+
+        response = await client.post(
+            "/api/v1/server/nodes/Test Physical Node 1/startup",
+            json={"node_proto_ids": [virtual_node_seed["vnode_id_1"]]},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert set(data) == set(StartupResponse.model_fields)
+        assert set(data["nodes"][0]) == set(VnodeServiceData.model_fields)

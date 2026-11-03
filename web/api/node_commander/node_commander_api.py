@@ -139,6 +139,9 @@ async def config_file_read(
         json_body = {
             'node_proto_id': q_params.node_proto_id,
             'path': node_info['config_path'],
+            # Нод-клиент вырезает пользователей по курсорам из метаданных ноды. Прежний контракт админки:
+            # без flatten_json_users_key конфиг отдаётся целиком, с ним — без пользователей
+            'exclude_users': bool(q_params.flatten_json_users_key),
         }
         async with aio_http.post(url, json=json_body) as resp:
             resp.raise_for_status()

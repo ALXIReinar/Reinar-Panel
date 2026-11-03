@@ -66,6 +66,44 @@ class TestConfigFileReadSuccess:
         assert '"clients": []' in data["file_content"]
 
 
+class RecordingAiohttpSession(FakeAiohttpSession):
+    """Фейковая сессия, запоминающая тела POST-запросов к нод-клиенту"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.sent_json: list[dict] = []
+
+    def post(self, url: str, *args, **kwargs):
+        self.sent_json.append(kwargs.get('json'))
+        return super().post(url, *args, **kwargs)
+
+
+class TestConfigFileReadExcludeUsers:
+    """Админка сохраняет прежний контракт: пользователи вырезаются, только если передан flatten_json_users_key"""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("params", "expected_exclude"),
+        [({}, False), ({"flatten_json_users_key": "inbounds___0___settings___clients"}, True)],
+        ids=["без ключа — пользователи остаются", "с ключом — пользователи вырезаются"],
+    )
+    async def test_read_config_passes_exclude_users(self, client, virtual_node_seed, db_pool, params, expected_exclude):
+        vnode_id = virtual_node_seed["vnode_id_1"]
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE nodes_protocols SET config_path = $1 WHERE id = $2", "/etc/xray/config.json", vnode_id
+            )
+        session = RecordingAiohttpSession(json_data={"content": '{"inbounds": []}'})
+        client.app.state.cmd_center_aiohttp = session
+
+        response = await client.get(
+            "/api/v1/private/cmd_center/config_file/read", params={"node_proto_id": vnode_id, **params}
+        )
+
+        assert response.status_code == 200
+        assert session.sent_json[-1]["exclude_users"] is expected_exclude
+
+
 class TestConfigFileReadErrors:
     """Тесты ошибочных сценариев при чтении конфига"""
 

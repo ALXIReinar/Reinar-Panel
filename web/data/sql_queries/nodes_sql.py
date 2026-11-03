@@ -144,8 +144,7 @@ class NodesQueries:
                pt.api_bulk_delete_user_script,
                COALESCE(np.metrics_command, pt.metrics_command) AS metrics_command,
                pt.api_metrics_script,
-               pt.proto_python_lib,
-               pt.metrics_parser_libs,
+               pt.proto_python_lib,  -- уже включает библиотеки парсера метрик (миграция b4e8a1c9d2f0)
                pt.metrics_parser_code
         FROM nodes_protocols np
         JOIN nodes n            ON n.id = np.node_id
@@ -165,6 +164,6 @@ class NodesQueries:
 
         return {
             "node_title": node_title,
-            "nodes": rows,
+            "nodes": [dict(row) for row in rows],
             "missing": missing,
         }

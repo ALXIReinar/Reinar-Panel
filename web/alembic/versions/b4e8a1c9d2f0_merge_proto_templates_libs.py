@@ -22,6 +22,18 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     """Объединение библиотек proto_python_lib и metrics_parser_libs без повторов."""
     conn = op.get_bind()
+
+    # В части баз (например, dev) столбец уже удалён вручную — тогда объединять нечего
+    has_column = conn.execute(
+        text("""
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'proto_templates' AND column_name = 'metrics_parser_libs'
+        """)
+    ).scalar()
+    if not has_column:
+        logging.warning("proto_templates.metrics_parser_libs отсутствует: объединение библиотек пропущено.")
+        return
+
     rows = conn.execute(text("SELECT id, proto_python_lib, metrics_parser_libs FROM proto_templates")).fetchall()
 
     for row in rows:
