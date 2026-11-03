@@ -16,6 +16,7 @@ from starlette.requests import Request
 
 from node_client.api.sandbox.hot_reload_executor import HotReloadExecutor
 from node_client.config import TMP_DIR, env
+from node_client.exceptions import NodeInitError
 from node_client.utils.logger_config import log_event
 
 
@@ -27,7 +28,7 @@ class ConfigWriteBuffer:
     - Один экземпляр на всё приложение
     - Отдельный буфер для каждой виртуальной ноды
     - Отдельный воркер для каждой ноды (изоляция)
-    - Динамическая регистрация нод при первом обращении
+    - Ноды регистрируются при старте и при реинициализации (данные из админки, /startup)
     """
 
     def __init__(self, max_batch: int = 5, timeout: float = 10.0):
@@ -58,24 +59,36 @@ class ConfigWriteBuffer:
 
     async def register_node(self, item: dict) -> None:
         """
-        Регистрация/обновление виртуальной ноды
-
-        Выполняет:
-        0. Валидацию метаданных
-        1. Компиляцию RAW скриптов в скомпилированные функции
-        2. Сохранение метаданных (расширенная структура)
-        3. Для новых нод: создание очереди, загрузка пользователей, запуск воркера
+        Регистрация/обновление одной виртуальной ноды: проверка, компиляция и применение метаданных
 
         Args:
             item: Словарь с полями VnodeServiceData
 
         Raises:
+            NodeInitError: при ошибке валидации или компиляции (память нод-клиента не меняется)
+        """
+        metadata = await self.compile_node(item)
+        await self.apply_nodes({item['node_proto_id']: metadata})
+
+    async def compile_node(self, item: dict) -> dict:
+        """
+        Проверяет элемент ответа /startup и компилирует его RAW-скрипты. Память нод-клиента НЕ меняет.
+
+        Выполняет:
+        0. Валидацию метаданных
+        1. Компиляцию RAW скриптов в скомпилированные функции
+        2. Проверку, что конфиг читается, а курсоры user_injectors указывают на массивы
+
+        Args:
+            item: Словарь с полями VnodeServiceData
+
+        Returns:
+            dict: метаданные ноды для apply_nodes()
+
+        Raises:
             NodeInitError: при ошибке валидации или компиляции
         """
-        from node_client.exceptions import NodeInitError
-
-        node_proto_id = item['node_proto_id']
-        is_new_node = node_proto_id not in self.node_metadata
+        node_proto_id = item.get('node_proto_id')
 
         # 0. Валидация обязательных полей
         if not isinstance(node_proto_id, int) or node_proto_id <= 0:
@@ -200,8 +213,8 @@ class ConfigWriteBuffer:
         compiled_metrics_script = _compile_optional(item.get('api_metrics_script'), 'get_metrics', 'api_metrics_script')
         compiled_parser = _compile_optional(item.get('metrics_parser_code'), 'parse_metrics', 'metrics_parser_code')
 
-        # 4. Сохраняем метаданные (расширенная структура)
-        self.node_metadata[node_proto_id] = {
+        # 4. Метаданные ноды (расширенная структура). В память их кладёт apply_nodes()
+        return {
             'filepath': filepath,
             'config2json_script': config_loader,
             'json2config_script': config_dumper,
@@ -216,21 +229,68 @@ class ConfigWriteBuffer:
             'queue_limited': True,
         }
 
-        # 5. Только для новых нод: создаём очередь, загружаем пользователей, запускаем воркер
-        if is_new_node:
+    async def apply_nodes(self, compiled: dict[int, dict]) -> None:
+        """
+        Применяет метаданные, заранее проверенные и скомпилированные через compile_node()
+
+        1. Метаданные всех нод подменяются одним шагом, без await между ними: другие корутины
+           не увидят половину обновления.
+        2. Для новых нод создаются очередь, буфер пользователей, local_state и воркер.
+           У известных нод buffer_storage, local_state и воркер не трогаются (требование 4.3).
+
+        Args:
+            compiled: {node_proto_id: метаданные из compile_node()}
+        """
+        new_ids = [node_proto_id for node_proto_id in compiled if node_proto_id not in self.node_metadata]
+
+        for node_proto_id, metadata in compiled.items():
+            old_metadata = self.node_metadata.get(node_proto_id)
+            if old_metadata is not None:
+                # bulk-операция могла прямо сейчас снять лимит очереди (unlimit_queue) — сохраняем режим
+                metadata['queue_limited'] = old_metadata['queue_limited']
+            self.node_metadata[node_proto_id] = metadata
+
+        for node_proto_id in new_ids:
             self.node_queues[node_proto_id] = asyncio.Queue()
             self.pending_writes[node_proto_id] = set()
             await self._load_users_from_config(node_proto_id)
             self.local_state[node_proto_id] = {}
-            task = asyncio.create_task(self._node_worker(node_proto_id))
-            self.worker_tasks[node_proto_id] = task
+            self.worker_tasks[node_proto_id] = asyncio.create_task(self._node_worker(node_proto_id))
             await self._audit_state(node_proto_id)
 
-        action_word = "зарегистрирована" if is_new_node else "обновлена"
-        users_count = len(self.buffer_storage.get(node_proto_id, {}))
-        log_event(
-            f"Нода {action_word} | node_proto_id: \033[33m{node_proto_id}\033[0m | users_len: \033[32m{users_count}\033[0m"
-        )
+        for node_proto_id in compiled:
+            action_word = "зарегистрирована" if node_proto_id in new_ids else "обновлена"
+            users_count = len(self.buffer_storage.get(node_proto_id, {}))
+            log_event(
+                f"Нода {action_word} | node_proto_id: \033[33m{node_proto_id}\033[0m | users_len: \033[32m{users_count}\033[0m"
+            )
+
+    async def remove_node(self, node_proto_id: int) -> None:
+        """
+        Полностью убирает виртуальную ноду из памяти нод-клиента (админка сообщила, что её больше нет)
+
+        Сначала останавливается воркер и дожидаются начатые записи на диск: им ещё нужны метаданные.
+        Остатки очереди на диск не сбрасываются — нода снята с учёта, её конфиг больше не ведём.
+        """
+        worker = self.worker_tasks.pop(node_proto_id, None)
+        if worker is not None:
+            worker.cancel()
+            await asyncio.gather(worker, return_exceptions=True)
+
+        pending = list(self.pending_writes.get(node_proto_id, ()))
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+        for storage in (
+            self.node_metadata,
+            self.node_queues,
+            self.pending_writes,
+            self.buffer_storage,
+            self.local_state,
+        ):
+            storage.pop(node_proto_id, None)
+
+        log_event(f"Нода удалена из памяти нод-клиента | node_proto_id: \033[33m{node_proto_id}\033[0m")
 
     def get_metadata(self, node_proto_id: int) -> dict:
         """
@@ -465,6 +525,9 @@ class ConfigWriteBuffer:
         - Если таймаут истёк и очередь не пуста → пишет
         """
         while True:
+            # Нода удалена из памяти (remove_node) — воркеру больше нечего обслуживать
+            if node_id not in self.node_metadata:
+                break
             try:
                 operations = []
                 start_time = time.time()
@@ -496,7 +559,7 @@ class ConfigWriteBuffer:
                     write_task = asyncio.create_task(self._write_node_to_disk(node_id))
                     self.pending_writes[node_id].add(write_task)
                     # Удаляем из pending после завершения
-                    write_task.add_done_callback(lambda t: self.pending_writes[node_id].discard(t))
+                    write_task.add_done_callback(lambda t: self.pending_writes.get(node_id, set()).discard(t))
 
             except asyncio.CancelledError:
                 break
@@ -505,6 +568,9 @@ class ConfigWriteBuffer:
                     f"\033[35m[Worker]\033[0m Ошибка воркера | node_proto_id: \033[31m{node_id}; error: \033[34m{e}\033[0m",
                     level='CRITICAL',
                 )
+                # Пауза перед следующей попыткой: без неё повторяющаяся ошибка крутит цикл без единого await
+                # и блокирует event loop всего нод-клиента
+                await asyncio.sleep(self.timeout)
 
     async def _write_node_to_disk(self, node_id: int):
         """

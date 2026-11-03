@@ -224,7 +224,7 @@ async def test_read_config_with_custom_converters_from_db(protocol_templates_wit
             # Проверяем успешность
             if response.status_code != 200:
                 error_detail = response.text
-                assert False, f"Unexpected status: {response.status_code}, body: {error_detail}"
+                raise AssertionError(f"Unexpected status: {response.status_code}, body: {error_detail}")
             data = response.json()
             assert data["success"] is True, f"Response not successful: {data.get('message')}"
             # 5. Конвертируем нативный → dict через config2json
@@ -235,7 +235,7 @@ async def test_read_config_with_custom_converters_from_db(protocol_templates_wit
             # 6. Проверка: пользователи должны быть удалены
             for flatten_array_cursor in flatten_keys:
                 users = flatten_key2value(returned_dict, flatten_array_cursor)
-                assert users is None or users == Exception or (isinstance(users, list) and len(users) == 0), (
+                assert users is None or users is Exception or (isinstance(users, list) and len(users) == 0), (
                     f"Пользователи должны быть удалены для {flatten_array_cursor}, получено: {users}"
                 )
             results.append(f"✅ {template_title}: OK")
@@ -370,3 +370,38 @@ async def test_write_config_with_custom_converters_from_db(protocol_templates_wi
     assert len(results) == custom_converters_templates, (
         "Часть шаблонов обошла проверку конвертер скриптов: скрипты не указаны!"
     )
+
+
+# ========== Незарегистрированная нода (требования 5.3, 6.5) ==========
+
+NOT_REGISTERED_MESSAGE = "нода не зарегистрирована в нод-клиенте, выполните реинициализацию"
+
+
+@pytest.mark.asyncio
+async def test_read_config_not_registered_node_returns_428(client, tmp_path):
+    """/read для ноды, которой нет в памяти нод-клиента, отвечает 428, а не 500"""
+    config_path = tmp_path / "config.json"
+    config_path.write_text('{"inbounds": []}', encoding='utf-8')
+
+    response = await client.post(
+        "/api/v1/server/node/config/read", json={"node_proto_id": 999, "path": str(config_path)}
+    )
+
+    assert response.status_code == 428
+    assert response.json() == {"success": False, "message": NOT_REGISTERED_MESSAGE, "node_proto_id": 999}
+
+
+@pytest.mark.asyncio
+async def test_write_config_not_registered_node_returns_428(client, tmp_path):
+    """/write для ноды, которой нет в памяти нод-клиента, отвечает 428 и не трогает файл"""
+    config_path = tmp_path / "config.json"
+    config_path.write_text('{"inbounds": []}', encoding='utf-8')
+
+    response = await client.post(
+        "/api/v1/server/node/config/write",
+        json={"node_proto_id": 999, "path": str(config_path), "content": "{}", "tmp_link": "vless://x"},
+    )
+
+    assert response.status_code == 428
+    assert response.json()["node_proto_id"] == 999
+    assert config_path.read_text(encoding='utf-8') == '{"inbounds": []}'

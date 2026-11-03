@@ -6,19 +6,25 @@
 """
 
 import asyncio
+from typing import TYPE_CHECKING
 
 import aiohttp
 
 from node_client.config import env
 from node_client.utils.logger_config import log_event
 
+if TYPE_CHECKING:
+    from node_client.api.proto_core.write_behind_caching_file import ConfigWriteBuffer
 
-async def fetch_startup_data(node_proto_ids: list[int] | None = None) -> dict:
+
+async def fetch_startup_data(node_proto_ids: list[int] | None = None, retries: int | None = None) -> dict:
     """
     Запрашивает служебные данные виртуальных нод у админки
 
     Args:
         node_proto_ids: Список ID виртуальных нод (пустой = все зарегистрированные)
+        retries: Число попыток. По умолчанию env.startup_retries (старт приложения);
+            реинициализация передаёт 1 — вызывающий ждёт ответа и не должен висеть минутами
 
     Returns:
         dict: Ответ от /startup с ключами 'nodes', 'missing', 'node_title'
@@ -28,13 +34,15 @@ async def fetch_startup_data(node_proto_ids: list[int] | None = None) -> dict:
     """
     if node_proto_ids is None:
         node_proto_ids = []
+    if retries is None:
+        retries = env.startup_retries
 
     url = f"{env.effective_admin_panel_url}/api/v1/server/nodes/{env.node_title}/startup"
     payload = {"node_proto_ids": node_proto_ids}
 
     last_error: Exception | None = None
 
-    for attempt in range(1, env.startup_retries + 1):
+    for attempt in range(1, retries + 1):
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
@@ -54,7 +62,7 @@ async def fetch_startup_data(node_proto_ids: list[int] | None = None) -> dict:
         except aiohttp.ClientError as e:
             last_error = e
             log_event(
-                f"Попытка {attempt}/{env.startup_retries} подключения к админке | "
+                f"Попытка {attempt}/{retries} подключения к админке | "
                 f"url: \033[34m{url}\033[0m; error: \033[31m{repr(e)}\033[0m",
                 level='WARNING',
             )
@@ -63,20 +71,19 @@ async def fetch_startup_data(node_proto_ids: list[int] | None = None) -> dict:
         except Exception as e:
             last_error = e
             log_event(
-                f"Попытка {attempt}/{env.startup_retries} | непредвиденная ошибка: \033[31m{repr(e)}\033[0m",
+                f"Попытка {attempt}/{retries} | непредвиденная ошибка: \033[31m{repr(e)}\033[0m",
                 level='WARNING',
             )
 
-        if attempt < env.startup_retries:
+        if attempt < retries:
             await asyncio.sleep(env.startup_retry_delay_s)
 
     raise RuntimeError(
-        f"Не удалось подключиться к админке после {env.startup_retries} попыток. "
-        f"URL: {url}. Последняя ошибка: {repr(last_error)}"
+        f"Не удалось подключиться к админке (попыток: {retries}). URL: {url}. Последняя ошибка: {repr(last_error)}"
     )
 
 
-async def phys_node_sys_init(buffer: 'ConfigWriteBuffer') -> None:  # noqa: F821
+async def phys_node_sys_init(buffer: 'ConfigWriteBuffer') -> None:
     """
     Инициализация физической ноды при старте приложения
 

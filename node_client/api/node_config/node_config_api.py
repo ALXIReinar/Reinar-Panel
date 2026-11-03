@@ -26,8 +26,9 @@ async def read_config(body: ConfigReadSchema, buffer: CoreBuffersDep, request: R
     Читает содержимое конфигурационного файла на ноде.
     Удаляет список пользователей из ответа (если exclude_users=True, по умолчанию True).
     """
+    # Вне try: NodeNotRegisteredError должна дойти до глобального обработчика (428), а не стать 500
+    meta = buffer.get_metadata(body.node_proto_id)
     try:
-        meta = buffer.get_metadata(body.node_proto_id)
         file_path = Path(body.path)
 
         if not file_path.exists():
@@ -85,8 +86,9 @@ async def write_config(body: ConfigWriteSchema, buffer: CoreBuffersDep, request:
     Переносит список пользователей из старого файла в новый.
     Создаёт резервную копию перед записью.
     """
+    # Вне try: NodeNotRegisteredError должна дойти до глобального обработчика (428), а не стать 500
+    meta = buffer.get_metadata(body.node_proto_id)
     try:
-        meta = buffer.get_metadata(body.node_proto_id)
         file_path = Path(body.path)
         new_file_json = buffer.read_config_json(body.node_proto_id, body.content)
 
