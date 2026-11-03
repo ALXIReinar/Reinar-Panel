@@ -1,23 +1,6 @@
-[tool.ruff]
-# Включаем базовые правила: Pyflakes (F), pycodestyle (E, W), isort (I)
-# Этого достаточно, чтобы ловить неиспользуемые импорты, необъявленные переменные и ошибки синтаксиса.
-select = ["E", "F", "W", "I"]
-ignore = []
-
-# Разрешаем длину строки до 120 (агенты часто пишут длинные строки, не будем их за это душить)
-line-length = 120
-
-[tool.ruff.format]
-quote-style = "preserve"
-
-[tool.ruff.lint]
-# Добавляет RUF100 к вашему текущему списку правил
-extend-select = ["RUF100"]
-
-# Игнорировать ошибку E501 (line-too-long)
-ignore = ["E501"]
-
-
+# ===============
+# MyPy
+# ===============
 [tool.mypy]
 # Основные настройки
 python_version = "3.12"
@@ -28,11 +11,9 @@ follow_imports = "silent"
 # Ищем баги, а не докапываемся до стиля
 # ==========================================
 
-# Mypy по умолчанию ИГНОРИРУЕТ функции без аннотаций.
-# Включаем это, чтобы он проверял логику внутри нетипизированных функций (найдет много багов).
+# Включаем это, чтобы он проверял логику внутри нетипизированных функций.
 check_untyped_defs = true
 
-# Главный киллер фич (ловит NoneType ошибки).
 # Запрещает передавать `None` туда, где ожидается `str` (требует `Optional[str]`).
 strict_optional = true
 
@@ -40,14 +21,48 @@ strict_optional = true
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 
-# Разрешаем использовать Any (это как раз твои нетипизированные DI объекты)
+# Разрешаем использовать Any (например, для нетипизированных DI объектов)
 disallow_any_expr = false
 disallow_any_generics = false
 
-# ==========================================
-# Настройки для конкретных микросервисов (если нужно)
-# ==========================================
-# Например, если в тестах вообще плевать на типы:
+# Пакеты без stub-файлов не считаем ошибкой: сломанные импорты ловит pylint (import-error).
+warn_unused_ignores = true
+exclude = ["^\\.venv", "^mutants/", "/alembic/versions/"]
+
+# В тестах типы не проверяем.
 [[tool.mypy.overrides]]
 module = "*.tests.*"
 ignore_errors = true
+
+# ===============
+# Ruff
+# ===============
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = [".venv*", "mutants"]
+
+[tool.ruff.format]
+quote-style = "preserve"
+
+[tool.ruff.lint]
+# F — реальные ошибки (неопределённые имена, неиспользуемые импорты), E/W — pycodestyle,
+# I — сортировка импортов, B — типовые баги (мутабельные дефолты, except без смысла),
+# UP — устаревший синтаксис, ASYNC — блокирующие вызовы в async-коде (важно для FastAPI/arq).
+select = ["F", "E", "W", "I", "B", "UP", "ASYNC"]
+ignore = [
+    "E501",  # длину строк решает форматтер
+    "B008",  # FastAPI: Depends(...) в значениях по умолчанию — норма
+]
+# RUF100 — лишние `# noqa`.
+extend-select = ["RUF100"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["web", "bot", "node_client"]
+
+[tool.mutmut]
+# mutmut 3: что мутировать и как гонять тесты. Сузь paths_to_mutate до модуля,
+# который проверяешь, — полный прогон по монорепозиторию идёт часами.
+paths_to_mutate = ["node_client/"]
+tests_dir = ["node_client/tests/"]
+pytest_add_cli_args = ["-c", "node_client/pytest.ini", "-x", "-q"]
