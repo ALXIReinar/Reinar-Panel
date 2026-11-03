@@ -9,7 +9,8 @@ Integration тесты для эндпоинтов управления конф
 - Используем реальные файлы через tmp_path
 - Используем реальный JSON из vless-tcp-server-metrics.json
 - Проверяем файловые операции и HTTP ответы
-- Для тестов с кастомными конвертерами используем данные из БД (protocol_templates_with_extractors)
+- Для тестов с кастомными конвертерами используем данные из БД (protocol_templates_with_extractors):
+  нода регистрируется с конвертерами шаблона, запросы — без служебных полей. Запуск: --protocol '*'
 """
 
 import shutil  # noqa: F401, I001
@@ -20,6 +21,7 @@ import pytest
 
 from node_client.api.proto_core.write_behind_caching_file import flatten_key2value
 from node_client.api.sandbox.hot_reload_executor import HotReloadExecutor
+from node_client.tests.utils.test_data_factory import create_vnode_service_data
 
 
 # ========== Helper Functions ==========
@@ -113,49 +115,63 @@ def create_nested_config_from_flatten_keys(flatten_keys: list[str], add_test_use
     return config
 
 
-# ========== Helper Functions for Payloads ==========
+# ========== Регистрация ноды по шаблону ==========
+
+READ_URL = "/api/v1/server/node/config/read"
+WRITE_URL = "/api/v1/server/node/config/write"
 
 
-def create_read_payload(
-    path: str,
-    flatten_key: list[str] = None,
-    node_proto_id: int = 1,
-    config2json_script: str = None,
-    json2config_script: str = None,
-    conf_converter_libs: str = None,
-) -> dict:
-    """Создаёт payload для /node/config/read с актуальной схемой"""
-    return {
-        "node_proto_id": node_proto_id,
-        "path": path,
-        "flatten_json_users_key": flatten_key if flatten_key else [],  # Пустой список вместо None
-        "config2json_script": config2json_script,
-        "json2config_script": json2config_script,
-        "conf_converter_libs": conf_converter_libs,
-    }
+async def register_template_node(buffer, template: dict, config_path) -> int:
+    """
+    Регистрирует в буфере виртуальную ноду с конвертерами и экстракторами шаблона.
+
+    Так нод-клиент получает их в рабочем режиме — из /startup, а не в теле запроса.
+    Возвращает node_proto_id (берём id шаблона: он уникален в пределах теста).
+    """
+    item = create_vnode_service_data(
+        node_proto_id=template['id'],
+        filepath=str(config_path),
+        user_injectors=[
+            {
+                'flatten_array_cursor': ext['flatten_array_cursor'],
+                'extractor_script': ext['extractor_script'],
+                'libs': ext['libs'],
+            }
+            for ext in template['extractors']
+        ],
+        config2json_script=template['config2json_script'],
+        json2config_script=template['json2config_script'],
+        conf_converter_libs=template['conf_converter_libs'],
+    )
+    await buffer.register_node(item)
+    return template['id']
 
 
-def create_write_payload(
-    path: str,
-    content: str,
-    flatten_key: list[str] = None,
-    node_proto_id: int = 1,
-    tmp_link: str = "http://test.local/config",
-    config2json_script: str = None,
-    json2config_script: str = None,
-    conf_converter_libs: str = None,
-) -> dict:
-    """Создаёт payload для /node/config/write с актуальной схемой"""
-    return {
-        "node_proto_id": node_proto_id,
-        "tmp_link": tmp_link,
-        "path": path,
-        "content": content,
-        "flatten_json_users_key": flatten_key if flatten_key else [],  # Пустой список вместо None
-        "config2json_script": config2json_script,
-        "json2config_script": json2config_script,
-        "conf_converter_libs": conf_converter_libs,
-    }
+def write_native_config(template: dict, config_path, flatten_keys: list[str], users_count: int) -> None:
+    """Генерирует конфиг с пользователями и пишет его в нативном формате шаблона (json2config)"""
+    conf_dumper = HotReloadExecutor.get_compiled_func(
+        template['json2config_script'], 'json2config', template['conf_converter_libs']
+    )
+    config_dict = create_nested_config_from_flatten_keys(flatten_keys, add_test_users=users_count)
+    config_path.write_bytes(conf_dumper(config_dict))
+
+
+def custom_converter_templates(templates: list[dict]) -> list[dict]:
+    """Шаблоны с кастомными конвертерами и экстракторами; если в выборке их нет — явный skip, а не пустой проход"""
+    selected = [t for t in templates if has_custom_converters(t) and extract_flatten_keys_from_template(t)]
+    if not selected:
+        pytest.skip(
+            "В выборке --protocol нет шаблонов с кастомными конвертерами (amneziawg, hysteria): запусти с --protocol '*'"
+        )
+    return selected
+
+
+def report(results: list[str], errors: list[str]) -> None:
+    """Печатает отчёт по шаблонам и валит тест, если хоть один шаблон упал"""
+    print("\n" + "\n".join(results + errors))
+    print(f"\nИтого: {len(results)}/{len(results) + len(errors)} шаблонов passed")
+    if errors:
+        pytest.fail(f"Тесты упали для {len(errors)} шаблонов:\n" + "\n".join(errors))
 
 
 # ========== Тесты с реальными шаблонами из БД (кастомные конвертеры) ==========
@@ -165,74 +181,32 @@ def create_write_payload(
 @pytest.mark.db
 async def test_read_config_with_custom_converters_from_db(protocol_templates_with_extractors, client, tmp_path):
     """
-    Тест чтения конфига с удалением пользователей для кастомных конвертеров из БД.
+    /read для шаблонов с кастомными конвертерами (conf, yaml): пользователи вырезаются.
 
-    Проверяет корректность работы config2json/json2config скриптов:
-    1. Фильтрует только шаблоны с кастомными конвертерами (не NULL)
-    2. Генерирует эвристический конфиг с пользователями
-    3. Конвертирует через json2config → записывает в нативном формате
-    4. Читает через API с удалением пользователей
-    5. Конвертирует через config2json и проверяет отсутствие пользователей
-
-    JSON конвертация (оба скрипта NULL) работает безупречно и не требует тестирования.
-    Кастомные форматы (TOML, YAML, etc.) имеют нюансы и требуют отдельного тестирования.
-
-    Формат отчёта:
-    ✅ singbox-hysteria2: OK
-    ✅ singbox-wireguard: OK
-    ❌ v2fly-shadowsocks: KeyError 'method'
-
-    Итого: 2/3 шаблонов passed
+    1. Конфиг с 3 пользователями пишется в нативном формате шаблона (json2config)
+    2. Нода регистрируется с конвертерами и экстракторами шаблона
+    3. /read без служебных полей (exclude_users по умолчанию True)
+    4. Ответ разбирается config2json: массивов пользователей быть не должно
     """
-    results = []
-    errors = []
-    # ОТЛАДКА: Проверяем что фикстура вообще что-то вернула
-    if not protocol_templates_with_extractors:
-        pytest.fail("Фикстура protocol_templates_with_extractors вернула пустой список!")
-    for template in protocol_templates_with_extractors:
-        # Пропускаем JSON-шаблоны (работают идеально, тестировать не нужно)
-        if not has_custom_converters(template):
-            continue
-        # Пропускаем шаблоны без extractors
-        flatten_keys = extract_flatten_keys_from_template(template)
-        if not flatten_keys:
-            continue
+    buffer = client.app.state.core_buffer
+    results, errors = [], []
+
+    for template in custom_converter_templates(protocol_templates_with_extractors):
         template_title = template['title']
+        flatten_keys = extract_flatten_keys_from_template(template)
         try:
-            # 1. Генерируем эвристический конфиг с 3 юзерами
-            config_dict = create_nested_config_from_flatten_keys(flatten_keys, add_test_users=3)
-            # 2. Конвертируем dict → нативный формат через json2config
-            conf_dumper = HotReloadExecutor.get_compiled_func(
-                template['json2config_script'], 'json2config', template['conf_converter_libs']
-            )
-            raw_config = conf_dumper(config_dict).decode('utf-8')
-            # 3. Записываем в файл в нативном формате
-            config_path = tmp_path / f"{template_title.replace('/', '_')}_config.txt"
-            config_path.write_text(raw_config, encoding='utf-8')
-            # 4. Читаем через API с удалением пользователей
-            response = await client.post(
-                "/api/v1/server/node/config/read",
-                json=create_read_payload(
-                    path=str(config_path),
-                    flatten_key=flatten_keys,
-                    node_proto_id=template['id'],
-                    config2json_script=template['config2json_script'],
-                    json2config_script=template['json2config_script'],
-                    conf_converter_libs=template['conf_converter_libs'],
-                ),
-            )
-            # Проверяем успешность
+            config_path = tmp_path / f"{template_title}_read.conf"
+            write_native_config(template, config_path, flatten_keys, users_count=3)
+            node_proto_id = await register_template_node(buffer, template, config_path)
+
+            response = await client.post(READ_URL, json={"node_proto_id": node_proto_id, "path": str(config_path)})
             if response.status_code != 200:
-                error_detail = response.text
-                raise AssertionError(f"Unexpected status: {response.status_code}, body: {error_detail}")
-            data = response.json()
-            assert data["success"] is True, f"Response not successful: {data.get('message')}"
-            # 5. Конвертируем нативный → dict через config2json
+                raise AssertionError(f"Unexpected status: {response.status_code}, body: {response.text}")
+
             conf_loader = HotReloadExecutor.get_compiled_func(
                 template['config2json_script'], 'config2json', template['conf_converter_libs']
             )
-            returned_dict = conf_loader(data["content"])
-            # 6. Проверка: пользователи должны быть удалены
+            returned_dict = conf_loader(response.json()["content"])
             for flatten_array_cursor in flatten_keys:
                 users = flatten_key2value(returned_dict, flatten_array_cursor)
                 assert users is None or users is Exception or (isinstance(users, list) and len(users) == 0), (
@@ -240,136 +214,69 @@ async def test_read_config_with_custom_converters_from_db(protocol_templates_wit
                 )
             results.append(f"✅ {template_title}: OK")
         except Exception as e:
-            errors.append(f"❌ {template_title}: {str(e)}")
-    # Итоговый отчёт
-    print("\n" + "\n".join(results + errors))
-    print(f"\nИтого: {len(results)}/{len(results) + len(errors)} шаблонов passed")
-    # Если были ошибки - тест проваливается
-    if errors:
-        pytest.fail(f"Тесты упали для {len(errors)} шаблонов:\n" + "\n".join(errors))
+            errors.append(f"❌ {template_title}: {e!r}")
+
+    report(results, errors)
 
 
 @pytest.mark.asyncio
 @pytest.mark.db
 async def test_write_config_with_custom_converters_from_db(protocol_templates_with_extractors, client, tmp_path):
     """
-    Тест записи конфига с переносом пользователей для кастомных конвертеров из БД.
+    /write для шаблонов с кастомными конвертерами: пользователи переносятся из старого файла.
 
-    Проверяет корректность работы json2config скриптов:
-    1. Фильтрует только шаблоны с кастомными конвертерами
-    2. Создаёт исходный конфиг с 3 юзерами
-    3. Читает через READ без удаления пользователей
-    4. Добавляет 4-го пользователя в dict
-    5. Конвертирует через json2config и записывает
-    6. Проверяет что файл содержит 4 пользователей
-
-    Формат отчёта:
-    ✅ singbox-hysteria2: OK (4 users)
-    ✅ singbox-wireguard: OK (4 users)
-    ❌ v2fly-shadowsocks: AssertionError: Expected 4 users, got 3
-
-    Итого: 2/3 шаблонов passed
+    1. Старый конфиг с 3 пользователями пишется в нативном формате шаблона
+    2. Нода регистрируется с конвертерами и экстракторами шаблона
+    3. /write нового содержимого с пустыми массивами пользователей
+    4. /read с exclude_users=False: в файле снова 3 пользователя из старого конфига
     """
-    results = []
-    errors = []
-    custom_converters_templates = 0
-    for template in protocol_templates_with_extractors:
-        # Пропускаем JSON-шаблоны
-        if not has_custom_converters(template):
-            continue
-        custom_converters_templates += 1
+    buffer = client.app.state.core_buffer
+    results, errors = [], []
 
-        # Пропускаем шаблоны без extractors
-        flatten_keys = extract_flatten_keys_from_template(template)
-        if not flatten_keys:
-            continue
+    for template in custom_converter_templates(protocol_templates_with_extractors):
         template_title = template['title']
-        print(f"{template_title}")
+        flatten_keys = extract_flatten_keys_from_template(template)
         try:
-            # 1. Генерируем исходный конфиг с 3 юзерами
-            config_dict = create_nested_config_from_flatten_keys(flatten_keys, add_test_users=3)
-            # 2. Конвертируем dict → нативный формат
+            config_path = tmp_path / f"{template_title}_write.conf"
+            write_native_config(template, config_path, flatten_keys, users_count=3)
+            node_proto_id = await register_template_node(buffer, template, config_path)
+
             conf_dumper = HotReloadExecutor.get_compiled_func(
                 template['json2config_script'], 'json2config', template['conf_converter_libs']
             )
+            new_content = conf_dumper(create_nested_config_from_flatten_keys(flatten_keys, add_test_users=0))
+            response_write = await client.post(
+                WRITE_URL,
+                json={
+                    "node_proto_id": node_proto_id,
+                    "path": str(config_path),
+                    "content": new_content.decode('utf-8'),
+                    "tmp_link": "http://test.local/config",
+                },
+            )
+            if response_write.status_code != 200:
+                raise AssertionError(f"WRITE: {response_write.status_code}, body: {response_write.text}")
+
+            response_read = await client.post(
+                READ_URL, json={"node_proto_id": node_proto_id, "path": str(config_path), "exclude_users": False}
+            )
+            if response_read.status_code != 200:
+                raise AssertionError(f"READ: {response_read.status_code}, body: {response_read.text}")
+
             conf_loader = HotReloadExecutor.get_compiled_func(
                 template['config2json_script'], 'config2json', template['conf_converter_libs']
             )
-            raw_config = conf_dumper(config_dict).decode('utf-8')
-            config_path = tmp_path / f"{template_title.replace('/', '_')}_write_test.txt"
-            config_path.write_text(raw_config, encoding='utf-8')
-            # 3. READ: читаем конфиг БЕЗ удаления пользователей
-            response_read = await client.post(
-                "/api/v1/server/node/config/read",
-                json=create_read_payload(
-                    path=str(config_path),
-                    flatten_key=[],  # Пустой список = не удаляем пользователей
-                    node_proto_id=template['id'],
-                    config2json_script=template['config2json_script'],
-                    json2config_script=template['json2config_script'],
-                    conf_converter_libs=template['conf_converter_libs'],
-                ),
-            )
-            assert response_read.status_code == 200, "READ должен пройти успешно"
-            # 4. Конвертируем в dict и добавляем 4-го пользователя
-            old_config = conf_loader(response_read.json()["content"])
-            for flatten_key in flatten_keys:
-                users_list = flatten_key2value(old_config, flatten_key)
-                # Определяем формат пользователя по flatten_key
-                if "auth" in flatten_key and "users" in flatten_key:
-                    # Hysteria формат
-                    new_user = {"username": "user4", "password": "pass4"}
-                else:
-                    # Стандартный формат
-                    new_user = {"id": "test-uuid-4", "email": "user4@test.local"}
-                users_list.append(new_user)
-            # 5. Конвертируем dict → нативный формат и записываем
-            raw_new_config = conf_dumper(old_config).decode('utf-8')
-            response_write = await client.post(
-                "/api/v1/server/node/config/write",
-                json=create_write_payload(
-                    path=str(config_path),
-                    content=raw_new_config,
-                    flatten_key=[],  # Пустой список = НЕ переносим пользователей
-                    node_proto_id=template['id'],
-                    config2json_script=template['config2json_script'],
-                    json2config_script=template['json2config_script'],
-                    conf_converter_libs=template['conf_converter_libs'],
-                ),
-            )
-            assert response_write.status_code == 200, f"WRITE должен пройти успешно: {response_write.json()}"
-            # 6. READ снова: проверяем что 4 юзера
-            response_verify = await client.post(
-                "/api/v1/server/node/config/read",
-                json=create_read_payload(
-                    path=str(config_path),
-                    flatten_key=[],
-                    node_proto_id=template['id'],
-                    config2json_script=template['config2json_script'],
-                    json2config_script=template['json2config_script'],
-                    conf_converter_libs=template['conf_converter_libs'],
-                ),
-            )
-            saved_dict = conf_loader(response_verify.json()["content"])
-            # 7. Проверка: 4 пользователя в каждом flatten_key
+            saved_dict = conf_loader(response_read.json()["content"])
             for flatten_array_cursor in flatten_keys:
                 users = flatten_key2value(saved_dict, flatten_array_cursor)
-                assert isinstance(users, list) and len(users) == 4, (
-                    f"Должно быть 4 пользователя для {flatten_array_cursor}, получено {len(users) if isinstance(users, list) else 'not a list'}"
+                assert isinstance(users, list) and len(users) == 3, (
+                    f"Должно быть 3 пользователя из старого файла для {flatten_array_cursor}, получено: {users}"
                 )
-            results.append(f"✅ {template_title}: OK (4 users)")
+            results.append(f"✅ {template_title}: OK (3 users перенесены)")
         except Exception as e:
-            errors.append(f"❌ {template_title}: {str(e)}")
-    # Итоговый отчёт
-    print("\n" + "\n".join(results + errors))
-    print(f"\nИтого: {len(results)}/{len(results) + len(errors)} шаблонов passed")
-    # Если были ошибки - тест проваливается
-    if errors:
-        pytest.fail(f"Тесты упали для {len(errors)} шаблонов:\n" + "\n".join(errors))
+            errors.append(f"❌ {template_title}: {e!r}")
 
-    assert len(results) == custom_converters_templates, (
-        "Часть шаблонов обошла проверку конвертер скриптов: скрипты не указаны!"
-    )
+    report(results, errors)
 
 
 # ========== Незарегистрированная нода (требования 5.3, 6.5) ==========

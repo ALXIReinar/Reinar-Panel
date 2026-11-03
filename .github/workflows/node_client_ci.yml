@@ -46,7 +46,7 @@ jobs:
           PG_HOST=127.0.0.1
   
           NODE_PORT=${{ vars.NODE_PORT }}
-          NODE_NAME=${{ vars.NODE_NAME }}
+          NODE_TITLE=${{ vars.NODE_TITLE || vars.NODE_NAME }}
           ADMIN_PANEL_PRIVATE_IP=${{ vars.ADMIN_PANEL_PRIVATE_IP }}
           EOF
           
@@ -121,7 +121,7 @@ jobs:
       - name: Install Node Client
         env:
           NODE_PORT: ${{ vars.NODE_PORT }}
-          NODE_NAME: ${{ vars.NODE_NAME }}
+          NODE_TITLE: ${{ vars.NODE_TITLE || vars.NODE_NAME }}
           ADMIN_PANEL_PRIVATE_IP: ${{ vars.ADMIN_PANEL_PRIVATE_IP }}
           CI: 1
         run: |

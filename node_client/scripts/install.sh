@@ -64,9 +64,16 @@ fi
 
 echo -e "\nНастройка имени Ноды"
 
-if [ -z "$NODE_NAME" ]; then
-    read -p "Введите имя ноды(будет отображаться в админ панели): " NODE_NAME
-fi
+# NODE_TITLE должен совпадать с названием физической ноды в админке (nodes.title):
+# по нему нод-клиент при старте запрашивает свои виртуальные ноды (/startup).
+# NODE_NAME — устаревшее имя переменной, принимаем его для совместимости.
+NODE_TITLE=${NODE_TITLE:-$NODE_NAME}
+while [ -z "$NODE_TITLE" ] || [ ${#NODE_TITLE} -gt 64 ]; do
+    if [ ${#NODE_TITLE} -gt 64 ]; then
+        echo -e "${RED}✗${NC} Имя ноды длиннее 64 символов"
+    fi
+    read -p "Введите имя ноды (как физическая нода называется в админ панели, до 64 символов): " NODE_TITLE
+done
 
 # Интерактивный выбор порта
 echo -e "\n${YELLOW}Настройка порта для Node Client${NC}"
@@ -202,7 +209,7 @@ if [ ! -f "$INSTALL_DIR/.env.node.prod" ]; then
     cat > "$INSTALL_DIR/.env.node.prod" <<ENVEOF
 # Node Client Configuration
 NODE_PORT=${NODE_PORT}
-NODE_NAME=${NODE_NAME}
+NODE_TITLE=${NODE_TITLE}
 COMMAND_TIMEOUT=30
 
 PYTHONUNBUFFERED=1
@@ -220,8 +227,15 @@ else
     # Обновляем порт в существующем файле
     sed -i "s/^NODE_PORT=.*/NODE_PORT=$NODE_PORT/" $INSTALL_DIR/.env.node.prod
     
-    # Обновляем имя ноды
-    sed -i "s/^NODE_NAME=.*/NODE_NAME=$NODE_NAME/" $INSTALL_DIR/.env.node.prod
+    # Обновляем имя ноды. Старое имя переменной NODE_NAME переименовываем в NODE_TITLE
+    if grep -q "^NODE_TITLE=" $INSTALL_DIR/.env.node.prod; then
+        sed -i "s/^NODE_TITLE=.*/NODE_TITLE=$NODE_TITLE/" $INSTALL_DIR/.env.node.prod
+        sed -i "/^NODE_NAME=/d" $INSTALL_DIR/.env.node.prod
+    elif grep -q "^NODE_NAME=" $INSTALL_DIR/.env.node.prod; then
+        sed -i "s/^NODE_NAME=.*/NODE_TITLE=$NODE_TITLE/" $INSTALL_DIR/.env.node.prod
+    else
+        echo "NODE_TITLE=$NODE_TITLE" >> $INSTALL_DIR/.env.node.prod
+    fi
     
     # Добавляем ADMIN_PANEL_PRIVATE_IP если его нет
     if ! grep -q "ADMIN_PANEL_PRIVATE_IP" $INSTALL_DIR/.env.node.prod; then
