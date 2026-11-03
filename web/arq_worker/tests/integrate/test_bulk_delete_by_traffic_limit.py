@@ -61,8 +61,8 @@ class TestBulkDeleteByTrafficLimit:
                     'job': job_mock,
                     'function_name': args[0],
                     'node_proto_id': args[1] if len(args) > 1 else None,
-                    'operation': args[8] if len(args) > 8 else None,  # operation параметр
-                    'users': args[9] if len(args) > 9 else None,  # users параметр
+                    'operation': args[5] if len(args) > 5 else None,  # operation параметр
+                    'users': args[6] if len(args) > 6 else None,  # users параметр
                 }
             )
             return job_mock
@@ -137,7 +137,7 @@ class TestBulkDeleteByTrafficLimit:
                 {
                     'args': args,
                     'node_proto_id': args[1],
-                    'users': args[9],  # users на позиции 9
+                    'users': args[6],  # users на позиции 6
                 }
             )
             return job_mock

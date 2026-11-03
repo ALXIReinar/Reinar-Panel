@@ -7,13 +7,14 @@ import math
 import re
 from collections import defaultdict
 from functools import lru_cache
-from typing import Callable, Any
+from typing import Any
+from collections.abc import Callable
 
 import flatten_json
 import jmespath
 import orjson
 
-from web.api.sandbox.ast_validator import SecurityError, CodeSandboxValidator
+from web.api.sandbox.ast_validator import CodeSandboxValidator
 from web.config_dir.config import env
 from web.utils.logger_config import log_event
 

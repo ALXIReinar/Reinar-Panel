@@ -46,20 +46,17 @@ class TestPointedBulkAction:
         assert call_vnode_10[0][0] == 'bulk_action_users_by_node'  # Имя функции
         assert call_vnode_10[0][1] == pointed_bulk_seed['vnode_id_10']  # node_proto_id
         assert call_vnode_10[0][2] == "10.0.0.100"  # private_ip
-        # Проверяем наличие api_bulk_action_script (позиция 6) - это теперь код скрипта, не строка вызова
-        assert call_vnode_10[0][6] is not None  # api_bulk_action_script
-        assert call_vnode_10[0][8] == 1  # operation=1 (ADD)
+        assert call_vnode_10[0][5] == 1  # operation=1 (ADD)
         # Проверяем что в users есть правильный пользователь
-        users_node_10 = call_vnode_10[0][9]  # users параметр на позиции 9
+        users_node_10 = call_vnode_10[0][6]  # users параметр на позиции 6
         assert len(users_node_10) == 1
         assert users_node_10[0]['uuid'] == pointed_bulk_seed['user3_uuid']
         assert users_node_10[0]['user_sub_id'] == pointed_bulk_seed['user3_order_active']
         # Проверяем вызов для vnode_id_11
         assert call_vnode_11[0][0] == 'bulk_action_users_by_node'
         assert call_vnode_11[0][1] == pointed_bulk_seed['vnode_id_11']
-        assert call_vnode_11[0][6] is not None  # api_bulk_action_script
-        assert call_vnode_11[0][8] == 1  # operation=1 (ADD)
-        users_node_11 = call_vnode_11[0][9]
+        assert call_vnode_11[0][5] == 1  # operation=1 (ADD)
+        users_node_11 = call_vnode_11[0][6]
         assert len(users_node_11) == 1
         assert users_node_11[0]['uuid'] == pointed_bulk_seed['user5_uuid']
 
@@ -89,15 +86,14 @@ class TestPointedBulkAction:
         # Проверяем что вызывается bulk_action_users_by_node с operation=2 (DELETE) для vnode_10
         assert call_vnode_10[0][0] == 'bulk_action_users_by_node'
         assert call_vnode_10[0][1] == pointed_bulk_seed['vnode_id_10']
-        assert call_vnode_10[0][6] is not None  # api_bulk_action_script для DELETE
-        assert call_vnode_10[0][8] == 2  # operation=2 (DELETE)
-        users_node_10 = call_vnode_10[0][9]  # users на позиции 9
+        assert call_vnode_10[0][5] == 2  # operation=2 (DELETE)
+        users_node_10 = call_vnode_10[0][6]  # users на позиции 6
         assert len(users_node_10) == 1
         assert users_node_10[0]['uuid'] == pointed_bulk_seed['user4_uuid']
         # Проверяем что вызывается bulk_action_users_by_node с operation=2 (DELETE) для vnode_11
         assert call_vnode_11[0][0] == 'bulk_action_users_by_node'
         assert call_vnode_11[0][1] == pointed_bulk_seed['vnode_id_11']
-        assert call_vnode_11[0][8] == 2  # operation=2 (DELETE)
+        assert call_vnode_11[0][5] == 2  # operation=2 (DELETE)
 
     async def test_pointed_bulk_empty_outbox_ids(self, mock_arq_ctx, pointed_bulk_seed, db_pool):
         """
@@ -198,7 +194,7 @@ class TestPointedBulkAction:
         calls = mock_arq_ctx['arq_redis'].enqueue_job.call_args_list
         # Находим задачу для vnode_10 (должна содержать 2 пользователей)
         vnode_10_call = [c for c in calls if c[0][1] == pointed_bulk_seed['vnode_id_10']][0]
-        users_vnode_10 = vnode_10_call[0][9]  # users на позиции 9
+        users_vnode_10 = vnode_10_call[0][6]  # users на позиции 6
         assert len(users_vnode_10) == 2, "vnode_10 должна содержать 2 пользователей"
         # Проверяем UUID пользователей
         uuids_vnode_10 = {u['uuid'] for u in users_vnode_10}
@@ -206,7 +202,7 @@ class TestPointedBulkAction:
         assert user7_uuid in uuids_vnode_10
         # Находим задачу для vnode_11 (должна содержать 1 пользователя)
         vnode_11_call = [c for c in calls if c[0][1] == pointed_bulk_seed['vnode_id_11']][0]
-        users_vnode_11 = vnode_11_call[0][9]  # users на позиции 9
+        users_vnode_11 = vnode_11_call[0][6]  # users на позиции 6
         assert len(users_vnode_11) == 1, "vnode_11 должна содержать 1 пользователя"
         assert users_vnode_11[0]['uuid'] == pointed_bulk_seed['user5_uuid']
 

@@ -44,7 +44,7 @@ class UpdateNodeProtoSchema(BaseModel):
 class VNodeRegisterSchema(BaseModel):
     tmp_id: int = Field(description='Выступает как np.tmp_id. Protocols были вырезаны', alias='proto_id')
     node_id: int
-    title: str  # Убрал max_length - контроль в валидаторе
+    title: str
     metrics_port: int | None = Field(None, le=65535, gt=0)
     proto_port: int = Field(le=65535, gt=0)
     config_path: str = Field(None)
@@ -85,7 +85,9 @@ class VNodeRegisterResultSchema(BaseModel):
     metrics_command: str | None = Field(None)
     config_path: str | None = Field(None)
     service_name: str | None = Field(None)
-    config_content: str | None = Field(None, description='Сырое содержимое конфиг-файла для первого рендеринга config_link')
+    config_content: str | None = Field(
+        None, description='Сырое содержимое конфиг-файла для первого рендеринга config_link'
+    )
 
     @field_validator('title', mode='after')
     @classmethod

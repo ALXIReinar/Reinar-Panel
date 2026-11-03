@@ -7,12 +7,19 @@ from fastapi.params import Query
 from web.config_dir.config import NodeExecAiohttpDep
 from web.data.postgres import PgSqlDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
-from web.schemas.node_schema import NodeCreateSchema, NodeUpdateSchema, NodesGetSchema, GetNodeProtoSchema
+from web.schemas.node_schema import (
+    NodeCreateSchema,
+    NodeUpdateSchema,
+    NodesGetSchema,
+    GetNodeProtoSchema,
+    StartupRequest,
+)
 from web.utils.anything import NodeUris
 from web.utils.logger_config import log_event
 
 
 router = APIRouter(prefix='/private/nodes', tags=['Physical Nodes (Servers)'])
+server_router = APIRouter(prefix='/server/nodes', tags=['Physical Nodes (Servers)'])
 
 
 @router.post('/create', summary="Создать физическую ноду")
@@ -148,3 +155,37 @@ async def get_node_protocols_api(
         request=request,
     )
     return {'protocols': protocols}
+
+
+@server_router.post(
+    '/{node_title}/startup',
+    # response_model=StartupResponse,
+    summary="Выдача служебных данных виртуальных нод для нод-клиента",
+)
+async def get_node_startup_data(
+    node_title: str,
+    body: StartupRequest,
+    db: PgSqlDep,
+    request: Request,
+):
+    """
+    Выдача служебных данных виртуальных нод физической ноды при инициализации нод-клиента.
+    """
+    startup_data = await db.nodes.get_startup_data(node_title, body.node_proto_ids)
+    if startup_data is None:
+        log_event(
+            f'Физическая нода не найдена при запросе startup | node_title: \033[31m{node_title}\033[0m',
+            request=request,
+            level='WARNING',
+        )
+        raise HTTPException(
+            status_code=404,
+            detail={"success": False, "message": f"Физическая нода '{node_title}' не найдена"},
+        )
+
+    log_event(
+        f'Выданы данные startup для нод-клиента | node_title: \033[32m{node_title}\033[0m; '
+        f'vnodes_count: \033[33m{len(startup_data["nodes"])}\033[0m; missing: {startup_data["missing"]}',
+        request=request,
+    )
+    return startup_data

@@ -1,8 +1,9 @@
 from fastapi import APIRouter  # noqa: I001
-from .nodes_api import router as phys_nodes_router
+from .nodes_api import router as phys_nodes_router, server_router as server_nodes_router
 from .nodes_protocols import router as virtual_nodes_router
 
 nodes_router = APIRouter()
 
 nodes_router.include_router(phys_nodes_router)
+nodes_router.include_router(server_nodes_router)
 nodes_router.include_router(virtual_nodes_router)

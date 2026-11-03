@@ -111,3 +111,60 @@ class NodesQueries:
         LIMIT $2 OFFSET $3
         """
         return await self.conn.fetch(query, node_id, limit, offset)
+
+    async def get_startup_data(self, node_title: str, node_proto_ids: list[int] | None = None) -> dict | None:
+        """Получить служебные данные виртуальных нод физической ноды для инициализации нод-клиента."""
+        # 1. Проверяем существование физической ноды
+        node = await self.conn.fetchrow("SELECT id FROM nodes WHERE title = $1", node_title)
+        if not node:
+            return None
+
+        # 2. Выбираем служебные данные зарегистрированных виртуальных нод
+        query = """
+        WITH pre_agg_user_injectors AS (
+            SELECT tmp_id,
+                   json_agg(
+                       json_build_object(
+                           'flatten_array_cursor', flatten_array_cursor,
+                           'extractor_script', extractor_script,
+                           'libs', libs
+                       )
+                   ) AS user_injectors
+            FROM templates_users_extractors
+            GROUP BY tmp_id
+        )
+        SELECT np.id                  AS node_proto_id,
+               np.config_path         AS filepath,
+               COALESCE(aui.user_injectors, '[]'::json) AS user_injectors,
+               np.reload_core_command AS reload_command,
+               pt.config2json_script,
+               pt.json2config_script,
+               pt.conf_converter_libs,
+               pt.api_bulk_add_user_script,
+               pt.api_bulk_delete_user_script,
+               COALESCE(np.metrics_command, pt.metrics_command) AS metrics_command,
+               pt.api_metrics_script,
+               pt.proto_python_lib,
+               pt.metrics_parser_libs,
+               pt.metrics_parser_code
+        FROM nodes_protocols np
+        JOIN nodes n            ON n.id = np.node_id
+        JOIN proto_templates pt ON pt.id = np.tmp_id
+        LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id
+        WHERE n.title = $1
+          AND np.reg_status = 2
+          AND ($2::int[] IS NULL OR cardinality($2::int[]) = 0 OR np.id = ANY($2::int[]))
+        ORDER BY np.id ASC
+        """
+        filter_ids = node_proto_ids if node_proto_ids else None
+        rows = await self.conn.fetch(query, node_title, filter_ids)
+
+        found_ids = set(row["node_proto_id"] for row in rows)
+        requested_ids = list(dict.fromkeys(node_proto_ids or []))
+        missing = [nid for nid in requested_ids if nid not in found_ids]
+
+        return {
+            "node_title": node_title,
+            "nodes": rows,
+            "missing": missing,
+        }

@@ -599,6 +599,10 @@ async def client(mock_core_buffer):
     """
     app = FastAPI()
     app.include_router(main_router)
+    from node_client.exceptions import NodeNotRegisteredError
+    from node_client.main import node_not_registered_handler
+
+    app.add_exception_handler(NodeNotRegisteredError, node_not_registered_handler)
     # Добавляем core_buffer в state приложения
     app.state.core_buffer = mock_core_buffer
     # Middleware НЕ добавляем для тестов (OnlyAdminAccessMiddleware)
@@ -619,6 +623,10 @@ async def client_with_real_buffer(fast_buffer):
     """
     app = FastAPI()
     app.include_router(main_router)
+    from node_client.exceptions import NodeNotRegisteredError
+    from node_client.main import node_not_registered_handler
+
+    app.add_exception_handler(NodeNotRegisteredError, node_not_registered_handler)
     app.state.core_buffer = fast_buffer
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:

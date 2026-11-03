@@ -3,12 +3,11 @@
 """
 
 import uuid as uuid_lib
-from typing import Optional
 
 
 def create_test_user(
-    email: Optional[str] = None,
-    uuid: Optional[str] = None,
+    email: str | None = None,
+    uuid: str | None = None,
     flow: str = "xtls-rprx-vision",
     level: int = 0,
     as_superuser: bool = True,
@@ -81,8 +80,8 @@ def create_bulk_test_users(count: int, prefix: str = "bulk_user") -> list[dict]:
 
 def create_user_injectors(
     flatten_array_cursor: str = "inbounds___0___settings___clients",
-    extractor_script: Optional[str] = None,
-    libs: Optional[str] = None,
+    extractor_script: str | None = None,
+    libs: str | None = None,
 ) -> list[dict]:
     """
     Создаёт user_injectors для ConfigWriteBuffer в новом формате
@@ -121,8 +120,8 @@ def transform(user_obj):
 
 
 def create_superuser_object(
-    user_uuid: Optional[str] = None,
-    email: Optional[str] = None,
+    user_uuid: str | None = None,
+    email: str | None = None,
     flow: str = "xtls-rprx-vision",
     level: int = 0,
     **extra_fields,
@@ -156,3 +155,38 @@ def create_superuser_object(
         email = f"test_user_{user_uuid[:8]}"
     superuser = {"user_uuid": user_uuid, "email": email, "flow": flow, "level": level, **extra_fields}
     return superuser
+
+
+def create_vnode_service_data(
+    node_proto_id: int = 1,
+    filepath: str = "/tmp/config.json",
+    user_injectors: list[dict] | None = None,
+    reload_command: str | None = None,
+    config2json_script: str | None = None,
+    json2config_script: str | None = None,
+    conf_converter_libs: str | None = None,
+    api_bulk_add_user_script: str | None = None,
+    api_bulk_delete_user_script: str | None = None,
+    metrics_command: str | None = None,
+    api_metrics_script: str | None = None,
+    proto_python_lib: str | None = None,
+    metrics_parser_code: str | None = None,
+) -> dict:
+    """Создаёт тестовый словарь VnodeServiceData для ConfigWriteBuffer.register_node"""
+    if user_injectors is None:
+        user_injectors = create_user_injectors()
+    return {
+        'node_proto_id': node_proto_id,
+        'filepath': filepath,
+        'user_injectors': user_injectors,
+        'reload_command': reload_command,
+        'config2json_script': config2json_script,
+        'json2config_script': json2config_script,
+        'conf_converter_libs': conf_converter_libs,
+        'api_bulk_add_user_script': api_bulk_add_user_script,
+        'api_bulk_delete_user_script': api_bulk_delete_user_script,
+        'metrics_command': metrics_command,
+        'api_metrics_script': api_metrics_script,
+        'proto_python_lib': proto_python_lib,
+        'metrics_parser_code': metrics_parser_code,
+    }

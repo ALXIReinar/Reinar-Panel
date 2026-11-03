@@ -20,7 +20,7 @@ class JSONFormatter(logging.Formatter):
             "@timestamp": datetime.now().isoformat() + "Z",
             "level": record.levelname,
             "message": record.getMessage(),
-            "service": env.node_name,
+            "service": env.node_title,
             "method": record.__dict__.get('method', ''),
             "url": str(record.__dict__.get('url', '')),
             "func": record.__dict__.get('func', 'unknown_function'),
@@ -49,7 +49,7 @@ class JSONFormatter(logging.Formatter):
                 "@timestamp": datetime.now().isoformat() + "Z",
                 "level": record.levelname,
                 "message": str(record.getMessage()),
-                "service": env.node_name,
+                "service": env.node_title,
                 "error": f"JSON serialization failed: {str(e)}",
             }
             return orjson.dumps(fallback_entry).decode('utf-8')

@@ -29,16 +29,12 @@ class TestBulkOperationsArqEnqueue:
             "10.0.0.100",  # private_ip
             8100,  # api_port
             9090,  # metrics_port
-            "vless",  # proto_python_lib
-            "python add.py",  # api_bulk_action_script
-            {},  # bulk_action_script_custom_params
             1,  # operation (1=ADD)
             users,  # users
-            "systemctl reload test",  # reload_core_command
-            "/etc/config.json",  # config_file_path
-            [],  # user_injectors
+            {},  # custom_params
             {"id": "{USER_UUID}"},  # required_user_data_obj
             {"level": 0},  # constant_user_data_obj
+            {},  # constant_node_data_obj
             1,  # current_attempt
         )
         # Assert
@@ -67,16 +63,12 @@ class TestBulkOperationsArqEnqueue:
             "10.0.0.100",  # private_ip
             8100,  # api_port
             9090,  # metrics_port
-            "vless",  # proto_python_lib
-            "python bulk_del.py",  # api_bulk_action_script
-            {},  # bulk_action_script_custom_params
             2,  # operation (2=DELETE)
             users,  # users
-            "systemctl reload test",  # reload_core_command
-            "/etc/config.json",  # config_file_path
-            [],  # user_injectors
+            {},  # custom_params
             {"id": "{USER_UUID}"},  # required_user_data_obj
             {"level": 0},  # constant_user_data_obj
+            {},  # constant_node_data_obj
             1,  # current_attempt
         )
         # Assert
@@ -105,16 +97,12 @@ class TestBulkOperationsArqEnqueue:
             "10.0.0.100",
             8100,
             9090,
-            "vless",
-            "python add.py",
-            {},
             1,  # operation (1=ADD)
             users,
-            "systemctl reload test",
-            "/etc/config.json",
-            [],  # user_injectors
+            {},
             {"id": "{USER_UUID}"},
             {"level": 0},
+            {},
             2,  # current_attempt = 2 (второй retry)
             _defer_by=120,  # Отложить на 120 секунд
         )

@@ -74,20 +74,12 @@ class TestBulkActionUsersAdd:
             private_ip=node_data['private_ip'],
             api_port=node_data['api_port'],
             metrics_port=node_data['metrics_port'],
-            proto_python_lib=node_data['proto_python_lib'],
-            api_bulk_action_script=node_data['api_bulk_add_user_script'],
-            bulk_action_script_custom_params=node_data['bulk_add_script_custom_params'],
             operation=CoreProtoActions.add,
             users=node_data['users'],
-            reload_core_command=node_data['reload_core_command'],
-            config_file_path=node_data['config_path'],
-            user_injectors=node_data['user_injectors'],
-            required_user_data_obj=node_data['required_user_data_obj'],
-            constant_user_data_obj=node_data['constant_user_data_obj'],
-            constant_node_data_obj=node_data['constant_node_data_obj'],
-            json2config_script=node_data['json2config_script'],
-            config2json_script=node_data['config2json_script'],
-            conf_converter_libs=node_data['conf_converter_libs'],
+            custom_params=node_data.get('custom_params'),
+            required_user_data_obj=node_data.get('required_user_data_obj'),
+            constant_user_data_obj=node_data.get('constant_user_data_obj'),
+            constant_node_data_obj=node_data.get('constant_node_data_obj'),
             current_attempt=1,
         )
         # Assert
@@ -101,7 +93,9 @@ class TestBulkActionUsersAdd:
         json_body = put_call['kwargs']['json']
         assert json_body['action'] == CoreProtoActions.add
         assert len(json_body['users']) == 1
-        assert 'user_injectors' in json_body
+        assert 'user_injectors' not in json_body
+        assert json_body['node_proto_id'] == node_data['node_proto_id']
+        assert json_body['core_port'] == node_data['metrics_port']
         # Проверяем create_vpn_like_user подставил данные
         user_obj = json_body['users'][0]
         assert user_obj['user_uuid'] == user_data['uuid']
@@ -131,20 +125,12 @@ class TestBulkActionUsersAdd:
             private_ip=node_data['private_ip'],
             api_port=node_data['api_port'],
             metrics_port=node_data['metrics_port'],
-            proto_python_lib=node_data['proto_python_lib'],
-            api_bulk_action_script=node_data['api_bulk_add_user_script'],
-            bulk_action_script_custom_params=node_data['bulk_add_script_custom_params'],
             operation=CoreProtoActions.add,
             users=node_data['users'],
-            reload_core_command=node_data['reload_core_command'],
-            config_file_path=node_data['config_path'],
-            user_injectors=node_data['user_injectors'],
-            required_user_data_obj=node_data['required_user_data_obj'],
-            constant_user_data_obj=node_data['constant_user_data_obj'],
-            constant_node_data_obj=node_data['constant_node_data_obj'],
-            json2config_script=node_data['json2config_script'],
-            config2json_script=node_data['config2json_script'],
-            conf_converter_libs=node_data['conf_converter_libs'],
+            custom_params=node_data.get('custom_params'),
+            required_user_data_obj=node_data.get('required_user_data_obj'),
+            constant_user_data_obj=node_data.get('constant_user_data_obj'),
+            constant_node_data_obj=node_data.get('constant_node_data_obj'),
             current_attempt=1,
         )
         # Assert
@@ -178,20 +164,12 @@ class TestBulkActionUsersAdd:
             private_ip=node_data['private_ip'],
             api_port=node_data['api_port'],
             metrics_port=node_data['metrics_port'],
-            proto_python_lib=node_data['proto_python_lib'],
-            api_bulk_action_script=node_data['api_bulk_add_user_script'],
-            bulk_action_script_custom_params=node_data['bulk_add_script_custom_params'],
             operation=CoreProtoActions.add,
             users=node_data['users'],
-            reload_core_command=node_data['reload_core_command'],
-            config_file_path=node_data['config_path'],
-            user_injectors=node_data['user_injectors'],
-            required_user_data_obj=node_data['required_user_data_obj'],
-            constant_user_data_obj=node_data['constant_user_data_obj'],
-            constant_node_data_obj=node_data['constant_node_data_obj'],
-            json2config_script=node_data['json2config_script'],
-            config2json_script=node_data['config2json_script'],
-            conf_converter_libs=node_data['conf_converter_libs'],
+            custom_params=node_data.get('custom_params'),
+            required_user_data_obj=node_data.get('required_user_data_obj'),
+            constant_user_data_obj=node_data.get('constant_user_data_obj'),
+            constant_node_data_obj=node_data.get('constant_node_data_obj'),
             current_attempt=1,
         )
         # Assert
@@ -202,8 +180,8 @@ class TestBulkActionUsersAdd:
         call_args = mock_arq_ctx['arq_redis'].enqueue_job.call_args
         # Проверяем имя задачи
         assert call_args[0][0] == 'bulk_action_users_by_node'
-        # Проверяем current_attempt инкрементирован (позиция 19 в параметрах после добавления 3 новых полей)
-        assert call_args[0][19] == 2  # current_attempt должен быть 2
+        # Проверяем current_attempt инкрементирован (позиция 11 в параметрах)
+        assert call_args[0][11] == 2  # current_attempt должен быть 2
         # Проверяем defer_seconds
         assert call_args[1]['_defer_by'] == 120  # 60 * 2^1
         # Outbox НЕ очищен при ошибке
@@ -229,20 +207,12 @@ class TestBulkActionUsersAdd:
             private_ip=node_data['private_ip'],
             api_port=node_data['api_port'],
             metrics_port=node_data['metrics_port'],
-            proto_python_lib=node_data['proto_python_lib'],
-            api_bulk_action_script=node_data['api_bulk_add_user_script'],
-            bulk_action_script_custom_params=node_data['bulk_add_script_custom_params'],
             operation=CoreProtoActions.add,
             users=node_data['users'],
-            reload_core_command=node_data['reload_core_command'],
-            config_file_path=node_data['config_path'],
-            user_injectors=node_data['user_injectors'],
-            required_user_data_obj=node_data['required_user_data_obj'],
-            constant_user_data_obj=node_data['constant_user_data_obj'],
-            constant_node_data_obj=node_data['constant_node_data_obj'],
-            json2config_script=node_data['json2config_script'],
-            config2json_script=node_data['config2json_script'],
-            conf_converter_libs=node_data['conf_converter_libs'],
+            custom_params=node_data.get('custom_params'),
+            required_user_data_obj=node_data.get('required_user_data_obj'),
+            constant_user_data_obj=node_data.get('constant_user_data_obj'),
+            constant_node_data_obj=node_data.get('constant_node_data_obj'),
             current_attempt=1,
         )
         # Assert
@@ -272,20 +242,12 @@ class TestBulkActionUsersAdd:
             private_ip=node_data['private_ip'],
             api_port=node_data['api_port'],
             metrics_port=node_data['metrics_port'],
-            proto_python_lib=node_data['proto_python_lib'],
-            api_bulk_action_script=node_data['api_bulk_add_user_script'],
-            bulk_action_script_custom_params=node_data['bulk_add_script_custom_params'],
             operation=CoreProtoActions.add,
             users=node_data['users'],
-            reload_core_command=node_data['reload_core_command'],
-            config_file_path=node_data['config_path'],
-            user_injectors=node_data['user_injectors'],
-            required_user_data_obj=node_data['required_user_data_obj'],
-            constant_user_data_obj=node_data['constant_user_data_obj'],
-            constant_node_data_obj=node_data['constant_node_data_obj'],
-            json2config_script=node_data['json2config_script'],
-            config2json_script=node_data['config2json_script'],
-            conf_converter_libs=node_data['conf_converter_libs'],
+            custom_params=node_data.get('custom_params'),
+            required_user_data_obj=node_data.get('required_user_data_obj'),
+            constant_user_data_obj=node_data.get('constant_user_data_obj'),
+            constant_node_data_obj=node_data.get('constant_node_data_obj'),
             current_attempt=3,  # Последняя попытка
         )
         # Assert
@@ -345,20 +307,12 @@ class TestBulkActionUsersDelete:
             private_ip=node_data['private_ip'],
             api_port=node_data['api_port'],
             metrics_port=node_data['metrics_port'],
-            proto_python_lib=node_data['proto_python_lib'],
-            api_bulk_action_script=node_data['api_bulk_delete_user_script'],
-            bulk_action_script_custom_params=node_data['bulk_delete_script_custom_params'],
             operation=CoreProtoActions.delete,
             users=node_data['users'],
-            reload_core_command=node_data['reload_core_command'],
-            config_file_path=node_data['config_path'],
-            user_injectors=node_data['user_injectors'],
-            required_user_data_obj=node_data['required_user_data_obj'],
-            constant_user_data_obj=node_data['constant_user_data_obj'],
-            constant_node_data_obj=node_data['constant_node_data_obj'],
-            json2config_script=node_data['json2config_script'],
-            config2json_script=node_data['config2json_script'],
-            conf_converter_libs=node_data['conf_converter_libs'],
+            custom_params=node_data.get('custom_params'),
+            required_user_data_obj=node_data.get('required_user_data_obj'),
+            constant_user_data_obj=node_data.get('constant_user_data_obj'),
+            constant_node_data_obj=node_data.get('constant_node_data_obj'),
             current_attempt=1,
         )
         # Assert
@@ -371,6 +325,9 @@ class TestBulkActionUsersDelete:
         json_body = put_call['kwargs']['json']
         assert json_body['action'] == CoreProtoActions.delete
         assert len(json_body['users']) == 1
+        assert 'user_injectors' not in json_body
+        assert json_body['node_proto_id'] == node_data['node_proto_id']
+        assert json_body['core_port'] == node_data['metrics_port']
         # Проверяем outbox ПОСЛЕ выполнения (должен быть очищен)
         async with db_pool.acquire() as conn:
             event_exists = await conn.fetchval("SELECT EXISTS(SELECT 1 FROM sub_nodes_outbox WHERE id = $1)", event_id)
@@ -388,20 +345,12 @@ class TestBulkActionUsersDelete:
             private_ip=node_data['private_ip'],
             api_port=node_data['api_port'],
             metrics_port=node_data['metrics_port'],
-            proto_python_lib=node_data['proto_python_lib'],
-            api_bulk_action_script=node_data['api_bulk_delete_user_script'],
-            bulk_action_script_custom_params=node_data['bulk_delete_script_custom_params'],
             operation=CoreProtoActions.delete,
             users=node_data['users'],
-            reload_core_command=node_data['reload_core_command'],
-            config_file_path=node_data['config_path'],
-            user_injectors=node_data['user_injectors'],
-            required_user_data_obj=node_data['required_user_data_obj'],
-            constant_user_data_obj=node_data['constant_user_data_obj'],
-            constant_node_data_obj=node_data['constant_node_data_obj'],
-            json2config_script=node_data['json2config_script'],
-            config2json_script=node_data['config2json_script'],
-            conf_converter_libs=node_data['conf_converter_libs'],
+            custom_params=node_data.get('custom_params'),
+            required_user_data_obj=node_data.get('required_user_data_obj'),
+            constant_user_data_obj=node_data.get('constant_user_data_obj'),
+            constant_node_data_obj=node_data.get('constant_node_data_obj'),
             current_attempt=1,
         )
         # Assert
@@ -424,20 +373,12 @@ class TestBulkActionUsersDelete:
             private_ip=node_data['private_ip'],
             api_port=node_data['api_port'],
             metrics_port=node_data['metrics_port'],
-            proto_python_lib=node_data['proto_python_lib'],
-            api_bulk_action_script=node_data['api_bulk_delete_user_script'],
-            bulk_action_script_custom_params=node_data['bulk_delete_script_custom_params'],
             operation=CoreProtoActions.delete,
             users=node_data['users'],
-            reload_core_command=node_data['reload_core_command'],
-            config_file_path=node_data['config_path'],
-            user_injectors=node_data['user_injectors'],
-            required_user_data_obj=node_data['required_user_data_obj'],
-            constant_user_data_obj=node_data['constant_user_data_obj'],
-            constant_node_data_obj=node_data['constant_node_data_obj'],
-            json2config_script=node_data['json2config_script'],
-            config2json_script=node_data['config2json_script'],
-            conf_converter_libs=node_data['conf_converter_libs'],
+            custom_params=node_data.get('custom_params'),
+            required_user_data_obj=node_data.get('required_user_data_obj'),
+            constant_user_data_obj=node_data.get('constant_user_data_obj'),
+            constant_node_data_obj=node_data.get('constant_node_data_obj'),
             current_attempt=1,
         )
         # Assert
@@ -446,7 +387,7 @@ class TestBulkActionUsersDelete:
         mock_arq_ctx['arq_redis'].enqueue_job.assert_called_once()
         call_args = mock_arq_ctx['arq_redis'].enqueue_job.call_args
         assert call_args[0][0] == 'bulk_action_users_by_node'
-        assert call_args[0][19] == 2  # current_attempt должен быть 2
+        assert call_args[0][11] == 2  # current_attempt должен быть 2
         assert call_args[1]['_defer_by'] == 120
 
     async def test_bulk_delete_connection_error_with_retry(self, mock_arq_ctx, arq_test_seed, db_pool):
@@ -461,20 +402,12 @@ class TestBulkActionUsersDelete:
             private_ip=node_data['private_ip'],
             api_port=node_data['api_port'],
             metrics_port=node_data['metrics_port'],
-            proto_python_lib=node_data['proto_python_lib'],
-            api_bulk_action_script=node_data['api_bulk_delete_user_script'],
-            bulk_action_script_custom_params=node_data['bulk_delete_script_custom_params'],
             operation=CoreProtoActions.delete,
             users=node_data['users'],
-            reload_core_command=node_data['reload_core_command'],
-            config_file_path=node_data['config_path'],
-            user_injectors=node_data['user_injectors'],
-            required_user_data_obj=node_data['required_user_data_obj'],
-            constant_user_data_obj=node_data['constant_user_data_obj'],
-            constant_node_data_obj=node_data['constant_node_data_obj'],
-            json2config_script=node_data['json2config_script'],
-            config2json_script=node_data['config2json_script'],
-            conf_converter_libs=node_data['conf_converter_libs'],
+            custom_params=node_data.get('custom_params'),
+            required_user_data_obj=node_data.get('required_user_data_obj'),
+            constant_user_data_obj=node_data.get('constant_user_data_obj'),
+            constant_node_data_obj=node_data.get('constant_node_data_obj'),
             current_attempt=1,
         )
         # Assert
@@ -493,20 +426,12 @@ class TestBulkActionUsersDelete:
             private_ip=node_data['private_ip'],
             api_port=node_data['api_port'],
             metrics_port=node_data['metrics_port'],
-            proto_python_lib=node_data['proto_python_lib'],
-            api_bulk_action_script=node_data['api_bulk_delete_user_script'],
-            bulk_action_script_custom_params=node_data['bulk_delete_script_custom_params'],
             operation=CoreProtoActions.delete,
             users=node_data['users'],
-            reload_core_command=node_data['reload_core_command'],
-            config_file_path=node_data['config_path'],
-            user_injectors=node_data['user_injectors'],
-            required_user_data_obj=node_data['required_user_data_obj'],
-            constant_user_data_obj=node_data['constant_user_data_obj'],
-            constant_node_data_obj=node_data['constant_node_data_obj'],
-            json2config_script=node_data['json2config_script'],
-            config2json_script=node_data['config2json_script'],
-            conf_converter_libs=node_data['conf_converter_libs'],
+            custom_params=node_data.get('custom_params'),
+            required_user_data_obj=node_data.get('required_user_data_obj'),
+            constant_user_data_obj=node_data.get('constant_user_data_obj'),
+            constant_node_data_obj=node_data.get('constant_node_data_obj'),
             current_attempt=3,  # Последняя попытка
         )
         # Assert

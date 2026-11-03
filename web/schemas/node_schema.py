@@ -37,3 +37,35 @@ class NodeUpdateSchema(BaseModel):
 class GetNodeProtoSchema(BaseModel):
     limit: int = Field(le=30)
     offset: int = Field(0, ge=0)
+
+
+class StartupRequest(BaseModel):
+    node_proto_ids: list[int] = Field(default_factory=list, description="Пустой список = все зарегистрированные ноды")
+
+
+class UserInjector(BaseModel):
+    flatten_array_cursor: str
+    extractor_script: str | None = None
+    libs: str | None = None
+
+
+class VnodeServiceData(BaseModel):
+    node_proto_id: int
+    filepath: str
+    user_injectors: list[UserInjector]
+    reload_command: str | None = None
+    config2json_script: str | None = None
+    json2config_script: str | None = None
+    conf_converter_libs: str | None = None
+    api_bulk_add_user_script: str | None = None
+    api_bulk_delete_user_script: str | None = None
+    metrics_command: str | None = None
+    api_metrics_script: str | None = None
+    proto_python_lib: str | None = None
+    metrics_parser_code: str | None = None
+
+
+class StartupResponse(BaseModel):
+    node_title: str
+    nodes: list[VnodeServiceData]
+    missing: list[int]

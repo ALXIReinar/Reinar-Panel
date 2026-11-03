@@ -141,7 +141,7 @@ async def bulk_delete_users(body: UserBulkDeleteSchema, request: Request, db: Pg
 
 
 @router.put('/meta/{user_id}')
-async def edit_user(user_id: int, body: UserUpdateSchema, request: Request, db: PgSqlDep, arq: ArqDep, _: JWTCookieDep):
+async def edit_user(user_id: int, body: UserUpdateSchema, request: Request, db: PgSqlDep, _: JWTCookieDep):
     status_code, upd = await db.users.update(
         user_id=user_id,
         tg_username=body.tg_username,

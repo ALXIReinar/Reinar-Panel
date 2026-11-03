@@ -1,9 +1,8 @@
-import orjson
-from aiohttp import ClientResponseError, ClientSession  # noqa: I001
+from aiohttp import ClientResponseError, ClientSession
 from arq import ArqRedis
 
 from web.arq_worker.data.postgres import PgSql
-from web.arq_worker.depends_fabric import pg_sql_dep, arq_dep, aiohttp_dep
+from web.arq_worker.depends_fabric import aiohttp_dep, arq_dep, pg_sql_dep
 from web.arq_worker.funcs.metrics_collector import create_vpn_like_user
 from web.arq_worker.utils.anything import CoreProtoActions, NodeUris
 from web.arq_worker.utils.arq_logger_config import log_event
@@ -18,21 +17,13 @@ async def bulk_action_users_by_node(
     private_ip: str,
     api_port: int,
     metrics_port: int,
-    proto_python_lib: str,
-    api_bulk_action_script: str,
-    bulk_action_script_custom_params: dict | None,
     operation: int,
     users: list[dict],
-    reload_core_command: str,
-    config_file_path: str,
-    user_injectors: list[dict],
-    required_user_data_obj: dict,
-    constant_user_data_obj: dict,
-    constant_node_data_obj: dict,
-    json2config_script: str,
-    config2json_script: str,
-    conf_converter_libs: str,
-    current_attempt=1,
+    custom_params: dict | None = None,
+    required_user_data_obj: dict | None = None,
+    constant_user_data_obj: dict | None = None,
+    constant_node_data_obj: dict | None = None,
+    current_attempt: int = 1,
     db: PgSql = None,
     arq: ArqRedis = None,
     aio_http: ClientSession = None,
@@ -47,9 +38,9 @@ async def bulk_action_users_by_node(
         success, vpn_user = create_vpn_like_user(
             user_uuid=u['uuid'],
             user_sub_id=u['user_sub_id'],
-            required_user_data_obj=required_user_data_obj,
-            constant_user_data_obj=constant_user_data_obj,
-            constant_node_data_obj=constant_node_data_obj,
+            required_user_data_obj=required_user_data_obj or {},
+            constant_user_data_obj=constant_user_data_obj or {},
+            constant_node_data_obj=constant_node_data_obj or {},
         )
         if success:
             vpn_like_users.append(vpn_user)
@@ -66,18 +57,10 @@ async def bulk_action_users_by_node(
     url = f"http://{private_ip}:{api_port}{NodeUris.proto_core_bulk_action}"
     json_body = {
         'node_proto_id': node_proto_id,
-        'core_lib': proto_python_lib,
-        'users': vpn_like_users,
-        'action_script': api_bulk_action_script,
         'core_port': metrics_port,
-        'reload_core_command': reload_core_command,
-        'config_file_path': config_file_path,
-        'user_injectors': user_injectors,
-        'custom_params': bulk_action_script_custom_params,
+        'custom_params': custom_params,
+        'users': vpn_like_users,
         'action': operation,
-        'json2config_script': json2config_script,
-        'config2json_script': config2json_script,
-        'conf_converter_libs': conf_converter_libs,
     }
     try:
         "2. Отправляем запрос на ноду, для изменений в впн-ядре"
@@ -139,20 +122,12 @@ async def bulk_action_users_by_node(
             private_ip,
             api_port,
             metrics_port,
-            proto_python_lib,
-            api_bulk_action_script,
-            bulk_action_script_custom_params,
             operation,
             users,
-            reload_core_command,
-            config_file_path,
-            user_injectors,
+            custom_params,
             required_user_data_obj,
             constant_user_data_obj,
             constant_node_data_obj,
-            json2config_script,
-            config2json_script,
-            conf_converter_libs,
             current_attempt + 1,  # Инкрементируем попытку
             _defer_by=defer_seconds,  # Откладываем выполнение
         )

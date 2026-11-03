@@ -16,6 +16,7 @@ class NodeUris:
     proto_core_bulk_action: str = (
         '/api/v1/server/proto_core/user/bulk/action'  # Experimental. Ещё не добавлено  на нод клиент
     )
+    reinit: str = '/api/v1/server/node/reinit'
 
 
 class CoreProtoActions:

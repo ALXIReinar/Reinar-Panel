@@ -53,18 +53,11 @@ async def retry_stuck_core_proto_actions(ctx: dict, db: PgSql = None, arq: ArqRe
                 if not batch:
                     return  # Если пачка пустая, ничего не делаем
 
-                action_pack = {
-                    CoreProtoActions.delete: (
-                        vnode['api_bulk_delete_user_script'],
-                        vnode['bulk_delete_script_custom_params'],
-                        CoreProtoActions.delete,
-                    ),
-                    CoreProtoActions.add: (
-                        vnode['api_bulk_add_user_script'],
-                        vnode['bulk_add_script_custom_params'],
-                        CoreProtoActions.add,
-                    ),
-                }
+                custom_params = (
+                    vnode['bulk_delete_script_custom_params']
+                    if operation == CoreProtoActions.delete
+                    else vnode['bulk_add_script_custom_params']
+                )
 
                 "Отправляем chain task на каждую ноду для бульк удаления"
                 log_event(
@@ -76,18 +69,12 @@ async def retry_stuck_core_proto_actions(ctx: dict, db: PgSql = None, arq: ArqRe
                     vnode['private_ip'],
                     vnode['api_port'],
                     vnode['metrics_port'],
-                    vnode['proto_python_lib'],
-                    *action_pack[operation],
+                    operation,
                     batch,
-                    vnode['reload_core_command'],
-                    vnode['config_path'],
-                    vnode['user_injectors'],
+                    custom_params,
                     vnode['required_user_data_obj'],
                     vnode['constant_user_data_obj'],
                     vnode['constant_node_data_obj'],
-                    vnode['json2config_script'],
-                    vnode['config2json_script'],
-                    vnode['conf_converter_libs'],
                 )
                 log_event(
                     f'\033[35m[ARQ Cron]\033[0m Ретрай операции в vpn-ядро протокола | node_proto_id: \033[32m{vnode["node_proto_id"]}\033[0m; operation: \033[36m{operation}\033[0m',

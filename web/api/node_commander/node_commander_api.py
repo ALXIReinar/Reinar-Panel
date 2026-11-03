@@ -111,7 +111,7 @@ async def config_file_read(
         f'Пробуем считать конфиг-файл с ноды | node_proto_id: \033[32m{q_params.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
         request=request,
     )
-    node_info = await db.nodes_protocols.get_node_for_file_edit(q_params.node_proto_id)
+    node_info = await db.nodes_protocols.get_node_for_config_file(q_params.node_proto_id)
 
     "Виртуальной ноды не существует"
     if node_info is None:
@@ -139,10 +139,6 @@ async def config_file_read(
         json_body = {
             'node_proto_id': q_params.node_proto_id,
             'path': node_info['config_path'],
-            'flatten_json_users_key': q_params.flatten_json_users_key,
-            'config2json_script': node_info['config2json_script'],
-            'config2json2config_script': node_info['json2config_script'],
-            'conf_converter_libs': node_info['conf_converter_libs'],
         }
         async with aio_http.post(url, json=json_body) as resp:
             resp.raise_for_status()
@@ -188,7 +184,7 @@ async def config_file_write(
         f'Пробуем записать конфиг-файл на ноду | node_proto_id: \033[32m{body.node_proto_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',
         request=request,
     )
-    node_info = await db.nodes_protocols.get_node_for_file_edit(body.node_proto_id)
+    node_info = await db.nodes_protocols.get_node_for_config_file(body.node_proto_id)
 
     "Виртуальной ноды не существует"
     if node_info is None:
@@ -218,10 +214,6 @@ async def config_file_write(
             'tmp_link': node_info['url_tmp'],
             'path': node_info['config_path'],
             'content': body.file_content,
-            'flatten_json_users_key': body.flatten_json_users_key,
-            'config2json_script': node_info['config2json_script'],
-            'config2json2config_script': node_info['json2config_script'],
-            'conf_converter_libs': node_info['conf_converter_libs'],
         }
         "Успешная запись вернёт обновлённую конфиг ссылку"
         async with aio_http.post(url, json=json_body) as resp:
@@ -301,14 +293,10 @@ async def add_user(body: UserCoreProtoActionSchema, request: Request, db: PgSqlD
 
     "Апи бульк формата. Так что формат соблюдаем"
     users = [{"user_sub_id": body.user_sub_id, "uuid": body.uuid, "event_id": vnode['event_id']}]
-    action_script_custom_params = {
-        'delete': (
-            vnode['api_bulk_delete_user_script'],
-            vnode['bulk_delete_script_custom_params'],
-            CoreProtoActions.delete,
-        ),
-        'add': (vnode['api_bulk_add_user_script'], vnode['bulk_add_script_custom_params'], CoreProtoActions.add),
-    }
+    custom_params = (
+        vnode['bulk_delete_script_custom_params'] if body.action == 'delete' else vnode['bulk_add_script_custom_params']
+    )
+    op = CoreProtoActions.delete if body.action == 'delete' else CoreProtoActions.add
 
     "Кидаем в фон"
     job = await arq.enqueue_job(
@@ -317,18 +305,12 @@ async def add_user(body: UserCoreProtoActionSchema, request: Request, db: PgSqlD
         vnode['private_ip'],
         vnode['api_port'],
         vnode['metrics_port'],
-        vnode['proto_python_lib'],
-        *action_script_custom_params[body.action],
+        op,
         users,
-        vnode['reload_core_command'],
-        vnode['config_path'],
-        vnode['user_injectors'],
+        custom_params,
         vnode['required_user_data_obj'],
         vnode['constant_user_data_obj'],
         vnode['constant_node_data_obj'],
-        vnode['json2config_script'],
-        vnode['config2json_script'],
-        vnode['conf_converter_libs'],
     )
     log_event(
         f'\033[35m[Node Command Center]\033[0m Отправили в фон \033[34m{body.action}\033[0m на ноду | node_proto_id: \033[33m{body.node_proto_id}\033[0m; uuid: \033[32m{body.uuid}\033[0m; job_id: \033[31m{job.job_id}\033[0m; admin_id: \033[31m{request.state.admin_id}\033[0m',

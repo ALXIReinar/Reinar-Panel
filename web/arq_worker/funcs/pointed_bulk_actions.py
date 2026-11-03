@@ -35,37 +35,24 @@ async def pointed_bulk_action(
                 f'\033[33m[ARQ Pointer Actioner]\033[0m Отправляем Бульк запрос на фоновое \033[31m{action}\033[0m пользователей в ядра | node_proto_id: \033[33m{vnode["node_proto_id"]}\033[0m'
             )
 
-            "Что нужно делать: вставку или удаление"
-            action_script_custom_params = {
-                'delete': (
-                    vnode['api_bulk_delete_user_script'],
-                    vnode['bulk_delete_script_custom_params'],
-                    CoreProtoActions.delete,
-                ),
-                'add': (
-                    vnode['api_bulk_add_user_script'],
-                    vnode['bulk_add_script_custom_params'],
-                    CoreProtoActions.add,
-                ),
-            }
+            custom_params = (
+                vnode['bulk_delete_script_custom_params']
+                if action == 'delete'
+                else vnode['bulk_add_script_custom_params']
+            )
+            op = CoreProtoActions.delete if action == 'delete' else CoreProtoActions.add
             job = await arq.enqueue_job(
                 'bulk_action_users_by_node',
                 vnode['node_proto_id'],
                 vnode['private_ip'],
                 vnode['api_port'],
                 vnode['metrics_port'],
-                vnode['proto_python_lib'],
-                *action_script_custom_params[action],
+                op,
                 vnode['users'],
-                vnode['reload_core_command'],
-                vnode['config_path'],
-                vnode['user_injectors'],
+                custom_params,
                 vnode['required_user_data_obj'],
                 vnode['constant_user_data_obj'],
                 vnode['constant_node_data_obj'],
-                vnode['json2config_script'],
-                vnode['config2json_script'],
-                vnode['conf_converter_libs'],
             )
 
             log_event(

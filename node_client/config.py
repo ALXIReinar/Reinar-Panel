@@ -48,7 +48,7 @@ class AuditModes(str, Enum):
 class Settings(BaseSettings):
     """Настройки Node Client"""
 
-    node_name: str = Field(max_length=64)
+    node_title: str = Field(max_length=64)
     lru_cache_max_size: int | None = os.getenv('LRU_CACHE_MAX_SIZE', 100)
     node_port: int
     command_timeout: int  # секунды
@@ -57,8 +57,18 @@ class Settings(BaseSettings):
     write_buffer_interval: int  # Интервал записи очереди из памяти на диск (в файл)
 
     admin_panel_private_ip: str
+    admin_panel_url: str | None = None
+    startup_retries: int = 30
+    startup_retry_delay_s: int = 5
+
     audit_mode: AuditModes = Field(default=AuditModes.lite)
     model_config = SettingsConfigDict(extra='allow')
+
+    @property
+    def effective_admin_panel_url(self) -> str:
+        if self.admin_panel_url:
+            return self.admin_panel_url.rstrip('/')
+        return f"http://{self.admin_panel_private_ip}:8000"
 
 
 @lru_cache

@@ -46,29 +46,14 @@ class TestActionOnCoreProtoBySubPlan:
                     JOIN nodes n ON n.id = np.node_id AND n.is_active = true
                     WHERE us.is_active = true AND us.id = $1
                     RETURNING id AS event_id, user_sub_id, user_uuid, node_proto_id
-                ),
-                pre_agg_user_injectors AS (
-                    SELECT tmp_id,
-                       json_agg(
-                           json_build_object(
-                               'flatten_array_cursor', flatten_array_cursor,
-                               'extractor_script', extractor_script,
-                               'libs', libs
-                           )
-                       ) AS user_injectors
-                    FROM templates_users_extractors
-                    GROUP BY tmp_id
                 )
-                SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib, 
-                       pt.api_bulk_delete_user_script, pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, 
-                       np.reload_core_command, np.config_path, pt.bulk_delete_script_custom_params, 
+                SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, 
+                       pt.bulk_add_script_custom_params, pt.bulk_delete_script_custom_params, 
                        pt.constant_user_data_obj, pt.required_user_data_obj, np.constant_node_data_obj,
-                       pt.json2config_script, pt.config2json_script, pt.conf_converter_libs,
-                       COALESCE(aui.user_injectors, '[]'::json) AS user_injectors, io.event_id
+                       io.event_id
                 FROM nodes_protocols np
                 JOIN nodes n ON n.id = np.node_id AND n.is_active = true
                 JOIN proto_templates pt ON np.tmp_id = pt.id 
-                LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id
                 JOIN insert_outbox io ON io.node_proto_id = np.id
                 WHERE np.user_visible = true AND np.reg_status = $4
                 '''  # noqa: W291
@@ -126,9 +111,10 @@ class TestActionOnCoreProtoBySubPlan:
         assert user_obj['user_sub_id'] == str(user_sub_id)
         assert user_obj['flow'] == 'xtls-rprx-vision'
         assert user_obj['level'] == 0
-        # Проверяем наличие user_injectors
-        assert 'user_injectors' in first_body
-        assert isinstance(first_body['user_injectors'], list)
+        # Проверяем отсутствие user_injectors и наличие core_port
+        assert 'user_injectors' not in first_body
+        assert first_body['node_proto_id'] == sample_sub_nodes[0]['node_proto_id']
+        assert first_body['core_port'] == sample_sub_nodes[0]['metrics_port']
         # Проверяем что outbox очищен
         async with db_pool.acquire() as conn:
             outbox_count = await conn.fetchval("SELECT COUNT(*) FROM sub_nodes_outbox WHERE user_uuid = $1", user_uuid)
@@ -156,11 +142,10 @@ class TestActionOnCoreProtoBySubPlan:
         # Проверяем что используется единый эндпоинт с action='delete'
         first_call = mock_arq_ctx['aio_http'].put_calls[0]
         assert NodeUris.proto_core_bulk_action in first_call['url']
-        # Проверяем body содержит action='delete' и bulk_delete_script
+        # Проверяем body содержит action='delete'
         first_body = first_call['kwargs']['json']
         assert first_body['action'] == 'delete'
-        assert 'action_script' in first_body
-        assert 'bulk_delete' in first_body['action_script']
+        assert 'action_script' not in first_body
 
     async def test_action_partial_success_one_node_fails(self, mock_arq_ctx, build_sub_nodes, arq_test_seed, db_pool):
         """

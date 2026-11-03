@@ -211,7 +211,6 @@ class TestVNodeRegisterSchema:
         assert "node_id" in missing_fields
         assert "title" in missing_fields
         assert "proto_port" in missing_fields
-        assert "config_path" in missing_fields
 
     def test_schema_constant_node_data_obj_dict(self):
         """constant_node_data_obj принимает dict"""

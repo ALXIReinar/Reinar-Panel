@@ -523,7 +523,7 @@ class TestConfirmVirtualNode:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        assert data["message"] == "Виртуальная нода поставлена на регистрацию"
+        assert data["message"] == "Виртуальная нода сменила статус регистрации"
 
         # Проверяем обновление в БД
         async with db_pool.acquire() as conn:

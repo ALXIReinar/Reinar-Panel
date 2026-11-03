@@ -79,33 +79,18 @@ async def action_on_core_proto_by_sub_plan(
             log_event(f'\033[31m{node.keys()}\033[0m')
             log_event(f'\033[34m{node.values()}\033[0m')
 
-            "Общий набор параметров"
+            custom_params = (
+                node.get('bulk_delete_script_custom_params')
+                if operation == 'delete'
+                else node.get('bulk_add_script_custom_params')
+            )
             json_body = {
                 'node_proto_id': node['node_proto_id'],
-                'core_lib': node['proto_python_lib'],
-                'users': [final_user_obj],  # Список, т.к. используется бульк-эндпоинт
                 'core_port': node['metrics_port'],
-                'reload_core_command': node['reload_core_command'],
-                'config_file_path': node['config_path'],
-                'user_injectors': node['user_injectors'],
+                'custom_params': custom_params,
+                'users': [final_user_obj],  # Список, т.к. используется бульк-эндпоинт
                 'action': operation,
-                'json2config_script': node['json2config_script'],
-                'config2json_script': node['config2json_script'],
-                'conf_converter_libs': node['conf_converter_libs'],
             }
-
-            "Выбираем нужный скрипт в зависимости от операции"
-            action_pack = {
-                'add': {
-                    'action_script': node['api_bulk_add_user_script'],
-                    'custom_params': node['bulk_add_script_custom_params'],
-                },
-                'delete': {
-                    'action_script': node['api_bulk_delete_user_script'],
-                    'custom_params': node['bulk_delete_script_custom_params'],
-                },
-            }
-            json_body.update(action_pack[operation])
 
             # url = f"http://localhost:8200{NodeUris.proto_core_bulk_action}"
             url = f"http://{node['private_ip']}:{node['api_port']}{NodeUris.proto_core_bulk_action}"

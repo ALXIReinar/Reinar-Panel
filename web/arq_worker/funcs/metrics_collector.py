@@ -63,11 +63,6 @@ async def collect_traffic_metrics(ctx: dict, nodes: list[dict], aio_http: Client
                 json_body = {
                     'node_proto_id': node['id'],
                     'metrics_port': node['metrics_port'],
-                    'command': node['metrics_command'],
-                    'metrics_script': node['api_metrics_script'],
-                    'core_lib': node['proto_python_lib'],
-                    'metrics_parser_code': node['metrics_parser_code'],
-                    'metrics_parser_libs': node['metrics_parser_libs'],
                 }
                 async with aio_http.post(url, json=json_body, timeout=env.node_client_command_timeout) as resp:
                     resp.raise_for_status()
@@ -154,20 +149,12 @@ async def bulk_delete_by_traffic_limit(ctx: dict, outbox_event_ids: list, arq: A
                 vnode['private_ip'],
                 vnode['api_port'],
                 vnode['metrics_port'],
-                vnode['proto_python_lib'],
-                vnode['api_bulk_delete_user_script'],
-                vnode['bulk_delete_script_custom_params'],
                 CoreProtoActions.delete,
                 vnode['users'],
-                vnode['reload_core_command'],
-                vnode['config_path'],
-                vnode['user_injectors'],
-                vnode['constant_user_data_obj'],
+                vnode['bulk_delete_script_custom_params'],
                 vnode['required_user_data_obj'],
+                vnode['constant_user_data_obj'],
                 vnode['constant_node_data_obj'],
-                vnode['json2config_script'],
-                vnode['config2json_script'],
-                vnode['conf_converter_libs'],
             )
             log_event(
                 f'\033[31m[ARQ Metrics Collector]\033[0m \033[34mTask Chaining, depth: \033[32m3\033[0m бульк delete летит на ноду | node_proto_id: \033[33m{vnode["node_proto_id"]}\033[0m'

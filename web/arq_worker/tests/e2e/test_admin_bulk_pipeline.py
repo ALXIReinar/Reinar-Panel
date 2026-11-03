@@ -69,32 +69,14 @@ class TestAdminBulkPipeline:
         # Проверяем что обе задачи для bulk_action_users_by_node с operation=1 (ADD)
         for job_data in enqueued_jobs:
             assert job_data['args'][0] == 'bulk_action_users_by_node'
-            assert job_data['args'][8] == 1, "operation должна быть 1 (ADD)"
+            assert job_data['args'][5] == 1, "operation должна быть 1 (ADD)"
         # Act 2: Выполняем bulk операции вручную (имитация ARQ worker)
         for job_data in enqueued_jobs:
             args = job_data['args']
             # Извлекаем параметры из enqueue_job
             result = await bulk_action_users_by_node(
-                ctx=arq_ctx,
-                node_proto_id=args[1],  # node_proto_id
-                private_ip=args[2],  # private_ip
-                api_port=args[3],  # api_port
-                metrics_port=args[4],  # metrics_port
-                proto_python_lib=args[5],  # proto_python_lib
-                api_bulk_action_script=args[6],  # api_bulk_action_script
-                bulk_action_script_custom_params=args[7],  # custom_params
-                operation=args[8],  # operation
-                users=args[9],  # users
-                reload_core_command=args[10],  # reload_core_command
-                config_file_path=args[11],  # config_file_path
-                user_injectors=args[12],  # user_injectors
-                required_user_data_obj=args[13],  # required_user_data_obj
-                constant_user_data_obj=args[14],  # constant_user_data_obj
-                constant_node_data_obj=args[15],  # constant_node_data_obj
-                json2config_script=args[16],  # json2config_script
-                config2json_script=args[17],  # config2json_script
-                conf_converter_libs=args[18],  # conf_converter_libs
-                current_attempt=1,
+                arq_ctx,
+                *args[1:],
             )
             assert result['success'] is True
         # Assert 2: Проверяем что HTTP PUT был вызван для каждой ноды
@@ -152,31 +134,13 @@ class TestAdminBulkPipeline:
         assert len(enqueued_jobs) == 2, "Должно быть 2 задачи (на 2 ноды)"
         for job_data in enqueued_jobs:
             assert job_data['args'][0] == 'bulk_action_users_by_node'
-            assert job_data['args'][8] == 2, "operation должна быть 2 (DELETE)"
+            assert job_data['args'][5] == 2, "operation должна быть 2 (DELETE)"
         # Act 2: Выполняем bulk операции вручную
         for job_data in enqueued_jobs:
             args = job_data['args']
             result = await bulk_action_users_by_node(
-                ctx=arq_ctx,
-                node_proto_id=args[1],
-                private_ip=args[2],
-                api_port=args[3],
-                metrics_port=args[4],
-                proto_python_lib=args[5],
-                api_bulk_action_script=args[6],
-                bulk_action_script_custom_params=args[7],
-                operation=args[8],
-                users=args[9],
-                reload_core_command=args[10],
-                config_file_path=args[11],
-                user_injectors=args[12],
-                required_user_data_obj=args[13],
-                constant_user_data_obj=args[14],
-                constant_node_data_obj=args[15],
-                json2config_script=args[16],  # json2config_script
-                config2json_script=args[17],  # config2json_script
-                conf_converter_libs=args[18],  # conf_converter_libs
-                current_attempt=1,
+                arq_ctx,
+                *args[1:],
             )
             assert result['success'] is True
         # Assert 2: Проверяем что HTTP PUT был вызван
@@ -239,7 +203,7 @@ class TestAdminBulkPipeline:
         assert arq_test_seed['vnode_id_11'] in node_ids
         # Проверяем что каждая задача содержит пользователя
         for job_data in enqueued_jobs:
-            users_list = job_data['args'][9]  # users параметр на позиции 9
+            users_list = job_data['args'][6]  # users параметр на позиции 6
             assert len(users_list) == 1
             assert users_list[0]['uuid'] == user3['uuid']
             assert users_list[0]['user_sub_id'] == user3['order_active']
@@ -247,26 +211,8 @@ class TestAdminBulkPipeline:
         for job_data in enqueued_jobs:
             args = job_data['args']
             await bulk_action_users_by_node(
-                ctx=arq_ctx,
-                node_proto_id=args[1],
-                private_ip=args[2],
-                api_port=args[3],
-                metrics_port=args[4],
-                proto_python_lib=args[5],
-                api_bulk_action_script=args[6],
-                bulk_action_script_custom_params=args[7],
-                operation=args[8],
-                users=args[9],
-                reload_core_command=args[10],
-                config_file_path=args[11],
-                user_injectors=args[12],
-                required_user_data_obj=args[13],
-                constant_user_data_obj=args[14],
-                constant_node_data_obj=args[15],
-                json2config_script=args[16],  # json2config_script
-                config2json_script=args[17],  # config2json_script
-                conf_converter_libs=args[18],  # conf_converter_libs
-                current_attempt=1,
+                arq_ctx,
+                *args[1:],
             )
         # Assert 2: Проверяем что outbox очищен для ОБЕИХ нод
         async with db_pool.acquire() as conn:
