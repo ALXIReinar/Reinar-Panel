@@ -601,7 +601,8 @@ async def test_template_metrics_parsing(protocol_templates_with_extractors, use_
                 continue
             # Собираем метрики (API скрипт ИЛИ CLI команда)
             metrics_script = template.get('api_metrics_script')
-            lib_names = template.get('metrics_parser_libs')
+            # Библиотеки всех скриптов шаблона — в proto_python_lib (metrics_parser_libs уходит, требование 11)
+            lib_names = template.get('proto_python_lib')
             # Если есть API скрипт - используем его
             if metrics_script:
                 success, raw_metrics = await HotReloadExecutor.execute_action_script(
@@ -653,7 +654,8 @@ async def test_template_metrics_parsing(protocol_templates_with_extractors, use_
             sample_metrics = get_sample_metrics_for_core(core_type)
             mock_vpn_users = prepare_mock_vpn_users_for_core(core_type)
             mock_local_state = {}
-            lib_names = template.get('metrics_parser_libs')
+            # Библиотеки всех скриптов шаблона — в proto_python_lib (metrics_parser_libs уходит, требование 11)
+            lib_names = template.get('proto_python_lib')
             # DEBUG: покажем какой шаблон тестируется и его библиотеки
             print(f"\n>>> Testing metrics parser for template: {template['title']} (core: {core_type})")
             print(f"    lib_names from DB: {repr(lib_names)}")
