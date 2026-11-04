@@ -37,7 +37,7 @@
         "flow": "xtls-rprx-vision",
         "level": 0
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    return config_link.format(n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], fp=user_obj['sub_link_fp'], public_key=user_obj['node_public_key'], flow=user_obj['flow'])",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vless-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
@@ -54,7 +54,6 @@
         "inbound_tag": "vless-inbound"
       },
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -108,7 +107,7 @@
         "flow": "xtls-rprx-vision",
         "level": 0
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для VLESS с транспортом GRPC\n    \n    :param user_obj: \n    :param config_link: \n    :return: \n    \"\"\"\n    return config_link.format(\n        user_uuid=user_obj['user_uuid'], grpc_mode=user_obj['sub_link_grpc_mode'],\n        fp=user_obj['sub_link_fp'], public_key=user_obj['node_public_key'], n_title=n_title, n_address=n_address\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vless-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
@@ -125,7 +124,6 @@
         "inbound_tag": "vless-inbound"
       },
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -179,7 +177,7 @@
         "flow": "xtls-rprx-vision",
         "level": 0
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    return config_link.format(n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], fp=user_obj['sub_link_fp'], public_key=user_obj['node_public_key'], flow=user_obj['flow'])",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vless-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
@@ -196,7 +194,6 @@
         "inbound_tag": "vless-inbound"
       },
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -247,7 +244,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    return config_link.format(n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], fp=user_obj['sub_link_fp'], public_key=user_obj['node_public_key'])",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vless-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
@@ -264,7 +261,6 @@
         "inbound_tag": "vless-inbound"
       },
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -315,7 +311,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    return config_link.format(n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], fp=user_obj['sub_link_fp'])",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vless-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
@@ -332,7 +328,6 @@
         "inbound_tag": "vless-inbound"
       },
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -385,7 +380,7 @@
       "constant_user_data_obj": {
         "alterId": 0
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    # 1. Заменяем плейсхолдер user_uuid (не используем .format() из-за многострочного JSON)\n    json_str = config_link.replace(\"{user_uuid}\", user_obj['user_uuid'])\n    json_str = json_str.replace(\"{n_title}\", n_title)\n    json_str = json_str.replace(\"{n_address}\", n_address)\n\n    # 2. Кодируем JSON в Base64\n    b64_config = base64.b64encode(json_str.encode(\"utf-8\")).decode(\"utf-8\")\n\n    # 3. Возвращаем готовую ссылку\n    return f\"vmess://{b64_config}\"",
       "sub_required_libs": "base64",
       "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vmess-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
@@ -400,7 +395,6 @@
         "inbound_tag": "vmess-inbound"
       },
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -453,7 +447,7 @@
       "constant_user_data_obj": {
         "alterId": 0
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    # 1. Заменяем плейсхолдер user_uuid (не используем .format() из-за многострочного JSON)\n    json_str = config_link.replace(\"{user_uuid}\", user_obj['user_uuid'])\n    json_str = json_str.replace(\"{n_title}\", n_title)\n    json_str = json_str.replace(\"{n_address}\", n_address)\n\n    # 2. Кодируем JSON в Base64\n    b64_config = base64.b64encode(json_str.encode(\"utf-8\")).decode(\"utf-8\")\n\n    # 3. Возвращаем готовую ссылку\n    return f\"vmess://{b64_config}\"",
       "sub_required_libs": "base64",
       "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vmess-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
@@ -468,7 +462,6 @@
         "inbound_tag": "vmess-inbound"
       },
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -521,7 +514,7 @@
       "constant_user_data_obj": {
         "alterId": 0
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    # 1. Заменяем плейсхолдер user_uuid (не используем .format() из-за многострочного JSON)\n    json_str = config_link.replace(\"{user_uuid}\", user_obj['user_uuid'])\n    json_str = json_str.replace(\"{n_title}\", n_title)\n    json_str = json_str.replace(\"{n_address}\", n_address)\n    json_str = json_str.replace('{grpc_mode}', user_obj['sub_link_grpc_mode'])\n\n    # 2. Кодируем JSON в Base64\n    b64_config = base64.b64encode(json_str.encode(\"utf-8\")).decode(\"utf-8\")\n\n    # 3. Возвращаем готовую ссылку\n    return f\"vmess://{b64_config}\"",
       "sub_required_libs": "base64",
       "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vmess-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
@@ -536,7 +529,6 @@
         "inbound_tag": "vmess-inbound"
       },
       "description": "# install script\n\nДля всех ss версии 2022 скрипт установки один и тот же, но с разными параметрами\n\n## Quick Start\n\nУстановит chacha20-poly1305 метод шифрования по умолчанию\n\n`bash ss-2022-install.sh 105`\n\n## Advanced\n\nНастройка метода шифрования. Вы можете выбрать \n\n1. 2022-blake3-aes-128-gcm\n\n> `bash ss-2022-install.sh 106  2022-blake3-aes-128-gcm`\n\n2. 2022-blake3-aes-256-gcm\n\n> `bash ss-2022-install.sh 107  2022-blake3-aes-256-gcm`\n\n3. 2022-blake3-chacha20-poly1305 (default)\n\n> `bash ss-2022-install.sh 105`",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -589,7 +581,7 @@
       "constant_user_data_obj": {
         "alterId": 0
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    # 1. Заменяем плейсхолдер user_uuid (не используем .format() из-за многострочного JSON)\n    json_str = config_link.replace(\"{user_uuid}\", user_obj['user_uuid'])\n    json_str = json_str.replace(\"{n_title}\", n_title)\n    json_str = json_str.replace(\"{n_address}\", n_address)\n\n    # 2. Кодируем JSON в Base64\n    b64_config = base64.b64encode(json_str.encode(\"utf-8\")).decode(\"utf-8\")\n\n    # 3. Возвращаем готовую ссылку\n    return f\"vmess://{b64_config}\"",
       "sub_required_libs": "base64",
       "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"vmess-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
@@ -604,7 +596,6 @@
         "inbound_tag": "vmess-inbound"
       },
       "description": "# install script\n\nДля всех ss версии 2022 скрипт установки один и тот же, но с разными параметрами\n\n## Quick Start\n\nУстановит chacha20-poly1305 метод шифрования по умолчанию\n\n`bash ss-2022-install.sh 105`\n\n## Advanced\n\nНастройка метода шифрования. Вы можете выбрать \n\n1. 2022-blake3-aes-128-gcm\n\n> `bash ss-2022-install.sh 106  2022-blake3-aes-128-gcm`\n\n2. 2022-blake3-aes-256-gcm\n\n> `bash ss-2022-install.sh 107  2022-blake3-aes-256-gcm`\n\n3. 2022-blake3-chacha20-poly1305 (default)\n\n> `bash ss-2022-install.sh 105`",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -657,7 +648,7 @@
       "constant_user_data_obj": {
         "flow": "xtls-rprx-vision"
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для VLESS/Trojan\n    \"\"\"\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], fp=user_obj['sub_link_fp'], public_key=user_obj['node_public_key']\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"trojan-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email') or u.get('user_sub_id') # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
@@ -672,7 +663,6 @@
         "inbound_tag": "trojan-inbound"
       },
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -725,7 +715,7 @@
       "constant_user_data_obj": {
         "flow": "xtls-rprx-vision"
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для VLESS/Trojan с транспортом GRPC\n    \"\"\"\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], grpc_mode=user_obj['sub_link_grpc_mode'],\n        fp=user_obj['sub_link_fp'], public_key=user_obj['node_public_key']\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"trojan-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email') or u.get('user_sub_id') # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
@@ -740,7 +730,6 @@
         "inbound_tag": "trojan-inbound"
       },
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -791,7 +780,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для VLESS/Trojan\n    \"\"\"\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], fp=user_obj['sub_link_fp']\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"trojan-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email') or u.get('user_sub_id') # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
@@ -806,7 +795,6 @@
         "inbound_tag": "trojan-inbound"
       },
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -857,7 +845,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для VLESS/Trojan\n    \"\"\"\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], fp=user_obj['sub_link_fp']\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"trojan-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email') or u.get('user_sub_id') # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
@@ -872,7 +860,6 @@
         "inbound_tag": "trojan-inbound"
       },
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -923,7 +910,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], fp=user_obj['sub_link_fp']\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"trojan-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('email') or u.get('user_sub_id') # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
@@ -938,7 +925,6 @@
         "inbound_tag": "trojan-inbound"
       },
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -991,7 +977,7 @@
       "constant_user_data_obj": {
         "level": 0
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    # Заменяем плейсхолдер user_uuid (не используем .format() чтобы не конфликтовать с {{jinja}} плейсхолдерами)\n    return config_link.format(n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'])\n",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"hysteria-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
@@ -1006,7 +992,6 @@
         "inbound_tag": "hysteria-inbound"
       },
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -1059,7 +1044,7 @@
       "constant_user_data_obj": {
         "level": 0
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    # Заменяем плейсхолдер user_uuid (не используем .format() чтобы не конфликтовать с {{jinja}} плейсхолдерами)\n    return config_link.format(n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'])\n",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"hysteria-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')  # Используем числовой user_sub_id\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
@@ -1074,7 +1059,6 @@
         "inbound_tag": "hysteria-inbound"
       },
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -1125,7 +1109,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для Hysteria2 с Port Hopping\n    \"\"\"\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], hop_start=user_obj['node_hop_start'], hop_end=user_obj['node_hop_end']\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
@@ -1136,7 +1120,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -1193,7 +1176,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для Hysteria2 с Port Hopping\n    \"\"\"\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], hop_start=user_obj['node_hop_start'], hop_end=user_obj['node_hop_end']\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
@@ -1204,7 +1187,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -1261,7 +1243,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    return config_link.format(n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'])",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
@@ -1272,7 +1254,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -1329,7 +1310,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    return config_link.format(n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'])",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
@@ -1340,7 +1321,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -1397,7 +1377,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        n_title=n_title, n_address=n_address, user_private_key=user_private_key,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -1408,7 +1388,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -1467,7 +1446,7 @@
       "constant_user_data_obj": {
         "node_psk_salt": "singbox-wg-ipv6"
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -1478,7 +1457,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Для варп версий используется один и тот же скрипт. Конфиги одни и те же, просто сам варп настраивается через инжекторы",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -1535,7 +1513,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,uuid,base64,hashlib,google",
+      "proto_python_lib": ",hashlib,xtlsapi,uuid,google.protobuf.json_format,base64",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для ss. Формирует user_psk из uuid4 пользователя\n\n    :param user_obj: супер объект из\n    - required_user_data_obj\n    - constant_user_data_obj\n    - constant_node_data_obj\n\n    :param config_link: для ss выглядит так\n    {\n      \"method\": \"2022-blake3-aes-128-gcm\",\n      \"server_psk\": \"ANY_B64_PASSW\",\n      \"user_psk\": \"{user_uuid}\",\n      \"node_title\": \"My Super Node!\",\n      \"node_address\": \"1.2.3.4\",\n      \"port\": \"8388\"\n    }\n    \"\"\"\n\n    \"1. Грузим json\"\n    json_data = ast.literal_eval(config_link)\n\n    \"2. В зависимости от метода, формируем b64 user_psk(16/32 байта)\"\n    raw = uuid.UUID(user_obj['user_uuid']).bytes\n    final_bytes = raw if \"128\" in user_obj['node_method'] else hashlib.sha256(raw).digest()\n    user_psk = base64.b64encode(final_bytes).decode('utf-8')\n\n    \"3. Собираем ссылку\"\n    mt_spsk_upsk_b64 = base64.b64encode(\n        f\"{json_data['method']}:{json_data['server_psk']}:{user_psk}\".encode('utf-8')\n    ).decode(\"utf-8\")\n\n    return f'ss://{mt_spsk_upsk_b64}@{n_address}:{json_data['port']}?type=tcp#{n_title}'",
       "sub_required_libs": "hashlib,uuid,base64,ast,urllib",
       "api_bulk_delete_user_script": "async def bulk_delete_users(users_list, node_ip, core_port, custom_params):\n    inbound_tag = custom_params.get(\"inbound_tag\", \"ss-inbound\")\n    \n    client = xtlsapi.XrayClient(node_ip, core_port)\n    \n    def _do_bulk():\n        success_count = 0\n        for u in users_list:\n            email = u.get('user_sub_id')\n            try:\n                client.remove_client(inbound_tag=inbound_tag, email=email)\n                success_count += 1\n            except Exception as e:\n                # Ловим ошибку, если пользователя и так нет в ядре, и продолжаем\n                print(f\"Пропуск удаления {email}: {e}\")\n        return success_count\n        \n    success_count = await asyncio.to_thread(_do_bulk)\n    failed_count = len(users_list) - success_count\n    \n    return {\"success\": success_count, \"failed\": failed_count}",
@@ -1550,7 +1528,6 @@
         "inbound_tag": "ss-inbound"
       },
       "description": "Выберите метод шифрования перед запуском скриптов\n\n1 - 2022-blake3-aes-128-gcm (быстрый, легкий)\n2 - 2022-blake3-aes-256-gcm (максимальная защита)\n3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -1601,7 +1578,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -1612,7 +1589,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -1671,7 +1647,7 @@
       "constant_user_data_obj": {
         "node_psk_salt": "singbox-awg-ipv6"
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -1682,7 +1658,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -1739,7 +1714,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n        hop_port=random.randint(int(user_obj['node_hop_start']), int(user_obj['node_hop_end']))\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,random,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -1750,7 +1725,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -1809,7 +1783,7 @@
       "constant_user_data_obj": {
         "node_psk_salt": "singbox-wg-ipv6-hopping"
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n        hop_port=random.randint(int(user_obj['node_hop_start']), int(user_obj['node_hop_end']))\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,random,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -1820,7 +1794,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -1877,7 +1850,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n        hop_port=random.randint(int(user_obj['node_hop_start']), int(user_obj['node_hop_end']))\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,random,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -1888,7 +1861,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -1947,7 +1919,7 @@
       "constant_user_data_obj": {
         "node_psk_salt": "singbox-awg-ipv6-hopping"
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n        hop_port=random.randint(int(user_obj['node_hop_start']), int(user_obj['node_hop_end']))\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,random,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -1958,7 +1930,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -2018,7 +1989,7 @@
         "warp": true,
         "node_psk_salt": "singbox-wg-ipv6-warp"
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -2029,7 +2000,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Для варп версий используется один и тот же скрипт. Конфиги одни и те же, просто сам варп настраивается через инжекторы",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -2089,7 +2059,7 @@
         "warp": true,
         "node_psk_salt": "singbox-awg-ipv6-warp"
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -2100,7 +2070,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -2160,7 +2129,7 @@
         "warp": true,
         "node_psk_salt": "singbox-wg-ipv6-hopping-warp"
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n        hop_port=random.randint(int(user_obj['node_hop_start']), int(user_obj['node_hop_end']))\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,random,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -2171,7 +2140,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -2231,7 +2199,7 @@
         "warp": true,
         "node_psk_salt": "singbox-awg-ipv6-hopping-warp"
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n        hop_port=random.randint(int(user_obj['node_hop_start']), int(user_obj['node_hop_end']))\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,random,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -2242,7 +2210,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -2301,7 +2268,7 @@
       "constant_user_data_obj": {
         "warp": true
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -2312,7 +2279,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -2371,7 +2337,7 @@
       "constant_user_data_obj": {
         "warp": true
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -2382,7 +2348,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -2441,7 +2406,7 @@
       "constant_user_data_obj": {
         "warp": true
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n        hop_port=random.randint(int(user_obj['node_hop_start']), int(user_obj['node_hop_end']))\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,random,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -2452,7 +2417,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -2511,7 +2475,7 @@
       "constant_user_data_obj": {
         "warp": true
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n        hop_port=random.randint(int(user_obj['node_hop_start']), int(user_obj['node_hop_end']))\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,random,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -2522,7 +2486,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -2579,7 +2542,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для VLESS/Trojan\n    \"\"\"\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], fp=user_obj['sub_link_fp']\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
@@ -2590,7 +2553,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -2647,7 +2609,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для VLESS/Trojan\n    \"\"\"\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], fp=user_obj['sub_link_fp'], public_key=user_obj['node_public_key']\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
@@ -2658,7 +2620,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -2715,7 +2676,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для VLESS/Trojan\n    \"\"\"\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], fp=user_obj['sub_link_fp'], public_key=user_obj['node_public_key'], grpc_mode=\"gun\"\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
@@ -2726,7 +2687,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Если вы хотите использовать multi режим grpc. Укажите в конфиг файле \n\"\"\"\n{\n  ...\n  \"inbounds\": [\n   # your GRPC inbound\n    \"multiplex\": {\n      \"enabled\": true\n    }\n  ... \n     }\n  ]\n{\n\"\"\"\n\nМы рекомендуем использовать gun из-за совместимости с любым ядром. \nНапример, пользователь не сможет подключиться с клиента с ядром xray. У xray  и sing-box разные реализации мультиплескирования(multi mode)",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -2783,7 +2743,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для ss. Формирует user_psk из uuid4 пользователя\n\n    :param user_obj: супер объект из\n    - required_user_data_obj\n    - constant_user_data_obj\n    - constant_node_data_obj\n\n    :param config_link: для ss выглядит так\n    {\n      \"method\": \"2022-blake3-aes-128-gcm\",\n      \"server_psk\": \"ANY_B64_PASSW\",\n      \"user_psk\": \"{user_uuid}\",\n      \"node_title\": \"My Super Node!\",\n      \"node_address\": \"1.2.3.4\",\n      \"port\": \"8388\"\n    }\n    \"\"\"\n\n    \"1. Грузим json\"\n    json_data = ast.literal_eval(config_link)\n\n    \"2. В зависимости от метода, формируем b64 user_psk(16/32 байта)\"\n    raw = uuid.UUID(user_obj['user_uuid']).bytes\n    final_bytes = raw if \"128\" in user_obj['node_method'] else hashlib.sha256(raw).digest()\n    user_psk = base64.b64encode(final_bytes).decode('utf-8')\n\n    \"3. Собираем ссылку\"\n    mt_spsk_upsk_b64 = base64.b64encode(\n        f\"{json_data['method']}:{json_data['server_psk']}:{user_psk}\".encode('utf-8')\n    ).decode(\"utf-8\")\n\n    return f'ss://{mt_spsk_upsk_b64}@{n_address}:{json_data['port']}?type=tcp#{n_title}'",
       "sub_required_libs": "hashlib,uuid,base64,ast,urllib",
       "api_bulk_delete_user_script": null,
@@ -2796,7 +2756,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "Выберите метод шифрования перед запуском скриптов\n\n1 - 2022-blake3-aes-128-gcm (быстрый, легкий)\n2 - 2022-blake3-aes-256-gcm (максимальная защита)\n3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -2853,7 +2812,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для ss. Формирует user_psk из uuid4 пользователя\n\n    :param user_obj: супер объект из\n    - required_user_data_obj\n    - constant_user_data_obj\n    - constant_node_data_obj\n\n    :param config_link: для ss выглядит так\n    {\n      \"method\": \"2022-blake3-aes-128-gcm\",\n      \"server_psk\": \"ANY_B64_PASSW\",\n      \"user_psk\": \"{user_uuid}\",\n      \"node_title\": \"My Super Node!\",\n      \"node_address\": \"1.2.3.4\",\n      \"port\": \"8388\"\n    }\n    \"\"\"\n\n    \"1. Грузим json\"\n    json_data = ast.literal_eval(config_link)\n\n    \"2. В зависимости от метода, формируем b64 user_psk(16/32 байта)\"\n    raw = uuid.UUID(user_obj['user_uuid']).bytes\n    final_bytes = raw if \"128\" in user_obj['node_method'] else hashlib.sha256(raw).digest()\n    user_psk = base64.b64encode(final_bytes).decode('utf-8')\n\n    \"3. Собираем ссылку\"\n    mt_spsk_upsk_b64 = base64.b64encode(\n        f\"{json_data['method']}:{json_data['server_psk']}:{user_psk}\".encode('utf-8')\n    ).decode(\"utf-8\")\n\n    return f'ss://{mt_spsk_upsk_b64}@{n_address}:{json_data['port']}?security=tls&type=tcp&sni={urllib.parse.quote(json_data['domain'])}#{n_title}'",
       "sub_required_libs": "hashlib,uuid,base64,ast,urllib",
       "api_bulk_delete_user_script": null,
@@ -2866,7 +2825,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "Выберите метод шифрования перед запуском скриптов\n\n1 - 2022-blake3-aes-128-gcm (быстрый, легкий)\n2 - 2022-blake3-aes-256-gcm (максимальная защита)\n3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -2923,7 +2881,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для ss. Формирует user_psk из uuid4 пользователя\n\n    :param user_obj: супер объект из\n    - required_user_data_obj\n    - constant_user_data_obj\n    - constant_node_data_obj\n\n    :param config_link: для ss выглядит так\n    {\n      \"method\": \"2022-blake3-aes-128-gcm\",\n      \"server_psk\": \"ANY_B64_PASSW\",\n      \"user_psk\": \"{user_uuid}\",\n      \"node_title\": \"My Super Node!\",\n      \"node_address\": \"1.2.3.4\",\n      \"port\": \"8388\"\n    }\n    \"\"\"\n\n    \"1. Грузим json\"\n    json_data = ast.literal_eval(config_link)\n\n    \"2. В зависимости от метода, формируем b64 user_psk(16/32 байта)\"\n    raw = uuid.UUID(user_obj['user_uuid']).bytes\n    final_bytes = raw if \"128\" in user_obj['node_method'] else hashlib.sha256(raw).digest()\n    user_psk = base64.b64encode(final_bytes).decode('utf-8')\n\n    \"3. Собираем ссылку\"\n    mt_spsk_upsk_b64 = base64.b64encode(\n        f\"{json_data['method']}:{json_data['server_psk']}:{user_psk}\".encode('utf-8')\n    ).decode(\"utf-8\")\n\n    return f'ss://{mt_spsk_upsk_b64}@{n_address}:{json_data['port']}?security=tls&type=httpupgrade&sni={urllib.parse.quote(json_data['domain'])}&path={urllib.parse.quote(json_data['path'])}#{n_title}'",
       "sub_required_libs": "hashlib,uuid,base64,ast,urllib",
       "api_bulk_delete_user_script": null,
@@ -2936,7 +2894,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "Выберите метод шифрования перед запуском скриптов\n\n1 - 2022-blake3-aes-128-gcm (быстрый, легкий)\n2 - 2022-blake3-aes-256-gcm (максимальная защита)\n3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -2993,7 +2950,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для ss. Формирует user_psk из uuid4 пользователя\n\n    :param user_obj: супер объект из\n    - required_user_data_obj\n    - constant_user_data_obj\n    - constant_node_data_obj\n\n    :param config_link: для ss выглядит так\n    {\n      \"method\": \"2022-blake3-aes-128-gcm\",\n      \"server_psk\": \"ANY_B64_PASSW\",\n      \"user_psk\": \"{user_uuid}\",\n      \"node_title\": \"My Super Node!\",\n      \"node_address\": \"1.2.3.4\",\n      \"port\": \"8388\"\n    }\n    \"\"\"\n\n    \"1. Грузим json\"\n    json_data = ast.literal_eval(config_link)\n\n    \"2. В зависимости от метода, формируем b64 user_psk(16/32 байта)\"\n    raw = uuid.UUID(user_obj['user_uuid']).bytes\n    final_bytes = raw if \"128\" in user_obj['node_method'] else hashlib.sha256(raw).digest()\n    user_psk = base64.b64encode(final_bytes).decode('utf-8')\n\n    \"3. Собираем ссылку\"\n    mt_spsk_upsk_b64 = base64.b64encode(\n        f\"{json_data['method']}:{json_data['server_psk']}:{user_psk}\".encode('utf-8')\n    ).decode(\"utf-8\")\n\n    return f'ss://{mt_spsk_upsk_b64}@{n_address}:{json_data['port']}?security=tls&type=ws&sni={urllib.parse.quote(json_data['domain'])}&path={urllib.parse.quote(json_data['path'])}#{n_title}'",
       "sub_required_libs": "hashlib,uuid,base64,ast,urllib",
       "api_bulk_delete_user_script": null,
@@ -3006,7 +2963,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "Выберите метод шифрования перед запуском скриптов\n\n1 - 2022-blake3-aes-128-gcm (быстрый, легкий)\n2 - 2022-blake3-aes-256-gcm (максимальная защита)\n3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -3065,7 +3021,7 @@
       "constant_user_data_obj": {
         "grpc_mode": "gun"
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для ss. Формирует user_psk из uuid4 пользователя\n\n    :param user_obj: супер объект из\n    - required_user_data_obj\n    - constant_user_data_obj\n    - constant_node_data_obj\n\n    :param config_link: для ss выглядит так\n    {\n      \"method\": \"2022-blake3-aes-128-gcm\",\n      \"server_psk\": \"ANY_B64_PASSW\",\n      \"user_psk\": \"{user_uuid}\",\n      \"node_title\": \"My Super Node!\",\n      \"node_address\": \"1.2.3.4\",\n      \"port\": \"8388\"\n    }\n    \"\"\"\n\n    \"1. Грузим json\"\n    json_data = ast.literal_eval(config_link)\n\n    \"2. В зависимости от метода, формируем b64 user_psk(16/32 байта)\"\n    raw = uuid.UUID(user_obj['user_uuid']).bytes\n    final_bytes = raw if \"128\" in user_obj['node_method'] else hashlib.sha256(raw).digest()\n    user_psk = base64.b64encode(final_bytes).decode('utf-8')\n\n    \"3. Собираем ссылку\"\n    mt_spsk_upsk_b64 = base64.b64encode(\n        f\"{json_data['method']}:{json_data['server_psk']}:{user_psk}\".encode('utf-8')\n    ).decode(\"utf-8\")\n\n    return f'ss://{mt_spsk_upsk_b64}@{n_address}:{json_data['port']}?security=tls&type=grpc&serviceName={json_data['grpc_service_name']}&mode={user_obj['grpc_mode']}&sni={urllib.parse.quote(json_data['domain'])}#{n_title}'",
       "sub_required_libs": "hashlib,uuid,base64,ast,urllib",
       "api_bulk_delete_user_script": null,
@@ -3078,7 +3034,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "Выберите метод шифрования перед запуском скриптов\n\n1 - 2022-blake3-aes-128-gcm (быстрый, легкий)\n2 - 2022-blake3-aes-256-gcm (максимальная защита)\n3 - 2022-blake3-chacha20-poly1305 (лучше для мобильных без AES-инструкций)",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -3137,7 +3092,7 @@
       "constant_user_data_obj": {
         "alterId": 0
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    # 1. Заменяем плейсхолдер user_uuid (не используем .format() из-за многострочного JSON)\n    json_str = config_link.replace(\"{user_uuid}\", user_obj['user_uuid'])\n    json_str = json_str.replace(\"{n_title}\", n_title)\n    json_str = json_str.replace(\"{n_address}\", n_address)\n\n    # 2. Кодируем JSON в Base64\n    b64_config = base64.b64encode(json_str.encode(\"utf-8\")).decode(\"utf-8\")\n\n    # 3. Возвращаем готовую ссылку\n    return f\"vmess://{b64_config}\"",
       "sub_required_libs": "base64",
       "api_bulk_delete_user_script": null,
@@ -3148,7 +3103,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -3208,7 +3162,7 @@
         "alterId": 0,
         "grpc_mode": "gun"
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    # 1. Заменяем плейсхолдер user_uuid (не используем .format() из-за многострочного JSON)\n    json_str = config_link.replace(\"{user_uuid}\", user_obj['user_uuid'])\n    json_str = json_str.replace(\"{n_title}\", n_title)\n    json_str = json_str.replace(\"{n_address}\", n_address)\n    json_str = json_str.replace('{grpc_mode}', user_obj['grpc_mode'])\n\n    # 2. Кодируем JSON в Base64\n    b64_config = base64.b64encode(json_str.encode(\"utf-8\")).decode(\"utf-8\")\n\n    # 3. Возвращаем готовую ссылку\n    return f\"vmess://{b64_config}\"",
       "sub_required_libs": "base64",
       "api_bulk_delete_user_script": null,
@@ -3219,7 +3173,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -3278,7 +3231,7 @@
       "constant_user_data_obj": {
         "alterId": 0
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    # 1. Заменяем плейсхолдер user_uuid (не используем .format() из-за многострочного JSON)\n    json_str = config_link.replace(\"{user_uuid}\", user_obj['user_uuid'])\n    json_str = json_str.replace(\"{n_title}\", n_title)\n    json_str = json_str.replace(\"{n_address}\", n_address)\n\n    # 2. Кодируем JSON в Base64\n    b64_config = base64.b64encode(json_str.encode(\"utf-8\")).decode(\"utf-8\")\n\n    # 3. Возвращаем готовую ссылку\n    return f\"vmess://{b64_config}\"",
       "sub_required_libs": "base64",
       "api_bulk_delete_user_script": null,
@@ -3289,7 +3242,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -3348,7 +3300,7 @@
       "constant_user_data_obj": {
         "alterId": 0
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    # 1. Заменяем плейсхолдер user_uuid (не используем .format() из-за многострочного JSON)\n    json_str = config_link.replace(\"{user_uuid}\", user_obj['user_uuid'])\n    json_str = json_str.replace(\"{n_title}\", n_title)\n    json_str = json_str.replace(\"{n_address}\", n_address)\n\n    # 2. Кодируем JSON в Base64\n    b64_config = base64.b64encode(json_str.encode(\"utf-8\")).decode(\"utf-8\")\n\n    # 3. Возвращаем готовую ссылку\n    return f\"vmess://{b64_config}\"",
       "sub_required_libs": "base64",
       "api_bulk_delete_user_script": null,
@@ -3359,7 +3311,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -3416,7 +3367,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для VLESS/Trojan\n    \"\"\"\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], fp=user_obj['sub_link_fp']\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
@@ -3427,7 +3378,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -3486,7 +3436,7 @@
       "constant_user_data_obj": {
         "flow": "xtls-rprx-vision"
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для VLESS с транспортом GRPC\n    \"\"\"\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], grpc_mode=user_obj['sub_link_grpc_mode'],\n        fp=user_obj['sub_link_fp'], public_key=user_obj['node_public_key']\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
@@ -3497,7 +3447,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -3556,7 +3505,7 @@
       "constant_user_data_obj": {
         "flow": "xtls-rprx-vision"
       },
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], \n        fp=user_obj['sub_link_fp'], public_key=user_obj['node_public_key']\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
@@ -3567,7 +3516,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -3624,7 +3572,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], \n        fp=user_obj['sub_link_fp'])",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
@@ -3635,7 +3583,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -3692,7 +3639,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], \n        fp=user_obj['sub_link_fp'])",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
@@ -3703,7 +3650,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
@@ -3763,7 +3709,7 @@
         "warp": true,
         "node_psk_salt": "amneziawg-ipv6-warp"
       },
-      "proto_python_lib": null,
+      "proto_python_lib": "ipaddress,",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -3774,7 +3720,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": "ipaddress",
       "config2json_script": "def config2json(raw_text):\n    # Жестко задаем схему! Нет пиров? Массив все равно будет. \n    # 1 пир? Он корректно ляжет в массив.\n    result = {\"Interface\": {}, \"Peers\": []}\n    current_section = None\n    \n    for line in raw_text.splitlines():\n        line = line.strip()\n        if not line or line.startswith(('#', ';')): continue\n        \n        if line == '[Interface]':\n            current_section = result[\"Interface\"]\n        elif line == '[Peer]':\n            current_section = {}\n            result[\"Peers\"].append(current_section)\n        elif '=' in line and current_section is not None:\n            k, v = map(str.strip, line.split('=', 1))\n            current_section[k] = v # Тут можно добавить парсинг интов/списков, если нужно\n            \n    return result",
       "json2config_script": "def json2config(json_obj):\n    lines = [\"[Interface]\"]\n    for k, v in json_obj.get(\"Interface\", {}).items():\n        lines.append(f\"{k} = {v}\")\n    \n    for peer in json_obj.get(\"Peers\", []):\n        lines.append(\"\\n[Peer]\")\n        for k, v in peer.items():\n            lines.append(f\"{k} = {v}\")\n            \n    return (\"\\n\".join(lines) + \"\\n\").encode(\"utf-8\")",
       "conf_converter_libs": null,
@@ -3836,7 +3781,7 @@
         "warp": true,
         "node_psk_salt": "amneziawg-ipv4-warp-hopping"
       },
-      "proto_python_lib": null,
+      "proto_python_lib": "ipaddress,",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n        hop_port=random.randint(int(user_obj['node_hop_start']), int(user_obj['node_hop_end']))\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress,random",
       "api_bulk_delete_user_script": null,
@@ -3847,7 +3792,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": "ipaddress",
       "config2json_script": "def config2json(raw_text):\n    # Жестко задаем схему! Нет пиров? Массив все равно будет. \n    # 1 пир? Он корректно ляжет в массив.\n    result = {\"Interface\": {}, \"Peers\": []}\n    current_section = None\n    \n    for line in raw_text.splitlines():\n        line = line.strip()\n        if not line or line.startswith(('#', ';')): continue\n        \n        if line == '[Interface]':\n            current_section = result[\"Interface\"]\n        elif line == '[Peer]':\n            current_section = {}\n            result[\"Peers\"].append(current_section)\n        elif '=' in line and current_section is not None:\n            k, v = map(str.strip, line.split('=', 1))\n            current_section[k] = v # Тут можно добавить парсинг интов/списков, если нужно\n            \n    return result",
       "json2config_script": "def json2config(json_obj):\n    lines = [\"[Interface]\"]\n    for k, v in json_obj.get(\"Interface\", {}).items():\n        lines.append(f\"{k} = {v}\")\n    \n    for peer in json_obj.get(\"Peers\", []):\n        lines.append(\"\\n[Peer]\")\n        for k, v in peer.items():\n            lines.append(f\"{k} = {v}\")\n            \n    return (\"\\n\".join(lines) + \"\\n\").encode(\"utf-8\")",
       "conf_converter_libs": null,
@@ -3909,7 +3853,7 @@
         "warp": true,
         "node_psk_salt": "amneziawg-ipv4-warp"
       },
-      "proto_python_lib": null,
+      "proto_python_lib": "ipaddress,",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -3920,7 +3864,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": "ipaddress",
       "config2json_script": "def config2json(raw_text):\n    # Жестко задаем схему! Нет пиров? Массив все равно будет. \n    # 1 пир? Он корректно ляжет в массив.\n    result = {\"Interface\": {}, \"Peers\": []}\n    current_section = None\n    \n    for line in raw_text.splitlines():\n        line = line.strip()\n        if not line or line.startswith(('#', ';')): continue\n        \n        if line == '[Interface]':\n            current_section = result[\"Interface\"]\n        elif line == '[Peer]':\n            current_section = {}\n            result[\"Peers\"].append(current_section)\n        elif '=' in line and current_section is not None:\n            k, v = map(str.strip, line.split('=', 1))\n            current_section[k] = v # Тут можно добавить парсинг интов/списков, если нужно\n            \n    return result",
       "json2config_script": "def json2config(json_obj):\n    lines = [\"[Interface]\"]\n    for k, v in json_obj.get(\"Interface\", {}).items():\n        lines.append(f\"{k} = {v}\")\n    \n    for peer in json_obj.get(\"Peers\", []):\n        lines.append(\"\\n[Peer]\")\n        for k, v in peer.items():\n            lines.append(f\"{k} = {v}\")\n            \n    return (\"\\n\".join(lines) + \"\\n\").encode(\"utf-8\")",
       "conf_converter_libs": null,
@@ -3982,7 +3925,7 @@
         "warp": true,
         "node_psk_salt": "amneziawg-ipv6-warp-hopping"
       },
-      "proto_python_lib": null,
+      "proto_python_lib": "ipaddress,",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n        hop_port=random.randint(int(user_obj['node_hop_start']), int(user_obj['node_hop_end']))\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress,random",
       "api_bulk_delete_user_script": null,
@@ -3993,7 +3936,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": "ipaddress",
       "config2json_script": "def config2json(raw_text):\n    # Жестко задаем схему! Нет пиров? Массив все равно будет. \n    # 1 пир? Он корректно ляжет в массив.\n    result = {\"Interface\": {}, \"Peers\": []}\n    current_section = None\n    \n    for line in raw_text.splitlines():\n        line = line.strip()\n        if not line or line.startswith(('#', ';')): continue\n        \n        if line == '[Interface]':\n            current_section = result[\"Interface\"]\n        elif line == '[Peer]':\n            current_section = {}\n            result[\"Peers\"].append(current_section)\n        elif '=' in line and current_section is not None:\n            k, v = map(str.strip, line.split('=', 1))\n            current_section[k] = v # Тут можно добавить парсинг интов/списков, если нужно\n            \n    return result",
       "json2config_script": "def json2config(json_obj):\n    lines = [\"[Interface]\"]\n    for k, v in json_obj.get(\"Interface\", {}).items():\n        lines.append(f\"{k} = {v}\")\n    \n    for peer in json_obj.get(\"Peers\", []):\n        lines.append(\"\\n[Peer]\")\n        for k, v in peer.items():\n            lines.append(f\"{k} = {v}\")\n            \n    return (\"\\n\".join(lines) + \"\\n\").encode(\"utf-8\")",
       "conf_converter_libs": null,
@@ -4054,7 +3996,7 @@
       "constant_user_data_obj": {
         "node_psk_salt": "amneziawg-ipv6-hopping"
       },
-      "proto_python_lib": null,
+      "proto_python_lib": "ipaddress,",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n        hop_port=random.randint(int(user_obj['node_hop_start']), int(user_obj['node_hop_end']))\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress,random",
       "api_bulk_delete_user_script": null,
@@ -4065,7 +4007,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": "ipaddress",
       "config2json_script": "def config2json(raw_text):\n    # Жестко задаем схему! Нет пиров? Массив все равно будет. \n    # 1 пир? Он корректно ляжет в массив.\n    result = {\"Interface\": {}, \"Peers\": []}\n    current_section = None\n    \n    for line in raw_text.splitlines():\n        line = line.strip()\n        if not line or line.startswith(('#', ';')): continue\n        \n        if line == '[Interface]':\n            current_section = result[\"Interface\"]\n        elif line == '[Peer]':\n            current_section = {}\n            result[\"Peers\"].append(current_section)\n        elif '=' in line and current_section is not None:\n            k, v = map(str.strip, line.split('=', 1))\n            current_section[k] = v # Тут можно добавить парсинг интов/списков, если нужно\n            \n    return result",
       "json2config_script": "def json2config(json_obj):\n    lines = [\"[Interface]\"]\n    for k, v in json_obj.get(\"Interface\", {}).items():\n        lines.append(f\"{k} = {v}\")\n    \n    for peer in json_obj.get(\"Peers\", []):\n        lines.append(\"\\n[Peer]\")\n        for k, v in peer.items():\n            lines.append(f\"{k} = {v}\")\n            \n    return (\"\\n\".join(lines) + \"\\n\").encode(\"utf-8\")",
       "conf_converter_libs": null,
@@ -4126,7 +4067,7 @@
       "constant_user_data_obj": {
         "node_psk_salt": "amneziawg-ipv4"
       },
-      "proto_python_lib": null,
+      "proto_python_lib": "ipaddress,",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -4137,7 +4078,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": "ipaddress",
       "config2json_script": "def config2json(raw_text):\n    # Жестко задаем схему! Нет пиров? Массив все равно будет. \n    # 1 пир? Он корректно ляжет в массив.\n    result = {\"Interface\": {}, \"Peers\": []}\n    current_section = None\n    \n    for line in raw_text.splitlines():\n        line = line.strip()\n        if not line or line.startswith(('#', ';')): continue\n        \n        if line == '[Interface]':\n            current_section = result[\"Interface\"]\n        elif line == '[Peer]':\n            current_section = {}\n            result[\"Peers\"].append(current_section)\n        elif '=' in line and current_section is not None:\n            k, v = map(str.strip, line.split('=', 1))\n            current_section[k] = v # Тут можно добавить парсинг интов/списков, если нужно\n            \n    return result",
       "json2config_script": "def json2config(json_obj):\n    lines = [\"[Interface]\"]\n    for k, v in json_obj.get(\"Interface\", {}).items():\n        lines.append(f\"{k} = {v}\")\n    \n    for peer in json_obj.get(\"Peers\", []):\n        lines.append(\"\\n[Peer]\")\n        for k, v in peer.items():\n            lines.append(f\"{k} = {v}\")\n            \n    return (\"\\n\".join(lines) + \"\\n\").encode(\"utf-8\")",
       "conf_converter_libs": null,
@@ -4198,7 +4138,7 @@
       "constant_user_data_obj": {
         "node_psk_salt": "amneziawg-ipv4-hopping"
       },
-      "proto_python_lib": null,
+      "proto_python_lib": "ipaddress,",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n        hop_port=random.randint(int(user_obj['node_hop_start']), int(user_obj['node_hop_end']))\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress,random",
       "api_bulk_delete_user_script": null,
@@ -4209,7 +4149,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": "ipaddress",
       "config2json_script": "def config2json(raw_text):\n    # Жестко задаем схему! Нет пиров? Массив все равно будет. \n    # 1 пир? Он корректно ляжет в массив.\n    result = {\"Interface\": {}, \"Peers\": []}\n    current_section = None\n    \n    for line in raw_text.splitlines():\n        line = line.strip()\n        if not line or line.startswith(('#', ';')): continue\n        \n        if line == '[Interface]':\n            current_section = result[\"Interface\"]\n        elif line == '[Peer]':\n            current_section = {}\n            result[\"Peers\"].append(current_section)\n        elif '=' in line and current_section is not None:\n            k, v = map(str.strip, line.split('=', 1))\n            current_section[k] = v # Тут можно добавить парсинг интов/списков, если нужно\n            \n    return result",
       "json2config_script": "def json2config(json_obj):\n    lines = [\"[Interface]\"]\n    for k, v in json_obj.get(\"Interface\", {}).items():\n        lines.append(f\"{k} = {v}\")\n    \n    for peer in json_obj.get(\"Peers\", []):\n        lines.append(\"\\n[Peer]\")\n        for k, v in peer.items():\n            lines.append(f\"{k} = {v}\")\n            \n    return (\"\\n\".join(lines) + \"\\n\").encode(\"utf-8\")",
       "conf_converter_libs": null,
@@ -4270,7 +4209,7 @@
       "constant_user_data_obj": {
         "node_psk_salt": "amneziawg-ipv6"
       },
-      "proto_python_lib": null,
+      "proto_python_lib": "ipaddress,",
       "sub_prepare_script": "\nfrom cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey\nfrom cryptography.hazmat.primitives import serialization\n\ndef prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Подготавливает config-link для WireGuard.\n    Генерирует приватный ключ клиента и вычисляет его IP.\n    \"\"\"\n    user_sub_id = int(user_obj[\"user_sub_id\"])\n    user_uuid = user_obj[\"user_uuid\"]\n\n    salt = user_obj.get(\"node_hash_salt\", \"\").encode(\"utf-8\")\n    psk_salt = user_obj.get(\"node_psk_salt\", \" \").encode(\"utf-8\")\n\n    # 1. Генерация приватного ключа клиента (тот же seed, что и на сервере)\n    raw_uuid = uuid.UUID(user_uuid).bytes\n    seed = hashlib.sha256(salt + raw_uuid).digest()\n    priv_key = X25519PrivateKey.from_private_bytes(seed)\n\n    raw_b64_key = base64.b64encode(priv_key.private_bytes(\n        encoding=serialization.Encoding.Raw,\n        format=serialization.PrivateFormat.Raw,\n        encryption_algorithm=serialization.NoEncryption()\n    )).decode(\"utf-8\")\n\n    # КРИТИЧНО: экранируем Base64 строку, чтобы символы \"/\" и \"+\" не сломали urlsplit в основном коде\n    user_private_key = urllib.parse.quote(raw_b64_key, safe=\"\")\n\n    # 2. Вычисление IP адреса клиента (поддерживаем IPv6 и IPv4)\n    if \"node_ipv6_subnet\" in user_obj:\n        net = ipaddress.IPv6Network(user_obj[\"node_ipv6_subnet\"], strict=False)\n        user_ip = f\"{net.network_address + user_sub_id}/128\"\n    elif \"node_ipv4_subnet\" in user_obj:\n        net = ipaddress.IPv4Network(user_obj[\"node_ipv4_subnet\"], strict=False)\n        usable_ips = net.num_addresses - 2\n        offset = (user_sub_id % usable_ips) + 1 if usable_ips > 0 else 0\n        user_ip = f\"{net[offset]}/32\"\n    else:\n        user_ip = \"0.0.0.0/32\"\n\n    # 3. WARP, если включен\n    reserved_array = [0,0,0] # дефолтные wg 3 байта, по которым ТСПУ чаще блокирует WG\n    if user_obj.get(\"warp\"):\n        reserved_seed = hashlib.sha256(salt + raw_uuid + b\"reserved_bytes\").digest()\n        reserved_array = [reserved_seed[0], reserved_seed[1], reserved_seed[2]]\n\n    reserved_str = urllib.parse.quote(f\"{reserved_array[0]},{reserved_array[1]},{reserved_array[2]}\")\n\n    # 4. Публичный ключ сервера\n    # В urlencode в основном коде он обработается нормально, но URL-кодировать тут тоже не повредит\n    server_public_key = urllib.parse.quote(user_obj[\"node_public_key\"], safe=\"\")\n    \n    # 5. PresharedKey\n    psk_bytes = hashlib.sha256(psk_salt + salt + raw_uuid).digest()\n    preshared_key = base64.b64encode(psk_bytes).decode(\"utf-8\")\n    ps_key = urllib.parse.quote(preshared_key)\n\n\n    # 6. Подставляем значения\n    final_link = config_link.format(\n        user_private_key=user_private_key, n_title=n_title, n_address=n_address,\n        server_public_key=server_public_key,\n        user_ip=user_ip,\n        reserved_bytes=reserved_str,\n        preshared_key=ps_key,\n    )\n\n    return final_link\n",
       "sub_required_libs": "urllib,cryptography,hashlib,uuid,base64,ipaddress",
       "api_bulk_delete_user_script": null,
@@ -4281,7 +4220,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": "ipaddress",
       "config2json_script": "def config2json(raw_text):\n    # Жестко задаем схему! Нет пиров? Массив все равно будет. \n    # 1 пир? Он корректно ляжет в массив.\n    result = {\"Interface\": {}, \"Peers\": []}\n    current_section = None\n    \n    for line in raw_text.splitlines():\n        line = line.strip()\n        if not line or line.startswith(('#', ';')): continue\n        \n        if line == '[Interface]':\n            current_section = result[\"Interface\"]\n        elif line == '[Peer]':\n            current_section = {}\n            result[\"Peers\"].append(current_section)\n        elif '=' in line and current_section is not None:\n            k, v = map(str.strip, line.split('=', 1))\n            current_section[k] = v # Тут можно добавить парсинг интов/списков, если нужно\n            \n    return result",
       "json2config_script": "def json2config(json_obj):\n    lines = [\"[Interface]\"]\n    for k, v in json_obj.get(\"Interface\", {}).items():\n        lines.append(f\"{k} = {v}\")\n    \n    for peer in json_obj.get(\"Peers\", []):\n        lines.append(\"\\n[Peer]\")\n        for k, v in peer.items():\n            lines.append(f\"{k} = {v}\")\n            \n    return (\"\\n\".join(lines) + \"\\n\").encode(\"utf-8\")",
       "conf_converter_libs": null,
@@ -4340,7 +4278,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": null,
+      "proto_python_lib": "",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для Hysteria2 с Port Hopping\n    \"\"\"\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], hop_start=user_obj['node_hop_start'], hop_end=user_obj['node_hop_end'], sni=user_obj['node_sni'],\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
@@ -4351,7 +4289,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": "def config2json(raw_yaml_text: str) -> dict:\n    \"\"\"\n    Преобразует YAML Hysteria 2 в нормализованный dict (JSON).\n    Гарантирует наличие массива 'users' для работы инжекторов нод-клиента.\n    \"\"\"\n    data = yaml.safe_load(raw_yaml_text) or {}\n\n    # 1. Гарантируем базовую структуру auth\n    if \"auth\" not in data or not isinstance(data[\"auth\"], dict):\n        data[\"auth\"] = {\"type\": \"userpass\"}\n\n    # 2. Достаем словарь пользователей из YAML (или пустой dict, если 0 юзеров)\n    raw_userpass = data[\"auth\"].get(\"userpass\") or {}\n\n    # 3. Преобразуем словарь/список в гарантированный LIST\n    users_list = []\n    if isinstance(raw_userpass, dict):\n        for username, password in raw_userpass.items():\n            users_list.append({\n                \"username\": str(username),\n                \"password\": str(password)\n            })\n    elif isinstance(raw_userpass, list):\n        users_list = raw_userpass\n\n    # 4. Фиксируем ключ \"users\" как LIST (решает проблему 0 элементов!)\n    data[\"auth\"][\"users\"] = users_list\n\n    # Удаляем старый ключ userpass, чтобы не путать структуры\n    if \"userpass\" in data[\"auth\"]:\n        del data[\"auth\"][\"userpass\"]\n\n    return data",
       "json2config_script": "def json2config(json_obj: dict) -> str:\n    \"\"\"\n    Преобразует внутренний dict (JSON) обратно в валидный YAML для Hysteria 2.\n    \"\"\"\n    config = json_obj.copy()\n\n    if \"auth\" in config and isinstance(config[\"auth\"], dict):\n        # Достаем наш искусственный массив пользователей\n        users_list = config[\"auth\"].pop(\"users\", [])\n\n        # Собираем словарь \"username\": \"password\" для нативной Hysteria 2\n        userpass_map = {}\n        for user in users_list:\n            if isinstance(user, dict):\n                username = str(user.get(\"username\", \"\"))\n                password = str(user.get(\"password\", \"\"))\n                if username:\n                    userpass_map[username] = password\n\n        config[\"auth\"][\"type\"] = \"userpass\"\n        config[\"auth\"][\"userpass\"] = userpass_map\n\n    # Дамп в красиво форматированный YAML\n    return yaml.dump(config, sort_keys=False, allow_unicode=True, default_flow_style=False).encode(\"utf-8\")",
       "conf_converter_libs": "yaml",
@@ -4398,7 +4335,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": null,
+      "proto_python_lib": "",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для Hysteria2 с Port Hopping\n    \"\"\"\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], proto_port=user_obj['node_proto_port'],  sni=user_obj['node_sni'],\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
@@ -4409,7 +4346,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": "def config2json(raw_yaml_text: str) -> dict:\n    \"\"\"\n    Преобразует YAML Hysteria 2 в нормализованный dict (JSON).\n    Гарантирует наличие массива 'users' для работы инжекторов нод-клиента.\n    \"\"\"\n    data = yaml.safe_load(raw_yaml_text) or {}\n\n    # 1. Гарантируем базовую структуру auth\n    if \"auth\" not in data or not isinstance(data[\"auth\"], dict):\n        data[\"auth\"] = {\"type\": \"userpass\"}\n\n    # 2. Достаем словарь пользователей из YAML (или пустой dict, если 0 юзеров)\n    raw_userpass = data[\"auth\"].get(\"userpass\") or {}\n\n    # 3. Преобразуем словарь/список в гарантированный LIST\n    users_list = []\n    if isinstance(raw_userpass, dict):\n        for username, password in raw_userpass.items():\n            users_list.append({\n                \"username\": str(username),\n                \"password\": str(password)\n            })\n    elif isinstance(raw_userpass, list):\n        users_list = raw_userpass\n\n    # 4. Фиксируем ключ \"users\" как LIST (решает проблему 0 элементов!)\n    data[\"auth\"][\"users\"] = users_list\n\n    # Удаляем старый ключ userpass, чтобы не путать структуры\n    if \"userpass\" in data[\"auth\"]:\n        del data[\"auth\"][\"userpass\"]\n\n    return data",
       "json2config_script": "def json2config(json_obj: dict) -> str:\n    \"\"\"\n    Преобразует внутренний dict (JSON) обратно в валидный YAML для Hysteria 2.\n    \"\"\"\n    config = json_obj.copy()\n\n    if \"auth\" in config and isinstance(config[\"auth\"], dict):\n        # Достаем наш искусственный массив пользователей\n        users_list = config[\"auth\"].pop(\"users\", [])\n\n        # Собираем словарь \"username\": \"password\" для нативной Hysteria 2\n        userpass_map = {}\n        for user in users_list:\n            if isinstance(user, dict):\n                username = str(user.get(\"username\", \"\"))\n                password = str(user.get(\"password\", \"\"))\n                if username:\n                    userpass_map[username] = password\n\n        config[\"auth\"][\"type\"] = \"userpass\"\n        config[\"auth\"][\"userpass\"] = userpass_map\n\n    # Дамп в красиво форматированный YAML\n    return yaml.dump(config, sort_keys=False, allow_unicode=True, default_flow_style=False).encode(\"utf-8\")",
       "conf_converter_libs": "yaml",
@@ -4456,7 +4392,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": null,
+      "proto_python_lib": "",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для Hysteria2 с Port Hopping\n    \"\"\"\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], hop_start=user_obj['node_hop_start'], hop_end=user_obj['node_hop_end'], sni=user_obj['node_sni'],\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
@@ -4467,7 +4403,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": "def config2json(raw_yaml_text: str) -> dict:\n    \"\"\"\n    Преобразует YAML Hysteria 2 в нормализованный dict (JSON).\n    Гарантирует наличие массива 'users' для работы инжекторов нод-клиента.\n    \"\"\"\n    data = yaml.safe_load(raw_yaml_text) or {}\n\n    # 1. Гарантируем базовую структуру auth\n    if \"auth\" not in data or not isinstance(data[\"auth\"], dict):\n        data[\"auth\"] = {\"type\": \"userpass\"}\n\n    # 2. Достаем словарь пользователей из YAML (или пустой dict, если 0 юзеров)\n    raw_userpass = data[\"auth\"].get(\"userpass\") or {}\n\n    # 3. Преобразуем словарь/список в гарантированный LIST\n    users_list = []\n    if isinstance(raw_userpass, dict):\n        for username, password in raw_userpass.items():\n            users_list.append({\n                \"username\": str(username),\n                \"password\": str(password)\n            })\n    elif isinstance(raw_userpass, list):\n        users_list = raw_userpass\n\n    # 4. Фиксируем ключ \"users\" как LIST (решает проблему 0 элементов!)\n    data[\"auth\"][\"users\"] = users_list\n\n    # Удаляем старый ключ userpass, чтобы не путать структуры\n    if \"userpass\" in data[\"auth\"]:\n        del data[\"auth\"][\"userpass\"]\n\n    return data",
       "json2config_script": "def json2config(json_obj: dict) -> str:\n    \"\"\"\n    Преобразует внутренний dict (JSON) обратно в валидный YAML для Hysteria 2.\n    \"\"\"\n    config = json_obj.copy()\n\n    if \"auth\" in config and isinstance(config[\"auth\"], dict):\n        # Достаем наш искусственный массив пользователей\n        users_list = config[\"auth\"].pop(\"users\", [])\n\n        # Собираем словарь \"username\": \"password\" для нативной Hysteria 2\n        userpass_map = {}\n        for user in users_list:\n            if isinstance(user, dict):\n                username = str(user.get(\"username\", \"\"))\n                password = str(user.get(\"password\", \"\"))\n                if username:\n                    userpass_map[username] = password\n\n        config[\"auth\"][\"type\"] = \"userpass\"\n        config[\"auth\"][\"userpass\"] = userpass_map\n\n    # Дамп в красиво форматированный YAML\n    return yaml.dump(config, sort_keys=False, allow_unicode=True, default_flow_style=False).encode(\"utf-8\")",
       "conf_converter_libs": "yaml",
@@ -4514,7 +4449,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": null,
+      "proto_python_lib": "",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    \"\"\"\n    Скрипт подготовки конфиг ссылки для Hysteria2 с Port Hopping\n    \"\"\"\n    return config_link.format(\n        n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'], proto_port=user_obj['node_proto_port'],  sni=user_obj['node_sni'],\n    )",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
@@ -4525,7 +4460,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": "def config2json(raw_yaml_text: str) -> dict:\n    \"\"\"\n    Преобразует YAML Hysteria 2 в нормализованный dict (JSON).\n    Гарантирует наличие массива 'users' для работы инжекторов нод-клиента.\n    \"\"\"\n    data = yaml.safe_load(raw_yaml_text) or {}\n\n    # 1. Гарантируем базовую структуру auth\n    if \"auth\" not in data or not isinstance(data[\"auth\"], dict):\n        data[\"auth\"] = {\"type\": \"userpass\"}\n\n    # 2. Достаем словарь пользователей из YAML (или пустой dict, если 0 юзеров)\n    raw_userpass = data[\"auth\"].get(\"userpass\") or {}\n\n    # 3. Преобразуем словарь/список в гарантированный LIST\n    users_list = []\n    if isinstance(raw_userpass, dict):\n        for username, password in raw_userpass.items():\n            users_list.append({\n                \"username\": str(username),\n                \"password\": str(password)\n            })\n    elif isinstance(raw_userpass, list):\n        users_list = raw_userpass\n\n    # 4. Фиксируем ключ \"users\" как LIST (решает проблему 0 элементов!)\n    data[\"auth\"][\"users\"] = users_list\n\n    # Удаляем старый ключ userpass, чтобы не путать структуры\n    if \"userpass\" in data[\"auth\"]:\n        del data[\"auth\"][\"userpass\"]\n\n    return data",
       "json2config_script": "def json2config(json_obj: dict) -> str:\n    \"\"\"\n    Преобразует внутренний dict (JSON) обратно в валидный YAML для Hysteria 2.\n    \"\"\"\n    config = json_obj.copy()\n\n    if \"auth\" in config and isinstance(config[\"auth\"], dict):\n        # Достаем наш искусственный массив пользователей\n        users_list = config[\"auth\"].pop(\"users\", [])\n\n        # Собираем словарь \"username\": \"password\" для нативной Hysteria 2\n        userpass_map = {}\n        for user in users_list:\n            if isinstance(user, dict):\n                username = str(user.get(\"username\", \"\"))\n                password = str(user.get(\"password\", \"\"))\n                if username:\n                    userpass_map[username] = password\n\n        config[\"auth\"][\"type\"] = \"userpass\"\n        config[\"auth\"][\"userpass\"] = userpass_map\n\n    # Дамп в красиво форматированный YAML\n    return yaml.dump(config, sort_keys=False, allow_unicode=True, default_flow_style=False).encode(\"utf-8\")",
       "conf_converter_libs": "yaml",
@@ -4572,7 +4506,7 @@
         "user_sub_id": "{USER_SUB_ID}"
       },
       "constant_user_data_obj": {},
-      "proto_python_lib": "xtlsapi,google",
+      "proto_python_lib": ",xtlsapi,google.protobuf.json_format",
       "sub_prepare_script": "def prepare_sub(user_obj: dict, config_link: str, n_address: str, n_title: str):\n    return config_link.format(n_title=n_title, n_address=n_address, user_uuid=user_obj['user_uuid'])",
       "sub_required_libs": null,
       "api_bulk_delete_user_script": null,
@@ -4583,7 +4517,6 @@
       "api_bulk_add_user_script": null,
       "bulk_add_script_custom_params": {},
       "description": "# Акме скрипт для выдачи сертификатов должен запускаться через source, чтобы переменные были доступны в других скриптах \n\nВ acme используется export ENV\n\nЧтобы переменная доступна была в сессии после отработки скрипта его нужно запустить \n> source env_edit_script.sh",
-      "metrics_parser_libs": null,
       "config2json_script": null,
       "json2config_script": null,
       "conf_converter_libs": null,
