@@ -4551,7 +4551,7 @@
       "templates_users_extractors": [
         {
           "flatten_array_cursor": "inbounds___0___users",
-          "extractor_script": "def transform(user_obj: dict) -> dict:\n    return {\n        # Используем UUID пользователя для обоих полей, чтобы упростить ссылку\n        \"uuid\": user_obj[\"user_uuid\"], \n        \"password\": user_obj[\"user_uuid\"]\n    }",
+          "extractor_script": "def transform(user_obj: dict) -> dict:\n    return {\n        # Имя пользователя tuic в sing-box обязательно: ID подписки строкой\n        \"name\": f\"{user_obj['user_sub_id']}\",\n        # Используем UUID пользователя для обоих полей, чтобы упростить ссылку\n        \"uuid\": user_obj[\"user_uuid\"],\n        \"password\": user_obj[\"user_uuid\"]\n    }",
           "libs": null,
           "tmp_id": "proto_templates_CURRENT"
         },
