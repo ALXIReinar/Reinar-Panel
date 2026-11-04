@@ -1,4 +1,5 @@
-from pathlib import Path  # noqa: I001
+import asyncio  # noqa: I001
+from pathlib import Path
 from starlette.requests import Request
 from fastapi import APIRouter
 from starlette.responses import JSONResponse
@@ -92,8 +93,11 @@ async def write_config(body: ConfigWriteSchema, buffer: CoreBuffersDep, request:
         file_path = Path(body.path)
         new_file_json = buffer.read_config_json(body.node_proto_id, body.content)
 
-        if file_path.exists():
-            old_file_json = buffer.read_config_json(body.node_proto_id, file_path.read_text(encoding='utf-8'))
+        # Файловые операции — в отдельном потоке, чтобы не блокировать event loop нод-клиента
+        file_existed = await asyncio.to_thread(file_path.exists)
+        if file_existed:
+            old_text = await asyncio.to_thread(file_path.read_text, encoding='utf-8')
+            old_file_json = buffer.read_config_json(body.node_proto_id, old_text)
             for inj in meta.get('injectors', []):
                 cursor = inj.get('flatten_array_cursor')
                 if cursor:
@@ -102,7 +106,7 @@ async def write_config(body: ConfigWriteSchema, buffer: CoreBuffersDep, request:
 
         _, config_link = generate_link_from_json(body.tmp_link, new_file_json)
 
-        if file_path.exists():
+        if file_existed:
             backup_path = await create_backup(str(file_path))
             if backup_path:
                 log_event(
@@ -111,7 +115,7 @@ async def write_config(body: ConfigWriteSchema, buffer: CoreBuffersDep, request:
                 )
 
         new_content = buffer.dump_config(body.node_proto_id, new_file_json)
-        file_path.write_bytes(new_content)
+        await asyncio.to_thread(file_path.write_bytes, new_content)
 
         return ConfigWriteResponseSchema(
             success=True,

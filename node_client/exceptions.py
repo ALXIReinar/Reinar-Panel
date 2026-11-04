@@ -1,7 +1,8 @@
 class NodeInitError(Exception):
     """Ошибка валидации или компиляции параметров виртуальной ноды при регистрации."""
 
-    def __init__(self, node_proto_id: int, field: str, reason: str):
+    def __init__(self, node_proto_id: int | None, field: str, reason: str):
+        # None — если в данных от админки нет самого node_proto_id
         self.node_proto_id = node_proto_id
         self.field = field
         self.reason = reason

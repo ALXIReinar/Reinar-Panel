@@ -131,9 +131,9 @@ class NodesProtocolsQueries:
 
     async def get_node_for_config_file(self, node_proto_id: int):
         query = '''
-        SELECT n.node_name, np.title, n.ip, n.private_ip, n.api_port, n.is_active, 
+        SELECT n.node_name, np.title, n.ip, n.private_ip, n.api_port, n.is_active,
                np.config_path, pt.url_tmp
-        FROM nodes_protocols np 
+        FROM nodes_protocols np
         JOIN nodes n ON np.node_id = n.id
         JOIN proto_templates pt ON np.tmp_id = pt.id
         WHERE np.id = $1

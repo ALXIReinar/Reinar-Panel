@@ -115,7 +115,7 @@ class ConfigWriteBuffer:
                     config2json_script_raw, 'config2json', conf_converter_libs
                 )
         except Exception as e:
-            raise NodeInitError(node_proto_id, 'config2json_script', repr(e))
+            raise NodeInitError(node_proto_id, 'config2json_script', repr(e)) from e
 
         try:
             json2config_script_raw = item.get('json2config_script')
@@ -126,14 +126,14 @@ class ConfigWriteBuffer:
                     json2config_script_raw, 'json2config', conf_converter_libs
                 )
         except Exception as e:
-            raise NodeInitError(node_proto_id, 'json2config_script', repr(e))
+            raise NodeInitError(node_proto_id, 'json2config_script', repr(e)) from e
 
         # 2. Проверка конфиг-файла и user_injectors
         try:
             ok, file_content = await self._read_config(filepath, True)
             json_content = config_loader(file_content)
         except Exception as e:
-            raise NodeInitError(node_proto_id, 'filepath', f'ошибка чтения/парсинга конфига: {repr(e)}')
+            raise NodeInitError(node_proto_id, 'filepath', f'ошибка чтения/парсинга конфига: {repr(e)}') from e
 
         injectors = []
         for idx, inj in enumerate(user_injectors_raw):
@@ -145,7 +145,7 @@ class ConfigWriteBuffer:
             try:
                 self._navigate_to_path(json_content, cursor)
             except Exception as e:
-                raise NodeInitError(node_proto_id, f'user_injectors[{idx}].flatten_array_cursor', repr(e))
+                raise NodeInitError(node_proto_id, f'user_injectors[{idx}].flatten_array_cursor', repr(e)) from e
 
             extractor_raw = inj.get('extractor_script')
             libs = inj.get('libs')
@@ -155,7 +155,7 @@ class ConfigWriteBuffer:
                 else:
                     extractor_func = None
             except Exception as e:
-                raise NodeInitError(node_proto_id, f'user_injectors[{idx}].extractor_script', repr(e))
+                raise NodeInitError(node_proto_id, f'user_injectors[{idx}].extractor_script', repr(e)) from e
 
             injectors.append(
                 {
@@ -172,7 +172,7 @@ class ConfigWriteBuffer:
             try:
                 return HotReloadExecutor.get_compiled_func(raw_script, func_name, proto_python_lib)
             except Exception as e:
-                raise NodeInitError(node_proto_id, field_name, repr(e))
+                raise NodeInitError(node_proto_id, field_name, repr(e)) from e
 
         # api_bulk_add_user_script: ищем 'bulk_add_users' или 'add_user'
         compiled_add_script = None
@@ -190,7 +190,7 @@ class ConfigWriteBuffer:
             except NodeInitError:
                 raise
             except Exception as e:
-                raise NodeInitError(node_proto_id, 'api_bulk_add_user_script', repr(e))
+                raise NodeInitError(node_proto_id, 'api_bulk_add_user_script', repr(e)) from e
 
         # api_bulk_delete_user_script: ищем 'bulk_delete_users' или 'delete_user'
         compiled_delete_script = None
@@ -208,7 +208,7 @@ class ConfigWriteBuffer:
             except NodeInitError:
                 raise
             except Exception as e:
-                raise NodeInitError(node_proto_id, 'api_bulk_delete_user_script', repr(e))
+                raise NodeInitError(node_proto_id, 'api_bulk_delete_user_script', repr(e)) from e
 
         compiled_metrics_script = _compile_optional(item.get('api_metrics_script'), 'get_metrics', 'api_metrics_script')
         compiled_parser = _compile_optional(item.get('metrics_parser_code'), 'parse_metrics', 'metrics_parser_code')

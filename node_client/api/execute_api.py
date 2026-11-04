@@ -26,7 +26,9 @@ def execute_command(body: ExecuteCommandSchema):
     try:
         result = subprocess.run(
             body.command,
-            shell=True,
+            # Эндпоинт намеренно выполняет shell-команды: админка шлёт только команды из whitelist_commands,
+            # доступ к нод-клиенту — только из приватной сети (OnlyAdminAccessMiddleware)
+            shell=True,  # nosemgrep
             capture_output=True,
             text=True,
             timeout=env.command_timeout,
@@ -101,7 +103,10 @@ async def get_metrics(
                 f"\033[35m[Metrics]\033[0m Сбор метрик CLI-командой: {cmd_str}",
                 request=request,
             )
-            proc_res = subprocess.run(
+            # В отдельном потоке: синхронный subprocess.run блокировал бы event loop всего нод-клиента
+            # (воркеры буфера, другие запросы) на время команды — до COMMAND_TIMEOUT
+            proc_res = await asyncio.to_thread(
+                subprocess.run,
                 shlex.split(cmd_str),
                 capture_output=True,
                 text=True,
@@ -174,4 +179,6 @@ async def get_metrics(
             request=request,
             level='ERROR',
         )
-        raise HTTPException(status_code=500, detail={"success": False, "error": f"Failed to parse stats: {str(e)}"})
+        raise HTTPException(
+            status_code=500, detail={"success": False, "error": f"Failed to parse stats: {str(e)}"}
+        ) from e
