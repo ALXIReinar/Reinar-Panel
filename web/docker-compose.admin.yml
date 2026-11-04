@@ -74,7 +74,9 @@ services:
       pg_db:
         condition: service_healthy
     volumes:
-      - ./db:/app/web/db:ro
+      # Код и миграции — с диска, как у web-service: новые ревизии alembic видны без пересборки образа.
+      # Образ нужен только ради зависимостей (requirements.txt)
+      - .:/app/web:ro
     network_mode: host
     secrets:
       - env.api.prod
@@ -94,6 +96,8 @@ services:
       - ENV_FILE=/run/secrets/env.arq.prod
     network_mode: host
     volumes:
+      # Код — с диска, как у web-service: иначе воркер остаётся на коде из образа до пересборки
+      - .:/app/web
       - arq_logs:/app/web/arq_worker/arq_logs
     secrets:
       - env.arq.prod
