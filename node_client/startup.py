@@ -7,6 +7,7 @@
 
 import asyncio
 from typing import TYPE_CHECKING
+from urllib.parse import quote
 
 import aiohttp
 
@@ -37,7 +38,8 @@ async def fetch_startup_data(node_proto_ids: list[int] | None = None, retries: i
     if retries is None:
         retries = env.startup_retries
 
-    url = f"{env.effective_admin_panel_url}/api/v1/server/nodes/{env.node_title}/startup"
+    # quote: «#», «?», «/» в имени ноды иначе обрезают или ломают путь
+    url = f"{env.effective_admin_panel_url}/api/v1/server/nodes/{quote(env.node_title, safe='')}/startup"
     payload = {"node_proto_ids": node_proto_ids}
 
     last_error: Exception | None = None

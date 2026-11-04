@@ -231,7 +231,7 @@ def resolve_user_template(template: dict, uuid: str, user_sub_id: int | None = N
 def create_vpn_like_user(
     user_uuid,
     user_sub_id,
-    required_user_data_obj: dict,
+    required_user_data_obj: dict | None,  # None (шаблон без него) — сборка падает, пользователь отсеивается
     constant_user_data_obj: dict,
     constant_node_data_obj: dict,
 ):

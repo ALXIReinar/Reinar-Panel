@@ -217,6 +217,8 @@ async def config_file_write(
             'tmp_link': node_info['url_tmp'],
             'path': node_info['config_path'],
             'content': body.file_content,
+            # Прежний контракт админки: пользователи из старого файла переносятся, только если передан ключ
+            'transfer_users': bool(body.flatten_json_users_key),
         }
         "Успешная запись вернёт обновлённую конфиг ссылку"
         async with aio_http.post(url, json=json_body) as resp:

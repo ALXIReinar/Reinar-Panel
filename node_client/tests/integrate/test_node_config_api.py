@@ -14,9 +14,9 @@ Integration тесты для эндпоинтов управления конф
 """
 
 import shutil  # noqa: F401, I001
-from pathlib import Path  # noqa: F401
+from pathlib import Path
 
-import orjson  # noqa: F401
+import orjson
 import pytest
 
 from node_client.api.proto_core.write_behind_caching_file import flatten_key2value
@@ -252,6 +252,7 @@ async def test_write_config_with_custom_converters_from_db(protocol_templates_wi
                     "path": str(config_path),
                     "content": new_content.decode('utf-8'),
                     "tmp_link": "http://test.local/config",
+                    "transfer_users": True,
                 },
             )
             if response_write.status_code != 200:
@@ -312,3 +313,40 @@ async def test_write_config_not_registered_node_returns_428(client, tmp_path):
     assert response.status_code == 428
     assert response.json()["node_proto_id"] == 999
     assert config_path.read_text(encoding='utf-8') == '{"inbounds": []}'
+
+
+# ========== /write: перенос пользователей только по запросу (прежний контракт админки) ==========
+
+
+def _write_json(path: str, data: dict) -> None:
+    Path(path).write_bytes(orjson.dumps(data))
+
+
+def _read_json(path: str) -> dict:
+    return orjson.loads(Path(path).read_bytes())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("transfer_users", "expected_clients"), [(False, []), (True, [{"id": "old-user"}])])
+async def test_write_config_transfers_users_only_on_request(client, tmp_path, transfer_users, expected_clients):
+    """Пользователи из старого файла переносятся, только если админка попросила (transfer_users)"""
+    from node_client.tests.utils.test_data_factory import create_vnode_item_with_config
+
+    item = create_vnode_item_with_config(tmp_path, 41)
+    config_path = item["filepath"]
+    _write_json(config_path, {"inbounds": [{"settings": {"clients": [{"id": "old-user"}]}}]})
+    await client.app.state.core_buffer.register_node(item)
+
+    response = await client.post(
+        "/api/v1/server/node/config/write",
+        json={
+            "node_proto_id": 41,
+            "path": config_path,
+            "content": orjson.dumps({"inbounds": [{"settings": {"clients": []}}]}).decode(),
+            "tmp_link": "vless://x",
+            "transfer_users": transfer_users,
+        },
+    )
+
+    assert response.status_code == 200
+    assert _read_json(config_path)["inbounds"][0]["settings"]["clients"] == expected_clients

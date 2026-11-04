@@ -27,7 +27,7 @@ def upgrade() -> None:
     has_column = conn.execute(
         text("""
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'proto_templates' AND column_name = 'metrics_parser_libs'
+        WHERE table_schema = current_schema() AND table_name = 'proto_templates' AND column_name = 'metrics_parser_libs'
         """)
     ).scalar()
     if not has_column:

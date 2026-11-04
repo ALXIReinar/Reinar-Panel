@@ -38,7 +38,7 @@ async def bulk_action_users_by_node(
         success, vpn_user = create_vpn_like_user(
             user_uuid=u['uuid'],
             user_sub_id=u['user_sub_id'],
-            required_user_data_obj=required_user_data_obj or {},
+            required_user_data_obj=required_user_data_obj,
             constant_user_data_obj=constant_user_data_obj or {},
             constant_node_data_obj=constant_node_data_obj or {},
         )

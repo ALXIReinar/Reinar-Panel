@@ -97,8 +97,9 @@ async def get_metrics(
     # 2. CLI-fallback строго при raw is None
     metrics_command = meta.get('metrics_command')
     if raw is None and metrics_command:
-        cmd_str = metrics_command.format(body.metrics_port)
         try:
+            # Внутри try: кривой шаблон команды ({port} вместо {}) — это 502 с причиной, а не голый 500
+            cmd_str = metrics_command.format(body.metrics_port)
             log_event(
                 f"\033[35m[Metrics]\033[0m Сбор метрик CLI-командой: {cmd_str}",
                 request=request,
@@ -143,7 +144,10 @@ async def get_metrics(
     if source:
         response.headers["X-Metrics-Source"] = source
     if first_error:
-        response.headers["X-Metrics-Error"] = first_error[:200]
+        # Заголовок HTTP — только ASCII без управляющих символов: текст ошибки gRPC многострочный,
+        # бывает по-русски, и иначе ответ с уже снятыми (через -reset) метриками падает
+        safe_error = first_error.encode('ascii', 'backslashreplace').decode('ascii')
+        response.headers["X-Metrics-Error"] = ' '.join(safe_error.split())[:200]
 
     # 3. Парсинг метрик
     parser_func = meta.get('metrics_parser_code')

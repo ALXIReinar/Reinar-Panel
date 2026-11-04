@@ -30,7 +30,9 @@ async def admin_request_bulk_action_users(
                 if action == 'delete'
                 else vnode['bulk_add_script_custom_params']
             )
-            op = CoreProtoActions.delete if action == 'delete' else CoreProtoActions.add
+            # Неизвестное действие — KeyError, как до рефакторинга (а не молчаливый add)
+            op_by_action: dict[object, int] = {'add': CoreProtoActions.add, 'delete': CoreProtoActions.delete}
+            op = op_by_action[action]
             log_event(
                 f'\033[36m[ARQ Admin Actioner]\033[0m Отправляем Бульк запрос на фоновое исполнение | action: \033[31m{action}\033[0m; node_proto_id: \033[33m{vnode["node_proto_id"]}\033[0m'
             )

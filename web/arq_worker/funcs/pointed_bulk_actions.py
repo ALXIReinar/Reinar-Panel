@@ -40,7 +40,7 @@ async def pointed_bulk_action(
                 if action == 'delete'
                 else vnode['bulk_add_script_custom_params']
             )
-            op = CoreProtoActions.delete if action == 'delete' else CoreProtoActions.add
+            op = {'add': CoreProtoActions.add, 'delete': CoreProtoActions.delete}[action]  # неизвестное — KeyError
             job = await arq.enqueue_job(
                 'bulk_action_users_by_node',
                 vnode['node_proto_id'],

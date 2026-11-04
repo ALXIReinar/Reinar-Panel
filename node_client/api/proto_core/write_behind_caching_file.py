@@ -56,6 +56,8 @@ class ConfigWriteBuffer:
         self.worker_tasks: dict[int, asyncio.Task] = {}
         # Активные задачи записи для каждой ноды {node_proto_id: set[Task]}
         self.pending_writes: dict[int, set[asyncio.Task]] = {}
+        # Реинициализации идут строго по одной: иначе устаревший ответ админки может примениться последним
+        self.reinit_lock = asyncio.Lock()
 
     async def register_node(self, item: dict) -> None:
         """
@@ -149,11 +151,11 @@ class ConfigWriteBuffer:
 
             extractor_raw = inj.get('extractor_script')
             libs = inj.get('libs')
+            if not extractor_raw:
+                # Без экстрактора запись конфига невозможна: каждая запись падала бы молча
+                raise NodeInitError(node_proto_id, f'user_injectors[{idx}].extractor_script', 'пустой скрипт')
             try:
-                if extractor_raw:
-                    extractor_func = HotReloadExecutor.get_compiled_func(extractor_raw, 'transform', libs)
-                else:
-                    extractor_func = None
+                extractor_func = HotReloadExecutor.get_compiled_func(extractor_raw, 'transform', libs)
             except Exception as e:
                 raise NodeInitError(node_proto_id, f'user_injectors[{idx}].extractor_script', repr(e)) from e
 
@@ -256,6 +258,9 @@ class ConfigWriteBuffer:
             await self._load_users_from_config(node_proto_id)
             self.local_state[node_proto_id] = {}
             self.worker_tasks[node_proto_id] = asyncio.create_task(self._node_worker(node_proto_id))
+        # Аудит — после того, как все новые ноды полностью созданы: исключение аудита (AUDIT_MODE=strict)
+        # не оставляет ноду с метаданными, но без очереди и воркера
+        for node_proto_id in new_ids:
             await self._audit_state(node_proto_id)
 
         for node_proto_id in compiled:
@@ -631,7 +636,16 @@ class ConfigWriteBuffer:
             process = await asyncio.create_subprocess_shell(
                 reload_command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
-            stdout, stderr = await process.communicate()
+            try:
+                # Без таймаута зависшая команда вешала запись, а с ней reinit (remove_node) и остановку
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=env.command_timeout)
+            except (TimeoutError, asyncio.TimeoutError):  # noqa: UP041 — в Python 3.10 это разные классы
+                process.kill()
+                log_event(
+                    f'Команда перезагрузки ядра не завершилась за {env.command_timeout} с и прервана: "{reload_command}"',
+                    level='CRITICAL',
+                )
+                return
 
             if process.returncode == 0:
                 log_event("Ядро успешно перезагружено")

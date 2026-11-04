@@ -129,6 +129,7 @@ class NodesQueries:
                            'extractor_script', extractor_script,
                            'libs', libs
                        )
+                       ORDER BY id  -- порядок инжекторов в ответе детерминирован
                    ) AS user_injectors
             FROM templates_users_extractors
             GROUP BY tmp_id
@@ -152,6 +153,8 @@ class NodesQueries:
         LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id
         WHERE n.title = $1
           AND np.reg_status = 2
+          -- Без пути к конфигу ноду не обслужить: такая нода уходит в missing, а не роняет ответ всей физической ноде
+          AND np.config_path IS NOT NULL
           AND ($2::int[] IS NULL OR cardinality($2::int[]) = 0 OR np.id = ANY($2::int[]))
         ORDER BY np.id ASC
         """

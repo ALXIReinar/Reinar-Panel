@@ -84,20 +84,22 @@ async def read_config(body: ConfigReadSchema, buffer: CoreBuffersDep, request: R
 async def write_config(body: ConfigWriteSchema, buffer: CoreBuffersDep, request: Request):
     """
     Записывает содержимое в конфигурационный файл на ноде.
-    Переносит список пользователей из старого файла в новый.
+    Переносит список пользователей из старого файла в новый — только если запрошено (transfer_users).
     Создаёт резервную копию перед записью.
     """
     # Вне try: NodeNotRegisteredError должна дойти до глобального обработчика (428), а не стать 500
     meta = buffer.get_metadata(body.node_proto_id)
+    # Конвертеры — из метаданных, захваченных в начале: снятие ноды посреди записи не превращается в 500
+    config_loader, config_dumper = meta['config2json_script'], meta['json2config_script']
     try:
         file_path = Path(body.path)
-        new_file_json = buffer.read_config_json(body.node_proto_id, body.content)
+        new_file_json = config_loader(body.content)
 
         # Файловые операции — в отдельном потоке, чтобы не блокировать event loop нод-клиента
         file_existed = await asyncio.to_thread(file_path.exists)
-        if file_existed:
+        if file_existed and body.transfer_users:
             old_text = await asyncio.to_thread(file_path.read_text, encoding='utf-8')
-            old_file_json = buffer.read_config_json(body.node_proto_id, old_text)
+            old_file_json = config_loader(old_text)
             for inj in meta.get('injectors', []):
                 cursor = inj.get('flatten_array_cursor')
                 if cursor:
@@ -114,7 +116,9 @@ async def write_config(body: ConfigWriteSchema, buffer: CoreBuffersDep, request:
                     level='INFO',
                 )
 
-        new_content = buffer.dump_config(body.node_proto_id, new_file_json)
+        new_content = config_dumper(new_file_json)
+        if isinstance(new_content, str):
+            new_content = new_content.encode('utf-8')
         await asyncio.to_thread(file_path.write_bytes, new_content)
 
         return ConfigWriteResponseSchema(

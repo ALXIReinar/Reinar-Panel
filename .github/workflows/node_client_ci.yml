@@ -118,11 +118,22 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Start fake admin panel
+        # Нод-клиент при старте запрашивает /startup у админки и до ответа не поднимает HTTP (/ping).
+        # Настоящей админки в CI нет — отвечает фейковая: «виртуальных нод нет»
+        run: |
+          nohup python3 .github/scripts/fake_admin.py 8000 > fake_admin.log 2>&1 &
+          for i in {1..10}; do
+            curl -s -o /dev/null -X POST http://127.0.0.1:8000/api/v1/server/nodes/ci/startup && exit 0
+            sleep 1
+          done
+          echo "❌ Фейковая админка не поднялась"; cat fake_admin.log; exit 1
+
       - name: Install Node Client
         env:
           NODE_PORT: ${{ vars.NODE_PORT }}
           NODE_TITLE: ${{ vars.NODE_TITLE || vars.NODE_NAME }}
-          ADMIN_PANEL_PRIVATE_IP: ${{ vars.ADMIN_PANEL_PRIVATE_IP }}
+          ADMIN_PANEL_PRIVATE_IP: 127.0.0.1  # фейковая админка из шага выше
           CI: 1
         run: |
           echo "🚀 Установка Node Client..."
@@ -145,5 +156,5 @@ jobs:
             sleep 5
           done
           echo "❌ Превышено время ожидания. Логи сервиса:"
-          sudo journalctl -u vpn-node-client.service -n 100 --no-pager || true
+          sudo journalctl -u reinar-node -n 100 --no-pager || true
           exit 1

@@ -26,7 +26,9 @@ def upgrade() -> None:
     conn.execute(text("UPDATE nodes SET title = SUBSTRING(title FROM 1 FOR 64) WHERE LENGTH(title) > 64"))
 
     # 2. Проверяем дубликаты
-    duplicates = conn.execute(text("SELECT title, COUNT(*) FROM nodes GROUP BY title HAVING COUNT(*) > 1")).fetchall()
+    duplicates = conn.execute(
+        text("SELECT title, COUNT(*) FROM nodes WHERE title IS NOT NULL GROUP BY title HAVING COUNT(*) > 1")
+    ).fetchall()
 
     if duplicates:
         dups_info = [f"'{row[0]}' ({row[1]} шт.)" for row in duplicates]
@@ -47,14 +49,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Удаление уникального индекса nodes.title."""
-    conn = op.get_bind()
-    existing_index = conn.execute(
-        text("""
-        SELECT indexname FROM pg_indexes
-        WHERE tablename = 'nodes' AND indexname IN ('nodes_title_key', 'ix_nodes_title')
-        """)
-    ).scalar()
+    """Удаление уникального индекса nodes.title — только созданного этой миграцией (ix_nodes_title).
 
-    if existing_index:
-        op.drop_index(existing_index, table_name='nodes')
+    nodes_title_key мог существовать до миграции (тогда upgrade его не создавал) — его не трогаем.
+    """
+    op.execute("DROP INDEX IF EXISTS ix_nodes_title")

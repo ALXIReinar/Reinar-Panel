@@ -503,3 +503,47 @@ async def test_get_metrics_none_api_result_falls_back_to_cli(client, mock_buffer
     assert response.headers.get("X-Metrics-Source") == "cli"
     mock_subprocess.assert_called_once()
     assert parser.call_args.args[0] == '{"stat": []}'
+
+
+# ========== Исправления по код-ревью ==========
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_non_ascii_api_error_does_not_break_response(client, mock_buffer):
+    """Ошибка API-скрипта с кириллицей и переводами строк (как у gRPC) — CLI-метрики всё равно доходят до ответа"""
+    node_proto_id = 7
+    mock_buffer.buffer_storage[node_proto_id] = {}
+    mock_buffer.local_state[node_proto_id] = {}
+    meta, api_script, _ = _metrics_meta(None)
+    api_script.side_effect = RuntimeError("Ошибка gRPC:\n\tstatus = UNAVAILABLE")
+    mock_buffer.node_metadata[node_proto_id] = meta
+
+    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout='{"stat": []}', stderr="")
+        response = await client.post(
+            "/api/v1/server/node/metrics", json={"node_proto_id": node_proto_id, "metrics_port": 10085}
+        )
+
+    assert response.status_code == 200
+    assert response.headers.get("X-Metrics-Source") == "cli"
+    error_header = response.headers.get("X-Metrics-Error", "")
+    assert error_header and error_header.isascii() and "\n" not in error_header
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_bad_command_template_returns_502(client, mock_buffer):
+    """Кривой шаблон metrics_command ({port} вместо {}) — 502 с причиной, а не голый 500"""
+    node_proto_id = 8
+    mock_buffer.buffer_storage[node_proto_id] = {}
+    mock_buffer.local_state[node_proto_id] = {}
+    mock_buffer.node_metadata[node_proto_id] = {
+        'api_metrics_script': None,
+        'metrics_command': "xray api statsquery --server=127.0.0.1:{port}",
+        'metrics_parser_code': MagicMock(return_value=([], [])),
+    }
+
+    response = await client.post(
+        "/api/v1/server/node/metrics", json={"node_proto_id": node_proto_id, "metrics_port": 10085}
+    )
+
+    assert response.status_code == 502

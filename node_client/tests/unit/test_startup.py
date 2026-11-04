@@ -152,3 +152,49 @@ async def test_phys_node_sys_init_fails_on_broken_node(tmp_path):
         assert exc_info.value.field == "user_injectors[0].extractor_script"
     finally:
         await buffer.stop()
+
+
+# ========== Исправления по код-ревью ==========
+
+
+def test_settings_accept_legacy_node_name(monkeypatch):
+    """Старые .env с NODE_NAME (до переименования) продолжают работать: обновление кода без install.sh не кладёт ноду"""
+    from node_client.config import Settings
+
+    monkeypatch.delenv("NODE_TITLE", raising=False)
+    monkeypatch.setenv("NODE_NAME", "legacy-node")
+
+    assert Settings().node_title == "legacy-node"
+
+
+@pytest.mark.asyncio
+async def test_compile_node_rejects_empty_extractor(tmp_path):
+    """Пустой extractor_script — ошибка регистрации, а не молча падающие записи конфига"""
+    buffer = ConfigWriteBuffer(max_batch=5, timeout=0.5)
+    item = create_vnode_item_with_config(tmp_path, 1, extractor_script="")
+
+    with pytest.raises(NodeInitError) as exc_info:
+        await buffer.compile_node(item)
+
+    assert exc_info.value.field == "user_injectors[0].extractor_script"
+
+
+@pytest.mark.asyncio
+async def test_reload_core_respects_command_timeout():
+    """Зависшая команда перезагрузки ядра не вешает запись (а с ней reinit и остановку) — обрывается по таймауту"""
+    import time
+
+    buffer = ConfigWriteBuffer(max_batch=5, timeout=0.5)
+    start = time.monotonic()
+    with patch.object(env, "command_timeout", 1):
+        await buffer._reload_core("sleep 30")
+    assert time.monotonic() - start < 5
+
+
+@pytest.mark.asyncio
+async def test_fetch_startup_data_quotes_node_title(fake_admin):
+    """Спецсимволы в NODE_TITLE экранируются в пути: '#' и '?' не обрезают URL"""
+    with patch.object(env, "node_title", "DE #1?x"):
+        await fetch_startup_data([])
+
+    assert fake_admin["requests"][0][0] == "DE #1?x"

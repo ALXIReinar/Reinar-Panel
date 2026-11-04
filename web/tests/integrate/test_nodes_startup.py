@@ -138,3 +138,34 @@ class TestNodeStartup:
         assert foreign_id not in [n["node_proto_id"] for n in all_nodes.json()["nodes"]]
         assert explicit.json()["nodes"] == []
         assert explicit.json()["missing"] == [foreign_id]
+
+    @pytest.mark.asyncio
+    async def test_startup_node_without_config_path_is_missing(self, client, virtual_node_seed, db_pool):
+        """Зарегистрированная нода без config_path не роняет /startup всей физической ноды — она в missing"""
+        vnode_id_1 = virtual_node_seed["vnode_id_1"]
+        async with db_pool.acquire() as conn:
+            broken_id = await conn.fetchval(
+                """
+                INSERT INTO nodes_protocols (node_id, tmp_id, title, reg_status)
+                VALUES ($1, $2, 'No Config Path', 2) RETURNING id
+                """,
+                virtual_node_seed["node_id_1"],
+                virtual_node_seed["tmp_id"],
+            )
+
+        response = await client.post(
+            "/api/v1/server/nodes/Test Physical Node 1/startup", json={"node_proto_ids": [vnode_id_1, broken_id]}
+        )
+
+        assert response.status_code == 200
+        assert [n["node_proto_id"] for n in response.json()["nodes"]] == [vnode_id_1]
+        assert response.json()["missing"] == [broken_id]
+
+    @pytest.mark.asyncio
+    async def test_startup_rejects_out_of_range_ids(self, client, virtual_node_seed):
+        """id за пределами int4 — ошибка валидации, а не 500 из БД"""
+        response = await client.post(
+            "/api/v1/server/nodes/Test Physical Node 1/startup", json={"node_proto_ids": [3_000_000_000]}
+        )
+
+        assert response.status_code == 422

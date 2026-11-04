@@ -4,7 +4,7 @@ from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
@@ -48,7 +48,8 @@ class AuditModes(str, Enum):
 class Settings(BaseSettings):
     """Настройки Node Client"""
 
-    node_title: str = Field(max_length=64)
+    # NODE_NAME — прежнее имя переменной: старые .env продолжают работать после обновления кода без install.sh
+    node_title: str = Field(max_length=64, validation_alias=AliasChoices('NODE_TITLE', 'NODE_NAME', 'node_title'))
     lru_cache_max_size: int | None = os.getenv('LRU_CACHE_MAX_SIZE', 100)
     node_port: int
     command_timeout: int  # секунды

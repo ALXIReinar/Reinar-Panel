@@ -23,6 +23,10 @@ class ConfigWriteSchema(BaseModel):
     path: str = Field(..., min_length=1, description="Путь к конфигурационному файлу")
     content: str = Field(..., description="Новое содержимое файла")
     tmp_link: str = Field(..., description="Шаблон ссылки (proto_templates.url_tmp)")
+    transfer_users: bool = Field(
+        default=False,
+        description="Перенести списки пользователей из старого файла в новый (админка: передан flatten_json_users_key)",
+    )
 
 
 class ConfigReadResponseSchema(BaseModel):

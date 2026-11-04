@@ -68,9 +68,19 @@ echo -e "\nНастройка имени Ноды"
 # по нему нод-клиент при старте запрашивает свои виртуальные ноды (/startup).
 # NODE_NAME — устаревшее имя переменной, принимаем его для совместимости.
 NODE_TITLE=${NODE_TITLE:-$NODE_NAME}
-while [ -z "$NODE_TITLE" ] || [ ${#NODE_TITLE} -gt 64 ]; do
-    if [ ${#NODE_TITLE} -gt 64 ]; then
-        echo -e "${RED}✗${NC} Имя ноды длиннее 64 символов"
+# Те же правила, что у админки (web/schemas/node_schema.py): до 64 символов, без символов, ломающих URL и sed
+node_title_problem() {
+    if [ -z "$NODE_TITLE" ]; then
+        echo "пустое"
+    elif [ ${#NODE_TITLE} -gt 64 ]; then
+        echo "длиннее 64 символов"
+    elif [[ "$NODE_TITLE" == *[\/\\\&\#\?%\'\"]* ]]; then
+        echo "содержит недопустимые символы (разрешены буквы, цифры, пробел, _ . -)"
+    fi
+}
+while [ -n "$(node_title_problem)" ]; do
+    if [ -n "$NODE_TITLE" ]; then
+        echo -e "${RED}✗${NC} Имя ноды $(node_title_problem)"
     fi
     read -p "Введите имя ноды (как физическая нода называется в админ панели, до 64 символов): " NODE_TITLE
 done

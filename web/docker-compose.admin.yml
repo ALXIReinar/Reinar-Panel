@@ -75,8 +75,8 @@ services:
         condition: service_healthy
     volumes:
       # Код и миграции — с диска, как у web-service: новые ревизии alembic видны без пересборки образа.
-      # Образ нужен только ради зависимостей (requirements.txt)
-      - .:/app/web:ro
+      # Образ нужен только ради зависимостей (requirements.txt). Не :ro — web/config_dir/config.py при импорте создаёт web_logs
+      - .:/app/web
     network_mode: host
     secrets:
       - env.api.prod

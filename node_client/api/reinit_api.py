@@ -34,6 +34,12 @@ class ReinitResponse(BaseModel):
 
 @router.post('/reinit', summary="Реинициализация виртуальных нод")
 async def reinit_nodes(body: ReinitRequest, buffer: CoreBuffersDep, request: Request):
+    """Реинициализации выполняются строго по одной (запрос к админке тоже внутри лока)"""
+    async with buffer.reinit_lock:
+        return await _reinit(body, buffer, request)
+
+
+async def _reinit(body: ReinitRequest, buffer: CoreBuffersDep, request: Request):
     """
     Реинициализация виртуальных нод без перезапуска нод-клиента
 
