@@ -597,8 +597,11 @@ class FakeAiohttpSession:
         self.json_data = {} if json_data is None else json_data
         self.status = status
         self.raise_error = raise_error
+        # Журнал вызовов: (метод, url, json-тело) — чтобы тесты проверяли, что и куда отправлено
+        self.calls: list[tuple[str, str, dict | None]] = []
 
     def get(self, url: str, *args, **kwargs):
+        self.calls.append(("GET", url, kwargs.get("json")))
         if self.raise_error:
             from aiohttp import ClientError
 
@@ -607,6 +610,7 @@ class FakeAiohttpSession:
 
     # Добавляем POST по аналогии
     def post(self, url: str, *args, **kwargs):
+        self.calls.append(("POST", url, kwargs.get("json")))
         if self.raise_error:
             from aiohttp import ClientError
 

@@ -4,6 +4,8 @@
 
 import uuid as uuid_lib
 
+import orjson
+
 
 def create_test_user(
     email: str | None = None,
@@ -190,3 +192,18 @@ def create_vnode_service_data(
         'proto_python_lib': proto_python_lib,
         'metrics_parser_code': metrics_parser_code,
     }
+
+
+def create_vnode_item_with_config(tmp_path, node_proto_id: int, extractor_script: str | None = None) -> dict:
+    """
+    Создаёт JSON-конфиг виртуальной ноды в tmp_path и элемент ответа /startup для неё.
+
+    Конфиг минимальный: массив клиентов по курсору инжектора по умолчанию (inbounds___0___settings___clients).
+    """
+    config_path = tmp_path / f"node_{node_proto_id}.json"
+    config_path.write_bytes(orjson.dumps({"inbounds": [{"settings": {"clients": []}}]}))
+    return create_vnode_service_data(
+        node_proto_id=node_proto_id,
+        filepath=str(config_path),
+        user_injectors=create_user_injectors(extractor_script=extractor_script),
+    )

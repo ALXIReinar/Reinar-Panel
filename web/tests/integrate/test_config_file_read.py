@@ -66,18 +66,6 @@ class TestConfigFileReadSuccess:
         assert '"clients": []' in data["file_content"]
 
 
-class RecordingAiohttpSession(FakeAiohttpSession):
-    """Фейковая сессия, запоминающая тела POST-запросов к нод-клиенту"""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.sent_json: list[dict] = []
-
-    def post(self, url: str, *args, **kwargs):
-        self.sent_json.append(kwargs.get('json'))
-        return super().post(url, *args, **kwargs)
-
-
 class TestConfigFileReadExcludeUsers:
     """Админка сохраняет прежний контракт: пользователи вырезаются, только если передан flatten_json_users_key"""
 
@@ -93,7 +81,7 @@ class TestConfigFileReadExcludeUsers:
             await conn.execute(
                 "UPDATE nodes_protocols SET config_path = $1 WHERE id = $2", "/etc/xray/config.json", vnode_id
             )
-        session = RecordingAiohttpSession(json_data={"content": '{"inbounds": []}'})
+        session = FakeAiohttpSession(json_data={"content": '{"inbounds": []}'})
         client.app.state.cmd_center_aiohttp = session
 
         response = await client.get(
@@ -101,7 +89,7 @@ class TestConfigFileReadExcludeUsers:
         )
 
         assert response.status_code == 200
-        assert session.sent_json[-1]["exclude_users"] is expected_exclude
+        assert session.calls[-1][2]["exclude_users"] is expected_exclude
 
 
 class TestConfigFileReadErrors:

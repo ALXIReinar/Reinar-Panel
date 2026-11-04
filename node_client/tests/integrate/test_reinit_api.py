@@ -11,25 +11,13 @@
 import asyncio
 from unittest.mock import AsyncMock, patch
 
-import orjson
 import pytest
 
-from node_client.tests.utils.test_data_factory import create_user_injectors, create_vnode_service_data
+from node_client.tests.utils.test_data_factory import create_vnode_item_with_config as make_item
 
 REINIT_URL = "/api/v1/server/node/reinit"
 FETCH_PATH = "node_client.api.reinit_api.fetch_startup_data"
 BROKEN_EXTRACTOR = "def transform(user_obj) этот скрипт не компилируется"
-
-
-def make_item(tmp_path, node_proto_id: int, extractor_script: str | None = None) -> dict:
-    """Создаёт конфиг-файл ноды и элемент ответа /startup для неё"""
-    config_path = tmp_path / f"node_{node_proto_id}.json"
-    config_path.write_bytes(orjson.dumps({"inbounds": [{"settings": {"clients": []}}]}))
-    return create_vnode_service_data(
-        node_proto_id=node_proto_id,
-        filepath=str(config_path),
-        user_injectors=create_user_injectors(extractor_script=extractor_script),
-    )
 
 
 def startup_answer(nodes: list[dict], missing: list[int] | None = None) -> AsyncMock:

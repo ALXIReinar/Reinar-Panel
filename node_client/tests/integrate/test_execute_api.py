@@ -446,3 +446,60 @@ async def test_get_metrics_unregistered_node(client, mock_buffer):
     data = response.json()
     assert data["success"] is False
     assert "не зарегистрирована" in data["message"]
+
+
+# ========== Выбор источника метрик: строго raw is None (требование 7.6) ==========
+
+
+def _metrics_meta(api_return):
+    """Метаданные ноды с API-скриптом, возвращающим api_return, и CLI-командой про запас"""
+    api_script = AsyncMock(return_value=api_return)
+    parser = MagicMock(return_value=([], []))
+    meta = {
+        'api_metrics_script': api_script,
+        'metrics_command': "xray api statsquery --server=127.0.0.1:{}",
+        'metrics_parser_code': parser,
+    }
+    return meta, api_script, parser
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("empty_raw", [[], ""], ids=["пустой список", "пустая строка"])
+async def test_get_metrics_empty_api_result_does_not_fall_back_to_cli(client, mock_buffer, empty_raw):
+    """Пустой, но допустимый ответ API (нет трафика) — не ошибка: CLI не вызывается, парсер получает этот ответ"""
+    node_proto_id = 5
+    mock_buffer.buffer_storage[node_proto_id] = {}
+    mock_buffer.local_state[node_proto_id] = {}
+    meta, _, parser = _metrics_meta(empty_raw)
+    mock_buffer.node_metadata[node_proto_id] = meta
+
+    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
+        response = await client.post(
+            "/api/v1/server/node/metrics", json={"node_proto_id": node_proto_id, "metrics_port": 10085}
+        )
+
+    assert response.status_code == 200
+    assert response.headers.get("X-Metrics-Source") == "api"
+    mock_subprocess.assert_not_called()
+    assert parser.call_args.args[0] == empty_raw
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_none_api_result_falls_back_to_cli(client, mock_buffer):
+    """API-скрипт вернул None → берём метрики CLI-командой"""
+    node_proto_id = 6
+    mock_buffer.buffer_storage[node_proto_id] = {}
+    mock_buffer.local_state[node_proto_id] = {}
+    meta, _, parser = _metrics_meta(None)
+    mock_buffer.node_metadata[node_proto_id] = meta
+
+    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout='{"stat": []}', stderr="")
+        response = await client.post(
+            "/api/v1/server/node/metrics", json={"node_proto_id": node_proto_id, "metrics_port": 10085}
+        )
+
+    assert response.status_code == 200
+    assert response.headers.get("X-Metrics-Source") == "cli"
+    mock_subprocess.assert_called_once()
+    assert parser.call_args.args[0] == '{"stat": []}'

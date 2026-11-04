@@ -103,3 +103,38 @@ class TestNodeStartup:
         data = response.json()
         assert set(data) == set(StartupResponse.model_fields)
         assert set(data["nodes"][0]) == set(VnodeServiceData.model_fields)
+
+    @pytest.mark.asyncio
+    async def test_startup_ignores_user_visible(self, client, virtual_node_seed, db_pool):
+        """user_visible управляет только списком локаций у пользователей: скрытая нода всё равно обслуживается"""
+        vnode_id_1 = virtual_node_seed["vnode_id_1"]
+        async with db_pool.acquire() as conn:
+            await conn.execute("UPDATE nodes_protocols SET user_visible = false WHERE id = $1", vnode_id_1)
+
+        response = await client.post("/api/v1/server/nodes/Test Physical Node 1/startup", json={"node_proto_ids": []})
+
+        assert response.status_code == 200
+        assert vnode_id_1 in [n["node_proto_id"] for n in response.json()["nodes"]]
+
+    @pytest.mark.asyncio
+    async def test_startup_excludes_other_physical_node(self, client, virtual_node_seed, db_pool):
+        """Зарегистрированная нода другой физической ноды не отдаётся; запрошенная явно — попадает в missing"""
+        async with db_pool.acquire() as conn:
+            foreign_id = await conn.fetchval(
+                """
+                INSERT INTO nodes_protocols (node_id, tmp_id, title, config_path, reg_status)
+                VALUES ($1, $2, 'Foreign Registered', '/etc/test-proto/foreign.json', 2)
+                RETURNING id
+                """,
+                virtual_node_seed["node_id_2"],
+                virtual_node_seed["tmp_id"],
+            )
+
+        all_nodes = await client.post("/api/v1/server/nodes/Test Physical Node 1/startup", json={"node_proto_ids": []})
+        explicit = await client.post(
+            "/api/v1/server/nodes/Test Physical Node 1/startup", json={"node_proto_ids": [foreign_id]}
+        )
+
+        assert foreign_id not in [n["node_proto_id"] for n in all_nodes.json()["nodes"]]
+        assert explicit.json()["nodes"] == []
+        assert explicit.json()["missing"] == [foreign_id]
