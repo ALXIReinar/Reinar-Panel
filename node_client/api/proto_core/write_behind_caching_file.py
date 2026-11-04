@@ -545,8 +545,9 @@ class ConfigWriteBuffer:
                         op = await asyncio.wait_for(self.node_queues[node_id].get(), timeout=remaining_time)
                         operations.append(op)
                         self.node_queues[node_id].task_done()
-                    except TimeoutError:
-                        # Таймаут истёк, выходим
+                    except (TimeoutError, asyncio.TimeoutError):  # noqa: UP041 — в Python 3.10 это разные классы
+                        # Таймаут истёк, выходим. На стенде нод-клиент работает на 3.10: там wait_for бросает
+                        # asyncio.TimeoutError, и один TimeoutError его не ловил — батч терялся, запись не происходила
                         break
 
                 # Если очередь ограничивается лимитами для этой ноды
