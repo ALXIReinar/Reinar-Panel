@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 from starlette.requests import Request
 
 from node_client.api.proto_core.write_behind_caching_file import CoreBuffersDep
+from node_client.config import CoreProtoActions
 from node_client.schemas.proto_core_users_schema import BaseUserCoreSchema
 from node_client.utils.logger_config import log_event
 
@@ -30,7 +31,9 @@ async def bulk_action_users_core(body: BaseUserCoreSchema, request: Request, buf
     hot_reload_result = ""
 
     action_script = (
-        meta.get('api_bulk_add_user_script') if body.action == 'add' else meta.get('api_bulk_delete_user_script')
+        meta.get('api_bulk_add_user_script')
+        if body.action == CoreProtoActions.word_add
+        else meta.get('api_bulk_delete_user_script')
     )
 
     if action_script and body.core_port:
@@ -42,14 +45,21 @@ async def bulk_action_users_core(body: BaseUserCoreSchema, request: Request, buf
             res = action_script(body.users, '127.0.0.1', body.core_port, body.custom_params or {})
             if asyncio.iscoroutine(res):
                 res = await res
-            hot_reload_success = True
             hot_reload_result = res
+            # Скрипты шаблонов ловят ошибки ядра по каждому пользователю сами и возвращают {"success": n, "failed": m}:
+            # без этой проверки отказ ядра (например, неверный ключ пользователя) виден только в print скрипта
+            failed = res.get('failed') if isinstance(res, dict) else None
+            hot_reload_success = not failed
+            if failed:
+                log_event(
+                    f"\033[32m[Bulk]\033[0m Ядро через API применило операцию не ко всем пользователям — для них изменения дойдут до ядра только после записи конфига | "
+                    f"action: \033[33m{body.action}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m; "
+                    f"success: {res.get('success')}; failed: {failed}",
+                    request=request,
+                    level='WARNING',
+                )
         except Exception as e:
-            log_event(
-                f"\033[32m[Bulk]\033[0m Ошибка при hot-reload: {e}",
-                request=request,
-                level='ERROR',
-            )
+            log_event(f"\033[32m[Bulk]\033[0m Ошибка при hot-reload | err: {e}", request=request, level='ERROR')
             hot_reload_success = False
             hot_reload_result = str(repr(e))
 

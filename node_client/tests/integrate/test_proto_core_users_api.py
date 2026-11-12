@@ -11,7 +11,7 @@
 - Ответ 428 при незарегистрированной ноде
 """
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -177,6 +177,41 @@ async def test_hot_reload_fails_continues_with_file(client, mock_buffer):
     assert data["hot_reload"] is False
     assert "gRPC connection refused" in data["hot_reload_message"]
     mock_buffer.bulk_action.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_hot_reload_partial_failure_logged_as_warning(client, mock_buffer):
+    """Скрипт отработал, но часть пользователей ядро не приняло (failed > 0): WARNING в лог и hot_reload=False"""
+    script = AsyncMock(return_value={"success": 0, "failed": 2})
+    mock_buffer.get_metadata.return_value = {'api_bulk_add_user_script': script, 'api_bulk_delete_user_script': None}
+
+    with patch('node_client.api.proto_core.proto_core_users_api.log_event') as log:
+        response = await client.put(
+            "/api/v1/server/proto_core/user/bulk/action", json=create_bulk_action_payload(core_port=10086)
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["hot_reload"] is False, "ядро не приняло пользователей, а ответ сообщает об успешном hot-reload"
+    assert "'failed': 2" in data["hot_reload_message"]
+    warnings = [c for c in log.call_args_list if c.kwargs.get('level') == 'WARNING']
+    assert len(warnings) == 1 and 'failed: 2' in warnings[0].args[0]
+    mock_buffer.bulk_action.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_hot_reload_full_success_no_warning(client, mock_buffer):
+    """failed == 0 — hot_reload=True, предупреждений нет"""
+    script = AsyncMock(return_value={"success": 2, "failed": 0})
+    mock_buffer.get_metadata.return_value = {'api_bulk_add_user_script': script, 'api_bulk_delete_user_script': None}
+
+    with patch('node_client.api.proto_core.proto_core_users_api.log_event') as log:
+        response = await client.put(
+            "/api/v1/server/proto_core/user/bulk/action", json=create_bulk_action_payload(core_port=10086)
+        )
+
+    assert response.json()["hot_reload"] is True
+    assert not [c for c in log.call_args_list if c.kwargs.get('level') == 'WARNING']
 
 
 # ========== Тесты количества пользователей ==========

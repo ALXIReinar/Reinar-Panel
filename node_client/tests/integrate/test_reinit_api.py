@@ -16,12 +16,11 @@ import pytest
 from node_client.tests.utils.test_data_factory import create_vnode_item_with_config as make_item
 
 REINIT_URL = "/api/v1/server/node/reinit"
-FETCH_PATH = "node_client.api.reinit_api.fetch_startup_data"
 BROKEN_EXTRACTOR = "def transform(user_obj) этот скрипт не компилируется"
 
 
 def startup_answer(nodes: list[dict], missing: list[int] | None = None) -> AsyncMock:
-    """Мок fetch_startup_data, возвращающий заданный ответ админки"""
+    """Мок ConfigWriteBuffer.fetch_startup_data, возвращающий заданный ответ админки"""
     return AsyncMock(return_value={"node_title": "test", "nodes": nodes, "missing": missing or []})
 
 
@@ -36,7 +35,7 @@ async def test_reinit_broken_node_keeps_old_metadata(client_with_real_buffer, fa
     new_1 = make_item(tmp_path, 1, extractor_script="def transform(user_obj):\n    return {'changed': True}\n")
     broken_2 = make_item(tmp_path, 2, extractor_script=BROKEN_EXTRACTOR)
 
-    with patch(FETCH_PATH, startup_answer([new_1, broken_2])):
+    with patch.object(fast_buffer, "fetch_startup_data", startup_answer([new_1, broken_2])):
         resp = await client_with_real_buffer.post(REINIT_URL, json={"node_proto_ids": [1, 2]})
 
     assert resp.status_code == 422
@@ -53,7 +52,7 @@ async def test_reinit_broken_node_does_not_start_new_nodes(client_with_real_buff
     broken_2 = make_item(tmp_path, 2, extractor_script=BROKEN_EXTRACTOR)
     new_3 = make_item(tmp_path, 3)
 
-    with patch(FETCH_PATH, startup_answer([new_3, broken_2])):
+    with patch.object(fast_buffer, "fetch_startup_data", startup_answer([new_3, broken_2])):
         resp = await client_with_real_buffer.post(REINIT_URL, json={"node_proto_ids": [2, 3]})
 
     assert resp.status_code == 422
@@ -72,7 +71,7 @@ async def test_reinit_success_keeps_users_and_local_state(client_with_real_buffe
     old_worker = fast_buffer.worker_tasks[1]
 
     new_1 = make_item(tmp_path, 1, extractor_script="def transform(user_obj):\n    return {'changed': True}\n")
-    with patch(FETCH_PATH, startup_answer([new_1])):
+    with patch.object(fast_buffer, "fetch_startup_data", startup_answer([new_1])):
         resp = await client_with_real_buffer.post(REINIT_URL, json={"node_proto_ids": [1]})
 
     assert resp.status_code == 200
@@ -89,7 +88,7 @@ async def test_reinit_missing_node_stops_worker(client_with_real_buffer, fast_bu
     await fast_buffer.register_node(make_item(tmp_path, 1))
     worker = fast_buffer.worker_tasks[1]
 
-    with patch(FETCH_PATH, startup_answer([], missing=[1])):
+    with patch.object(fast_buffer, "fetch_startup_data", startup_answer([], missing=[1])):
         resp = await client_with_real_buffer.post(REINIT_URL, json={"node_proto_ids": [1]})
 
     assert resp.status_code == 200
@@ -112,10 +111,10 @@ async def test_reinit_missing_node_stops_worker(client_with_real_buffer, fast_bu
 
 @pytest.mark.asyncio
 async def test_reinit_requests_admin_once(client_with_real_buffer, fast_buffer, tmp_path):
-    """Реинициализация не использует стартовую политику повторов: одна попытка запроса к админке"""
+    """Одна попытка запроса к админке (без стартовой политики повторов) — через сессию из app.state (AioHttpAdminDep)"""
     fetch = startup_answer([make_item(tmp_path, 1)])
-    with patch(FETCH_PATH, fetch):
+    with patch.object(fast_buffer, "fetch_startup_data", fetch):
         resp = await client_with_real_buffer.post(REINIT_URL, json={"node_proto_ids": [1]})
 
     assert resp.status_code == 200
-    fetch.assert_awaited_once_with(node_proto_ids=[1], retries=1)
+    fetch.assert_awaited_once_with(client_with_real_buffer.app.state.admin_aiohttp, node_proto_ids=[1], retries=1)

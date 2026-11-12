@@ -4,7 +4,7 @@ from node_client.config import env
 from .node_config.node_config_api import router as node_config_router
 from .execute_api import router as execute_router
 from .proto_core.proto_core_users_api import router as proto_core_users_router
-from .reinit_api import router as reinit_router
+from node_client.api.reinit_api import router as reinit_router
 
 main_router = APIRouter(prefix='/api/v1/server')
 

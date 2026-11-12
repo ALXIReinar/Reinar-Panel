@@ -498,19 +498,18 @@ async def bulk_add_users(users_list, node_ip, core_port, custom_params):
 @pytest.mark.asyncio
 @pytest.mark.db
 @pytest.mark.slow
-async def test_bulk_add_users_with_api_script_unlimit_flush(
+async def test_bulk_add_users_with_api_script_one_write(
     e2e_client, e2e_config_path, e2e_buffer, get_script_from_template, mock_xtlsapi_e2e
 ):
     """
     E2E: Bulk добавление пользователей С API-скриптом
 
-    Сценарий: bulk_add_script → hot-reload → unlimit_queue → принудительный flush
+    Сценарий: bulk_add_script → hot-reload → буфер → воркер пишет всю пачку одной записью
 
     Проверяем:
     - Bulk hot-reload выполнен
     - Все пользователи добавлены в WBC
-    - unlimit_queue отключил лимиты
-    - Принудительный flush записал всех сразу
+    - Воркер записал всю пачку (10 > max_batch=5), без принудительного сброса
     - Все пользователи в файле
     """
     # Загружаем bulk скрипт из БД
@@ -533,12 +532,8 @@ async def test_bulk_add_users_with_api_script_unlimit_flush(
     data = response.json()
     assert data['success'] is True
     assert data['hot_reload'] is True
-    # Bulk операция должна записать сразу (unlimit_queue + flush)
-    # Увеличенная задержка для гарантированной записи на диск
+    # Пачка больше max_batch — воркер пишет её сразу одной записью
     await asyncio.sleep(1.0)
-    # Принудительный flush для синхронизации
-    await e2e_buffer._flush_all_nodes(node_proto_id=1)
-    await asyncio.sleep(0.2)
     # Проверяем что все пользователи в буфере (по user_uuid)
     for user in users_to_add:
         assert user['user_uuid'] in e2e_buffer.buffer_storage[1]
@@ -849,9 +844,6 @@ async def test_e2e_bulk_operations_with_verification(
     add_response = await e2e_client.put("/api/v1/server/proto_core/user/bulk/action", json=add_request)
     assert add_response.status_code == 200
     await asyncio.sleep(1.0)  # Увеличено для гарантированной записи на диск
-    # Принудительный flush для синхронизации
-    await e2e_buffer._flush_all_nodes(node_proto_id=1)
-    await asyncio.sleep(0.2)
     # 2. Проверяем что все 5 добавлены
     config_after_add = await read_config_with_converter(e2e_buffer, str(e2e_config_path))
     users_after_add = e2e_buffer._navigate_to_path(config_after_add, "inbounds___1___settings___clients")
@@ -876,9 +868,6 @@ async def test_e2e_bulk_operations_with_verification(
     delete_response = await e2e_client.put("/api/v1/server/proto_core/user/bulk/action", json=delete_request)
     assert delete_response.status_code == 200
     await asyncio.sleep(1.0)  # Увеличено для гарантированной записи на диск
-    # Принудительный flush для синхронизации
-    await e2e_buffer._flush_all_nodes(node_proto_id=1)
-    await asyncio.sleep(0.2)
     # 4. Проверяем что удалены 3, остались 2
     config_after_delete = await read_config_with_converter(e2e_buffer, str(e2e_config_path))
     users_after_delete = e2e_buffer._navigate_to_path(config_after_delete, "inbounds___1___settings___clients")

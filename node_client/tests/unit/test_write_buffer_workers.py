@@ -3,11 +3,13 @@ Unit тесты для воркеров и батчинга ConfigWriteBuffer
 
 Тестируем:
 - _node_worker() - триггеры батчинга (max_batch, timeout)
-- Флаг queue_limited - влияние на запись (теперь per-node)
+- Одна запись и один перезапуск ядра на цикл воркера (пачки не пишутся порциями)
 - Изоляция воркеров между нодами
 """
 
 import asyncio  # noqa: I001
+from unittest.mock import patch
+
 import pytest
 import orjson
 from pathlib import Path
@@ -114,33 +116,6 @@ async def test_worker_triggers_on_timeout(config_with_2_users):
     emails_on_disk = {u["email"] for u in users_on_disk}
     assert "timeout_user_1@test.com" in emails_on_disk
     assert "timeout_user_2@test.com" in emails_on_disk
-    await buffer.stop()
-
-
-@pytest.mark.slow
-async def test_worker_respects_queue_limited_flag(config_with_2_users):
-    """
-    Тест: Воркер НЕ записывает если queue_limited=False для конкретной ноды
-    """
-    buffer = ConfigWriteBuffer(max_batch=3, timeout=1.0)
-    node_proto_id = 1
-    await buffer.register_node(
-        create_vnode_service_data(node_proto_id=node_proto_id, filepath=str(config_with_2_users))
-    )
-
-    buffer.node_metadata[node_proto_id]['queue_limited'] = False
-    for i in range(3):
-        user = create_test_user(email=f"unlimit_user_{i}@test.com", uuid=f"uuid-ul-{i}", as_superuser=True)
-        await buffer.add_user(node_proto_id=node_proto_id, user_obj=user)
-
-    await asyncio.sleep(0.5)
-    users_on_disk = read_config_users(config_with_2_users)
-    assert len(users_on_disk) == 2  # Только начальные, новые НЕ записались
-
-    buffer.node_metadata[node_proto_id]['queue_limited'] = True
-    await buffer._flush_all_nodes(node_proto_id)
-    users_on_disk = read_config_users(config_with_2_users)
-    assert len(users_on_disk) == 5
     await buffer.stop()
 
 
@@ -327,100 +302,77 @@ async def test_write_without_reload_command(config_with_2_users):
     await buffer.stop()
 
 
-# ========== Группа 3: Unlimit режим (bulk операции) ==========
+# ========== Группа 3: одна запись и один перезапуск ядра на цикл воркера ==========
 
 
-async def test_unlimit_queue_disables_limits(config_with_2_users):
+def count_writes_and_reloads(buffer: ConfigWriteBuffer):
+    """Подменяет запись и перезапуск ядра счётчиками; запись при этом настоящая"""
+    counts = {"writes": 0, "reloads": 0}
+    real_write = buffer._write_node_to_disk
+
+    async def write(node_id):
+        counts["writes"] += 1
+        await real_write(node_id)
+
+    async def reload(_command):
+        counts["reloads"] += 1
+
+    return counts, patch.object(buffer, "_write_node_to_disk", write), patch.object(buffer, "_reload_core", reload)
+
+
+async def test_bulk_action_one_write_and_one_reload(config_with_2_users):
     """
-    Тест: unlimit_queue() устанавливает queue_limited=False для конкретной ноды
+    Пачка больше max_batch: эндпоинт только кладёт операции в буфер (ядро не трогает),
+    воркер пишет конфиг один раз и один раз перезапускает ядро — а не порциями по max_batch
     """
-    buffer = ConfigWriteBuffer(max_batch=5, timeout=10.0)
-    node_proto_id = 1
+    buffer = ConfigWriteBuffer(max_batch=5, timeout=0.5)
     await buffer.register_node(
-        create_vnode_service_data(node_proto_id=node_proto_id, filepath=str(config_with_2_users))
+        create_vnode_service_data(node_proto_id=1, filepath=str(config_with_2_users), reload_command="true")
     )
-
-    assert buffer.node_metadata[node_proto_id]['queue_limited'] is True
-    async with buffer.unlimit_queue(node_proto_id):
-        assert buffer.node_metadata[node_proto_id]['queue_limited'] is False
-    assert buffer.node_metadata[node_proto_id]['queue_limited'] is True
-    await buffer.stop()
-
-
-@pytest.mark.slow
-async def test_unlimit_queue_flushes_on_exit(config_with_2_users):
-    """
-    Тест: unlimit_queue() принудительно записывает при выходе из контекста
-    """
-    buffer = ConfigWriteBuffer(max_batch=10, timeout=10.0)
-    node_proto_id = 1
-    await buffer.register_node(
-        create_vnode_service_data(node_proto_id=node_proto_id, filepath=str(config_with_2_users))
-    )
-
-    async with buffer.unlimit_queue(node_proto_id):
-        for i in range(3):
-            user = create_test_user(email=f"unlimit_{i}@test.com", uuid=f"uuid-ul-{i}", as_superuser=True)
-            await buffer.add_user(node_proto_id=node_proto_id, user_obj=user)
-
-    await asyncio.sleep(0.3)
-    users_on_disk = read_config_users(config_with_2_users)
-    assert len(users_on_disk) == 5
-    emails_on_disk = {u["email"] for u in users_on_disk}
-    for i in range(3):
-        assert f"unlimit_{i}@test.com" in emails_on_disk
-    await buffer.stop()
-
-
-async def test_unlimit_queue_restores_flag(config_with_2_users):
-    """
-    Тест: unlimit_queue() восстанавливает флаг queue_limited после выхода
-    """
-    buffer = ConfigWriteBuffer(max_batch=5, timeout=10.0)
-    node_proto_id = 1
-    await buffer.register_node(
-        create_vnode_service_data(node_proto_id=node_proto_id, filepath=str(config_with_2_users))
-    )
-
-    assert buffer.node_metadata[node_proto_id]['queue_limited'] is True
-    async with buffer.unlimit_queue(node_proto_id):
-        assert buffer.node_metadata[node_proto_id]['queue_limited'] is False
-    assert buffer.node_metadata[node_proto_id]['queue_limited'] is True
-
+    users = [create_test_user(email=f"bulk_{i}@test.com", uuid=f"uuid-bulk-{i}", as_superuser=True) for i in range(12)]
+    counts, patch_write, patch_reload = count_writes_and_reloads(buffer)
     try:
-        async with buffer.unlimit_queue(node_proto_id):
-            assert buffer.node_metadata[node_proto_id]['queue_limited'] is False
-            raise ValueError("Тестовое исключение")
-    except ValueError:
-        pass
-    assert buffer.node_metadata[node_proto_id]['queue_limited'] is True
-    await buffer.stop()
+        with patch_write, patch_reload:
+            await buffer.bulk_action(node_proto_id=1, users=users, action="add")
+            assert counts == {"writes": 0, "reloads": 0}, "эндпоинт сам пишет конфиг или перезапускает ядро"
+
+            await asyncio.sleep(buffer.timeout * 3)
+
+        assert counts == {"writes": 1, "reloads": 1}
+        assert len(read_config_users(config_with_2_users)) == 14
+    finally:
+        await buffer.stop()
 
 
-@pytest.mark.slow
-async def test_bulk_operations_without_intermediate_writes(config_with_2_users):
-    """
-    Тест: Массовое добавление в unlimit режиме без промежуточных записей
-    """
-    buffer = ConfigWriteBuffer(max_batch=5, timeout=2.0)
-    node_proto_id = 1
-    await buffer.register_node(
-        create_vnode_service_data(node_proto_id=node_proto_id, filepath=str(config_with_2_users))
-    )
+async def test_full_batch_written_without_waiting_interval(config_with_2_users):
+    """Набралось max_batch операций — запись сразу, не дожидаясь интервала (здесь он заведомо больше теста)"""
+    buffer = ConfigWriteBuffer(max_batch=5, timeout=30.0)
+    await buffer.register_node(create_vnode_service_data(node_proto_id=1, filepath=str(config_with_2_users)))
+    users = [create_test_user(email=f"full_{i}@test.com", uuid=f"uuid-full-{i}", as_superuser=True) for i in range(12)]
+    try:
+        await buffer.bulk_action(node_proto_id=1, users=users, action="add")
+        await asyncio.sleep(0.5)
 
-    initial_mtime = config_with_2_users.stat().st_mtime
-    async with buffer.unlimit_queue(node_proto_id):
-        for i in range(20):
-            user = create_test_user(email=f"bulk_{i}@test.com", uuid=f"uuid-bulk-{i}", as_superuser=True)
-            await buffer.add_user(node_proto_id=node_proto_id, user_obj=user)
-        await asyncio.sleep(2.5)
-        mid_mtime = config_with_2_users.stat().st_mtime
-        assert initial_mtime == mid_mtime
+        assert len(read_config_users(config_with_2_users)) == 14
+    finally:
+        await buffer.stop()
 
-    await asyncio.sleep(0.3)
-    users_on_disk = read_config_users(config_with_2_users)
-    assert len(users_on_disk) == 22
-    await buffer.stop()
+
+async def test_bulk_delete_one_write(config_with_2_users):
+    """Пакетное удаление — так же одной записью"""
+    buffer = ConfigWriteBuffer(max_batch=1, timeout=0.5)
+    await buffer.register_node(create_vnode_service_data(node_proto_id=1, filepath=str(config_with_2_users)))
+    counts, patch_write, patch_reload = count_writes_and_reloads(buffer)
+    try:
+        with patch_write, patch_reload:
+            existing = [{"user_uuid": "uuid-ex1"}, {"user_uuid": "uuid-ex2"}]
+            await buffer.bulk_action(node_proto_id=1, users=existing, action="delete")
+            await asyncio.sleep(buffer.timeout * 3)
+
+        assert counts["writes"] == 1
+        assert read_config_users(config_with_2_users) == []
+    finally:
+        await buffer.stop()
 
 
 # ========== Группа 4: Остановка и cleanup ==========

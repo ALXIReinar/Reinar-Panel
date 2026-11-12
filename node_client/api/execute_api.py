@@ -3,7 +3,7 @@ import copy
 import shlex
 import subprocess
 from typing import Any
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request
 
 from node_client.api.proto_core.write_behind_caching_file import CoreBuffersDep
 from node_client.config import env
@@ -61,7 +61,6 @@ async def get_metrics(
     body: MetricsSchema,
     buffer: CoreBuffersDep,
     request: Request,
-    response: Response,
 ):
     """
     Сбор и парсинг метрик с впн-ядра виртуальной ноды.
@@ -89,7 +88,7 @@ async def get_metrics(
         except Exception as e:
             first_error = str(e)
             log_event(
-                f"\033[35m[Metrics]\033[0m Ошибка API-скрипта сбора метрик: {e}",
+                f"\033[35m[Metrics]\033[0m Ошибка API-скрипта сбора метрик | err: {e}",
                 request=request,
                 level='WARNING',
             )
@@ -141,14 +140,6 @@ async def get_metrics(
         )
         raise HTTPException(status_code=502, detail={"success": False, "error": err_msg})
 
-    if source:
-        response.headers["X-Metrics-Source"] = source
-    if first_error:
-        # Заголовок HTTP — только ASCII без управляющих символов: текст ошибки gRPC многострочный,
-        # бывает по-русски, и иначе ответ с уже снятыми (через -reset) метриками падает
-        safe_error = first_error.encode('ascii', 'backslashreplace').decode('ascii')
-        response.headers["X-Metrics-Error"] = ' '.join(safe_error.split())[:200]
-
     # 3. Парсинг метрик
     parser_func = meta.get('metrics_parser_code')
     if not parser_func:
@@ -175,7 +166,16 @@ async def get_metrics(
         else:
             traffic_consuming = parsed_res
 
-        return {"success": True, "users_traffic": traffic_consuming}
+        # source — чем сняты метрики (api/cli); fallback_reason — почему API-скрипт не сработал и взята CLI
+        log_event(
+            f'\033[35m[Metrics]\033[0m Ответ со статистикой трафика отдан | metrics_source: \033[34m{source}\033[0m; node_proto_id: \033[33m{body.node_proto_id}\033[0m'
+        )
+        return {
+            "success": True,
+            "users_traffic": traffic_consuming,
+            "source": source,
+            "fallback_reason": first_error,
+        }
 
     except Exception as e:
         log_event(

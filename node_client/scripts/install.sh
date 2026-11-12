@@ -146,6 +146,20 @@ ADMIN_PANEL_PRIVATE_IP=${ADMIN_PANEL_PRIVATE_IP:-$DEFAULT_ADMIN_IP}
 
 echo -e "${GREEN}✓${NC} Приватный IP админки: $ADMIN_PANEL_PRIVATE_IP"
 
+# Порт админки: нод-клиент при старте запрашивает у неё свои виртуальные ноды (/startup).
+# Значения по умолчанию нет намеренно — ошибочный порт тихо оставил бы ноду без инициализации
+while ! [[ "$ADMIN_PANEL_PORT" =~ ^[0-9]+$ ]] || [ "$ADMIN_PANEL_PORT" -lt 1 ] || [ "$ADMIN_PANEL_PORT" -gt 65535 ]; do
+    if [ -n "$CI" ]; then
+        echo -e "${RED}✗${NC} ADMIN_PANEL_PORT не задан или неверен: '${ADMIN_PANEL_PORT}'"
+        exit 1
+    fi
+    if [ -n "$ADMIN_PANEL_PORT" ]; then
+        echo -e "${RED}✗${NC} Порт должен быть числом от 1 до 65535"
+    fi
+    read -p "Введите порт админ-панели: " ADMIN_PANEL_PORT
+done
+echo -e "${GREEN}✓${NC} Порт админки: $ADMIN_PANEL_PORT"
+
 # Проверка наличия Python
 echo -e "\n${YELLOW}Проверка Python...${NC}"
 if ! command -v python3 &> /dev/null; then
@@ -228,8 +242,9 @@ PYTHONUNBUFFERED=1
 WRITE_BUFFER_INTERVAL=10
 WRITE_BUFFER_SIZE=5
 
-# Приватный IP админ-панели
+# Приватный IP и порт админ-панели
 ADMIN_PANEL_PRIVATE_IP=${ADMIN_PANEL_PRIVATE_IP}
+ADMIN_PANEL_PORT=${ADMIN_PANEL_PORT}
 ENVEOF
     echo -e "${GREEN}✓${NC} Конфигурация создана: $INSTALL_DIR/.env.node.prod"
 else
@@ -254,6 +269,13 @@ else
         echo "ADMIN_PANEL_PRIVATE_IP=$ADMIN_PANEL_PRIVATE_IP" >> $INSTALL_DIR/.env.node.prod
     else
         sed -i "s/^ADMIN_PANEL_PRIVATE_IP=.*/ADMIN_PANEL_PRIVATE_IP=$ADMIN_PANEL_PRIVATE_IP/" $INSTALL_DIR/.env.node.prod
+    fi
+
+    # Порт админки: без него нод-клиент не стартует
+    if grep -q "^ADMIN_PANEL_PORT=" $INSTALL_DIR/.env.node.prod; then
+        sed -i "s/^ADMIN_PANEL_PORT=.*/ADMIN_PANEL_PORT=$ADMIN_PANEL_PORT/" $INSTALL_DIR/.env.node.prod
+    else
+        echo "ADMIN_PANEL_PORT=$ADMIN_PANEL_PORT" >> $INSTALL_DIR/.env.node.prod
     fi
     
     # Добавляем Write Buffer настройки если их нет

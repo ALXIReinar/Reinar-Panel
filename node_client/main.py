@@ -1,5 +1,6 @@
 import uvicorn  # noqa: I001
 from contextlib import asynccontextmanager
+from aiohttp import ClientSession, ClientTimeout
 from fastapi import FastAPI
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -9,22 +10,23 @@ from node_client.api.middleware import OnlyAdminAccessMiddleware
 from node_client.api.proto_core.write_behind_caching_file import ConfigWriteBuffer
 from node_client.config import env
 from node_client.exceptions import NodeNotRegisteredError
-from node_client.startup import phys_node_sys_init
 
 
 @asynccontextmanager
 async def lifespan(web_app: FastAPI):
     """"""
-    "Инициализируем глобальный ConfigWriteBuffer"
+    "Глобальные объекты на всё время жизни нод-клиента: буфер записи и HTTP-сессия к админке"
     web_app.state.core_buffer = ConfigWriteBuffer(max_batch=env.write_buffer_size, timeout=env.write_buffer_interval)
-
-    "Запрашиваем данные у админки и регистрируем все виртуальные ноды"
-    await phys_node_sys_init(web_app.state.core_buffer)
+    web_app.state.admin_aiohttp = ClientSession(timeout=ClientTimeout(total=30))
 
     try:
+        "Запрашиваем данные у админки и регистрируем все виртуальные ноды"
+        # Внутри try: при ошибке инициализации воркеры уже зарегистрированных нод и сессия всё равно закрываются
+        await web_app.state.core_buffer.phys_node_sys_init(web_app.state.admin_aiohttp)
         yield
     finally:
         await web_app.state.core_buffer.stop()
+        await web_app.state.admin_aiohttp.close()
 
 
 app = FastAPI(lifespan=lifespan)

@@ -46,8 +46,9 @@ jobs:
           PG_HOST=127.0.0.1
   
           NODE_PORT=${{ vars.NODE_PORT }}
-          NODE_TITLE=${{ vars.NODE_TITLE || vars.NODE_NAME }}
+          NODE_TITLE=${{ vars.NODE_TITLE }}
           ADMIN_PANEL_PRIVATE_IP=${{ vars.ADMIN_PANEL_PRIVATE_IP }}
+          ADMIN_PANEL_PORT=${{ vars.ADMIN_PANEL_PORT }}
           EOF
           
           cat > node_client/.env <<EOF
@@ -132,8 +133,9 @@ jobs:
       - name: Install Node Client
         env:
           NODE_PORT: ${{ vars.NODE_PORT }}
-          NODE_TITLE: ${{ vars.NODE_TITLE || vars.NODE_NAME }}
+          NODE_TITLE: ${{ vars.NODE_TITLE }}
           ADMIN_PANEL_PRIVATE_IP: 127.0.0.1  # фейковая админка из шага выше
+          ADMIN_PANEL_PORT: 8000  # порт фейковой админки
           CI: 1
         run: |
           echo "🚀 Установка Node Client..."

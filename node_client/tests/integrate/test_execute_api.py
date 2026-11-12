@@ -264,7 +264,8 @@ async def test_get_metrics_with_script_success(client, mock_buffer):
     data = response.json()
     assert data["success"] is True
     assert len(data["users_traffic"]) == 1
-    assert response.headers.get("X-Metrics-Source") == "api"
+    assert data["source"] == "api"
+    assert data["fallback_reason"] is None
     api_script.assert_called_once_with('127.0.0.1', 10085, {})
     parser.assert_called_once()
 
@@ -302,8 +303,8 @@ async def test_get_metrics_fallback_to_cli(client, mock_buffer):
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        assert response.headers.get("X-Metrics-Source") == "cli"
-        assert "gRPC connection failed" in response.headers.get("X-Metrics-Error", "")
+        assert data["source"] == "cli"
+        assert "gRPC connection failed" in data["fallback_reason"]
         mock_subprocess.assert_called_once()
 
 
@@ -337,7 +338,7 @@ async def test_get_metrics_no_script_uses_cli(client, mock_buffer):
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        assert response.headers.get("X-Metrics-Source") == "cli"
+        assert data["source"] == "cli"
 
 
 @pytest.mark.asyncio
@@ -479,7 +480,7 @@ async def test_get_metrics_empty_api_result_does_not_fall_back_to_cli(client, mo
         )
 
     assert response.status_code == 200
-    assert response.headers.get("X-Metrics-Source") == "api"
+    assert response.json()["source"] == "api"
     mock_subprocess.assert_not_called()
     assert parser.call_args.args[0] == empty_raw
 
@@ -500,7 +501,7 @@ async def test_get_metrics_none_api_result_falls_back_to_cli(client, mock_buffer
         )
 
     assert response.status_code == 200
-    assert response.headers.get("X-Metrics-Source") == "cli"
+    assert response.json()["source"] == "cli"
     mock_subprocess.assert_called_once()
     assert parser.call_args.args[0] == '{"stat": []}'
 
@@ -510,7 +511,7 @@ async def test_get_metrics_none_api_result_falls_back_to_cli(client, mock_buffer
 
 @pytest.mark.asyncio
 async def test_get_metrics_non_ascii_api_error_does_not_break_response(client, mock_buffer):
-    """Ошибка API-скрипта с кириллицей и переводами строк (как у gRPC) — CLI-метрики всё равно доходят до ответа"""
+    """Ошибка API-скрипта с кириллицей и переводами строк (как у gRPC) — CLI-метрики доходят, причина — в JSON как есть"""
     node_proto_id = 7
     mock_buffer.buffer_storage[node_proto_id] = {}
     mock_buffer.local_state[node_proto_id] = {}
@@ -525,9 +526,10 @@ async def test_get_metrics_non_ascii_api_error_does_not_break_response(client, m
         )
 
     assert response.status_code == 200
-    assert response.headers.get("X-Metrics-Source") == "cli"
-    error_header = response.headers.get("X-Metrics-Error", "")
-    assert error_header and error_header.isascii() and "\n" not in error_header
+    data = response.json()
+    assert data["source"] == "cli"
+    # Причина отказа API — в JSON целиком, без обрезки до ASCII (раньше была в HTTP-заголовке)
+    assert data["fallback_reason"] == "Ошибка gRPC:\n\tstatus = UNAVAILABLE"
 
 
 @pytest.mark.asyncio

@@ -9,6 +9,10 @@ class NodeInitError(Exception):
         super().__init__(f"Ошибка инициализации виртуальной ноды {node_proto_id} (поле: '{field}'): {reason}")
 
 
+class AdminPanelError(RuntimeError):
+    """Админка недоступна или отказала в данных для инициализации (/startup)."""
+
+
 class NodeNotRegisteredError(Exception):
     """Исключение при обращении к незарегистрированной виртуальной ноде."""
 
