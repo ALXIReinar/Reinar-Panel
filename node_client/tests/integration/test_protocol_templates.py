@@ -114,6 +114,10 @@ def create_test_user_for_template(template: dict, index: int = 0) -> dict:
 # ========== Mock классы для библиотек ==========
 
 
+# Все вызовы add_client/remove_client моков за тест: клиент создаётся внутри скрипта шаблона, ссылки на него у теста нет
+CORE_CALLS: list[tuple[str, dict]] = []
+
+
 class MockUniversalCoreClient:
     """
     Универсальный мок для любого VPN ядра (xray, singbox, shadowsocks, и др.)
@@ -135,6 +139,7 @@ class MockUniversalCoreClient:
         if user_id:
             self.users[user_id] = kwargs
         self.calls.append(('add_client', kwargs))
+        CORE_CALLS.append(('add_client', kwargs))
         return True
 
     def remove_client(self, **kwargs):
@@ -143,6 +148,7 @@ class MockUniversalCoreClient:
         if user_id and user_id in self.users:
             del self.users[user_id]
         self.calls.append(('remove_client', kwargs))
+        CORE_CALLS.append(('remove_client', kwargs))
         return True
 
     def stats_query(self, **kwargs):
@@ -190,8 +196,36 @@ def mock_universal_core(is_mock_mode):
         'singbox_client': mock_module,
         'shadowsocks_client': mock_module,
     }
+    CORE_CALLS.clear()
     with patch.dict('sys.modules', mock_dict):
         yield mock_module
+
+
+def wrong_core_calls(method: str, users_list: list[dict]) -> list[str]:
+    """
+    Проверяет, что скрипт шаблона передал ядру данные пользователей, а не None.
+
+    Скрипт получает пользователей в формате состояния (user_uuid, user_sub_id, константы), а не в формате ядра
+    после экстрактора (id, password, email). Ошибка ключа не роняет скрипт: он ловит исключение ядра и пропускает
+    пользователя — поэтому одного success=True мало.
+
+    Returns:
+        list[str]: описания неверных вызовов; пустой список — всё верно
+    """
+    sub_ids = {u['user_sub_id'] for u in users_list}
+    calls = [kwargs for name, kwargs in CORE_CALLS if name == method]
+    problems = (
+        [] if len(calls) == len(users_list) else [f"{method}: вызовов {len(calls)}, пользователей {len(users_list)}"]
+    )
+    for kwargs in calls:
+        if kwargs.get('email') not in sub_ids:
+            problems.append(f"{method}: email={kwargs.get('email')!r} — не user_sub_id пользователя")
+    if method == 'add_client':
+        # Идентификатор — сам user_uuid или выведенный из него ключ (shadowsocks-2022): непустой и у каждого свой
+        ids = [kwargs.get('user_id_or_password') for kwargs in calls]
+        if not all(ids) or len(set(ids)) != len(ids):
+            problems.append(f"{method}: user_id_or_password пустой или общий у разных пользователей: {ids!r}")
+    return problems
 
 
 # ========== Группа 1: Валидация структуры шаблона ==========
@@ -350,7 +384,9 @@ async def test_template_bulk_add_execution(
 
     ВАЖНО: Проверяются только шаблоны с is_accepted = true И с API скриптами.
     Шаблоны без api_bulk_add_user_script пропускаются (skip).
+    В mock режиме дополнительно проверяется, что ядру переданы user_uuid и user_sub_id пользователей.
     """
+    bad_templates: list[str] = []
     for template in protocol_templates_with_extractors:
         # Пропускаем шаблоны без API скриптов
         if not template.get('api_bulk_add_user_script'):
@@ -372,6 +408,7 @@ async def test_template_bulk_add_execution(
         custom_params = template.get('bulk_add_script_custom_params') or {}
         # Создаём 3 тестовых пользователя
         users_list = [create_test_user_for_template(template, index=i) for i in range(3)]
+        CORE_CALLS.clear()
         # Выполняем скрипт
         success, message = await HotReloadExecutor.execute_action_script(
             script=script,
@@ -387,6 +424,10 @@ async def test_template_bulk_add_execution(
             f"Message: {message}\n"
             f"Core: {core_type} ({'real' if use_real_core else 'mock'})"
         )
+        if not use_real_core:
+            for problem in wrong_core_calls('add_client', users_list):
+                bad_templates.append(f"{template['title']}: {problem}")
+    assert not bad_templates, "Скрипты добавления передают ядру не те ключи:\n" + "\n".join(bad_templates)
 
 
 @pytest.mark.parametrize("use_real_core", [False, True], ids=["mock", "real"])
@@ -403,7 +444,9 @@ async def test_template_bulk_delete_execution(
 
     ВАЖНО: Проверяются только шаблоны с is_accepted = true И с API скриптами.
     Шаблоны без api_bulk_delete_user_script пропускаются (skip).
+    В mock режиме дополнительно проверяется, что ядру передан user_sub_id пользователей (email в xray).
     """
+    bad_templates: list[str] = []
     for template in protocol_templates_with_extractors:
         # Пропускаем шаблоны без API скриптов
         if not template.get('api_bulk_delete_user_script'):
@@ -425,6 +468,7 @@ async def test_template_bulk_delete_execution(
         custom_params = template.get('bulk_delete_script_custom_params') or {}
         # Создаём 2 тестовых пользователя для удаления
         users_list = [create_test_user_for_template(template, index=i) for i in range(2)]
+        CORE_CALLS.clear()
         # Выполняем скрипт
         success, message = await HotReloadExecutor.execute_action_script(
             script=script,
@@ -440,6 +484,10 @@ async def test_template_bulk_delete_execution(
             f"Message: {message}\n"
             f"Core: {core_type} ({'real' if use_real_core else 'mock'})"
         )
+        if not use_real_core:
+            for problem in wrong_core_calls('remove_client', users_list):
+                bad_templates.append(f"{template['title']}: {problem}")
+    assert not bad_templates, "Скрипты удаления передают ядру не те ключи:\n" + "\n".join(bad_templates)
 
 
 # ========== Группа 3: Метрики (сбор и парсинг) ==========
