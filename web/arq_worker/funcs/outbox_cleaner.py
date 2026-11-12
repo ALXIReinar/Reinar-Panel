@@ -53,11 +53,7 @@ async def retry_stuck_core_proto_actions(ctx: dict, db: PgSql = None, arq: ArqRe
                 if not batch:
                     return  # Если пачка пустая, ничего не делаем
 
-                custom_params = (
-                    vnode['bulk_delete_script_custom_params']
-                    if operation == CoreProtoActions.delete
-                    else vnode['bulk_add_script_custom_params']
-                )
+                custom_params = CoreProtoActions.custom_params(vnode, operation)
 
                 "Отправляем chain task на каждую ноду для бульк удаления"
                 log_event(

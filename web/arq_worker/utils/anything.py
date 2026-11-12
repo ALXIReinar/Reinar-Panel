@@ -1,4 +1,6 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -31,6 +33,17 @@ class CoreProtoActions:
         'delete': 2,
     }
     id2name: dict[str, str] = {id: name for name, id in name2id.items()}
+
+    # Поле шаблона (proto_templates) с custom_params скрипта для каждой операции
+    custom_params_field: dict[int, str] = {
+        1: 'bulk_add_script_custom_params',
+        2: 'bulk_delete_script_custom_params',
+    }
+
+    @classmethod
+    def custom_params(cls, vnode: Mapping[str, Any], operation: int) -> dict | None:
+        """custom_params скрипта шаблона для операции add(1)/delete(2); слово действия — через name2id"""
+        return vnode[cls.custom_params_field[operation]]
 
 
 @dataclass

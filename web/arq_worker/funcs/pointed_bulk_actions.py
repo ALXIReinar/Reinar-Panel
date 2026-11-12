@@ -35,12 +35,8 @@ async def pointed_bulk_action(
                 f'\033[33m[ARQ Pointer Actioner]\033[0m Отправляем Бульк запрос на фоновое \033[31m{action}\033[0m пользователей в ядра | node_proto_id: \033[33m{vnode["node_proto_id"]}\033[0m'
             )
 
-            custom_params = (
-                vnode['bulk_delete_script_custom_params']
-                if action == 'delete'
-                else vnode['bulk_add_script_custom_params']
-            )
-            op = {'add': CoreProtoActions.add, 'delete': CoreProtoActions.delete}[action]  # неизвестное — KeyError
+            op = CoreProtoActions.name2id[action]
+            custom_params = CoreProtoActions.custom_params(vnode, op)
             job = await arq.enqueue_job(
                 'bulk_action_users_by_node',
                 vnode['node_proto_id'],

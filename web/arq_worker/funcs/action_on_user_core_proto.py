@@ -9,7 +9,7 @@ from web.arq_worker.data.postgres import PgSql
 from web.arq_worker.depends_fabric import aiohttp_dep, arq_dep, pg_sql_dep
 from web.arq_worker.funcs.metrics_collector import create_vpn_like_user
 from web.arq_worker.utils.arq_logger_config import log_event
-from web.arq_worker.utils.anything import NodeUris
+from web.arq_worker.utils.anything import CoreProtoActions, NodeUris
 
 
 @aiohttp_dep
@@ -79,11 +79,7 @@ async def action_on_core_proto_by_sub_plan(
             log_event(f'\033[31m{node.keys()}\033[0m')
             log_event(f'\033[34m{node.values()}\033[0m')
 
-            custom_params = (
-                node.get('bulk_delete_script_custom_params')
-                if operation == 'delete'
-                else node.get('bulk_add_script_custom_params')
-            )
+            custom_params = CoreProtoActions.custom_params(node, CoreProtoActions.name2id[operation])
             json_body = {
                 'node_proto_id': node['node_proto_id'],
                 'core_port': node['metrics_port'],

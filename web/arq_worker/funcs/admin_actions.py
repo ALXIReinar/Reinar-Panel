@@ -14,7 +14,7 @@ from web.arq_worker.utils.arq_logger_config import log_event
 @arq_dep
 async def admin_request_bulk_action_users(
     ctx: dict,
-    action: Literal['delete', 'add'] | CoreProtoActions,
+    action: Literal['add', 'delete'],
     outbox_event_ids: list[int],
     db: PgSql = None,
     arq: ArqRedis = None,
@@ -25,14 +25,8 @@ async def admin_request_bulk_action_users(
     async def worker(vnode):
         async with sem:
             "Отправляем chain task на каждую ноду для бульк удаления"
-            custom_params = (
-                vnode['bulk_delete_script_custom_params']
-                if action == 'delete'
-                else vnode['bulk_add_script_custom_params']
-            )
-            # Неизвестное действие — KeyError, как до рефакторинга (а не молчаливый add)
-            op_by_action: dict[object, int] = {'add': CoreProtoActions.add, 'delete': CoreProtoActions.delete}
-            op = op_by_action[action]
+            op = CoreProtoActions.name2id[action]
+            custom_params = CoreProtoActions.custom_params(vnode, op)
             log_event(
                 f'\033[36m[ARQ Admin Actioner]\033[0m Отправляем Бульк запрос на фоновое исполнение | action: \033[31m{action}\033[0m; node_proto_id: \033[33m{vnode["node_proto_id"]}\033[0m'
             )
