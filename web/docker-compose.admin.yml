@@ -1,3 +1,6 @@
+# Продовый compose админки: код сервисов — только из образа (Dockerfile: COPY . /app/web/), после изменения кода
+# нужна пересборка: docker compose -f docker-compose.admin.yml up -d --build
+# Для разработки и дев-стенда — надстройка docker-compose.admin.dev.yml (код с диска, без пересборок)
 name: reinar_panel_admin
 
 services:
@@ -55,7 +58,6 @@ services:
     network_mode: host
     volumes:
       - web_logs:/app/web/web_logs
-      - .:/app/web
     secrets:
       - env.api.prod
       - private_key.pem
@@ -73,10 +75,6 @@ services:
     depends_on:
       pg_db:
         condition: service_healthy
-    volumes:
-      # Код и миграции — с диска, как у web-service: новые ревизии alembic видны без пересборки образа.
-      # Образ нужен только ради зависимостей (requirements.txt). Не :ro — web/config_dir/config.py при импорте создаёт web_logs
-      - .:/app/web
     network_mode: host
     secrets:
       - env.api.prod
@@ -96,8 +94,6 @@ services:
       - ENV_FILE=/run/secrets/env.arq.prod
     network_mode: host
     volumes:
-      # Код — с диска, как у web-service: иначе воркер остаётся на коде из образа до пересборки
-      - .:/app/web
       - arq_logs:/app/web/arq_worker/arq_logs
     secrets:
       - env.arq.prod
