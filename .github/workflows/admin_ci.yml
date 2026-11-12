@@ -131,6 +131,7 @@ jobs:
           REDIS_PASSWORD=${REDIS_PASSWORD}
           APP_MODE=docker
           UVICORN_PORT=$ADMIN_PORT
+          NODES_PRIVATE_NETWORK=10.0.0.0/24
           EOF
           
           echo "📝 Создание .env.arq.test..."

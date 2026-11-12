@@ -110,10 +110,24 @@ logger_settings_arq['formatters']['default']['format'] = (
 logger_settings_arq["handlers"]["json_file"]["filename"] = ARQ_LOG_DIR / "app.log"
 
 
-def get_client_ip(request: Request):
+def get_client_ip(request: Request) -> str:
+    """
+    IP клиента для логов. Та же логика, что web/utils/anything.py:resolve_client_ip у админки
+
+    X-Forwarded-For учитывается только от доверенного прокси (TRUSTED_PROXIES, caddy); за прокси клиент — самый
+    правый адрес цепочки, который сам не является прокси: левые адреса подставляет сам клиент.
+    """
+    peer = request.client.host if request.client else None
+    if not peer:
+        return 'unknown'
     xff = request.headers.get('X-Forwarded-For')
-    ip = xff.split(',')[0].strip() if (xff and request.client.host in env.trusted_proxies) else request.client.host
-    return ip
+    if not xff or peer not in env.trusted_proxies:
+        return peer
+    chain = [ip.strip() for ip in xff.split(',') if ip.strip()]
+    for ip in reversed(chain):
+        if ip not in env.trusted_proxies:
+            return ip
+    return chain[0] if chain else peer
 
 
 def log_event(

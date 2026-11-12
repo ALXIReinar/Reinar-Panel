@@ -373,6 +373,8 @@ UVICORN_PORT=${ADMIN_PORT}
 DOMAIN=http://localhost:${ADMIN_PORT}
 ALLOWED_IPS=127.0.0.1,10.0.0.1
 TRUSTED_PROXIES=127.0.0.1,10.0.0.1
+# Приватная сеть нод (WireGuard): нод-клиентам из неё без JWT доступны только /api/v1/server/* (/startup, регистрация)
+NODES_PRIVATE_NETWORK=10.0.0.0/24
 APIENVEOF
     echo -e "${GREEN}✓${NC} Конфигурация Admin API создана: $ENV_API_FILE"
 else
@@ -399,6 +401,13 @@ else
         echo "" >> "$ENV_API_FILE"
         echo "# Subscription settings" >> "$ENV_API_FILE"
         echo "NODE_METRICS_QUEUE_LIMIT=8" >> "$ENV_API_FILE"
+    fi
+
+    # Приватная сеть нод: без неё админка не стартует (значения по умолчанию в коде нет)
+    if ! grep -q "^NODES_PRIVATE_NETWORK=" "$ENV_API_FILE"; then
+        echo "" >> "$ENV_API_FILE"
+        echo "# Приватная сеть нод (WireGuard): нод-клиентам из неё без JWT доступны только /api/v1/server/*" >> "$ENV_API_FILE"
+        echo "NODES_PRIVATE_NETWORK=10.0.0.0/24" >> "$ENV_API_FILE"
     fi
     
     echo -e "${GREEN}✓${NC} Конфигурация Admin API обновлена"

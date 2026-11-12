@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from ipaddress import IPv4Network, IPv6Network, ip_address
 
 from starlette.requests import Request
 from starlette.types import Scope
@@ -13,9 +14,7 @@ class NodeUris:
     get_config_file: str = '/api/v1/server/node/config/read'
     write_config_file: str = '/api/v1/server/node/config/write'
     ping: str = '/api/v1/server/node/ping'
-    proto_core_bulk_action: str = (
-        '/api/v1/server/proto_core/user/bulk/action'  # Experimental. Ещё не добавлено  на нод клиент
-    )
+    proto_core_bulk_action: str = '/api/v1/server/proto_core/user/bulk/action'
     reinit: str = '/api/v1/server/node/reinit'
 
 
@@ -64,28 +63,44 @@ class Constants:
     proto_core_methods = {'add': NodeUris.proto_core_bulk_action, 'delete': NodeUris.proto_core_bulk_action}
 
 
-def get_client_ip(request: Request):
-    xff = request.headers.get('X-Forwarded-For')
-    ip = xff.split(',')[0].strip() if (xff and request.client.host in env.trusted_proxies) else request.client.host
-    return ip
+def resolve_client_ip(peer: str | None, xff: str | None) -> str:
+    """
+    IP клиента по адресу TCP-соединения и заголовку X-Forwarded-For
+
+    Заголовку верим только от доверенного прокси (TRUSTED_PROXIES): иначе его подставит кто угодно, кто достучится
+    до порта админки напрямую. За прокси клиент — самый правый адрес цепочки, который сам не является прокси:
+    левые адреса тоже приходят от клиента и могут быть поддельными.
+    """
+    if not peer:
+        return 'unknown'
+    if not xff or peer not in env.trusted_proxies:
+        return peer
+    chain = [ip.strip() for ip in xff.split(',') if ip.strip()]
+    for ip in reversed(chain):
+        if ip not in env.trusted_proxies:
+            return ip
+    # Вся цепочка из прокси (например, запрос от самой админки через caddy) — исходный адрес
+    return chain[0] if chain else peer
 
 
-def get_client_ip_by_scope(scope: Scope):
-    # 1. Извлекаем все заголовки из scope
-    headers = dict(scope.get("headers", []))
+def get_client_ip(request: Request) -> str:
+    return resolve_client_ip(request.client.host if request.client else None, request.headers.get('X-Forwarded-For'))
 
-    # 2. Ищем x-forwarded-for (имена в ASGI всегда в нижнем регистре)
-    xff = headers.get(b"x-forwarded-for")
 
-    if xff:
-        # 3. Декодируем байты и берем первый адрес (самый левый в списке)
-        # XFF обычно имеет формат: "client, proxy1, proxy2"
-        client_ip = xff.decode("utf-8").split(",")[0].strip()
-    else:
-        # 4. Фолбэк на стандартный scope["client"], если заголовка нет
-        client = scope.get("client")
-        client_ip = client[0] if client else "unknown"
-    return client_ip
+def get_client_ip_by_scope(scope: Scope) -> str:
+    # Имена заголовков в ASGI — в нижнем регистре
+    xff = dict(scope.get('headers', [])).get(b'x-forwarded-for')
+    client = scope.get('client')
+    return resolve_client_ip(client[0] if client else None, xff.decode('latin-1') if xff else None)
+
+
+def ip_in_networks(ip: str, networks: list[IPv4Network | IPv6Network]) -> bool:
+    """Входит ли адрес в одну из сетей; не-IP (например, 'unknown') — нет"""
+    try:
+        address = ip_address(ip)
+    except ValueError:
+        return False
+    return any(address in network for network in networks)
 
 
 def hide_log_param(param, start=3, end=8):

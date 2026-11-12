@@ -2,6 +2,7 @@ import logging  # noqa: I001
 import os
 from datetime import timedelta
 from functools import lru_cache
+from ipaddress import IPv4Network, IPv6Network, ip_network
 from pathlib import Path
 from typing import Annotated
 
@@ -96,6 +97,9 @@ class Settings(BaseSettings):
     app_mode: AppMode
     trusted_proxies: set[str] | list[str] | str
     allowed_ips: set[str] | list[str] | str
+    # Приватная сеть нод (WireGuard), CIDR через запятую: с этих адресов без JWT доступны только служебные
+    # маршруты /api/v1/server/* (/startup, register/confirm), остальная админка — по JWT. Без значения по умолчанию
+    nodes_private_network: list[IPv4Network | IPv6Network] | str
     domain: str
 
     # ARQ Settings
@@ -112,6 +116,13 @@ class Settings(BaseSettings):
     def allowed_ips_validator(cls, v):
         raw_items = v.split(',') if isinstance(v, str) else v
         return set(str(IPvAnyAddress(ip.strip())) for ip in raw_items)
+
+    @field_validator('nodes_private_network', mode='before')
+    @classmethod
+    def nodes_private_network_validator(cls, v):
+        raw_items = v.split(',') if isinstance(v, str) else v
+        # strict: '10.0.0.1/24' вместо '10.0.0.0/24' — ошибка настройки, а не молча расширенная сеть
+        return [ip_network(item.strip()) for item in raw_items if str(item).strip()]
 
     model_config = SettingsConfigDict(extra='allow', env_file_encoding='utf-8')
 
