@@ -112,6 +112,15 @@ class NodesQueries:
         """
         return await self.conn.fetch(query, node_id, limit, offset)
 
+    async def get_vnode_ids_not_on_node(self, node_id: int, node_proto_ids: list[int]) -> list[int]:
+        """ID из списка, которые не являются виртуальными нодами этой физической ноды (чужие или несуществующие)"""
+        query = """
+        SELECT x.id
+        FROM unnest($2::int[]) AS x(id)
+        WHERE NOT EXISTS (SELECT 1 FROM nodes_protocols np WHERE np.id = x.id AND np.node_id = $1)
+        """
+        return [row['id'] for row in await self.conn.fetch(query, node_id, node_proto_ids)]
+
     async def get_startup_data(self, node_title: str, node_proto_ids: list[int] | None = None) -> dict | None:
         """Получить служебные данные виртуальных нод физической ноды для инициализации нод-клиента."""
         # 1. Проверяем существование физической ноды

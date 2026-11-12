@@ -52,6 +52,14 @@ class StartupRequest(BaseModel):
     )
 
 
+class NodeReinitSchema(BaseModel):
+    """Реинициализация виртуальных нод физической ноды на её нод-клиенте"""
+
+    node_proto_ids: list[Annotated[int, Field(ge=1, le=2_147_483_647)]] = Field(
+        default_factory=list, description="ID виртуальных нод этой физической ноды; пустой список = все"
+    )
+
+
 class UserInjector(BaseModel):
     flatten_array_cursor: str
     extractor_script: str | None = None

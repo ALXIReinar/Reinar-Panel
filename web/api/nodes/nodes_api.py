@@ -1,7 +1,7 @@
 from typing import Annotated  # noqa: I001
 
 from aiohttp import ClientError
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Path, Request, HTTPException
 from fastapi.params import Query
 
 from web.config_dir.config import NodeExecAiohttpDep
@@ -12,9 +12,11 @@ from web.schemas.node_schema import (
     NodeUpdateSchema,
     NodesGetSchema,
     GetNodeProtoSchema,
+    NodeReinitSchema,
     StartupRequest,
     StartupResponse,
 )
+from web.api.nodes.handlers import push_reinit
 from web.utils.anything import NodeUris
 from web.utils.logger_config import log_event
 
@@ -156,6 +158,106 @@ async def get_node_protocols_api(
         request=request,
     )
     return {'protocols': protocols}
+
+
+@router.post('/{node_id}/reinit', summary="Реинициализировать виртуальные ноды на нод-клиенте")
+async def reinit_vnodes_api(
+    node_id: Annotated[int, Path(ge=1, le=32_767)],  # nodes.id — smallint: больший ID дал бы 500 из asyncpg
+    body: NodeReinitSchema,
+    request: Request,
+    db: PgSqlDep,
+    aio_http: NodeExecAiohttpDep,
+    _: JWTCookieDep,
+):
+    """
+    Точечная реинициализация виртуальных нод физической ноды без перезапуска нод-клиента.
+
+    Именно этот эндпоинт должен использовать фронт для интерфейса тонкой реинициализации виртуальных нод:
+    после правки шаблона или параметров ноды нод-клиент заново берёт её данные из /startup и перекомпилирует скрипты.
+
+    - node_proto_ids: виртуальные ноды этой физической ноды; пустой список — все её ноды
+    - 200: {success, registered, removed} от нод-клиента; removed — ноды, которые админка больше не выдаёт
+      (например, reg_status не success)
+    - 400: в списке есть чужие или несуществующие виртуальные ноды (foreign_node_proto_ids)
+    - 404: физической ноды нет; 409: у неё не задан приватный IP
+    - 422: шаблон не прошёл проверку на нод-клиенте (node_proto_id, field, reason), память нод-клиента не изменена
+    - 502: нод-клиент недоступен, отказал или сам не получил данные от админки
+    """
+    admin_id = request.state.admin_id
+    log_event(
+        f'Реинициализация виртуальных нод | node_id: \033[32m{node_id}\033[0m; node_proto_ids: \033[33m{body.node_proto_ids}\033[0m; admin_id: \033[31m{admin_id}\033[0m',
+        request=request,
+    )
+    node = await db.nodes.get_node(node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail={'success': False, 'message': 'Физическая нода не найдена'})
+    if not node['private_ip']:
+        raise HTTPException(
+            status_code=409, detail={'success': False, 'message': 'У физической ноды не задан приватный IP'}
+        )
+
+    if body.node_proto_ids:
+        foreign = await db.nodes.get_vnode_ids_not_on_node(node_id, body.node_proto_ids)
+        if foreign:
+            log_event(
+                f'Реинициализация отклонена: виртуальные ноды не принадлежат физической ноде | node_id: \033[32m{node_id}\033[0m; foreign: \033[31m{foreign}\033[0m',
+                request=request,
+                level='WARNING',
+            )
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    'success': False,
+                    'message': 'Виртуальные ноды не принадлежат этой физической ноде',
+                    'foreign_node_proto_ids': foreign,
+                },
+            )
+
+    try:
+        status, node_resp = await push_reinit(aio_http, node['private_ip'], node['api_port'], body.node_proto_ids)
+    except (ClientError, TimeoutError) as e:
+        log_event(
+            f'Нод-клиент недоступен для реинициализации | node_id: \033[32m{node_id}\033[0m; error: \033[31m{repr(e)}\033[0m',
+            request=request,
+            level='ERROR',
+        )
+        raise HTTPException(
+            status_code=502,
+            detail={'success': False, 'message': 'Нод-клиент недоступен', 'err_message': repr(e)},
+        ) from e
+
+    if status == 200:
+        log_event(
+            f'Нод-клиент реинициализировал виртуальные ноды | node_id: \033[32m{node_id}\033[0m; registered: \033[32m{node_resp.get("registered")}\033[0m; removed: \033[33m{node_resp.get("removed")}\033[0m',
+            request=request,
+        )
+        return node_resp
+
+    log_event(
+        f'Нод-клиент не выполнил реинициализацию | node_id: \033[32m{node_id}\033[0m; status: \033[31m{status}\033[0m; response: \033[37m{node_resp}\033[0m',
+        request=request,
+        level='ERROR',
+    )
+    if status == 422:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                'success': False,
+                'message': 'Шаблон виртуальной ноды не прошёл проверку на нод-клиенте, память нод-клиента не изменена',
+                'node_proto_id': node_resp.get('node_proto_id'),
+                'field': node_resp.get('field'),
+                'reason': node_resp.get('reason'),
+            },
+        )
+    raise HTTPException(
+        status_code=502,
+        detail={
+            'success': False,
+            'message': 'Нод-клиент не выполнил реинициализацию',
+            'node_client_status': status,
+            'node_client_response': node_resp,
+        },
+    )
 
 
 @server_router.post(

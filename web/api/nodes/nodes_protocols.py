@@ -1,7 +1,9 @@
-import aiohttp
+import asyncio
+
 from fastapi import APIRouter, HTTPException
 from starlette.requests import Request
 
+from web.api.nodes.handlers import push_reinit
 from web.config_dir.config import NodeExecAiohttpDep
 from web.data.postgres import PgSqlDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
@@ -10,7 +12,7 @@ from web.schemas.nodes_protocols_schema import (
     VNodeRegisterResultSchema,
     VNodeRegisterSchema,
 )
-from web.utils.anything import NodeUris, VnodeRegStatuses
+from web.utils.anything import VnodeRegStatuses
 from web.utils.config_renderer import generate_config_link_from_raw_content
 from web.utils.logger_config import log_event
 
@@ -138,30 +140,28 @@ async def confirm_vnode(
             )
 
     "Если регистрация успешна - вызываем реинициализацию на нод-клиенте (best-effort, таймаут 5с)"
+    # Best-effort: ошибка push не отменяет подтверждение — скрипт установки ноды ждёт ответа confirm.
+    # Без push нода включится при следующем старте нод-клиента или точечной реинициализацией (POST /private/nodes/{id}/reinit)
     if body.status == VnodeRegStatuses.success:
         try:
             node_data = await db.nodes_protocols.get_node_for_file_edit(body.node_proto_id)
-            if node_data:
-                host = node_data['private_ip'] or node_data['ip']
-                port = node_data['api_port']
-                if host and port:
-                    url = f'http://{host}:{port}{NodeUris.reinit}'
-                    async with aio_http.post(
-                        url,
-                        json={'node_proto_ids': [body.node_proto_id]},
-                        timeout=aiohttp.ClientTimeout(total=5),
-                    ) as resp:
-                        if resp.status == 200:
-                            log_event(
-                                f'Push реинициализации на нод-клиент выполнен успешно | node_proto_id: \033[32m{body.node_proto_id}\033[0m',
-                                request=request,
-                            )
-                        else:
-                            log_event(
-                                f'Push реинициализации на нод-клиент вернул статус {resp.status} | node_proto_id: \033[33m{body.node_proto_id}\033[0m',
-                                request=request,
-                                level='WARNING',
-                            )
+            if node_data and node_data['private_ip'] and node_data['api_port']:
+                async with asyncio.timeout(5):
+                    status, _ = await push_reinit(
+                        aio_http, node_data['private_ip'], node_data['api_port'], [body.node_proto_id]
+                    )
+                log_event(
+                    f'Push реинициализации на нод-клиент | node_proto_id: \033[32m{body.node_proto_id}\033[0m; status: \033[33m{status}\033[0m',
+                    request=request,
+                    level='INFO' if status == 200 else 'WARNING',
+                )
+            elif node_data:
+                # Публичный адрес не используем: команды админки ходят к нод-клиенту только по приватной сети
+                log_event(
+                    f'Push реинициализации пропущен: у физической ноды не задан приватный IP | node_proto_id: \033[33m{body.node_proto_id}\033[0m',
+                    request=request,
+                    level='WARNING',
+                )
         except Exception as e:
             log_event(
                 f'Не удалось отправить push реинициализации на нод-клиент | node_proto_id: \033[33m{body.node_proto_id}\033[0m; error: {repr(e)}',
