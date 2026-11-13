@@ -194,6 +194,9 @@ jobs:
         env:
           ADMIN_PORT: ${{ vars.ADMIN_PORT }}
           ADMIN_DOMAIN: "admin.ci.local"
+          # Порты Caddy: в install.sh это вопросы, в CI отвечаем через окружение
+          CADDY_HTTP_PORT: "80"
+          CADDY_HTTPS_PORT: "443"
           SUB_SERVICE_DOMAIN: "https://sub.example.com"
           PG_ADMIN_PASSWORD: "AdminPass123"
           PG_CRUD_PASSWORD: "CrudPass123"
@@ -214,6 +217,9 @@ jobs:
           CI: "1"
           SUB_PORT: ${{ vars.SUB_PORT }}
           SUB_DOMAIN: "localhost"
+          # Порты Caddy: в install.sh это вопросы, в CI отвечаем через окружение
+          CADDY_HTTP_PORT: "80"
+          CADDY_HTTPS_PORT: "443"
           PG_CRUD_PASSWORD: "CrudPass123"
           REDIS_PASSWORD: "RedisPass123"
           ROBO_SHOP_LOGIN: "TestShopLogin"

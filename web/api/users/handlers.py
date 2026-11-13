@@ -10,7 +10,7 @@ from web.utils.logger_config import log_event
 
 async def put_to_arq_bg_bulk(
     arq: ArqRedis,
-    outbox_event_ids: list[dict],
+    outbox_event_ids: list[int],
     action: Literal['activate', 'deactivate', 'reset_traffic', 'add', 'delete'],
 ) -> str:
     """

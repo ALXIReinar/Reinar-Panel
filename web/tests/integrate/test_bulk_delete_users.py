@@ -184,7 +184,8 @@ class TestBulkDeleteSuccess:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["deleted_count"] == 2  # Только 2 попали в outbox (is_limited=false, is_active=true)
+        assert data["deleted_count"] == 3  # удалённые пользователи, а не события
+        assert data["events_count"] == 2  # в outbox — только is_limited=false, is_active=true
         assert "message" in data
 
 
@@ -231,7 +232,8 @@ class TestBulkDeleteOutboxAndArq:
         data = response.json()
 
         # В outbox должны попасть только 2 пользователя (is_limited=false, is_active=true)
-        assert data["deleted_count"] == 2
+        assert data["deleted_count"] == 4  # удалённые пользователи, а не события
+        assert data["events_count"] == 2
 
         # Проверяем outbox
         async with db_pool.acquire() as conn:
@@ -331,7 +333,8 @@ class TestBulkDeleteEdgeCases:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["deleted_count"] == 0  # Не попал в outbox
+        assert data["deleted_count"] == 1  # удалённые пользователи, а не события
+        assert data["events_count"] == 0  # не попал в outbox
 
         # Проверяем что пользователь помечен как удалённый (soft delete)
         async with db_pool.acquire() as conn:
@@ -361,7 +364,8 @@ class TestBulkDeleteEdgeCases:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["deleted_count"] == 0  # Не попал в outbox
+        assert data["deleted_count"] == 1  # удалённые пользователи, а не события
+        assert data["events_count"] == 0  # не попал в outbox
 
         # Проверяем что пользователь помечен как удалённый (soft delete)
         async with db_pool.acquire() as conn:
@@ -439,7 +443,8 @@ class TestBulkDeleteEdgeCases:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["deleted_count"] == 0  # Не попал в outbox (invisible vnode)
+        assert data["deleted_count"] == 1  # удалённые пользователи, а не события
+        assert data["events_count"] == 0  # не попал в outbox (invisible vnode)
 
         # Проверяем что пользователь помечен как удалённый (soft delete)
         async with db_pool.acquire() as conn:
@@ -528,7 +533,8 @@ class TestBulkDeleteEdgeCases:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["deleted_count"] == 0  # Не попал в outbox (inactive node)
+        assert data["deleted_count"] == 1  # удалённые пользователи, а не события
+        assert data["events_count"] == 0  # не попал в outbox (inactive node)
 
         # Проверяем что пользователь помечен как удалённый (soft delete)
         async with db_pool.acquire() as conn:

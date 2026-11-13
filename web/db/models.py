@@ -39,7 +39,7 @@ class Admins(Base):
     )
     passw: Mapped[str] = mapped_column(String(97), nullable=False)
     login: Mapped[str] = mapped_column(String(128), nullable=False)
-    date_register: Mapped[Optional[datetime.date]] = mapped_column(Date, server_default=text('(now())::date'))
+    date_register: Mapped[datetime.date | None] = mapped_column(Date, server_default=text('(now())::date'))
 
     sessions_admins: Mapped[list['SessionsAdmins']] = relationship('SessionsAdmins', back_populates='admin')
 
@@ -50,6 +50,7 @@ class Nodes(Base):
         PrimaryKeyConstraint('id', name='nodes_pkey1'),
         UniqueConstraint('ip', name='nodes_ip_key'),
         UniqueConstraint('private_ip', name='nodes_private_ip_key'),
+        UniqueConstraint('title', name='nodes_title_key'),
     )
 
     id: Mapped[int] = mapped_column(
@@ -60,12 +61,12 @@ class Nodes(Base):
     )
     ip: Mapped[str] = mapped_column(String(45), nullable=False)
     api_port: Mapped[int] = mapped_column(Integer, nullable=False)
-    private_ip: Mapped[Optional[str]] = mapped_column(String(45))
-    is_active: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('true'))
-    title: Mapped[Optional[str]] = mapped_column(Text)
-    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
-    updated_at: Mapped[Optional[datetime.time]] = mapped_column(Time(True), server_default=text('now()'))
-    node_name: Mapped[Optional[str]] = mapped_column(String(64))
+    private_ip: Mapped[str | None] = mapped_column(String(45))
+    is_active: Mapped[bool | None] = mapped_column(Boolean, server_default=text('true'))
+    title: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(True), server_default=text('now()'))
+    updated_at: Mapped[datetime.time | None] = mapped_column(Time(True), server_default=text('now()'))
+    node_name: Mapped[str | None] = mapped_column(String(64))
 
     nodes_protocols: Mapped[list['NodesProtocols']] = relationship('NodesProtocols', back_populates='node')
 
@@ -115,17 +116,17 @@ class RemoteExecuteHistory(Base):
     )
     status: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     command: Mapped[str] = mapped_column(String(1024), nullable=False)
-    stdout: Mapped[Optional[str]] = mapped_column(Text)
-    stderr: Mapped[Optional[str]] = mapped_column(Text)
-    exit_code: Mapped[Optional[int]] = mapped_column(Integer, server_default=text('1'))
-    exception_text: Mapped[Optional[str]] = mapped_column(Text)
-    node_proto_id: Mapped[Optional[int]] = mapped_column(Integer)
-    api_port: Mapped[Optional[int]] = mapped_column(Integer)
-    private_ip: Mapped[Optional[str]] = mapped_column(String(45))
-    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
-    status_code: Mapped[Optional[int]] = mapped_column(SmallInteger, server_default=text('100'))
-    node_success: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
-    updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
+    stdout: Mapped[str | None] = mapped_column(Text)
+    stderr: Mapped[str | None] = mapped_column(Text)
+    exit_code: Mapped[int | None] = mapped_column(Integer, server_default=text('1'))
+    exception_text: Mapped[str | None] = mapped_column(Text)
+    node_proto_id: Mapped[int | None] = mapped_column(Integer)
+    api_port: Mapped[int | None] = mapped_column(Integer)
+    private_ip: Mapped[str | None] = mapped_column(String(45))
+    created_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(True), server_default=text('now()'))
+    status_code: Mapped[int | None] = mapped_column(SmallInteger, server_default=text('100'))
+    node_success: Mapped[bool | None] = mapped_column(Boolean, server_default=text('false'))
+    updated_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(True), server_default=text('now()'))
 
 
 class SubNodesOperations(Base):
@@ -162,9 +163,9 @@ class SubPlans(Base):
         autoincrement=True,
     )
     title: Mapped[str] = mapped_column(String(25), nullable=False)
-    is_active: Mapped[Optional[bool]] = mapped_column(Boolean)
-    description: Mapped[Optional[str]] = mapped_column(String(200))
-    position: Mapped[Optional[int]] = mapped_column(SmallInteger, server_default=text('0'))
+    is_active: Mapped[bool | None] = mapped_column(Boolean, server_default=text('false'))
+    description: Mapped[str | None] = mapped_column(String(200), server_default=text("''::character varying"))
+    position: Mapped[int | None] = mapped_column(SmallInteger, server_default=text('0'))
 
     sub_plan_offers: Mapped[list['SubPlanOffers']] = relationship('SubPlanOffers', back_populates='sub_plan')
     user_subs: Mapped[list['UserSubs']] = relationship('UserSubs', back_populates='sub_plan')
@@ -219,7 +220,7 @@ class WhitelistCommands(Base):
         autoincrement=True,
     )
     command: Mapped[str] = mapped_column(String(1000), nullable=False)
-    is_active: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('true'))
+    is_active: Mapped[bool | None] = mapped_column(Boolean, server_default=text('true'))
 
 
 class ProtoTemplates(Base):
@@ -240,26 +241,25 @@ class ProtoTemplates(Base):
     )
     title: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text('2'))
-    url_tmp: Mapped[Optional[str]] = mapped_column(Text)
-    is_accepted: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
-    required_user_data_obj: Mapped[Optional[dict]] = mapped_column(JSONB)
-    constant_user_data_obj: Mapped[Optional[dict]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
-    proto_python_lib: Mapped[Optional[str]] = mapped_column(String(512))
-    sub_prepare_script: Mapped[Optional[str]] = mapped_column(Text)
-    sub_required_libs: Mapped[Optional[str]] = mapped_column(String(512))
-    api_bulk_delete_user_script: Mapped[Optional[str]] = mapped_column(Text)
-    metrics_parser_code: Mapped[Optional[str]] = mapped_column(Text)
-    metrics_command: Mapped[Optional[str]] = mapped_column(String(256))
-    bulk_delete_script_custom_params: Mapped[Optional[dict]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
-    api_metrics_script: Mapped[Optional[str]] = mapped_column(Text)
-    api_bulk_add_user_script: Mapped[Optional[str]] = mapped_column(Text)
-    bulk_add_script_custom_params: Mapped[Optional[dict]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
-    description: Mapped[Optional[str]] = mapped_column(Text)
-    metrics_parser_libs: Mapped[Optional[str]] = mapped_column(String(512))
-    config2json_script: Mapped[Optional[str]] = mapped_column(Text)
-    json2config_script: Mapped[Optional[str]] = mapped_column(Text)
-    conf_converter_libs: Mapped[Optional[str]] = mapped_column(String(512))
-    cli_cmds: Mapped[Optional[dict]] = mapped_column(JSON, server_default=text('\'{"commands": []}\'::json'))
+    url_tmp: Mapped[str | None] = mapped_column(Text)
+    is_accepted: Mapped[bool | None] = mapped_column(Boolean, server_default=text('false'))
+    required_user_data_obj: Mapped[dict | None] = mapped_column(JSONB)
+    constant_user_data_obj: Mapped[dict | None] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    proto_python_lib: Mapped[str | None] = mapped_column(String(512))
+    sub_prepare_script: Mapped[str | None] = mapped_column(Text)
+    sub_required_libs: Mapped[str | None] = mapped_column(String(512))
+    api_bulk_delete_user_script: Mapped[str | None] = mapped_column(Text)
+    metrics_parser_code: Mapped[str | None] = mapped_column(Text)
+    metrics_command: Mapped[str | None] = mapped_column(String(256))
+    bulk_delete_script_custom_params: Mapped[dict | None] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    api_metrics_script: Mapped[str | None] = mapped_column(Text)
+    api_bulk_add_user_script: Mapped[str | None] = mapped_column(Text)
+    bulk_add_script_custom_params: Mapped[dict | None] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    description: Mapped[str | None] = mapped_column(Text)
+    config2json_script: Mapped[str | None] = mapped_column(Text)
+    json2config_script: Mapped[str | None] = mapped_column(Text)
+    conf_converter_libs: Mapped[str | None] = mapped_column(String(512))
+    cli_cmds: Mapped[dict | None] = mapped_column(JSON, server_default=text('\'{"commands": []}\'::json'))
 
     templates_statuses: Mapped['TemplatesStatuses'] = relationship(
         'TemplatesStatuses', back_populates='proto_templates'
@@ -285,7 +285,7 @@ class SessionsAdmins(Base):
     exp: Mapped[datetime.datetime] = mapped_column(DateTime(True), nullable=False)
     refresh_token: Mapped[str] = mapped_column(String(97), nullable=False)
     ip: Mapped[str] = mapped_column(String(45), nullable=False)
-    user_agent: Mapped[Optional[str]] = mapped_column(String(200))
+    user_agent: Mapped[str | None] = mapped_column(String(200))
 
     admin: Mapped['Admins'] = relationship('Admins', back_populates='sessions_admins')
 
@@ -316,12 +316,12 @@ class SubPlanOffers(Base):
     sub_plan_id: Mapped[int] = mapped_column(Integer, nullable=False)
     ttl_days: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     cost: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    is_active: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
-    traffic_limit_day_mb: Mapped[Optional[int]] = mapped_column(BigInteger)
-    traffic_limit_mb: Mapped[Optional[int]] = mapped_column(BigInteger)
-    infinite_traffic: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
-    infinite_expire: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
-    position: Mapped[Optional[int]] = mapped_column(SmallInteger)
+    is_active: Mapped[bool | None] = mapped_column(Boolean, server_default=text('false'))
+    traffic_limit_day_mb: Mapped[int | None] = mapped_column(BigInteger)
+    traffic_limit_mb: Mapped[int | None] = mapped_column(BigInteger)
+    infinite_traffic: Mapped[bool | None] = mapped_column(Boolean, server_default=text('false'))
+    infinite_expire: Mapped[bool | None] = mapped_column(Boolean, server_default=text('false'))
+    position: Mapped[int | None] = mapped_column(SmallInteger)
 
     sub_plan: Mapped['SubPlans'] = relationship('SubPlans', back_populates='sub_plan_offers')
 
@@ -358,11 +358,11 @@ class Users(Base):
         autoincrement=True,
     )
     online_status: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text('1'))
-    tg_id: Mapped[Optional[int]] = mapped_column(BigInteger)
-    tg_username: Mapped[Optional[str]] = mapped_column(String(32))
-    updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
-    registered_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
-    is_deleted: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
+    tg_id: Mapped[int | None] = mapped_column(BigInteger)
+    tg_username: Mapped[str | None] = mapped_column(String(32))
+    updated_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(True), server_default=text('now()'))
+    registered_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(True), server_default=text('now()'))
+    is_deleted: Mapped[bool | None] = mapped_column(Boolean, server_default=text('false'))
 
     online_statuses: Mapped['OnlineStatuses'] = relationship('OnlineStatuses', back_populates='users')
     pay_orders: Mapped[list['PayOrders']] = relationship('PayOrders', back_populates='user')
@@ -379,8 +379,23 @@ class NodesProtocols(Base):
         ),
         PrimaryKeyConstraint('id', name='nodes_pkey'),
         UniqueConstraint('config_path', 'node_id', name='nodes_protocols_config_path_node_id_key'),
-        UniqueConstraint('node_id', 'metrics_port', name='nodes_protocols_node_id_metrics_port_key'),
-        UniqueConstraint('node_id', 'proto_port', name='nodes_protocols_node_id_proto_port_key'),
+        UniqueConstraint('service_name', 'node_id', name='nodes_protocols_service_name_node_id_key'),
+        Index(
+            'nodes_protocols_metrics_port_node_id_idx',
+            'metrics_port',
+            'node_id',
+            postgresql_where='(user_visible = true)',
+            postgresql_with={'deduplicate_items': 'true'},
+            unique=True,
+        ),
+        Index(
+            'nodes_protocols_node_id_proto_port_idx',
+            'node_id',
+            'proto_port',
+            postgresql_where='(user_visible = true)',
+            postgresql_with={'deduplicate_items': 'true'},
+            unique=True,
+        ),
     )
 
     id: Mapped[int] = mapped_column(
@@ -391,20 +406,20 @@ class NodesProtocols(Base):
     )
     node_id: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     title: Mapped[str] = mapped_column(String(30), nullable=False, server_default=text("''::character varying"))
-    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
-    updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
-    config_path: Mapped[Optional[str]] = mapped_column(Text)
-    user_visible: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
-    config_link: Mapped[Optional[str]] = mapped_column(Text)
-    metrics_port: Mapped[Optional[int]] = mapped_column(Integer)
-    proto_port: Mapped[Optional[int]] = mapped_column(Integer)
-    sub_node_address: Mapped[Optional[str]] = mapped_column(String(255))
-    constant_node_data_obj: Mapped[Optional[dict]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
-    reload_core_command: Mapped[Optional[str]] = mapped_column(String(256))
-    metrics_command: Mapped[Optional[str]] = mapped_column(String(256))
-    reg_status: Mapped[Optional[int]] = mapped_column(SmallInteger, server_default=text('1'))
-    service_name: Mapped[Optional[str]] = mapped_column(String(256))
-    tmp_id: Mapped[Optional[int]] = mapped_column(Integer)
+    created_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(True), server_default=text('now()'))
+    updated_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(True), server_default=text('now()'))
+    config_path: Mapped[str | None] = mapped_column(Text)
+    user_visible: Mapped[bool | None] = mapped_column(Boolean, server_default=text('false'))
+    config_link: Mapped[str | None] = mapped_column(Text)
+    metrics_port: Mapped[int | None] = mapped_column(Integer)
+    proto_port: Mapped[int | None] = mapped_column(Integer)
+    sub_node_address: Mapped[str | None] = mapped_column(String(255))
+    constant_node_data_obj: Mapped[dict | None] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    reload_core_command: Mapped[str | None] = mapped_column(String(256))
+    metrics_command: Mapped[str | None] = mapped_column(String(256))
+    reg_status: Mapped[int | None] = mapped_column(SmallInteger, server_default=text('1'))
+    service_name: Mapped[str | None] = mapped_column(String(256))
+    tmp_id: Mapped[int | None] = mapped_column(Integer)
 
     node: Mapped['Nodes'] = relationship('Nodes', back_populates='nodes_protocols')
     vnodes_reg_statuses: Mapped[Optional['VnodesRegStatuses']] = relationship(
@@ -433,11 +448,11 @@ class PayOrders(Base):
     infinite_expire: Mapped[bool] = mapped_column(Boolean, nullable=False)
     infinite_traffic: Mapped[bool] = mapped_column(Boolean, nullable=False)
     cost: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    status: Mapped[Optional[int]] = mapped_column(SmallInteger, server_default=text('1'))
-    timestamp: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
-    traffic_limit_mb: Mapped[Optional[int]] = mapped_column(BigInteger)
-    traffic_limit_day_mb: Mapped[Optional[int]] = mapped_column(BigInteger)
-    ttl_days: Mapped[Optional[int]] = mapped_column(SmallInteger)
+    status: Mapped[int | None] = mapped_column(SmallInteger, server_default=text('1'))
+    timestamp: Mapped[datetime.datetime | None] = mapped_column(DateTime(True), server_default=text('now()'))
+    traffic_limit_mb: Mapped[int | None] = mapped_column(BigInteger)
+    traffic_limit_day_mb: Mapped[int | None] = mapped_column(BigInteger)
+    ttl_days: Mapped[int | None] = mapped_column(SmallInteger)
 
     pay_statuses: Mapped[Optional['PayStatuses']] = relationship('PayStatuses', back_populates='pay_orders')
     user: Mapped['Users'] = relationship('Users', back_populates='pay_orders')
@@ -465,7 +480,7 @@ class TemplatesUsersExtractors(Base):
     tmp_id: Mapped[int] = mapped_column(Integer, nullable=False)
     flatten_array_cursor: Mapped[str] = mapped_column(String(1024), nullable=False)
     extractor_script: Mapped[str] = mapped_column(Text, nullable=False)
-    libs: Mapped[Optional[str]] = mapped_column(String(512))
+    libs: Mapped[str | None] = mapped_column(String(512))
 
     tmp: Mapped['ProtoTemplates'] = relationship('ProtoTemplates', back_populates='templates_users_extractors')
 
@@ -490,19 +505,19 @@ class UserSubs(Base):
     )
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     sub_plan_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text('false'))
+    is_limited: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text('false'))
     infinite_traffic: Mapped[bool] = mapped_column(Boolean, nullable=False)
     uuid: Mapped[str] = mapped_column(String(36), nullable=False)
     b64_id: Mapped[str] = mapped_column(String(150), nullable=False)
     infinite_expire: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    order_id: Mapped[Optional[int]] = mapped_column(BigInteger)
-    is_active: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
-    is_limited: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
-    expire_date: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True))
-    traffic_used_day_mb: Mapped[Optional[int]] = mapped_column(BigInteger, server_default=text('0'))
-    traffic_limit_day: Mapped[Optional[int]] = mapped_column(BigInteger)
-    used_mb: Mapped[Optional[int]] = mapped_column(BigInteger, server_default=text('0'))
-    used_mb_limit: Mapped[Optional[int]] = mapped_column(BigInteger)
-    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
+    order_id: Mapped[int | None] = mapped_column(BigInteger)
+    expire_date: Mapped[datetime.datetime | None] = mapped_column(DateTime(True))
+    traffic_used_day_mb: Mapped[int | None] = mapped_column(BigInteger, server_default=text('0'))
+    traffic_limit_day: Mapped[int | None] = mapped_column(BigInteger)
+    used_mb: Mapped[int | None] = mapped_column(BigInteger, server_default=text('0'))
+    used_mb_limit: Mapped[int | None] = mapped_column(BigInteger)
+    created_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(True), server_default=text('now()'))
 
     order: Mapped[Optional['PayOrders']] = relationship('PayOrders', back_populates='user_subs')
     sub_plan: Mapped['SubPlans'] = relationship('SubPlans', back_populates='user_subs')
@@ -513,7 +528,9 @@ class UserSubs(Base):
 class VnodesSubPlans(Base):
     __tablename__ = 'vnodes_sub_plans'
     __table_args__ = (
-        ForeignKeyConstraint(['node_proto_id'], ['nodes_protocols.id'], name='vnodes_sub_plans_node_proto_id_fkey'),
+        ForeignKeyConstraint(
+            ['node_proto_id'], ['nodes_protocols.id'], ondelete='CASCADE', name='vnodes_sub_plans_node_proto_id_fkey'
+        ),
         ForeignKeyConstraint(
             ['sub_plan_id'], ['sub_plans.id'], ondelete='CASCADE', name='vnodes_sub_plans_sub_plan_id_fkey'
         ),
@@ -556,8 +573,8 @@ class SubNodesOutbox(Base):
     operation: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     user_sub_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     node_proto_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    is_retried: Mapped[Optional[bool]] = mapped_column(Boolean, server_default=text('false'))
-    created_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime(True), server_default=text('now()'))
+    is_retried: Mapped[bool | None] = mapped_column(Boolean, server_default=text('false'))
+    created_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(True), server_default=text('now()'))
 
     node_proto: Mapped['NodesProtocols'] = relationship('NodesProtocols', back_populates='sub_nodes_outbox')
     user_sub: Mapped['UserSubs'] = relationship('UserSubs', back_populates='sub_nodes_outbox')

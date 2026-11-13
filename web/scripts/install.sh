@@ -119,6 +119,57 @@ else
     echo -e "${GREEN}✓${NC} Используется домен из переменной окружения: $ADMIN_DOMAIN"
 fi
 
+CADDY_CONTAINER="caddy-admin"
+
+# Порты Caddy. Значение из переменной окружения (например, в CI) принимается без вопроса, иначе спрашиваем.
+# $1 — имя переменной, $2 — порт по умолчанию, $3 — подпись для вопроса
+ask_caddy_port() {
+    local var_name=$1 default_port=$2 label=$3 from_env=${!1} port
+    while true; do
+        if [ -n "$from_env" ]; then
+            port=$from_env
+        else
+            read -p "Введите $label порт Caddy (по умолчанию $default_port): " port
+            port=${port:-$default_port}
+        fi
+
+        if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+            echo -e "${RED}✗${NC} Ошибка: порт должен быть числом от 1 до 65535: '$port'"
+        elif ! docker ps --format '{{.Names}}' | grep -q "^${CADDY_CONTAINER}$" && lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
+            # Занятость проверяем, только если наш Caddy ещё не запущен: при повторной установке порт занят им самим
+            echo -e "${RED}✗${NC} Порт $port уже занят:"
+            lsof -Pi :$port -sTCP:LISTEN | head -5
+        else
+            printf -v "$var_name" '%s' "$port"
+            echo -e "${GREEN}✓${NC} Caddy, $label порт: $port"
+            return 0
+        fi
+
+        # Значение из окружения исправить нечем — выходим, а не спрашиваем по кругу
+        if [ -n "$from_env" ]; then
+            echo -e "${YELLOW}Установка отменена: исправьте переменную $var_name${NC}"
+            exit 1
+        fi
+    done
+}
+
+ask_caddy_ports() {
+    echo -e "\n${YELLOW}Настройка портов Caddy${NC}"
+    ask_caddy_port CADDY_HTTP_PORT 80 "HTTP"
+    ask_caddy_port CADDY_HTTPS_PORT 443 "HTTPS"
+    if [ "$CADDY_HTTP_PORT" = "$CADDY_HTTPS_PORT" ]; then
+        echo -e "${RED}✗${NC} HTTP и HTTPS порты Caddy не могут совпадать ($CADDY_HTTP_PORT)"
+        echo -e "${YELLOW}Установка отменена${NC}"
+        exit 1
+    fi
+    if [ "$CADDY_HTTP_PORT" != "80" ] || [ "$CADDY_HTTPS_PORT" != "443" ]; then
+        echo -e "${YELLOW}⚠  Let's Encrypt проверяет домен только через внешние порты 80 и 443.${NC}"
+        echo -e "${YELLOW}   С другими портами сертификат для реального домена выпустится, только если${NC}"
+        echo -e "${YELLOW}   80/443 проброшены на них снаружи (NAT, балансировщик)${NC}"
+    fi
+}
+ask_caddy_ports
+
 # Интерактивный выбор порта для админ-панели
 echo -e "\n${YELLOW}Настройка порта для Admin Panel${NC}"
 DEFAULT_PORT=8000
@@ -321,6 +372,10 @@ cat > "$ENV_FILE" <<ENVEOF
 ADMIN_PORT=${ADMIN_PORT}
 ADMIN_DOMAIN=${ADMIN_DOMAIN}
 
+# Порты, на которых Caddy принимает соединения
+CADDY_HTTP_PORT=${CADDY_HTTP_PORT}
+CADDY_HTTPS_PORT=${CADDY_HTTPS_PORT}
+
 # Redis
 REDIS_PASSWORD=${REDIS_PASSWORD}
 
@@ -516,7 +571,12 @@ echo -e "${GREEN}  Установка завершена успешно!${NC}"
 echo -e "${BLUE}========================================${NC}\n"
 
 echo -e "Директория установки: ${GREEN}${INSTALL_DIR}${NC}"
-echo -e "Admin Panel доступна по адресу: ${GREEN}https://${ADMIN_DOMAIN}${NC}"
+# Нестандартный HTTPS-порт нужно указывать в адресе явно
+ADMIN_URL="https://${ADMIN_DOMAIN}"
+if [ "$CADDY_HTTPS_PORT" != "443" ]; then
+    ADMIN_URL="${ADMIN_URL}:${CADDY_HTTPS_PORT}"
+fi
+echo -e "Admin Panel доступна по адресу: ${GREEN}${ADMIN_URL}${NC}"
 if [ "$ADMIN_DOMAIN" = "localhost" ]; then
     echo -e "${YELLOW}⚠  Самоподписанный сертификат - браузер покажет предупреждение${NC}"
     echo -e "${YELLOW}   Это нормально для localhost. Продолжите через 'Advanced' → 'Proceed'${NC}"

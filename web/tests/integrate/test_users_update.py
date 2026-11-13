@@ -186,6 +186,65 @@ class TestUpdateUserSubs:
             assert subs_count == 2  # Было 1, стало 2
 
     @pytest.mark.asyncio
+    async def test_add_subscription_without_flags_uses_defaults(self, client, user_with_subs, mock_arq, db_pool):
+        """
+        Подписка без is_active/is_limited создаётся активной и не ограниченной.
+
+        Раньше в БД уходил NULL: bulk deactivate/activate/delete фильтруют is_limited = false,
+        поэтому такая подписка выключалась в базе, а пользователь оставался в ядрах
+        """
+        user_id = user_with_subs["user_id"]
+
+        response = await client.put(
+            f"/api/v1/private/users/subs/{user_id}",
+            json={
+                "user_subs_to_add": [
+                    {
+                        "b64_id": "b64_token_without_flags_1",
+                        "uuid": "cccccccc-dddd-eeee-ffff-000000000002",
+                        "sub_plan_id": user_with_subs["plan_id_2"],
+                        "infinite_traffic": True,
+                        "infinite_expire": True,
+                    }
+                ]
+            },
+        )
+
+        assert response.status_code == 200
+        async with db_pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT is_active, is_limited FROM user_subs WHERE b64_id = $1", "b64_token_without_flags_1"
+            )
+        assert row["is_active"] is True
+        assert row["is_limited"] is False
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("flag", ["is_active", "is_limited"])
+    async def test_add_subscription_null_flag_rejected(self, client, user_with_subs, mock_arq, db_pool, flag):
+        """Явный null во флаге подписки — 422, а не NULL в базе"""
+        user_id = user_with_subs["user_id"]
+
+        response = await client.put(
+            f"/api/v1/private/users/subs/{user_id}",
+            json={
+                "user_subs_to_add": [
+                    {
+                        "b64_id": "b64_token_with_null_flag",
+                        "uuid": "cccccccc-dddd-eeee-ffff-000000000003",
+                        "sub_plan_id": user_with_subs["plan_id_2"],
+                        "infinite_traffic": True,
+                        "infinite_expire": True,
+                        flag: None,
+                    }
+                ]
+            },
+        )
+
+        assert response.status_code == 422
+        async with db_pool.acquire() as conn:
+            assert await conn.fetchval("SELECT COUNT(*) FROM user_subs WHERE b64_id = 'b64_token_with_null_flag'") == 0
+
+    @pytest.mark.asyncio
     async def test_update_user_subs_delete_subscription(self, client, user_with_subs, mock_arq, db_pool):
         """Удаление подписки пользователя"""
         user_id = user_with_subs["user_id"]

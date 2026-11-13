@@ -486,7 +486,9 @@ class TestBulkUpdateEdgeCases:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["affected_count"] == 0  # Не попал в outbox (is_limited=true фильтруется)
+        # affected_count считает подписки, а не события: подписка деактивирована, хотя в outbox не попала
+        assert data["affected_count"] == 1
+        assert data["events_count"] == 0  # is_limited=true: пользователя в ядрах уже нет
 
         # Проверяем что в outbox ничего не попало (is_limited=true не попадают в outbox)
         async with db_pool.acquire() as conn:
@@ -572,7 +574,8 @@ class TestBulkUpdateEdgeCases:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["affected_count"] == 1  # Только limited попал в outbox
+        assert data["affected_count"] == 2  # Трафик сброшен у обеих подписок
+        assert data["events_count"] == 1  # В outbox попал только limited
 
         # Проверяем что трафик обнулён у ОБОИХ в user_subs
         async with db_pool.acquire() as conn:

@@ -381,55 +381,75 @@ else
     echo -e "${GREEN}✓${NC} Используется домен из переменной окружения: $SUB_DOMAIN"
 fi
 
-# Проверка портов 80 и 443 для Caddy
-echo -e "\n${YELLOW}Проверка портов 80 и 443 для Caddy...${NC}"
+# Режим Caddy: общий с Admin Panel (caddy-admin уже запущен на этом сервере) или отдельный (caddy-sub)
+CADDY_MODE="standalone"
+CADDY_CONTAINER="caddy-sub"
 
-PORT_80_BUSY=false
-PORT_443_BUSY=false
-CADDY_MODE="standalone"  # По умолчанию отдельный Caddy
-
-# Проверяем порт 80
-if lsof -Pi :80 -sTCP:LISTEN -t >/dev/null 2>&1; then
-    PORT_80_BUSY=true
-    echo -e "${YELLOW}⚠${NC}  Порт 80 занят"
-fi
-
-# Проверяем порт 443
-if lsof -Pi :443 -sTCP:LISTEN -t >/dev/null 2>&1; then
-    PORT_443_BUSY=true
-    echo -e "${YELLOW}⚠${NC}  Порт 443 занят"
-fi
-
-# Если хотя бы один порт занят
-if [ "$PORT_80_BUSY" = true ] || [ "$PORT_443_BUSY" = true ]; then
-    echo -e "\n${YELLOW}Проверяем что занимает порты...${NC}"
-    
-    # Проверяем есть ли наш Caddy (caddy-admin)
-    if docker ps --format '{{.Names}}' | grep -q '^caddy-admin$'; then
-        echo -e "${GREEN}✓${NC} Найден Caddy от Admin Panel (caddy-admin)"
-        echo -e "${BLUE}  Sub Service будет использовать общий Caddy${NC}"
-        CADDY_MODE="shared"
-    else
-        # Порты заняты неизвестным процессом
-        echo -e "${RED}✗${NC} Порты заняты другим процессом:"
-        
-        if [ "$PORT_80_BUSY" = true ]; then
-            echo -e "\n${YELLOW}Процесс на порту 80:${NC}"
-            lsof -Pi :80 -sTCP:LISTEN | head -5
+# Порты Caddy. Значение из переменной окружения (например, в CI) принимается без вопроса, иначе спрашиваем.
+# $1 — имя переменной, $2 — порт по умолчанию, $3 — подпись для вопроса
+ask_caddy_port() {
+    local var_name=$1 default_port=$2 label=$3 from_env=${!1} port
+    while true; do
+        if [ -n "$from_env" ]; then
+            port=$from_env
+        else
+            read -p "Введите $label порт Caddy (по умолчанию $default_port): " port
+            port=${port:-$default_port}
         fi
-        
-        if [ "$PORT_443_BUSY" = true ]; then
-            echo -e "\n${YELLOW}Процесс на порту 443:${NC}"
-            lsof -Pi :443 -sTCP:LISTEN | head -5
+
+        if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+            echo -e "${RED}✗${NC} Ошибка: порт должен быть числом от 1 до 65535: '$port'"
+        elif ! docker ps --format '{{.Names}}' | grep -q "^${CADDY_CONTAINER}$" && lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
+            # Занятость проверяем, только если наш Caddy ещё не запущен: при повторной установке порт занят им самим
+            echo -e "${RED}✗${NC} Порт $port уже занят:"
+            lsof -Pi :$port -sTCP:LISTEN | head -5
+        else
+            printf -v "$var_name" '%s' "$port"
+            echo -e "${GREEN}✓${NC} Caddy, $label порт: $port"
+            return 0
         fi
-        
-        echo -e "\n${RED}Освободите порты 80 и 443 или остановите Admin Panel Caddy перед установкой Sub Service${NC}"
+
+        # Значение из окружения исправить нечем — выходим, а не спрашиваем по кругу
+        if [ -n "$from_env" ]; then
+            echo -e "${YELLOW}Установка отменена: исправьте переменную $var_name${NC}"
+            exit 1
+        fi
+    done
+}
+
+ask_caddy_ports() {
+    echo -e "\n${YELLOW}Настройка портов Caddy${NC}"
+    ask_caddy_port CADDY_HTTP_PORT 80 "HTTP"
+    ask_caddy_port CADDY_HTTPS_PORT 443 "HTTPS"
+    if [ "$CADDY_HTTP_PORT" = "$CADDY_HTTPS_PORT" ]; then
+        echo -e "${RED}✗${NC} HTTP и HTTPS порты Caddy не могут совпадать ($CADDY_HTTP_PORT)"
         echo -e "${YELLOW}Установка отменена${NC}"
         exit 1
     fi
+    if [ "$CADDY_HTTP_PORT" != "80" ] || [ "$CADDY_HTTPS_PORT" != "443" ]; then
+        echo -e "${YELLOW}⚠  Let's Encrypt проверяет домен только через внешние порты 80 и 443.${NC}"
+        echo -e "${YELLOW}   С другими портами сертификат для реального домена выпустится, только если${NC}"
+        echo -e "${YELLOW}   80/443 проброшены на них снаружи (NAT, балансировщик)${NC}"
+    fi
+}
+
+if docker ps --format '{{.Names}}' | grep -q '^caddy-admin$'; then
+    CADDY_MODE="shared"
+    echo -e "\n${GREEN}✓${NC} Найден Caddy от Admin Panel (caddy-admin)"
+    echo -e "${BLUE}  Sub Service будет использовать общий Caddy${NC}"
+    # Порты общего Caddy задаёт установка Admin Panel — берём HTTPS-порт оттуда, он нужен для адреса сервиса
+    CADDY_HTTPS_PORT=$(grep -s "^CADDY_HTTPS_PORT=" "$INSTALL_DIR/.env" | cut -d= -f2)
+    CADDY_HTTPS_PORT=${CADDY_HTTPS_PORT:-443}
 else
-    echo -e "${GREEN}✓${NC} Порты 80 и 443 свободны"
-    echo -e "${BLUE}  Sub Service будет использовать отдельный Caddy${NC}"
+    echo -e "\n${BLUE}Sub Service будет использовать отдельный Caddy${NC}"
+    # Занятый порт здесь — ошибка: ask_caddy_port покажет, кем он занят
+    ask_caddy_ports
+fi
+
+# Нестандартный HTTPS-порт нужно указывать в адресе явно
+SUB_URL_PORT=""
+if [ "$CADDY_HTTPS_PORT" != "443" ]; then
+    SUB_URL_PORT=":${CADDY_HTTPS_PORT}"
 fi
 
 # Путь к .env файлу
@@ -458,7 +478,7 @@ UVICORN_WORKERS=1
 POST_PROCESSING_RESPONSES=1
 UVICORN_PORT=${SUB_PORT}
 TRUSTED_PROXIES=127.0.0.1,10.0.0.1
-DOMAIN=https://${SUB_DOMAIN}
+DOMAIN=https://${SUB_DOMAIN}${SUB_URL_PORT}
 
 # Robokassa
 ROBO_SHOP_LOGIN=${ROBO_SHOP_LOGIN}
@@ -525,6 +545,9 @@ if [ "$CADDY_MODE" = "standalone" ]; then
 SUB_DOMAIN=${SUB_DOMAIN}
 SUB_PORT=${SUB_PORT}
 REDIS_PASSWORD=${REDIS_PASSWORD}
+# Порты, на которых Caddy принимает соединения
+CADDY_HTTP_PORT=${CADDY_HTTP_PORT}
+CADDY_HTTPS_PORT=${CADDY_HTTPS_PORT}
 ENVEOF
     
     echo -e "${GREEN}✓${NC} .env создан: $ENV_COMPOSE_FILE"
@@ -627,12 +650,12 @@ echo -e "${BLUE}========================================${NC}\n"
 
 # Формируем URL в зависимости от домена
 if [ "$SUB_DOMAIN" = "localhost" ]; then
-    SERVICE_URL="https://localhost"
+    SERVICE_URL="https://localhost${SUB_URL_PORT}"
     echo -e "${YELLOW}⚠  Используется самоподписанный сертификат${NC}"
     echo -e "${YELLOW}   Браузер покажет предупреждение о безопасности - это нормально${NC}"
     echo -e "${YELLOW}   Сервис доступен только локально${NC}\n"
 else
-    SERVICE_URL="https://${SUB_DOMAIN}"
+    SERVICE_URL="https://${SUB_DOMAIN}${SUB_URL_PORT}"
     echo -e "${GREEN}✓${NC} Let's Encrypt сертификат будет получен автоматически"
     echo -e "${YELLOW}  Убедитесь что DNS A-запись для ${SUB_DOMAIN} указывает на IP этого сервера${NC}\n"
 fi

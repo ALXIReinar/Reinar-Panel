@@ -88,22 +88,22 @@ async def bulk_update_users(body: UserBulkUpdateSchema, request: Request, db: Pg
     )
 
     "1. Исполняем 'action' на уровне данных"
-    affected_users = await db.users.bulk_update_action(body.user_ids, body.action)
+    affected_subs, affected_event_ids = await db.users.bulk_update_action(body.user_ids, body.action)
 
     "2. Пробрасываем фоновую задачу на исполнение 'action' на ядрах"
     job_ids = None
-    if affected_users:  # Вызываем ARQ только если есть пользователи
-        affected_event_ids = [ae['event_id'] for ae in affected_users]
+    if affected_event_ids:  # Вызываем ARQ только если есть что исполнять на ядрах
         job_ids = await put_to_arq_bg_bulk(arq, affected_event_ids, body.action)
 
     log_event(
-        f'Обновлено пользователей ({len(affected_users)}). Закинули исполнение операции в фон | job_ids: \033[31m{job_ids}\033[0m; action: \033[32m{body.action}\033[0m; admin_id: \033[32m{request.state.admin_id}\033[0m',
+        f'Обновлено подписок: {affected_subs}; событий для ядер: {len(affected_event_ids)}. Закинули исполнение операции в фон | job_ids: \033[31m{job_ids}\033[0m; action: \033[32m{body.action}\033[0m; admin_id: \033[32m{request.state.admin_id}\033[0m',
         request=request,
     )
     return {
         'success': True,
         'message': f'Bulk Операция ({body.action}) выполнена',
-        'affected_count': len(affected_users),
+        'affected_count': affected_subs,  # подписки, а не события: событие создаётся на каждую ноду подписки
+        'events_count': len(affected_event_ids),
         'arq_job_ids': job_ids,
     }
 
@@ -119,23 +119,23 @@ async def bulk_delete_users(body: UserBulkDeleteSchema, request: Request, db: Pg
     )
 
     "1. Удаление на уровне данных"
-    delete_events = await db.users.bulk_delete(body.user_ids)
+    deleted_users, delete_events_ids = await db.users.bulk_delete(body.user_ids)
 
     "2. Удаление на впн-ядрах"
     job_ids = []
-    if delete_events:  # Вызываем ARQ только если есть пользователи
-        delete_events_ids = [de['event_id'] for de in delete_events]
+    if delete_events_ids:  # Вызываем ARQ только если есть что удалять из ядер
         job_ids = await put_to_arq_bg_bulk(arq, delete_events_ids, CoreProtoActions.word_delete)
 
     log_event(
-        f'Удалено пользователей: {len(delete_events)}; admin_id: \033[32m{request.state.admin_id}\033[0m',
+        f'Удалено пользователей: {deleted_users}; событий для ядер: {len(delete_events_ids)}; admin_id: \033[32m{request.state.admin_id}\033[0m',
         request=request,
         level='WARNING',
     )
     return {
         'success': True,
         'message': 'Пользователи удалены!',
-        'deleted_count': len(delete_events),
+        'deleted_count': deleted_users,  # пользователи, а не события: событие создаётся на каждую ноду подписки
+        'events_count': len(delete_events_ids),
         'arq_job_ids': job_ids,
     }
 

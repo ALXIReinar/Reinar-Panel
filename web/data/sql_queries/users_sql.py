@@ -31,8 +31,13 @@ class UsersQueries:
 
         return await self.conn.fetch(query, tg_ids, tg_usernames)
 
-    async def bulk_update_action(self, user_ids: list[int], action: str):
-        """3 upd-варианта"""
+    async def bulk_update_action(self, user_ids: list[int], action: str) -> tuple[int, list[int]]:
+        """
+        3 upd-варианта.
+
+        Возвращает (сколько подписок изменено, ID событий outbox). Это разные числа: событий — по одному на каждую
+        ноду подписки, а для подписок, которых в ядрах нет (is_limited), их нет вовсе
+        """
         "Активируем подписки"
         query_activate = """
         UPDATE user_subs SET is_active = true FROM (
@@ -92,16 +97,26 @@ class UsersQueries:
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true AND np.reg_status = $3
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
             {is_limited_filter}
+        ),
+        events AS (
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+            SELECT uuid, user_sub_id, $2, node_proto_id
+            FROM sub_nodes_info
+            RETURNING id AS event_id
         )
-        INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
-        SELECT uuid, user_sub_id, $2, node_proto_id
-        FROM sub_nodes_info
-        RETURNING id AS event_id
+        SELECT (SELECT COUNT(*) FROM action) AS affected_subs,
+               COALESCE((SELECT array_agg(event_id) FROM events), '{{}}') AS event_ids -- Список вида [event_id]
         '''  # noqa: W291
-        return await self.conn.fetch(base_query, user_ids, action_param, VnodeRegStatuses.success)
+        row = await self.conn.fetchrow(base_query, user_ids, action_param, VnodeRegStatuses.success)
+        return row['affected_subs'], list(row['event_ids'])
 
-    async def bulk_delete(self, user_ids: list[int]):
-        """Удаление пользователей"""
+    async def bulk_delete(self, user_ids: list[int]) -> tuple[int, list[int]]:
+        """
+        Удаление пользователей.
+
+        Возвращает (сколько пользователей удалено, ID событий outbox). Событий может не быть вовсе: у пользователя
+        нет активной подписки или его уже нет в ядрах (is_limited)
+        """
         query = """
         WITH sub_off AS (
             UPDATE user_subs SET is_active = false
@@ -122,13 +137,18 @@ class UsersQueries:
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = us.sub_plan_id 
             JOIN nodes_protocols np ON np.id = vsp.node_proto_id AND np.user_visible = true AND np.reg_status = $3
             JOIN nodes n ON np.node_id = n.id AND n.is_active = true 
+        ),
+        events AS (
+            INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
+            SELECT uuid, user_sub_id, $2, node_proto_id
+            FROM sub_nodes_info
+            RETURNING id AS event_id
         )
-        INSERT INTO sub_nodes_outbox (user_uuid, user_sub_id, operation, node_proto_id)
-        SELECT uuid, user_sub_id, $2, node_proto_id
-        FROM sub_nodes_info
-        RETURNING id AS event_id
+        SELECT (SELECT COUNT(*) FROM del_users) AS deleted_users,
+               COALESCE((SELECT array_agg(event_id) FROM events), '{}') AS event_ids
         """  # noqa: W291
-        return await self.conn.fetch(query, user_ids, CoreProtoActions.delete, VnodeRegStatuses.success)
+        row = await self.conn.fetchrow(query, user_ids, CoreProtoActions.delete, VnodeRegStatuses.success)
+        return row['deleted_users'], list(row['event_ids'])
 
     async def all(self, last_id: int | None, sort_by: Literal['asc', 'desc'], limit: int) -> list:
         """Получить список пользователей с пагинацией"""

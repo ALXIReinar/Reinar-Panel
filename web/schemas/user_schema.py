@@ -77,8 +77,10 @@ class UserSubAddItem(BaseModel):
     infinite_traffic: bool
     expire_date: Optional[datetime] = None
     infinite_expire: bool
-    is_active: Optional[bool] = None
-    is_limited: Optional[bool] = None
+    # Не Optional: NULL в этих флагах ломает bulk-операции — они фильтруют is_limited = false, и подписка с NULL
+    # выключается в базе, а пользователь остаётся в ядрах. Явный null в запросе — 422
+    is_active: bool = True
+    is_limited: bool = False
 
 
 class UserSubsUpdateSchema(BaseModel):

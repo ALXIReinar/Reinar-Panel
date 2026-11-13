@@ -1,6 +1,9 @@
 {
     admin off
     order rate_limit before basicauth
+    # Порты, на которых Caddy принимает соединения. Подстановка окружения в Caddyfile — {$ИМЯ:умолчание}
+    http_port {$CADDY_HTTP_PORT:80}
+    https_port {$CADDY_HTTPS_PORT:443}
 }
 
 # Импортируем все конфиги доменов из папки
