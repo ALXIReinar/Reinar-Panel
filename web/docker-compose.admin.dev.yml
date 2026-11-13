@@ -5,6 +5,8 @@
 #   docker compose -f docker-compose.admin.yml -f docker-compose.admin.dev.yml up -d
 # Применить изменения кода:
 #   docker compose -f docker-compose.admin.yml -f docker-compose.admin.dev.yml restart web-service arq-sub-worker
+# Пересобрать образ после смены requirements.txt (только админку, без Caddy):
+#   docker compose -f docker-compose.admin.yml -f docker-compose.admin.dev.yml build web-db-migrations
 # Миграции и сид:
 #   docker compose -f docker-compose.admin.yml -f docker-compose.admin.dev.yml run --rm web-db-migrations
 #
