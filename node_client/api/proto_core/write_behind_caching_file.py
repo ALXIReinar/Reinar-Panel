@@ -654,9 +654,8 @@ class ConfigWriteBuffer:
                         op = await asyncio.wait_for(queue.get(), timeout=remaining_time)
                         operations.append(op)
                         queue.task_done()
-                    except (TimeoutError, asyncio.TimeoutError):  # noqa: UP041 — в Python 3.10 это разные классы
-                        # Таймаут истёк, выходим. На стенде нод-клиент работает на 3.10: там wait_for бросает
-                        # asyncio.TimeoutError, и один TimeoutError его не ловил — батч терялся, запись не происходила
+                    except TimeoutError:
+                        # Таймаут истёк, выходим
                         break
 
                 # Запись сохраняет всё состояние буфера, а не только операции батча: забираем и остаток очереди,
@@ -748,7 +747,7 @@ class ConfigWriteBuffer:
             try:
                 # Без таймаута зависшая команда вешала запись, а с ней reinit (remove_node) и остановку
                 stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=env.command_timeout)
-            except (TimeoutError, asyncio.TimeoutError):  # noqa: UP041 — в Python 3.10 это разные классы
+            except TimeoutError:
                 process.kill()
                 log_event(
                     f'Команда перезагрузки ядра не завершилась за {env.command_timeout} с и прервана: "{reload_command}"',
