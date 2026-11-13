@@ -129,6 +129,17 @@ class NodesProtocolsQueries:
         '''  # noqa: W291
         return await self.conn.fetchrow(query, node_proto_id)
 
+    async def get_node_for_config_file(self, node_proto_id: int):
+        query = '''
+        SELECT n.node_name, np.title, n.ip, n.private_ip, n.api_port, n.is_active,
+               np.config_path, pt.url_tmp
+        FROM nodes_protocols np
+        JOIN nodes n ON np.node_id = n.id
+        JOIN proto_templates pt ON np.tmp_id = pt.id
+        WHERE np.id = $1
+        '''
+        return await self.conn.fetchrow(query, node_proto_id)
+
     async def update_config_link(self, node_proto_id: int, sub_ready_link: str):
         query = 'UPDATE nodes_protocols SET updated_at = NOW(), config_link = $2 WHERE id = $1'
         await self.conn.execute(query, node_proto_id, sub_ready_link)
@@ -144,29 +155,14 @@ class NodesProtocolsQueries:
             JOIN nodes n ON n.id = np.node_id AND n.is_active = true
             WHERE np.reg_status = $5
             RETURNING id, node_proto_id
-        ),
-        pre_agg_user_injectors AS (
-            SELECT tmp_id,
-               json_agg(
-                   json_build_object(
-                       'flatten_array_cursor', flatten_array_cursor,
-                       'extractor_script', extractor_script,
-                       'libs', libs
-                   )
-               ) AS user_injectors
-            FROM templates_users_extractors
-            GROUP BY tmp_id
         )
-        SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib, pt.api_bulk_add_user_script,
-               pt.api_bulk_delete_user_script, np.reload_core_command,
-               np.config_path, pt.required_user_data_obj,
-               pt.constant_user_data_obj, pt.bulk_delete_script_custom_params, pt.bulk_add_script_custom_params, oi.id AS event_id,
-               np.constant_node_data_obj, pt.json2config_script, pt.config2json_script, pt.conf_converter_libs,
-               COALESCE(aui.user_injectors, '[]'::json) AS user_injectors
+        SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port,
+               pt.required_user_data_obj, pt.constant_user_data_obj,
+               pt.bulk_delete_script_custom_params, pt.bulk_add_script_custom_params,
+               oi.id AS event_id, np.constant_node_data_obj
         FROM nodes_protocols np
         JOIN nodes n ON np.node_id = n.id AND n.is_active = true
         JOIN proto_templates pt ON np.tmp_id = pt.id
-        LEFT JOIN pre_agg_user_injectors aui ON pt.id = aui.tmp_id
         JOIN outbox_insert oi ON oi.node_proto_id = np.id
         WHERE np.id = $4 AND np.reg_status = $5
         '''  # noqa: W291

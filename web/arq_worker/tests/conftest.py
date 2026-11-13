@@ -2161,6 +2161,13 @@ async def metrics_collector_seed(db_pool, arq_test_seed, real_parser_scripts):
                 )
             );
         """)  # noqa: W291, W293
+        # Шаблон общий (эталонный, из seed_data) — запоминаем исходные поля и возвращаем их после теста.
+        # Иначе заглушки ниже остаются в тестовой БД и ломают тесты нод-клиента (регистрация компилирует скрипты)
+        tmp_id = await conn.fetchval("SELECT tmp_id FROM nodes_protocols WHERE id = $1", arq_test_seed['vnode_id_10'])
+        original_template = await conn.fetchrow(
+            "SELECT metrics_parser_code, metrics_command, api_metrics_script FROM proto_templates WHERE id = $1",
+            tmp_id,
+        )
         # 1. Добавляем metrics_parser_code в существующий proto_template из arq_test_seed
         parser = list(real_parser_scripts.values())[0]
         await conn.execute(
@@ -2532,7 +2539,7 @@ async def metrics_collector_seed(db_pool, arq_test_seed, real_parser_scripts):
             "uuid-metrics-user-g",
             "b64-metrics-g",
         )
-        return {
+        seed = {
             # Переиспользуем инфраструктуру из arq_test_seed
             "plan_id": metrics_plan_id,
             "node_id": arq_test_seed['node_id_active'],
@@ -2587,6 +2594,20 @@ async def metrics_collector_seed(db_pool, arq_test_seed, real_parser_scripts):
                 },
             },
         }
+
+    yield seed
+
+    "Возвращаем эталонному шаблону исходные значения"
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE proto_templates
+            SET metrics_parser_code = $2, metrics_command = $3, api_metrics_script = $4
+            WHERE id = $1
+        """,
+            tmp_id,
+            *original_template,
+        )
 
 
 @pytest.fixture

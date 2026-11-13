@@ -46,8 +46,9 @@ jobs:
           PG_HOST=127.0.0.1
   
           NODE_PORT=${{ vars.NODE_PORT }}
-          NODE_NAME=${{ vars.NODE_NAME }}
+          NODE_TITLE=${{ vars.NODE_TITLE }}
           ADMIN_PANEL_PRIVATE_IP=${{ vars.ADMIN_PANEL_PRIVATE_IP }}
+          ADMIN_PANEL_PORT=${{ vars.ADMIN_PANEL_PORT }}
           EOF
           
           cat > node_client/.env <<EOF
@@ -87,7 +88,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Requirements
-        run: pip install -r node_client/requirements.txt
+        run: pip install -r node_client/requirements-test.txt
 
       - name: Run Node Client Tests
         run: python -m pytest node_client/tests -v --protocol "*" --mode real
@@ -99,7 +100,8 @@ jobs:
   # 2. Установка и Healthcheck
   install-test:
     needs: build-test
-    runs-on: ubuntu-latest
+    # Ubuntu 22.04 — поддерживаемая ОС нод: системный python3 там 3.10, install.sh обязан поставить 3.12 сам
+    runs-on: ubuntu-22.04
     environment: node_client
     steps:
       - name: Checkout code
@@ -118,11 +120,23 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Start fake admin panel
+        # Нод-клиент при старте запрашивает /startup у админки и до ответа не поднимает HTTP (/ping).
+        # Настоящей админки в CI нет — отвечает фейковая: «виртуальных нод нет»
+        run: |
+          nohup python3 .github/scripts/fake_admin.py 8000 > fake_admin.log 2>&1 &
+          for i in {1..10}; do
+            curl -s -o /dev/null -X POST http://127.0.0.1:8000/api/v1/server/nodes/ci/startup && exit 0
+            sleep 1
+          done
+          echo "❌ Фейковая админка не поднялась"; cat fake_admin.log; exit 1
+
       - name: Install Node Client
         env:
           NODE_PORT: ${{ vars.NODE_PORT }}
-          NODE_NAME: ${{ vars.NODE_NAME }}
-          ADMIN_PANEL_PRIVATE_IP: ${{ vars.ADMIN_PANEL_PRIVATE_IP }}
+          NODE_TITLE: ${{ vars.NODE_TITLE }}
+          ADMIN_PANEL_PRIVATE_IP: 127.0.0.1  # фейковая админка из шага выше
+          ADMIN_PANEL_PORT: 8000  # порт фейковой админки
           CI: 1
         run: |
           echo "🚀 Установка Node Client..."
@@ -131,6 +145,12 @@ jobs:
             echo "❌ Ошибка установки Node Client"
             exit 1
           }
+
+      - name: Verify Node Client Python version
+        run: |
+          VERSION=$(sudo /opt/reinar_panel/node/venv/bin/python --version)
+          echo "Python нод-клиента: $VERSION"
+          [[ "$VERSION" == "Python 3.12."* ]] || { echo "❌ Ожидался Python 3.12"; exit 1; }
 
       - name: Verify Node Client Health
         env:
@@ -145,5 +165,5 @@ jobs:
             sleep 5
           done
           echo "❌ Превышено время ожидания. Логи сервиса:"
-          sudo journalctl -u vpn-node-client.service -n 100 --no-pager || true
+          sudo journalctl -u reinar-node -n 100 --no-pager || true
           exit 1

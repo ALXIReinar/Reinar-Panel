@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException  # noqa: I001
+import asyncio  # noqa: I001
+from fastapi import APIRouter, HTTPException
 from starlette.requests import Request
 
-from node_client.api.sandbox.hot_reload_executor import HotReloadExecutor
 from node_client.api.proto_core.write_behind_caching_file import CoreBuffersDep
+from node_client.config import CoreProtoActions
 from node_client.schemas.proto_core_users_schema import BaseUserCoreSchema
 from node_client.utils.logger_config import log_event
 
@@ -12,69 +13,65 @@ router = APIRouter(prefix='/proto_core', tags=['Protocol Core Users'])
 @router.put('/user/bulk/action')
 async def bulk_action_users_core(body: BaseUserCoreSchema, request: Request, buffer: CoreBuffersDep):
     """
-    Добавление пользователя в ядро протокола
+    Добавление или удаление пользователей в ядро протокола
 
     Workflow:
-    1. [Если есть core_lib] → Hot-reload через API (мгновенно)
-    2. Вставка в буфер (O(1))
-    3. Добавление в очередь на запись (батчинг)
-    4. [Если нет hot-reload] → Перезагрузка ядра после записи файла
+    1. Получение метаданных виртуальной ноды из ConfigWriteBuffer
+    2. [Если есть api_script] → Hot-reload через API (мгновенно)
+    3. Вставка/удаление в буфер (O(1)) и добавление в очередь на запись (батчинг)
     """
     log_event(
-        f"Добавление пользователей | action: \033[33m{body.action}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m; users_len: \033[0m{len(body.users)}\033[0m",
+        f"Операция над пользователями | action: \033[33m{body.action}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m; users_len: \033[0m{len(body.users)}\033[0m",
         request=request,
     )
 
-    "0. Маппим действия в зависимости от операции"
+    meta = buffer.get_metadata(body.node_proto_id)
+
     hot_reload_success = False
     hot_reload_result = ""
 
-    "1. Hot-reload через API (если есть скрипт)"
-    if body.action_script and body.core_port:
+    action_script = (
+        meta.get('api_bulk_add_user_script')
+        if body.action == CoreProtoActions.word_add
+        else meta.get('api_bulk_delete_user_script')
+    )
+
+    if action_script and body.core_port:
         try:
             log_event(
-                f"\033[32m[Bulk]]\033[0m Попытка hot-reload действия через {body.core_lib} | action: \033[33m{body.action}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m;",
+                f"\033[32m[Bulk]\033[0m Попытка hot-reload действия | action: \033[33m{body.action}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m;",
                 request=request,
             )
-            hot_reload_success, hot_reload_result = await HotReloadExecutor.execute_action_script(
-                script=body.action_script,
-                lib_names=body.core_lib,
-                user_obj=body.users,
-                node_ip='127.0.0.1',
-                core_api_port=body.core_port,
-                custom_params=body.custom_params,
-                action="user_core_operation",  # Используем универсальный action для bulk операций
-            )
-
-            if not hot_reload_success:
+            res = action_script(body.users, '127.0.0.1', body.core_port, body.custom_params or {})
+            if asyncio.iscoroutine(res):
+                res = await res
+            hot_reload_result = res
+            # Скрипты шаблонов ловят ошибки ядра по каждому пользователю сами и возвращают {"success": n, "failed": m}:
+            # без этой проверки отказ ядра (например, неверный ключ пользователя) виден только в print скрипта
+            failed = res.get('failed') if isinstance(res, dict) else None
+            hot_reload_success = not failed
+            if failed:
                 log_event(
-                    f"\033[32m[Bulk]\033[0m Hot-reload ADD FAILED: {hot_reload_result}. Продолжаем с файловой записью | action: \033[33m{body.action}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m;",
+                    f"\033[32m[Bulk]\033[0m Ядро через API применило операцию не ко всем пользователям — для них изменения дойдут до ядра только после записи конфига | "
+                    f"action: \033[33m{body.action}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m; "
+                    f"success: {res.get('success')}; failed: {failed}",
                     request=request,
-                    level='ERROR',
+                    level='WARNING',
                 )
-
         except Exception as e:
-            log_event(
-                f"\033[32m[Bulk]\033[0m Исключение при hot-reload вставки: {e}", request=request, level='CRITICAL'
-            )
+            log_event(f"\033[32m[Bulk]\033[0m Ошибка при hot-reload | err: {e}", request=request, level='ERROR')
+            hot_reload_success = False
             hot_reload_result = str(repr(e))
 
-    "2. Действие из ConfigWriteBuffer без лимитов на операции"
     success, msg = await buffer.bulk_action(
         node_proto_id=body.node_proto_id,
         users=body.users,
-        filepath=body.config_file_path,
-        user_injectors=[u_inj.model_dump() for u_inj in body.user_injectors],
-        reload_command=body.reload_core_command,
         action=body.action,
-        config2json_script=body.config2json_script,
-        json2config_script=body.json2config_script,
-        conf_converter_libs=body.conf_converter_libs,
     )
 
     level = "INFO" if success else "CRITICAL"
     log_event(
-        f"\033[32m[Bulk]\033[0m Бульк Действия в буфере в буфер | action: \033[33m{body.action}\033[0m; users_len: \033[31m{len(body.users)}\033[0m; msg: \033[36m{msg}\033[0m",
+        f"\033[32m[Bulk]\033[0m Действие в буфере | action: \033[33m{body.action}\033[0m; users_len: \033[31m{len(body.users)}\033[0m; msg: \033[36m{msg}\033[0m",
         request=request,
         level=level,
     )

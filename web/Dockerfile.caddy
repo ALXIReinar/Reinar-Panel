@@ -1,9 +1,18 @@
-FROM caddy:builder AS builder
+# Версия Caddy закреплена намеренно. С плавающими тегами (caddy:builder, caddy:alpine) каждое обновление образа
+# в Docker Hub сбрасывало кеш, и Caddy компилировался заново (10+ минут на слабом сервере).
+# Обновление Caddy — поменять CADDY_VERSION здесь, плагина — версию после @
+ARG CADDY_VERSION=2.11.9
 
-# xcaddy автоматически скачает исходники, добавит плагин и соберет бинарник
-RUN xcaddy build \
-    --with github.com/mholt/caddy-ratelimit
+FROM caddy:${CADDY_VERSION}-builder AS builder
+ARG CADDY_VERSION
+
+# xcaddy скачает исходники Caddy указанной версии, добавит плагин и соберёт бинарник.
+# Кеш модулей и компиляции Go живёт между сборками: после смены версии пересобирается только изменившееся
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    xcaddy build v${CADDY_VERSION} \
+    --with github.com/mholt/caddy-ratelimit@v0.1.0
 
 # Легковесный финальный образ
-FROM caddy:alpine
+FROM caddy:${CADDY_VERSION}-alpine
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy

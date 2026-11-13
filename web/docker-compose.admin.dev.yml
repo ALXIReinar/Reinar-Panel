@@ -1,0 +1,27 @@
+# Dev-надстройка над docker-compose.admin.yml: код сервисов монтируется с диска, образ нужен только ради зависимостей
+# (пересборка — лишь при смене requirements.txt). Для локальной разработки и дев-стенда; на проде НЕ использовать.
+#
+# Запуск (из каталога web/):
+#   docker compose -f docker-compose.admin.yml -f docker-compose.admin.dev.yml up -d
+# Применить изменения кода:
+#   docker compose -f docker-compose.admin.yml -f docker-compose.admin.dev.yml restart web-service arq-sub-worker
+# Пересобрать образ после смены requirements.txt (только админку, без Caddy):
+#   docker compose -f docker-compose.admin.yml -f docker-compose.admin.dev.yml build web-db-migrations
+# Миграции и сид:
+#   docker compose -f docker-compose.admin.yml -f docker-compose.admin.dev.yml run --rm web-db-migrations
+#
+# Чтобы не писать оба -f: в web/.env (рядом с compose) — COMPOSE_FILE=docker-compose.admin.yml:docker-compose.admin.dev.yml
+
+services:
+  web-service:
+    volumes:
+      - .:/app/web
+
+  web-db-migrations:
+    volumes:
+      # Не :ro — web/config_dir/config.py при импорте создаёт web_logs
+      - .:/app/web
+
+  arq-sub-worker:
+    volumes:
+      - .:/app/web

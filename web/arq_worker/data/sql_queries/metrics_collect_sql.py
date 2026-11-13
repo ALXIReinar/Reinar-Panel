@@ -1,6 +1,6 @@
 from asyncpg import Connection
 
-from web.arq_worker.utils.anything import CoreProtoActions, VnodeRegStatuses, UserStatuses
+from web.arq_worker.utils.anything import CoreProtoActions, UserStatuses, VnodeRegStatuses
 
 
 class MetricsQueries:
@@ -9,14 +9,11 @@ class MetricsQueries:
 
     async def get_all_nodes_for_metrics_cron(self):
         query = '''
-        SELECT np.id, n.ip, n.private_ip, n.api_port, np.metrics_port, COALESCE(np.metrics_command, pt.metrics_command) AS metrics_command,
-               pt.api_metrics_script, pt.proto_python_lib, pt.metrics_parser_code, pt.metrics_parser_libs, 
-               pt.metrics_parser_code, pt.metrics_parser_libs
+        SELECT np.id, n.ip, n.private_ip, n.api_port, np.metrics_port
         FROM nodes n
         JOIN nodes_protocols np ON np.node_id = n.id AND np.user_visible = true AND np.reg_status = $1
-        JOIN proto_templates pt ON np.tmp_id = pt.id
         WHERE n.is_active = true AND np.metrics_port IS NOT NULL
-        '''  # noqa: W291
+        '''
         return await self.conn.fetch(query, VnodeRegStatuses.success)
 
     async def update_traffic(self, user_sub_ids: list[str], traffic_add_mbs: list[int]):

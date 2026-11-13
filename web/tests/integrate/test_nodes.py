@@ -338,3 +338,40 @@ class TestDeletePhysicalNode:
                 "SELECT EXISTS(SELECT 1 FROM nodes_protocols WHERE id = $1)", vnode_id
             )
             assert vnode_exists_after is False
+
+
+class TestNodeTitleValidation:
+    """nodes.title — имя, по которому нод-клиент находит себя (/startup): ≤64 символов, без символов, ломающих URL"""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "title",
+        ["DE/Frankfurt", "DE #1", "node?x", "a&b", "x" * 65],
+        ids=["слэш", "решётка", "вопрос", "амперсанд", "65 символов"],
+    )
+    async def test_create_node_rejects_unsafe_title(self, client, db_seed, title):
+        client.app.state.cmd_center_aiohttp = FakeAiohttpSession(json_data={"success": True, "service": "s"})
+
+        response = await client.post(
+            "/api/v1/private/nodes/create",
+            json={"ip": "192.168.1.51", "private_ip": "10.0.0.51", "api_port": 8100, "title": title, "is_active": True},
+        )
+
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_create_node_accepts_cyrillic_title_with_spaces(self, client, db_seed):
+        client.app.state.cmd_center_aiohttp = FakeAiohttpSession(json_data={"success": True, "service": "s"})
+
+        response = await client.post(
+            "/api/v1/private/nodes/create",
+            json={
+                "ip": "192.168.1.52",
+                "private_ip": "10.0.0.52",
+                "api_port": 8100,
+                "title": "Нидерланды-1 main_2.0",
+                "is_active": True,
+            },
+        )
+
+        assert response.status_code == 200

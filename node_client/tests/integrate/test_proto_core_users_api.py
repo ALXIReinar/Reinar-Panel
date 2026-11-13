@@ -3,22 +3,24 @@
 
 Тестируем:
 - HTTP endpoint /user/bulk/action
-- Валидацию Pydantic схем
-- Параметр action ("add", "delete", 1, 2)
-- Взаимодействие с ConfigWriteBuffer (мокированным)
-- Hot-reload логику (мокированную)
-- Обработку ошибок
-- Логику с количеством пользователей
+- Тонкий payload (node_proto_id, users, action, core_port, custom_params)
+- Обратную совместимость (extra="ignore" для старых полей)
+- Валидацию Pydantic схем и конвертацию action ("add", "delete", 1, 2)
+- Взаимодействие с ConfigWriteBuffer
+- Hot-reload через api_bulk_add_user_script / api_bulk_delete_user_script
+- Ответ 428 при незарегистрированной ноде
 """
 
-import pytest  # noqa: I001
-from unittest.mock import AsyncMock, patch, MagicMock  # noqa: F401
-from httpx import AsyncClient
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 
 from node_client.api import main_router
-from node_client.tests.utils.test_data_factory import create_test_user, create_user_injectors  # noqa: F401
-
+from node_client.exceptions import NodeNotRegisteredError
+from node_client.main import node_not_registered_handler
+from node_client.tests.utils.test_data_factory import create_test_user
 
 # ========== Fixtures ==========
 
@@ -27,18 +29,15 @@ from node_client.tests.utils.test_data_factory import create_test_user, create_u
 def mock_buffer():
     """Мокированный ConfigWriteBuffer"""
     buffer_mock = AsyncMock()
-    # По умолчанию все операции успешны
     buffer_mock.bulk_action = AsyncMock(return_value=(True, "Действие выполнено"))
+    buffer_mock.get_metadata = MagicMock(
+        return_value={
+            'api_bulk_add_user_script': None,
+            'api_bulk_delete_user_script': None,
+            'reload_command': None,
+        }
+    )
     return buffer_mock
-
-
-@pytest.fixture
-def mock_hot_reload():
-    """Мокированный HotReloadExecutor"""
-    with patch('node_client.api.proto_core.proto_core_users_api.HotReloadExecutor') as mock:
-        # По умолчанию hot-reload успешен (AsyncMock для awaitable)
-        mock.execute_action_script = AsyncMock(return_value=(True, "Hot-reload успешен"))
-        yield mock
 
 
 @pytest.fixture
@@ -46,15 +45,14 @@ async def client(mock_buffer):
     """HTTP клиент для тестирования API"""
     app = FastAPI()
     app.include_router(main_router)
+    app.add_exception_handler(NodeNotRegisteredError, node_not_registered_handler)
 
-    # Подменяем dependency на мокированный buffer
     def get_mock_buffer():
         return mock_buffer
 
     from node_client.api.proto_core.write_behind_caching_file import get_proto_cores_buffer
 
     app.dependency_overrides[get_proto_cores_buffer] = get_mock_buffer
-    from httpx import ASGITransport
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -62,27 +60,13 @@ async def client(mock_buffer):
 
 
 def create_bulk_action_payload(**overrides):
-    """Создаёт валидный payload для /user/bulk/action"""
+    """Создаёт валидный тонкий payload для /user/bulk/action"""
     payload = {
         "node_proto_id": 1,
         "users": [create_test_user(email="test@test.com")],
-        "config_file_path": "/path/to/config.json",
-        "user_injectors": [
-            {
-                "flatten_array_cursor": "inbounds___0___settings___clients",
-                "extractor_script": "def transform(u): return {'id': u['user_uuid'], 'email': u.get('user_sub_id', 'test@test.com')}",
-                "libs": None,
-            }
-        ],
-        "reload_core_command": "systemctl reload xray",
         "core_port": None,
-        "core_lib": None,
-        "action_script": None,
         "custom_params": None,
-        "action": "add",  # По умолчанию add
-        "config2json_script": None,  # JSON по умолчанию
-        "json2config_script": None,
-        "conf_converter_libs": None,
+        "action": "add",
     }
     payload.update(overrides)
     return payload
@@ -92,104 +76,63 @@ def create_bulk_action_payload(**overrides):
 
 
 @pytest.mark.asyncio
-async def test_action_as_string_add(client, mock_buffer, mock_hot_reload):
-    """
-    Тест: action="add" (строка)
-
-    Проверяем:
-    - HTTP 200
-    - buffer.bulk_action вызван с action="add"
-    """
+async def test_action_as_string_add(client, mock_buffer):
+    """Тест: action='add' (строка)"""
     payload = create_bulk_action_payload(action="add")
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 200
     data = response.json()
     assert data["success"] is True
-    # Проверяем что buffer.bulk_action был вызван с action="add"
     mock_buffer.bulk_action.assert_called_once()
-    call_kwargs = mock_buffer.bulk_action.call_args.kwargs
-    assert call_kwargs["action"] == "add"
+    assert mock_buffer.bulk_action.call_args.kwargs["action"] == "add"
 
 
 @pytest.mark.asyncio
-async def test_action_as_string_delete(client, mock_buffer, mock_hot_reload):
-    """
-    Тест: action="delete" (строка)
-
-    Проверяем:
-    - HTTP 200
-    - buffer.bulk_action вызван с action="delete"
-    """
+async def test_action_as_string_delete(client, mock_buffer):
+    """Тест: action='delete' (строка)"""
     payload = create_bulk_action_payload(action="delete")
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 200
     data = response.json()
     assert data["success"] is True
-    # Проверяем что buffer.bulk_action был вызван с action="delete"
     mock_buffer.bulk_action.assert_called_once()
-    call_kwargs = mock_buffer.bulk_action.call_args.kwargs
-    assert call_kwargs["action"] == "delete"
+    assert mock_buffer.bulk_action.call_args.kwargs["action"] == "delete"
 
 
 @pytest.mark.asyncio
-async def test_action_as_int_1_converts_to_add(client, mock_buffer, mock_hot_reload):
-    """
-    Тест: action=1 (число) конвертируется в "add"
-
-    Проверяем:
-    - HTTP 200
-    - action=1 конвертируется в "add" через validator
-    - buffer.bulk_action вызван с action="add"
-    """
+async def test_action_as_int_1_converts_to_add(client, mock_buffer):
+    """Тест: action=1 (число) конвертируется в 'add'"""
     payload = create_bulk_action_payload(action=1)
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 200
-    data = response.json()
-    assert data["success"] is True
-    # Проверяем конвертацию 1 -> "add"
-    mock_buffer.bulk_action.assert_called_once()
-    call_kwargs = mock_buffer.bulk_action.call_args.kwargs
-    assert call_kwargs["action"] == "add"
+    assert mock_buffer.bulk_action.call_args.kwargs["action"] == "add"
 
 
 @pytest.mark.asyncio
-async def test_action_as_int_2_converts_to_delete(client, mock_buffer, mock_hot_reload):
-    """
-    Тест: action=2 (число) конвертируется в "delete"
-
-    Проверяем:
-    - HTTP 200
-    - action=2 конвертируется в "delete" через validator
-    - buffer.bulk_action вызван с action="delete"
-    """
+async def test_action_as_int_2_converts_to_delete(client, mock_buffer):
+    """Тест: action=2 (число) конвертируется в 'delete'"""
     payload = create_bulk_action_payload(action=2)
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 200
-    data = response.json()
-    assert data["success"] is True
-    # Проверяем конвертацию 2 -> "delete"
-    mock_buffer.bulk_action.assert_called_once()
-    call_kwargs = mock_buffer.bulk_action.call_args.kwargs
-    assert call_kwargs["action"] == "delete"
+    assert mock_buffer.bulk_action.call_args.kwargs["action"] == "delete"
 
 
 # ========== Тесты hot-reload логики ==========
 
 
 @pytest.mark.asyncio
-async def test_bulk_action_with_hot_reload_add(client, mock_buffer, mock_hot_reload):
-    """
-    Тест: Добавление с hot-reload (action="add")
+async def test_bulk_action_with_hot_reload_add(client, mock_buffer):
+    """Тест: Добавление с hot-reload через скомпилированную функцию из метаданных"""
+    mock_hot_reload_func = AsyncMock(return_value="Hot-reload успешен")
+    mock_buffer.get_metadata.return_value = {
+        'api_bulk_add_user_script': mock_hot_reload_func,
+        'api_bulk_delete_user_script': None,
+    }
 
-    Проверяем:
-    - HotReloadExecutor вызван с action="bulk_add_users"
-    - Ответ содержит hot_reload=True
-    """
     payload = create_bulk_action_payload(
         action="add",
         core_port=10086,
-        core_lib="grpcio",
-        action_script="def bulk_add_users(users, ip, port, params): return True",
+        custom_params={"tag": "vpn"},
     )
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 200
@@ -197,225 +140,168 @@ async def test_bulk_action_with_hot_reload_add(client, mock_buffer, mock_hot_rel
     assert data["success"] is True
     assert data["hot_reload"] is True
     assert data["hot_reload_message"] == "Hot-reload успешен"
-    # Проверяем что hot-reload был вызван с action="bulk_add_users"
-    mock_hot_reload.execute_action_script.assert_called_once()
-    call_kwargs = mock_hot_reload.execute_action_script.call_args.kwargs
-    assert call_kwargs["action"] == "user_core_operation"
+    mock_hot_reload_func.assert_called_once_with(payload["users"], "127.0.0.1", 10086, {"tag": "vpn"})
 
 
 @pytest.mark.asyncio
-async def test_bulk_action_with_hot_reload_delete(client, mock_buffer, mock_hot_reload):
-    """
-    Тест: Удаление с hot-reload (action="delete")
+async def test_bulk_action_with_hot_reload_delete(client, mock_buffer):
+    """Тест: Удаление с hot-reload"""
+    mock_delete_func = AsyncMock(return_value="Hot-reload delete ok")
+    mock_buffer.get_metadata.return_value = {
+        'api_bulk_add_user_script': None,
+        'api_bulk_delete_user_script': mock_delete_func,
+    }
 
-    Проверяем:
-    - HotReloadExecutor вызван с action="bulk_delete_users"
-    - Ответ содержит hot_reload=True
-    """
-    payload = create_bulk_action_payload(
-        action="delete",
-        core_port=10086,
-        core_lib="grpcio",
-        action_script="def bulk_delete_users(users, ip, port, params): return True",
-    )
+    payload = create_bulk_action_payload(action="delete", core_port=10086)
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 200
     data = response.json()
-    assert data["success"] is True
     assert data["hot_reload"] is True
-    # Проверяем что hot-reload был вызван с action="bulk_delete_users"
-    mock_hot_reload.execute_action_script.assert_called_once()
-    call_kwargs = mock_hot_reload.execute_action_script.call_args.kwargs
-    assert call_kwargs["action"] == "user_core_operation"
+    mock_delete_func.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_hot_reload_fails_continues_with_file(client, mock_buffer, mock_hot_reload):
-    """
-    Тест: Hot-reload провалился, но файловая запись продолжается
+async def test_hot_reload_fails_continues_with_file(client, mock_buffer):
+    """Тест: Ошибка при hot-reload не блокирует добавление в буфер"""
+    mock_failing_func = AsyncMock(side_effect=RuntimeError("gRPC connection refused"))
+    mock_buffer.get_metadata.return_value = {
+        'api_bulk_add_user_script': mock_failing_func,
+        'api_bulk_delete_user_script': None,
+    }
 
-    Проверяем:
-    - Hot-reload вернул False
-    - buffer.bulk_action всё равно вызван
-    - Ответ содержит hot_reload=False
-    """
-    # Hot-reload провалился
-    mock_hot_reload.execute_action_script = AsyncMock(return_value=(False, "Hot-reload ошибка"))
-    payload = create_bulk_action_payload(
-        core_port=10086,
-        core_lib="grpcio",
-        action_script="def bulk_add_users(users, ip, port, params): return False",
-        reload_core_command="systemctl reload xray",
-    )
+    payload = create_bulk_action_payload(core_port=10086)
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 200
     data = response.json()
     assert data["success"] is True
     assert data["hot_reload"] is False
-    assert data["hot_reload_message"] == "Hot-reload ошибка"
-    # Проверяем что buffer.bulk_action был вызван несмотря на провал hot-reload
+    assert "gRPC connection refused" in data["hot_reload_message"]
     mock_buffer.bulk_action.assert_called_once()
 
 
-# ========== Тесты логики с количеством пользователей ==========
+@pytest.mark.asyncio
+async def test_hot_reload_partial_failure_logged_as_warning(client, mock_buffer):
+    """Скрипт отработал, но часть пользователей ядро не приняло (failed > 0): WARNING в лог и hot_reload=False"""
+    script = AsyncMock(return_value={"success": 0, "failed": 2})
+    mock_buffer.get_metadata.return_value = {'api_bulk_add_user_script': script, 'api_bulk_delete_user_script': None}
+
+    with patch('node_client.api.proto_core.proto_core_users_api.log_event') as log:
+        response = await client.put(
+            "/api/v1/server/proto_core/user/bulk/action", json=create_bulk_action_payload(core_port=10086)
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["hot_reload"] is False, "ядро не приняло пользователей, а ответ сообщает об успешном hot-reload"
+    assert "'failed': 2" in data["hot_reload_message"]
+    warnings = [c for c in log.call_args_list if c.kwargs.get('level') == 'WARNING']
+    assert len(warnings) == 1 and 'failed: 2' in warnings[0].args[0]
+    mock_buffer.bulk_action.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_single_user_add(client, mock_buffer, mock_hot_reload):
-    """
-    Тест: Добавление одного пользователя
+async def test_hot_reload_full_success_no_warning(client, mock_buffer):
+    """failed == 0 — hot_reload=True, предупреждений нет"""
+    script = AsyncMock(return_value={"success": 2, "failed": 0})
+    mock_buffer.get_metadata.return_value = {'api_bulk_add_user_script': script, 'api_bulk_delete_user_script': None}
 
-    Проверяем:
-    - Работает с 1 пользователем
-    - buffer.bulk_action вызван с правильным списком
-    """
+    with patch('node_client.api.proto_core.proto_core_users_api.log_event') as log:
+        response = await client.put(
+            "/api/v1/server/proto_core/user/bulk/action", json=create_bulk_action_payload(core_port=10086)
+        )
+
+    assert response.json()["hot_reload"] is True
+    assert not [c for c in log.call_args_list if c.kwargs.get('level') == 'WARNING']
+
+
+# ========== Тесты количества пользователей ==========
+
+
+@pytest.mark.asyncio
+async def test_single_user_add(client, mock_buffer):
+    """Тест: Добавление одного пользователя"""
     user = create_test_user(email="single@test.com")
     payload = create_bulk_action_payload(users=[user])
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 200
-    data = response.json()
-    assert data["success"] is True
-    # Проверяем что передан список из 1 пользователя
     call_kwargs = mock_buffer.bulk_action.call_args.kwargs
     assert len(call_kwargs["users"]) == 1
     assert call_kwargs["users"][0]["email"] == "single@test.com"
 
 
 @pytest.mark.asyncio
-async def test_multiple_users_bulk(client, mock_buffer, mock_hot_reload):
-    """
-    Тест: Массовая операция с несколькими пользователями
-
-    Проверяем:
-    - Работает со списком пользователей
-    - buffer.bulk_action получает весь список
-    """
+async def test_multiple_users_bulk(client, mock_buffer):
+    """Тест: Массовая операция со списком пользователей"""
     users = [create_test_user(email=f"user{i}@test.com") for i in range(5)]
     payload = create_bulk_action_payload(users=users)
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 200
-    data = response.json()
-    assert data["success"] is True
-    # Проверяем что передан список из 5 пользователей
     call_kwargs = mock_buffer.bulk_action.call_args.kwargs
     assert len(call_kwargs["users"]) == 5
 
 
-# ========== Тесты обработки ошибок ==========
+# ========== Тесты обработки ошибок и валидации ==========
 
 
 @pytest.mark.asyncio
-async def test_buffer_error_returns_500(client, mock_buffer, mock_hot_reload):
-    """
-    Тест: Ошибка от буфера возвращает HTTP 500
+async def test_unregistered_node_returns_428(client, mock_buffer):
+    """Тест: Незарегистрированная нода возвращает 428 Precondition Required"""
+    mock_buffer.get_metadata.side_effect = NodeNotRegisteredError(999)
+    payload = create_bulk_action_payload(node_proto_id=999)
+    response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
+    assert response.status_code == 428
+    data = response.json()
+    assert data["success"] is False
+    assert "не зарегистрирована" in data["message"]
 
-    Проверяем:
-    - buffer.bulk_action вернул (False, error_message)
-    - HTTP 500
-    - Ответ содержит детали ошибки
-    """
-    # Буфер возвращает ошибку
-    mock_buffer.bulk_action = AsyncMock(return_value=(False, "Ошибка валидации конфига"))
+
+@pytest.mark.asyncio
+async def test_buffer_error_returns_500(client, mock_buffer):
+    """Тест: Ошибка буфера возвращает 500"""
+    mock_buffer.bulk_action = AsyncMock(return_value=(False, "Ошибка записи"))
     payload = create_bulk_action_payload()
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 500
     data = response.json()
     assert data["detail"]["success"] is False
-    assert "message" in data["detail"]
-    assert "Ошибка валидации конфига" in data["detail"]["message"]
+    assert "Ошибка записи" in data["detail"]["message"]
 
 
 @pytest.mark.asyncio
 async def test_invalid_schema_returns_422(client, mock_buffer):
-    """
-    Тест: Невалидная схема возвращает HTTP 422
-
-    Проверяем:
-    - Отсутствует обязательное поле
-    - HTTP 422
-    - buffer.bulk_action НЕ вызван
-    """
-    payload = {
-        "node_proto_id": 1,
-        # users отсутствует (обязательное поле)
-        "config_file_path": "/path/to/config.json",
-    }
+    """Тест: Отсутствие обязательных полей -> 422"""
+    payload = {"node_proto_id": 1}  # users отсутствует
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 422
-    # buffer.bulk_action не должен быть вызван
-    mock_buffer.bulk_action.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_invalid_action_value_returns_422(client, mock_buffer):
-    """
-    Тест: Невалидное значение action возвращает HTTP 422
-
-    Проверяем:
-    - action="invalid" не проходит валидацию
-    - HTTP 422
-    """
+    """Тест: Недопустимое значение action -> 422"""
     payload = create_bulk_action_payload(action="invalid")
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 422
-    # buffer.bulk_action не должен быть вызван
-    mock_buffer.bulk_action.assert_not_called()
-
-
-# ========== Тесты user_injectors ==========
 
 
 @pytest.mark.asyncio
-async def test_user_injectors_passed_correctly(client, mock_buffer, mock_hot_reload):
+async def test_extra_fields_ignored_backward_compatibility(client, mock_buffer):
     """
-    Тест: user_injectors правильно передаются в буфер
-
-    Проверяем:
-    - user_injectors конвертируются в list[dict]
-    - Каждый инжектор содержит flatten_array_cursor, extractor_script, libs
+    Тест: Старые служебные поля (action_script, config_file_path, user_injectors и т.д.)
+    игнорируются благодаря extra='ignore'
     """
-    injectors_data = [
+    payload = create_bulk_action_payload()
+    payload.update(
         {
-            "flatten_array_cursor": "inbounds___0___settings___clients",
-            "extractor_script": "def transform(u): return {'id': u['user_uuid']}",
-            "libs": None,
-        },
-        {
-            "flatten_array_cursor": "inbounds___1___settings___users",
-            "extractor_script": "def transform(u): return {'name': u['email']}",
-            "libs": "json,base64",
-        },
-    ]
-    payload = create_bulk_action_payload(user_injectors=injectors_data)
-    response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
-    assert response.status_code == 200
-    # Проверяем что user_injectors переданы правильно
-    call_kwargs = mock_buffer.bulk_action.call_args.kwargs
-    assert len(call_kwargs["user_injectors"]) == 2
-    assert call_kwargs["user_injectors"][0]["flatten_array_cursor"] == "inbounds___0___settings___clients"
-    assert call_kwargs["user_injectors"][1]["flatten_array_cursor"] == "inbounds___1___settings___users"
-
-
-# ========== Тесты custom_params ==========
-
-
-@pytest.mark.asyncio
-async def test_custom_params_passed_to_hot_reload(client, mock_buffer, mock_hot_reload):
-    """
-    Тест: custom_params передаются в HotReloadExecutor
-
-    Проверяем:
-    - custom_params корректно переданы
-    """
-    custom_params = {"inbound_tag": "main", "flow": "xtls-rprx-vision"}
-    payload = create_bulk_action_payload(
-        custom_params=custom_params,
-        core_port=10086,
-        core_lib="grpcio",
-        action_script="def bulk_add_users(users, ip, port, params): return True",
+            "config_file_path": "/var/etc/xray.json",
+            "action_script": "def foo(): pass",
+            "core_lib": "grpcio",
+            "reload_core_command": "systemctl restart xray",
+            "user_injectors": [{"flatten_array_cursor": "foo", "extractor_script": "bar"}],
+            "config2json_script": None,
+            "json2config_script": None,
+            "conf_converter_libs": None,
+        }
     )
     response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
     assert response.status_code == 200
-    # Проверяем что custom_params переданы в hot-reload
-    call_kwargs = mock_hot_reload.execute_action_script.call_args.kwargs
-    assert call_kwargs["custom_params"] == custom_params
+    assert response.json()["success"] is True

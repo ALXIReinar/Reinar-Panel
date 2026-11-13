@@ -148,7 +148,6 @@ async def registered_vless_node(buffer, tmp_path, vless_extractor):
         'config2json_script': None,
         'json2config_script': None,
         'conf_converter_libs': None,
-        'queue_limited': True,
         'max_batch_size': 50,
     }
     return node_id, state_path, config_path, superusers, cutlets
@@ -197,7 +196,6 @@ async def registered_shadowsocks_node(buffer, tmp_path, shadowsocks_extractor):
         'config2json_script': None,
         'json2config_script': None,
         'conf_converter_libs': None,
-        'queue_limited': True,
         'max_batch_size': 50,
     }
     return node_id, state_path, config_path, superusers, cutlets
@@ -543,7 +541,6 @@ async def test_audit_multiple_injectors_all_pass(buffer, tmp_path, vless_extract
         'config2json_script': None,
         'json2config_script': None,
         'conf_converter_libs': None,
-        'queue_limited': True,
         'max_batch_size': 50,
     }
     with patch('node_client.config.env.audit_mode', AuditModes.medium):
@@ -607,7 +604,6 @@ async def test_audit_multiple_injectors_one_fails(buffer, tmp_path, vless_extrac
         'config2json_script': None,
         'json2config_script': None,
         'conf_converter_libs': None,
-        'queue_limited': True,
         'max_batch_size': 50,
     }
     with patch('node_client.config.env.audit_mode', AuditModes.medium):

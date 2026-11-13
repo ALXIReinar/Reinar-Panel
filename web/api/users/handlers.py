@@ -68,32 +68,24 @@ async def put_to_arq_bg_single(arq: ArqRedis, nodes_pack: list, action: Literal[
 
     async def worker(vnode: dict):
         async with sem:
-            action_script_custom_params = {
-                'delete': (
-                    vnode['api_bulk_delete_user_script'],
-                    vnode['bulk_delete_script_custom_params'],
-                    CoreProtoActions.delete,
-                ),
-                'add': (
-                    vnode['api_bulk_add_user_script'],
-                    vnode['bulk_add_script_custom_params'],
-                    CoreProtoActions.add,
-                ),
-            }
+            custom_params = (
+                vnode['bulk_delete_script_custom_params']
+                if action == 'delete'
+                else vnode['bulk_add_script_custom_params']
+            )
+            op = {'add': CoreProtoActions.add, 'delete': CoreProtoActions.delete}[action]  # неизвестное — KeyError
             job = await arq.enqueue_job(
                 'bulk_action_users_by_node',
                 vnode['node_proto_id'],
                 vnode['private_ip'],
                 vnode['api_port'],
                 vnode['metrics_port'],
-                vnode['proto_python_lib'],
-                *action_script_custom_params[action],
+                op,
                 vnode['users'],
-                vnode['reload_core_command'],
-                vnode['config_path'],
-                vnode['user_injectors'],
+                custom_params,
                 vnode['required_user_data_obj'],
                 vnode['constant_user_data_obj'],
+                vnode['constant_node_data_obj'],
             )
             log_event(
                 f'\033[35m[User Subs Editor]\033[0m Отправили в фон \033[34m{action}\033[0m на ноду | node_proto_id: \033[33m{vnode["node_proto_id"]}\033[0m; users: \033[32m{vnode["users"]}\033[0m; job_id: \033[31m{job.job_id}\033[0m'

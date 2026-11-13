@@ -269,32 +269,16 @@ class UsersQueries:
             FROM insert_outbox io
             JOIN outbox_with_metadata owm ON io.user_sub_id = owm.user_sub_id AND io.node_proto_id = owm.node_proto_id
             GROUP BY owm.node_proto_id
-        ),
-        -- 4.2. Пре агрегация инжекторов. До 2000-3000 записей, так что последняя
-        pre_agg_user_injectors AS (
-            SELECT tmp_id,
-               json_agg(
-                   json_build_object(
-                       'flatten_array_cursor', flatten_array_cursor,
-                       'extractor_script', extractor_script,
-                       'libs', libs
-                   )
-               ) AS user_injectors
-            FROM templates_users_extractors
-            GROUP BY tmp_id
         )
         -- 5. Ноды для вставки пользователя (подписки, впн-пользователя)
-        SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib, pt.api_bulk_delete_user_script, 
-               np.config_path, pt.bulk_delete_script_custom_params, pt.constant_user_data_obj, pt.required_user_data_obj,
-               pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, np.constant_node_data_obj,
-               pau.users, pt.json2config_script, pt.config2json_script, pt.conf_converter_libs,
-               np.reload_core_command,
-               COALESCE(aui.user_injectors, '[]'::json) AS user_injectors
+        SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port,
+               pt.bulk_delete_script_custom_params, pt.constant_user_data_obj, pt.required_user_data_obj,
+               pt.bulk_add_script_custom_params, np.constant_node_data_obj,
+               pau.users
         FROM nodes_protocols np
         JOIN nodes n ON n.id = np.node_id AND n.is_active = true
         JOIN pre_agg_users pau ON pau.node_proto_id = np.id
         JOIN proto_templates pt ON np.tmp_id = pt.id 
-        LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id 
         WHERE np.user_visible = true
         '''  # noqa: W291
         add_query = '''

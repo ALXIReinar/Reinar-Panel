@@ -14,6 +14,7 @@ import time
 os.environ['ENV_LOCAL_TEST_FILE'] = os.getenv('ENV_LOCAL_TEST_FILE') or 'node_client/.env.node.test'
 
 from asyncpg import create_pool, Connection  # noqa: I001
+import aiohttp
 import httpx
 import orjson
 import pytest
@@ -599,12 +600,21 @@ async def client(mock_core_buffer):
     """
     app = FastAPI()
     app.include_router(main_router)
+    from node_client.exceptions import NodeNotRegisteredError
+    from node_client.main import node_not_registered_handler
+
+    app.add_exception_handler(NodeNotRegisteredError, node_not_registered_handler)
     # Добавляем core_buffer в state приложения
     app.state.core_buffer = mock_core_buffer
     # Middleware НЕ добавляем для тестов (OnlyAdminAccessMiddleware)
     # Это позволяет тестировать API без проверки IP
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+    # ASGITransport не запускает lifespan: сессию к админке создаём, как это делает lifespan
+    async with (
+        aiohttp.ClientSession() as admin_aiohttp,
+        httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+    ):
+        app.state.admin_aiohttp = admin_aiohttp
         ac.app = app  # Сохраняем ссылку для доступа к app.state
         yield ac
 
@@ -619,9 +629,17 @@ async def client_with_real_buffer(fast_buffer):
     """
     app = FastAPI()
     app.include_router(main_router)
+    from node_client.exceptions import NodeNotRegisteredError
+    from node_client.main import node_not_registered_handler
+
+    app.add_exception_handler(NodeNotRegisteredError, node_not_registered_handler)
     app.state.core_buffer = fast_buffer
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with (
+        aiohttp.ClientSession() as admin_aiohttp,
+        httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+    ):
+        app.state.admin_aiohttp = admin_aiohttp
         ac.app = app
         yield ac
 

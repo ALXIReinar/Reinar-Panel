@@ -5,6 +5,8 @@
 
 import pytest
 
+from web.tests.conftest import FakeAiohttpSession
+
 
 class TestGetNodeProtocols:
     """Тесты для GET /api/v1/private/nodes/{node_id}/protocols"""
@@ -523,7 +525,7 @@ class TestConfirmVirtualNode:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        assert data["message"] == "Виртуальная нода поставлена на регистрацию"
+        assert data["message"] == "Виртуальная нода сменила статус регистрации"
 
         # Проверяем обновление в БД
         async with db_pool.acquire() as conn:
@@ -862,3 +864,76 @@ class TestRegisterConfirmFlow:
             vnode = await conn.fetchrow("SELECT * FROM nodes_protocols WHERE id = $1", node_proto_id)
             assert vnode["reg_status"] == 2
             assert vnode["title"] == "Confirmed Twice"  # Обновилось при повторном вызове
+
+
+class TestConfirmReinitPush:
+    """После confirm со status=2 админка просит нод-клиент реинициализировать ноду (требования 4.8, 4.9)"""
+
+    CONFIRM_URL = "/api/v1/server/nodes/protocols/confirm"
+    REINIT_PATH = "/api/v1/server/node/reinit"
+
+    @staticmethod
+    async def _pending_vnode(db_pool, physical_node_seed, proto_template_seed) -> tuple[int, str]:
+        """Создаёт ноду в статусе pending; возвращает её id и ожидаемый адрес реинициализации"""
+        async with db_pool.acquire() as conn:
+            node_proto_id = await conn.fetchval(
+                """
+                INSERT INTO nodes_protocols (node_id, tmp_id, title, proto_port, config_path, reg_status)
+                VALUES ($1, $2, $3, $4, $5, 1)
+                RETURNING id
+                """,
+                physical_node_seed["node_id_1"],
+                proto_template_seed["tmp_id"],
+                "Reinit Push Node",
+                8470,
+                "/tmp/reinit-push.json",
+            )
+            node = await conn.fetchrow(
+                "SELECT private_ip, api_port FROM nodes WHERE id = $1", physical_node_seed["node_id_1"]
+            )
+        return node_proto_id, f"http://{node['private_ip']}:{node['api_port']}{TestConfirmReinitPush.REINIT_PATH}"
+
+    @pytest.mark.asyncio
+    async def test_confirm_success_pushes_reinit(self, client, physical_node_seed, proto_template_seed, db_pool):
+        """status=2 → один POST на reinit нод-клиента этой физической ноды с [node_proto_id]"""
+        node_proto_id, reinit_url = await self._pending_vnode(db_pool, physical_node_seed, proto_template_seed)
+        session = FakeAiohttpSession()
+        client.app.state.cmd_center_aiohttp = session
+
+        response = await client.post(self.CONFIRM_URL, json={"node_proto_id": node_proto_id, "status": 2})
+
+        assert response.status_code == 200
+        reinit_calls = [c for c in session.calls if c[1].endswith(self.REINIT_PATH)]
+        assert reinit_calls == [("POST", reinit_url, {"node_proto_ids": [node_proto_id]})]
+
+    @pytest.mark.asyncio
+    async def test_confirm_failed_status_does_not_push(self, client, physical_node_seed, proto_template_seed, db_pool):
+        """status=3 (ошибка регистрации) → нод-клиент не трогаем"""
+        node_proto_id, _ = await self._pending_vnode(db_pool, physical_node_seed, proto_template_seed)
+        session = FakeAiohttpSession()
+        client.app.state.cmd_center_aiohttp = session
+
+        response = await client.post(self.CONFIRM_URL, json={"node_proto_id": node_proto_id, "status": 3})
+
+        assert response.status_code == 200
+        assert not [c for c in session.calls if c[1].endswith(self.REINIT_PATH)]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "session",
+        [FakeAiohttpSession(raise_error=True), FakeAiohttpSession(status=500)],
+        ids=["нод-клиент недоступен", "нод-клиент ответил 500"],
+    )
+    async def test_confirm_succeeds_when_push_fails(
+        self, client, physical_node_seed, proto_template_seed, db_pool, session
+    ):
+        """Ошибка push не отменяет подтверждение и не возвращает ошибку скрипту установки"""
+        node_proto_id, _ = await self._pending_vnode(db_pool, physical_node_seed, proto_template_seed)
+        client.app.state.cmd_center_aiohttp = session
+
+        response = await client.post(self.CONFIRM_URL, json={"node_proto_id": node_proto_id, "status": 2})
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        async with db_pool.acquire() as conn:
+            assert await conn.fetchval("SELECT reg_status FROM nodes_protocols WHERE id = $1", node_proto_id) == 2

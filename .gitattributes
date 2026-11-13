@@ -1,0 +1,10 @@
+# Всё текстовое хранится и выкладывается с LF, даже если файл правили в Windows.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Данные шаблонов, выгружаются из БД (export_seed_from_db.py). В diff не показываем: тысячи строк данных
+# забивают контекст ревью (и людей, и агентов). Посмотреть изменения: git diff --text -- web/db/seed_data.json
+web/db/seed_data.json -diff linguist-generated=true
+web/db/seed_data_backup.json -diff linguist-generated=true

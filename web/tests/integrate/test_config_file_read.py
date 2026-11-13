@@ -66,6 +66,32 @@ class TestConfigFileReadSuccess:
         assert '"clients": []' in data["file_content"]
 
 
+class TestConfigFileReadExcludeUsers:
+    """Админка сохраняет прежний контракт: пользователи вырезаются, только если передан flatten_json_users_key"""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("params", "expected_exclude"),
+        [({}, False), ({"flatten_json_users_key": "inbounds___0___settings___clients"}, True)],
+        ids=["без ключа — пользователи остаются", "с ключом — пользователи вырезаются"],
+    )
+    async def test_read_config_passes_exclude_users(self, client, virtual_node_seed, db_pool, params, expected_exclude):
+        vnode_id = virtual_node_seed["vnode_id_1"]
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE nodes_protocols SET config_path = $1 WHERE id = $2", "/etc/xray/config.json", vnode_id
+            )
+        session = FakeAiohttpSession(json_data={"content": '{"inbounds": []}'})
+        client.app.state.cmd_center_aiohttp = session
+
+        response = await client.get(
+            "/api/v1/private/cmd_center/config_file/read", params={"node_proto_id": vnode_id, **params}
+        )
+
+        assert response.status_code == 200
+        assert session.calls[-1][2]["exclude_users"] is expected_exclude
+
+
 class TestConfigFileReadErrors:
     """Тесты ошибочных сценариев при чтении конфига"""
 
@@ -156,3 +182,31 @@ class TestConfigFileReadValidation:
         assert "detail" in data
         # Проверяем что ошибка валидации связана с node_proto_id
         assert any("node_proto_id" in str(err) for err in data["detail"])
+
+
+class TestConfigFileWriteTransferUsers:
+    """/config_file/write: пользователи из старого файла переносятся, только если передан flatten_json_users_key"""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("extra", "expected_transfer"),
+        [({}, False), ({"flatten_json_users_key": ["inbounds___0___settings___clients"]}, True)],
+        ids=["без ключа — файл как есть", "с ключом — перенос пользователей"],
+    )
+    async def test_write_config_passes_transfer_users(
+        self, client, virtual_node_seed, db_pool, extra, expected_transfer
+    ):
+        vnode_id = virtual_node_seed["vnode_id_1"]
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE nodes_protocols SET config_path = $1 WHERE id = $2", "/etc/xray/config.json", vnode_id
+            )
+        session = FakeAiohttpSession(json_data={"success": True, "config_link": "vless://x"})
+        client.app.state.cmd_center_aiohttp = session
+
+        await client.put(
+            "/api/v1/private/cmd_center/config_file/write",
+            json={"node_proto_id": vnode_id, "file_content": '{"inbounds": []}', **extra},
+        )
+
+        assert session.calls[-1][2]["transfer_users"] is expected_transfer

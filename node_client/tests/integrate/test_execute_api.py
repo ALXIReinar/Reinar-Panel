@@ -12,7 +12,7 @@ Integration тесты для эндпоинта выполнения коман
 
 import platform  # noqa: I001
 import subprocess
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
@@ -237,238 +237,315 @@ async def test_execute_command_exception_handling(client):
 
 @pytest.mark.asyncio
 async def test_get_metrics_with_script_success(client, mock_buffer):
-    """Успешное получение метрик через скрипт get_metrics"""
-    # Регистрируем ноду в буфере
+    """Успешное получение метрик через API-скрипт из метаданных ноды"""
     node_proto_id = 1
     mock_buffer.buffer_storage[node_proto_id] = {}
     mock_buffer.local_state[node_proto_id] = {}
-    with patch('node_client.api.execute_api.HotReloadExecutor.execute_action_script') as mock_executor:
-        # Мокируем успешный результат выполнения скрипта
-        mock_metrics = '{"stat": [{"name": "user>>>test@test.com>>>traffic>>>uplink", "value": 1024}]}'
-        mock_parser_result = ([], [])  # traffic_consuming, troubles
-        # Первый вызов - get_metrics, второй - parse_metrics
-        mock_executor.side_effect = [
-            (True, mock_metrics),  # get_metrics
-            (True, mock_parser_result),  # parse_metrics
-        ]
-        response = await client.post(
-            "/api/v1/server/node/metrics",
-            json={
-                "node_proto_id": node_proto_id,
-                "metrics_script": "async def get_metrics(node_ip, core_port, custom_params): return 'metrics'",
-                "core_lib": "xtlsapi",
-                "metrics_port": 10085,
-                "command": "xray api statsquery --server=127.0.0.1:{}",
-                "metrics_parser_code": "def parse_metrics(raw, users, state): return [], []",
-                "metrics_parser_libs": None,
-            },
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert data["users_traffic"] == []
-        # Проверяем что HotReloadExecutor был вызван дважды
-        assert mock_executor.call_count == 2
+
+    api_script = AsyncMock(
+        return_value='{"stat": [{"name": "user>>>test@test.com>>>traffic>>>uplink", "value": 1024}]}'
+    )
+    parser = MagicMock(return_value=([{"user_sub_id": 1, "total_used_mb": 10}], []))
+
+    mock_buffer.node_metadata[node_proto_id] = {
+        'api_metrics_script': api_script,
+        'metrics_command': "xray api statsquery --server=127.0.0.1:{}",
+        'metrics_parser_code': parser,
+    }
+
+    response = await client.post(
+        "/api/v1/server/node/metrics",
+        json={
+            "node_proto_id": node_proto_id,
+            "metrics_port": 10085,
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert len(data["users_traffic"]) == 1
+    assert data["source"] == "api"
+    assert data["fallback_reason"] is None
+    api_script.assert_called_once_with('127.0.0.1', 10085, {})
+    parser.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_get_metrics_fallback_to_cli(client, mock_buffer):
-    """Fallback на CLI команду когда скрипт провалился"""
-    # Регистрируем ноду в буфере
+    """Fallback на CLI команду когда API-скрипт вернул ошибку"""
     node_proto_id = 2
     mock_buffer.buffer_storage[node_proto_id] = {}
     mock_buffer.local_state[node_proto_id] = {}
-    with (
-        patch('node_client.api.execute_api.HotReloadExecutor.execute_action_script') as mock_executor,
-        patch('node_client.api.execute_api.subprocess.run') as mock_subprocess,
-    ):
-        # Скрипт провалился
-        mock_parser_result = ([], [])
-        mock_executor.return_value = (True, mock_parser_result)
-        # CLI команда успешна
+
+    api_script = AsyncMock(side_effect=RuntimeError("gRPC connection failed"))
+    parser = MagicMock(return_value=([{"user_sub_id": 2, "total_used_mb": 20}], []))
+
+    mock_buffer.node_metadata[node_proto_id] = {
+        'api_metrics_script': api_script,
+        'metrics_command': "xray api statsquery --server=127.0.0.1:{}",
+        'metrics_parser_code': parser,
+    }
+
+    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
         mock_result = MagicMock()
         mock_result.returncode = 0
         mock_result.stdout = '{"stat": [{"name": "user>>>cli@test.com>>>traffic>>>downlink", "value": 2048}]}'
         mock_result.stderr = ""
         mock_subprocess.return_value = mock_result
+
         response = await client.post(
             "/api/v1/server/node/metrics",
             json={
                 "node_proto_id": node_proto_id,
-                "metrics_script": None,  # Нет скрипта - используем CLI
-                "core_lib": None,
                 "metrics_port": 10085,
-                "command": "xray api statsquery --server=127.0.0.1:{}",
-                "metrics_parser_code": "def parse_metrics(raw, users, state): return [], []",
-                "metrics_parser_libs": None,
             },
         )
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        # Проверяем что CLI команда была вызвана
+        assert data["source"] == "cli"
+        assert "gRPC connection failed" in data["fallback_reason"]
         mock_subprocess.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_get_metrics_no_script_uses_cli(client, mock_buffer):
-    """Использование CLI когда скрипт не передан"""
-    # Регистрируем ноду в буфере
+    """Использование CLI когда api_metrics_script отсутствует"""
     node_proto_id = 3
     mock_buffer.buffer_storage[node_proto_id] = {}
     mock_buffer.local_state[node_proto_id] = {}
-    with (
-        patch('node_client.api.execute_api.subprocess.run') as mock_subprocess,
-        patch('node_client.api.execute_api.HotReloadExecutor.execute_action_script') as mock_executor,
-    ):
+
+    mock_buffer.node_metadata[node_proto_id] = {
+        'api_metrics_script': None,
+        'metrics_command': "xray api statsquery --server=127.0.0.1:{}",
+        'metrics_parser_code': lambda raw, users, state: ([], []),
+    }
+
+    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
         mock_result = MagicMock()
         mock_result.returncode = 0
         mock_result.stdout = 'metrics from cli'
         mock_result.stderr = ""
         mock_subprocess.return_value = mock_result
-        # parse_metrics успешен
-        mock_parser_result = ([], [])
-        mock_executor.return_value = (True, mock_parser_result)
+
         response = await client.post(
             "/api/v1/server/node/metrics",
             json={
                 "node_proto_id": node_proto_id,
-                "metrics_script": None,  # Нет скрипта
-                "core_lib": None,
                 "metrics_port": 10085,
-                "command": "xray api statsquery --server=127.0.0.1:{}",
-                "metrics_parser_code": "def parse_metrics(raw, users, state): return [], []",
-                "metrics_parser_libs": None,
             },
         )
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        assert data["users_traffic"] == []
+        assert data["source"] == "cli"
 
 
 @pytest.mark.asyncio
 async def test_get_metrics_cli_command_timeout(client, mock_buffer):
     """408 при timeout CLI команды"""
-    # Регистрируем ноду в буфере
     node_proto_id = 4
     mock_buffer.buffer_storage[node_proto_id] = {}
     mock_buffer.local_state[node_proto_id] = {}
+
+    mock_buffer.node_metadata[node_proto_id] = {
+        'api_metrics_script': None,
+        'metrics_command': "xray api statsquery --server=127.0.0.1:{}",
+        'metrics_parser_code': lambda raw, users, state: ([], []),
+    }
+
     with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
-        # CLI команда timeout
         mock_subprocess.side_effect = subprocess.TimeoutExpired(cmd="xray api statsquery", timeout=10)
         response = await client.post(
             "/api/v1/server/node/metrics",
             json={
                 "node_proto_id": node_proto_id,
-                "metrics_script": None,
-                "core_lib": None,
                 "metrics_port": 10085,
-                "command": "xray api statsquery --server=127.0.0.1:{}",
-                "metrics_parser_code": "def parse_metrics(raw, users, state): return [], []",
-                "metrics_parser_libs": None,
             },
         )
-        assert response.status_code == 408
+        assert response.status_code == 502
         data = response.json()
         assert data["detail"]["success"] is False
-        assert "timeout" in data["detail"]["message"].lower()
+        assert "timed out" in data["detail"]["error"].lower() or "timeout" in data["detail"]["error"].lower()
 
 
 @pytest.mark.asyncio
 async def test_get_metrics_cli_non_zero_exit(client, mock_buffer):
-    """400 при ненулевом exit code CLI команды"""
-    # Регистрируем ноду в буфере
+    """502 когда CLI команда вернула ненулевой код и метрики не получены"""
     node_proto_id = 5
     mock_buffer.buffer_storage[node_proto_id] = {}
     mock_buffer.local_state[node_proto_id] = {}
+
+    mock_buffer.node_metadata[node_proto_id] = {
+        'api_metrics_script': None,
+        'metrics_command': "xray api statsquery --server=127.0.0.1:{}",
+        'metrics_parser_code': lambda raw, users, state: ([], []),
+    }
+
     with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
         mock_result = MagicMock()
         mock_result.returncode = 1
         mock_result.stdout = ""
         mock_result.stderr = "xray: command not found"
         mock_subprocess.return_value = mock_result
+
         response = await client.post(
             "/api/v1/server/node/metrics",
             json={
                 "node_proto_id": node_proto_id,
-                "metrics_script": None,
-                "core_lib": None,
                 "metrics_port": 10085,
-                "command": "xray api statsquery --server=127.0.0.1:{}",
-                "metrics_parser_code": "def parse_metrics(raw, users, state): return [], []",
-                "metrics_parser_libs": None,
             },
         )
-        assert response.status_code == 400
+        assert response.status_code == 502
         data = response.json()
         assert data["detail"]["success"] is False
-        assert data["detail"]["error"] == "Failed to get stats"
-
-
-@pytest.mark.asyncio
-async def test_get_metrics_exception_handling(client, mock_buffer):
-    """500 при непредвиденной ошибке"""
-    # Регистрируем ноду в буфере
-    node_proto_id = 6
-    mock_buffer.buffer_storage[node_proto_id] = {}
-    mock_buffer.local_state[node_proto_id] = {}
-    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
-        # Симулируем непредвиденное исключение
-        mock_subprocess.side_effect = RuntimeError("Unexpected error")
-        response = await client.post(
-            "/api/v1/server/node/metrics",
-            json={
-                "node_proto_id": node_proto_id,
-                "metrics_script": None,
-                "core_lib": None,
-                "metrics_port": 10085,
-                "command": "xray api statsquery --server=127.0.0.1:{}",
-                "metrics_parser_code": "def parse_metrics(raw, users, state): return [], []",
-                "metrics_parser_libs": None,
-            },
-        )
-        assert response.status_code == 500
-        data = response.json()
-        assert data["detail"]["success"] is False
-        assert "ошибка" in data["detail"]["message"].lower()
+        assert "command not found" in data["detail"]["error"]
 
 
 @pytest.mark.asyncio
 async def test_get_metrics_command_formatting(client, mock_buffer):
     """Проверка правильного форматирования команды с портом"""
-    # Регистрируем ноду в буфере
     node_proto_id = 7
     mock_buffer.buffer_storage[node_proto_id] = {}
     mock_buffer.local_state[node_proto_id] = {}
-    with (
-        patch('node_client.api.execute_api.subprocess.run') as mock_subprocess,
-        patch('node_client.api.execute_api.HotReloadExecutor.execute_action_script') as mock_executor,
-    ):
+
+    mock_buffer.node_metadata[node_proto_id] = {
+        'api_metrics_script': None,
+        'metrics_command': "xray api statsquery --server=127.0.0.1:{} -pattern user",
+        'metrics_parser_code': lambda raw, users, state: ([], []),
+    }
+
+    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
         mock_result = MagicMock()
         mock_result.returncode = 0
         mock_result.stdout = "metrics"
         mock_result.stderr = ""
         mock_subprocess.return_value = mock_result
-        # parse_metrics успешен
-        mock_parser_result = ([], [])
-        mock_executor.return_value = (True, mock_parser_result)
+
         response = await client.post(
             "/api/v1/server/node/metrics",
             json={
                 "node_proto_id": node_proto_id,
-                "metrics_script": None,
-                "core_lib": None,
                 "metrics_port": 12345,
-                "command": "xray api statsquery --server=127.0.0.1:{} -pattern user",
-                "metrics_parser_code": "def parse_metrics(raw, users, state): return [], []",
-                "metrics_parser_libs": None,
             },
         )
         assert response.status_code == 200
-        # Проверяем что команда была отформатирована с портом
         call_args = mock_subprocess.call_args
-        command_parts = call_args[0][0]  # Первый позиционный аргумент
-        # Команда должна содержать порт 12345
+        command_parts = call_args[0][0]
         full_command = ' '.join(command_parts)
         assert '12345' in full_command
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_unregistered_node(client, mock_buffer):
+    """428 при запросе метрик незарегистрированной ноды"""
+    response = await client.post(
+        "/api/v1/server/node/metrics",
+        json={"node_proto_id": 9999, "metrics_port": 10085},
+    )
+    assert response.status_code == 428
+    data = response.json()
+    assert data["success"] is False
+    assert "не зарегистрирована" in data["message"]
+
+
+# ========== Выбор источника метрик: строго raw is None (требование 7.6) ==========
+
+
+def _metrics_meta(api_return):
+    """Метаданные ноды с API-скриптом, возвращающим api_return, и CLI-командой про запас"""
+    api_script = AsyncMock(return_value=api_return)
+    parser = MagicMock(return_value=([], []))
+    meta = {
+        'api_metrics_script': api_script,
+        'metrics_command': "xray api statsquery --server=127.0.0.1:{}",
+        'metrics_parser_code': parser,
+    }
+    return meta, api_script, parser
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("empty_raw", [[], ""], ids=["пустой список", "пустая строка"])
+async def test_get_metrics_empty_api_result_does_not_fall_back_to_cli(client, mock_buffer, empty_raw):
+    """Пустой, но допустимый ответ API (нет трафика) — не ошибка: CLI не вызывается, парсер получает этот ответ"""
+    node_proto_id = 5
+    mock_buffer.buffer_storage[node_proto_id] = {}
+    mock_buffer.local_state[node_proto_id] = {}
+    meta, _, parser = _metrics_meta(empty_raw)
+    mock_buffer.node_metadata[node_proto_id] = meta
+
+    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
+        response = await client.post(
+            "/api/v1/server/node/metrics", json={"node_proto_id": node_proto_id, "metrics_port": 10085}
+        )
+
+    assert response.status_code == 200
+    assert response.json()["source"] == "api"
+    mock_subprocess.assert_not_called()
+    assert parser.call_args.args[0] == empty_raw
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_none_api_result_falls_back_to_cli(client, mock_buffer):
+    """API-скрипт вернул None → берём метрики CLI-командой"""
+    node_proto_id = 6
+    mock_buffer.buffer_storage[node_proto_id] = {}
+    mock_buffer.local_state[node_proto_id] = {}
+    meta, _, parser = _metrics_meta(None)
+    mock_buffer.node_metadata[node_proto_id] = meta
+
+    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout='{"stat": []}', stderr="")
+        response = await client.post(
+            "/api/v1/server/node/metrics", json={"node_proto_id": node_proto_id, "metrics_port": 10085}
+        )
+
+    assert response.status_code == 200
+    assert response.json()["source"] == "cli"
+    mock_subprocess.assert_called_once()
+    assert parser.call_args.args[0] == '{"stat": []}'
+
+
+# ========== Исправления по код-ревью ==========
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_non_ascii_api_error_does_not_break_response(client, mock_buffer):
+    """Ошибка API-скрипта с кириллицей и переводами строк (как у gRPC) — CLI-метрики доходят, причина — в JSON как есть"""
+    node_proto_id = 7
+    mock_buffer.buffer_storage[node_proto_id] = {}
+    mock_buffer.local_state[node_proto_id] = {}
+    meta, api_script, _ = _metrics_meta(None)
+    api_script.side_effect = RuntimeError("Ошибка gRPC:\n\tstatus = UNAVAILABLE")
+    mock_buffer.node_metadata[node_proto_id] = meta
+
+    with patch('node_client.api.execute_api.subprocess.run') as mock_subprocess:
+        mock_subprocess.return_value = MagicMock(returncode=0, stdout='{"stat": []}', stderr="")
+        response = await client.post(
+            "/api/v1/server/node/metrics", json={"node_proto_id": node_proto_id, "metrics_port": 10085}
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["source"] == "cli"
+    # Причина отказа API — в JSON целиком, без обрезки до ASCII (раньше была в HTTP-заголовке)
+    assert data["fallback_reason"] == "Ошибка gRPC:\n\tstatus = UNAVAILABLE"
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_bad_command_template_returns_502(client, mock_buffer):
+    """Кривой шаблон metrics_command ({port} вместо {}) — 502 с причиной, а не голый 500"""
+    node_proto_id = 8
+    mock_buffer.buffer_storage[node_proto_id] = {}
+    mock_buffer.local_state[node_proto_id] = {}
+    mock_buffer.node_metadata[node_proto_id] = {
+        'api_metrics_script': None,
+        'metrics_command': "xray api statsquery --server=127.0.0.1:{port}",
+        'metrics_parser_code': MagicMock(return_value=([], [])),
+    }
+
+    response = await client.post(
+        "/api/v1/server/node/metrics", json={"node_proto_id": node_proto_id, "metrics_port": 10085}
+    )
+
+    assert response.status_code == 502

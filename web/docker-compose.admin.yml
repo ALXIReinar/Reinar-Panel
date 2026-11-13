@@ -1,3 +1,8 @@
+# Продовый compose админки: код сервисов — только из образа (Dockerfile: COPY . /app/web/), после изменения кода
+# нужна пересборка образа админки и пересоздание контейнеров:
+#   docker compose -f docker-compose.admin.yml build web-db-migrations && docker compose -f docker-compose.admin.yml up -d
+# `up -d --build` без имени сервиса пересобирает и Caddy — он нужен только после правки Dockerfile.caddy
+# Для разработки и дев-стенда — надстройка docker-compose.admin.dev.yml (код с диска, без пересборок)
 name: reinar_panel_admin
 
 services:
@@ -55,7 +60,6 @@ services:
     network_mode: host
     volumes:
       - web_logs:/app/web/web_logs
-      - .:/app/web
     secrets:
       - env.api.prod
       - private_key.pem
@@ -73,8 +77,6 @@ services:
     depends_on:
       pg_db:
         condition: service_healthy
-    volumes:
-      - ./db:/app/web/db:ro
     network_mode: host
     secrets:
       - env.api.prod

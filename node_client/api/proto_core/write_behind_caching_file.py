@@ -5,17 +5,21 @@ Write-Behind Caching для батчинга операций с конфиг-ф
 import asyncio
 import os
 import time
-from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from collections.abc import Callable
 from typing import Annotated, Literal
+from urllib.parse import quote
 
 import aiofiles
+import aiohttp
 import orjson
 from fastapi.params import Depends
+from pydantic import ValidationError
 from starlette.requests import Request
 
 from node_client.api.sandbox.hot_reload_executor import HotReloadExecutor
-from node_client.config import TMP_DIR, env
+from node_client.config import TMP_DIR, AdminPanelUris, AuditModes, env
+from node_client.exceptions import AdminPanelError, NodeInitError, NodeNotRegisteredError
+from node_client.schemas.node_startup_schema import VnodeServiceDataSchema
 from node_client.utils.logger_config import log_event
 
 
@@ -27,7 +31,7 @@ class ConfigWriteBuffer:
     - Один экземпляр на всё приложение
     - Отдельный буфер для каждой виртуальной ноды
     - Отдельный воркер для каждой ноды (изоляция)
-    - Динамическая регистрация нод при первом обращении
+    - Ноды регистрируются при старте и при реинициализации (данные из админки, /startup)
     """
 
     def __init__(self, max_batch: int = 5, timeout: float = 10.0):
@@ -46,7 +50,7 @@ class ConfigWriteBuffer:
         # Переносное хранилище между изолированными окружениями скриптов
         self.local_state: dict[int, dict] = {}
 
-        # Метаданные нод {node_proto_id: {filepath, users_path, reload_command, queue_limited}}
+        # Метаданные нод {node_proto_id: {filepath, injectors, reload_command, скомпилированные скрипты}}
         self.node_metadata: dict[int, dict] = {}
 
         # Очереди операций для каждой ноды {node_proto_id: Queue}
@@ -55,140 +59,406 @@ class ConfigWriteBuffer:
         self.worker_tasks: dict[int, asyncio.Task] = {}
         # Активные задачи записи для каждой ноды {node_proto_id: set[Task]}
         self.pending_writes: dict[int, set[asyncio.Task]] = {}
+        # Реинициализации идут строго по одной: иначе устаревший ответ админки может примениться последним
+        self.reinit_lock = asyncio.Lock()
 
-    async def register_node(
-        self,
-        node_proto_id: int,
-        filepath: str,
-        user_injectors: list[dict],
-        reload_command: str | None,
-        config2json_script: str | None,
-        json2config_script: str | None,
-        conf_converter_libs: str | None,
-    ):
+    # ========== Инициализация от админки (/startup) ==========
+
+    async def fetch_startup_data(
+        self, admin_aiohttp: aiohttp.ClientSession, node_proto_ids: list[int], retries: int | None = None
+    ) -> dict:
         """
-        Регистрирует виртуальную ноду в менеджере
+        Запрашивает служебные данные виртуальных нод у админки
+
+        Args:
+            admin_aiohttp: HTTP-сессия к админке из lifespan (таймаут задан в ней)
+            node_proto_ids: ID виртуальных нод (пустой список = все зарегистрированные)
+            retries: Число попыток. По умолчанию env.startup_retries (старт приложения);
+                реинициализация передаёт 1 — вызывающий ждёт ответа и не должен висеть минутами
+
+        Returns:
+            dict: Ответ /startup с ключами 'nodes', 'missing', 'node_title'
+
+        Raises:
+            AdminPanelError: админка не знает ноду (404) или недоступна после всех попыток
+        """
+        if retries is None:
+            retries = env.startup_retries
+
+        # quote: «#», «?», «/» в имени ноды иначе обрезают или ломают путь
+        uri = AdminPanelUris.startup.format(node_title=quote(env.node_title, safe=''))
+        url = f"http://{env.admin_panel_private_ip}:{env.admin_panel_port}{uri}"
+        payload = {"node_proto_ids": node_proto_ids}
+        if len(node_proto_ids) == 0:
+            log_event(
+                f'\033[33m[NodeInit]\033[0m Полная реинициализация виртуальных нод | node_title: \033[35m{env.node_title}\033[0m; url: \033[36m{url}\033[0m',
+                level='WARNING',
+            )
+
+        last_error: Exception | None = None
+        log_event(
+            f'\033[33m[NodeInit]\033[0m Запрос обслуживаемых нод на этой физической ноде | node_title: \033[35m{env.node_title}\033[0m; url: \033[36m{url}\033[0m'
+        )
+        for attempt in range(1, retries + 1):
+            try:
+                async with admin_aiohttp.post(url, json=payload) as resp:
+                    if resp.status == 404:
+                        body = await resp.json()
+                        raise AdminPanelError(f"Админка не знает ноду '{env.node_title}': {body.get('detail', body)}")
+                    resp.raise_for_status()
+                    data = await resp.json()
+
+                log_event(
+                    f"Данные от /startup получены | nodes: \033[32m{len(data.get('nodes', []))}\033[0m; missing: \033[33m{data.get('missing', [])}\033[0m"
+                )
+                return data
+
+            except AdminPanelError:
+                # Ошибка настройки (NODE_TITLE), повторы её не исправят
+                log_event(
+                    f'\033[33m[NodeInit]\033[0m Эта физическая нода не сущесвтует для админки | node_title: \033[35m{env.node_title}\033[0m; attempt: {attempt}',
+                    level='CRITICAL',
+                )
+                raise
+            except Exception as e:
+                last_error = e
+                log_event(
+                    f"Попытка {attempt}/{retries} подключения к админке | url: \033[34m{url}\033[0m; error: \033[31m{repr(e)}\033[0m",
+                    level='WARNING',
+                )
+
+            if attempt < retries:
+                await asyncio.sleep(env.startup_retry_delay_s)
+
+        raise AdminPanelError(
+            f"Не удалось подключиться к админке (попыток: {retries}). URL: {url}. Последняя ошибка: {repr(last_error)}"
+        )
+
+    async def phys_node_sys_init(self, admin_aiohttp: aiohttp.ClientSession) -> None:
+        """
+        Инициализация физической ноды при старте приложения: регистрирует все её виртуальные ноды
+
+        Raises:
+            AdminPanelError: админка недоступна или не знает ноду
+            NodeInitError: ошибка валидации/компиляции любой ноды (принцип Trust: старт прерывается)
+        """
+        log_event(
+            f"Инициализация физической ноды | node_title: \033[35m{env.node_title}\033[0m; admin_panel: \033[34m{env.admin_panel_private_ip}:{env.admin_panel_port}\033[0m"
+        )
+        data = await self.fetch_startup_data(admin_aiohttp, node_proto_ids=[])
+
+        nodes = data.get('nodes', [])
+        for item in nodes:
+            await self.register_node(item)
+
+        log_event(
+            f"Инициализация завершена | зарегистрировано: \033[32m{len(nodes)}\033[0m; missing: \033[33m{data.get('missing', [])}\033[0m"
+        )
+
+    async def reinit_nodes(
+        self, admin_aiohttp: aiohttp.ClientSession, node_proto_ids: list[int]
+    ) -> tuple[list[int], list[int]]:
+        """
+        Реинициализация виртуальных нод без перезапуска нод-клиента. Выполняются строго по одной (reinit_lock):
+        иначе устаревший ответ админки может примениться последним.
+
+        1. Запрашивает актуальные данные у админки (одна попытка: вызывающий ждёт ответа)
+        2. Проверяет и компилирует ВСЕ ноды во временную структуру. Ошибка любой ноды → NodeInitError,
+           память нод-клиента не меняется (требования 4.5, 4.6)
+        3. Применяет метаданные одним шагом; buffer_storage и local_state известных нод сохраняются
+        4. Ноды из missing полностью убирает из памяти, включая воркер и очередь
+
+        Args:
+            admin_aiohttp: HTTP-сессия к админке из lifespan
+            node_proto_ids: ID виртуальных нод (пустой список = все зарегистрированные)
+
+        Returns:
+            tuple: (зарегистрированные/обновлённые ID, удалённые ID)
+
+        Raises:
+            AdminPanelError: админка недоступна или не знает ноду
+            NodeInitError: ошибка валидации/компиляции любой ноды
+        """
+        async with self.reinit_lock:
+            data = await self.fetch_startup_data(admin_aiohttp, node_proto_ids=node_proto_ids, retries=1)
+
+            compiled = {}
+            for item in data.get('nodes', []):
+                metadata = await self.compile_node(item)
+                compiled[item['node_proto_id']] = metadata
+
+            await self.apply_nodes(compiled)
+
+            removed = list(data.get('missing', []))
+            for node_proto_id in removed:
+                await self.remove_node(node_proto_id)
+
+        return list(compiled), removed
+
+    # ========== Регистрация виртуальных нод ==========
+
+    async def register_node(self, item: dict) -> None:
+        """
+        Регистрация/обновление одной виртуальной ноды: проверка, компиляция и применение метаданных
+
+        Args:
+            item: Словарь с полями VnodeServiceData
+
+        Raises:
+            NodeInitError: при ошибке валидации или компиляции (память нод-клиента не меняется)
+        """
+        metadata = await self.compile_node(item)
+        await self.apply_nodes({item['node_proto_id']: metadata})
+
+    async def compile_node(self, item: dict) -> dict:
+        """
+        Проверяет элемент ответа /startup и компилирует его RAW-скрипты. Память нод-клиента НЕ меняет.
 
         Выполняет:
-        0. Валидацию метаданных для управления очередью
-        1. Сохранение метаданных
-        2. Создание очереди
-        3. Загрузку существующих пользователей из конфиг-файла
-        4. Запуск воркера
+        0. Валидацию полей схемой VnodeServiceDataSchema
+        1. Компиляцию RAW скриптов в функции (байт-код кэшируется в HotReloadExecutor)
+        2. Проверку, что конфиг читается, а курсоры user_injectors указывают на массивы
+
+        Args:
+            item: Элемент ответа /startup (VnodeServiceData)
+
+        Returns:
+            dict: метаданные ноды для apply_nodes()
+
+        Raises:
+            NodeInitError: при ошибке валидации или компиляции
+        """
+        # 0. Валидация
+        try:
+            data = VnodeServiceDataSchema.model_validate(item)
+        except ValidationError as e:
+            raw_id = item.get('node_proto_id') if isinstance(item, dict) else None
+            first = e.errors()[0]
+            log_event(
+                f'\033[32m[NodeInit]\033[0m Валидация через pydantic не пройдена | node_proto_id: \033[31m{raw_id}\033[0m',
+                level='ERROR',
+            )
+            raise NodeInitError(
+                raw_id if isinstance(raw_id, int) else None, _error_loc_to_field(first['loc']), first['msg']
+            ) from e
+        node_proto_id = data.node_proto_id
+        libs = data.proto_python_lib
+
+        # 1. Конвертеры конфига. Без скрипта конфиг считается JSON-ом
+        config_loader: Callable = orjson.loads
+        if data.config2json_script is not None:
+            config_loader = self._compile_script(
+                node_proto_id, 'config2json_script', data.config2json_script, 'config2json', data.conf_converter_libs
+            )
+        config_dumper: Callable = _dump_json_config
+        if data.json2config_script is not None:
+            config_dumper = self._compile_script(
+                node_proto_id, 'json2config_script', data.json2config_script, 'json2config', data.conf_converter_libs
+            )
+
+        # 2. Конфиг читается, курсоры инжекторов указывают на массивы
+        try:
+            _, file_content = await self._read_config(data.filepath, True)
+            json_content = config_loader(file_content)
+        except Exception as e:
+            log_event(
+                f'\033[32m[NodeInit]\033[0m Путь к конфиг-файлу некорректный | filepath: \033[34m{data.filepath}\033[0m; node_proto_id: \033[31m{data.node_proto_id}\033[0m',
+                level='ERROR',
+            )
+            raise NodeInitError(node_proto_id, 'filepath', f'ошибка чтения/парсинга конфига: {repr(e)}') from e
+
+        injectors = []
+        for idx, inj in enumerate(data.user_injectors):
+            field = f'user_injectors[{idx}]'
+            try:
+                self._navigate_to_path(json_content, inj.flatten_array_cursor)
+            except Exception as e:
+                log_event(
+                    f'\033[32m[NodeInit]\033[0m Некорректный flatten_array_cursor для экстрактора | node_proto_id: \033[31m{data.node_proto_id}\033[0m; flatten_array_cursor: \033[34m{inj.flatten_array_cursor}\033[0m; extractor_script: \033[35m{inj.extractor_script[:150]}\033[0m',
+                    level='ERROR',
+                )
+                raise NodeInitError(node_proto_id, f'{field}.flatten_array_cursor', repr(e)) from e
+            injectors.append(
+                {
+                    'flatten_array_cursor': inj.flatten_array_cursor,
+                    'extractor_script': self._compile_script(
+                        node_proto_id, f'{field}.extractor_script', inj.extractor_script, 'transform', inj.libs
+                    ),
+                }
+            )
+
+        # 3. Необязательные скрипты API операций и метрик (пустой скрипт — None)
+        compile_optional = self._compile_optional
+        add_script = compile_optional(
+            node_proto_id, 'api_bulk_add_user_script', data.api_bulk_add_user_script, 'bulk_add_users', libs
+        )
+        delete_script = compile_optional(
+            node_proto_id, 'api_bulk_delete_user_script', data.api_bulk_delete_user_script, 'bulk_delete_users', libs
+        )
+        metrics_script = compile_optional(
+            node_proto_id, 'api_metrics_script', data.api_metrics_script, 'get_metrics', libs
+        )
+        parser = compile_optional(node_proto_id, 'metrics_parser_code', data.metrics_parser_code, 'parse_metrics', libs)
+
+        # 4. Метаданные ноды. В память их кладёт apply_nodes()
+        log_event(
+            f'\033[32m[NodeInit]\033[0m Компиляция шаблона успешна, передаём данные для регистрации ноды | node_proto_id: \033[31m{node_proto_id}\033[0m'
+        )
+        return {
+            'filepath': data.filepath,
+            'config2json_script': config_loader,
+            'json2config_script': config_dumper,
+            'injectors': injectors,
+            'reload_command': data.reload_command,
+            'api_bulk_add_user_script': add_script,
+            'api_bulk_delete_user_script': delete_script,
+            'api_metrics_script': metrics_script,
+            'metrics_command': data.metrics_command,
+            'metrics_parser_code': parser,
+            'proto_python_lib': libs,
+        }
+
+    @staticmethod
+    def _compile_script(node_proto_id: int, field: str, raw_script: str, func_name: str, libs: str | None) -> Callable:
+        """Компилирует скрипт шаблона и достаёт из него функцию; любая ошибка — NodeInitError с именем поля"""
+        try:
+            return HotReloadExecutor.get_compiled_func(raw_script, func_name, libs)
+        except Exception as e:
+            raise NodeInitError(node_proto_id, field, repr(e)) from e
+
+    @classmethod
+    def _compile_optional(
+        cls, node_proto_id: int, field: str, raw_script: str | None, func_name: str, libs: str | None
+    ) -> Callable | None:
+        """Как _compile_script, но скрипт необязателен: пустой или не заданный — None"""
+        return cls._compile_script(node_proto_id, field, raw_script, func_name, libs) if raw_script else None
+
+    async def apply_nodes(self, compiled: dict[int, dict]) -> None:
+        """
+        Применяет метаданные, заранее проверенные и скомпилированные через compile_node()
+
+        1. Метаданные всех нод подменяются одним шагом, без await между ними: другие корутины
+           не увидят половину обновления.
+        2. Для новых нод создаются очередь, буфер пользователей, local_state и воркер.
+           У известных нод buffer_storage, local_state и воркер не трогаются (требование 4.3).
+
+        Args:
+            compiled: {node_proto_id: метаданные из compile_node()}
+        """
+        new_ids = [node_proto_id for node_proto_id in compiled if node_proto_id not in self.node_metadata]
+
+        for node_proto_id, metadata in compiled.items():
+            self.node_metadata[node_proto_id] = metadata
+
+        for node_proto_id in new_ids:
+            self.node_queues[node_proto_id] = asyncio.Queue()
+            self.pending_writes[node_proto_id] = set()
+            await self._load_users_from_config(node_proto_id)
+            self.local_state[node_proto_id] = {}
+            self.worker_tasks[node_proto_id] = asyncio.create_task(self._node_worker(node_proto_id))
+        # Аудит — после того, как все новые ноды полностью созданы: исключение аудита (AUDIT_MODE=strict)
+        # не оставляет ноду с метаданными, но без очереди и воркера
+        for node_proto_id in new_ids:
+            await self._audit_state(node_proto_id)
+        log_event(
+            f'\033[36m[Metadata reinit]\033[0m Аудит проведён для новых виртуальных нод в нод-клиенте | new_ids: \033[33m{len(new_ids)}\033[0m'
+        )
+
+        for node_proto_id in compiled:
+            action_word = "зарегистрирована" if node_proto_id in new_ids else "обновлена"
+            users_count = len(self.buffer_storage.get(node_proto_id, {}))
+            log_event(
+                f"Нода {action_word} | node_proto_id: \033[33m{node_proto_id}\033[0m | users_len: \033[32m{users_count}\033[0m"
+            )
+
+    async def remove_node(self, node_proto_id: int) -> None:
+        """
+        Полностью убирает виртуальную ноду из памяти нод-клиента (админка сообщила, что её больше нет)
+
+        Сначала останавливается воркер и дожидаются начатые записи на диск: им ещё нужны метаданные.
+        Остатки очереди на диск не сбрасываются — нода снята с учёта, её конфиг больше не ведём.
+        """
+        worker = self.worker_tasks.pop(node_proto_id, None)
+        if worker is not None:
+            log_event(f"Остановка воркера виртульной ноды | node_proto_id: \033[33m{node_proto_id}\033[0m")
+            worker.cancel()
+            await asyncio.gather(worker, return_exceptions=True)
+
+        pending = list(self.pending_writes.get(node_proto_id, set()))
+        if pending:
+            log_event(f"Выполнение pending задач записи | node_proto_id: \033[33m{node_proto_id}\033[0m")
+            await asyncio.gather(*pending, return_exceptions=True)
+
+        for storage in (
+            self.node_metadata,
+            self.node_queues,
+            self.pending_writes,
+            self.buffer_storage,
+            self.local_state,
+        ):
+            storage.pop(node_proto_id, None)
+
+        log_event(f"Нода удалена из памяти нод-клиента | node_proto_id: \033[33m{node_proto_id}\033[0m")
+
+    def get_metadata(self, node_proto_id: int) -> dict:
+        """
+        Возвращает метаданные виртуальной ноды
 
         Args:
             node_proto_id: ID виртуальной ноды
-            filepath: Путь к конфиг-файлу
-            user_injectors:
-                - flatten_array_cursor (users_path): Flatten-json путь до массива clients
-                - extractor_script (flatten_user_identifier_key): Flatten-json путь до идентификатора пользователя
-            reload_command: Команда перезагрузки ядра (если нет hot-reload)
-            config2json_script: Скрипт для конвертации конфиг-файла в json структуру для нод клиента. Плюсы - поддержка любого конфига
-            json2config_script: Скрипт для конвертации из джсон структуры в формат файла для впн-ядра
-            conf_converter_libs: Либы для файл-конвертеров
+
+        Returns:
+            dict: метаданные ноды со скомпилированными функциями
+
+        Raises:
+            NodeNotRegisteredError: если нода не зарегистрирована
         """
-        # 0. Проверяем значения перед сохранением
-        injectors = []
-        try:
-            # По дефолту используем json формат(не указан в БД = JsonConverter)
-            if config2json_script is None:
-                config_loader = lambda x: orjson.loads(x)  # noqa: E731
-            else:
-                config_loader = HotReloadExecutor.get_compiled_func(
-                    config2json_script, 'config2json', conf_converter_libs
-                )
-
-            if json2config_script is None:
-                config_dumper = lambda x: orjson.dumps(x, option=orjson.OPT_INDENT_2)  # noqa: E731
-            else:
-                config_dumper = HotReloadExecutor.get_compiled_func(
-                    json2config_script, 'json2config', conf_converter_libs
-                )
-
-            # Проверка существования файла-конфига
-            ok, file_content = await self._read_config(filepath, True)
-            json_content = config_loader(file_content)
-
-            for inj in user_injectors:
-                # Проверка работоспособности ключа массива для операций в конфиг-файле
-                self._navigate_to_path(json_content, inj['flatten_array_cursor'])
-                injectors.append(
-                    {
-                        "flatten_array_cursor": inj['flatten_array_cursor'],
-                        # Внутри сидит код, который выдаст user_obj в нужном формате
-                        "extractor_script": HotReloadExecutor.get_compiled_func(
-                            inj['extractor_script'], 'transform', inj['libs']
-                        ),
-                    }
-                )
-
-        except Exception as e:
+        meta = self.node_metadata.get(node_proto_id)
+        if meta is None:
             log_event(
-                f'\033[35m[Worker]\033[0m Валидация параметров перед регистрацией провалилась | user_injectors: \033[34m{user_injectors}\033[0m; error: \033[34m{e}\033[0m',
+                f'Метаданные не найдены! Предусловия невыполнены: Служебный шаблон отсутствует/битый | node_proto_id: \033[33m{node_proto_id}\033[0m',
                 level='ERROR',
             )
-            return False, 500, str(repr(e))
+            raise NodeNotRegisteredError(node_proto_id)
+        return meta
 
-        # 1. Сохраняем метаданные
-        self.node_metadata[node_proto_id] = {
-            'filepath': filepath,
-            "config2json_script": config_loader,
-            "json2config_script": config_dumper,
-            'injectors': injectors,
-            'reload_command': reload_command,
-            'queue_limited': True,  # Флаг для контроля лимитов конкретной ноды
-        }
-        # 2. Создаём очередь
-        self.node_queues[node_proto_id] = asyncio.Queue()
-        # 2.1. Создаём set для отслеживания pending writes
-        self.pending_writes[node_proto_id] = set()
-        # 3. Загружаем существующих пользователей из файла
-        await self._load_users_from_config(node_proto_id)
-        # 3.1. Инициализируем local_state для этой ноды
-        self.local_state[node_proto_id] = {}
-        # 4. Запускаем воркер для этой ноды
-        task = asyncio.create_task(self._node_worker(node_proto_id))
-        self.worker_tasks[node_proto_id] = task
+    def read_config_json(self, node_proto_id: int, text: str) -> dict:
+        """Конвертирует текст конфига в JSON (dict) через скомпилированный config2json_script ноды"""
+        meta = self.get_metadata(node_proto_id)
+        loader = meta['config2json_script']
+        return loader(text)
 
-        # 5. Запускаем аудит state конфига
-        await self._audit_state(node_proto_id)
-
-        log_event(
-            f"Нода зарегистрирована | node_proto_id: \033[33m{node_proto_id}\033[0m | users_len: \033[32m{len(self.buffer_storage[node_proto_id])}\033[0m"
-        )
-        return True, 200, f'Зарегистрирована очередь | node_proto_id: \033[32m{node_proto_id}\033[0m'
+    def dump_config(self, node_proto_id: int, data: dict) -> bytes:
+        """Конвертирует JSON-структуру в байты конфига через скомпилированный json2config_script ноды"""
+        meta = self.get_metadata(node_proto_id)
+        dumper = meta['json2config_script']
+        res = dumper(data)
+        if isinstance(res, str):
+            return res.encode('utf-8')
+        return res
 
     async def add_user(
         self,
         node_proto_id: int,
-        user_obj: dict | str,
-        filepath: str,
-        user_injectors: list[dict],
-        reload_command: str | None,
-        config2json_script: str | None,
-        json2config_script: str | None,
-        conf_converter_libs: str | None,
+        user_obj: dict,
     ):
         """
         Добавляет пользователя в буфер (O(1))
 
-        Логика:
-        1. Если пользователь УЖЕ в буфере → обновляем
-        2. Если очередь существует → добавляем
-        3. Если очереди нет → регистрируем ноду + добавляем
-
         Args:
             node_proto_id: ID виртуальной ноды
-            user_obj: Объект пользователя
-            filepath: Путь к конфиг-файлу (нужен только при первом обращении)
-            user_injectors:
-                - flatten_array_cursor (users_path): Flatten-json путь до массива clients
-                - extractor_script (flatten_user_identifier_key): Flatten-json путь до идентификатора пользователя
-            reload_command: Команда перезагрузки (нужна только при первом обращении)
-            config2json_script: Скрипт для конвертации конфиг-файла в json структуру для нод клиента. Плюсы - поддержка любого конфига
-            json2config_script: Скрипт для конвертации из джсон структуры в формат файла для впн-ядра
-            conf_converter_libs: Либы для файл-конвертеров
+            user_obj: Объект пользователя (user_uuid обязателен в required_user_data_obj любого шаблона)
+
+        Raises:
+            NodeNotRegisteredError: если нода не зарегистрирована
         """
+        if node_proto_id not in self.node_metadata:
+            log_event(
+                f'Вставка не выполнена. Предусловия невыполнены: Служебный шаблон отсутствует/битый | node_proto_id: \033[33m{node_proto_id}\033[0m; user_uuid: \033[32m{user_obj.get("user_uuid", "UUID_PLACEHOLDER")}\033[0m',
+                level='ERROR',
+            )
+            raise NodeNotRegisteredError(node_proto_id)
+
         uuid = user_obj['user_uuid']
 
         # Сценарий 1: Пользователь УЖЕ в буфере
@@ -196,10 +466,6 @@ class ConfigWriteBuffer:
             log_event(
                 f"Пользователь УЖЕ в буфере | node_proto_id: \033[35m{node_proto_id}\033[0m | uuid: \033[32m{uuid}\033[0m"
             )
-
-            "Опциональный апдейт пользователя в ядре"
-            # self.buffer_storage[node_proto_id][uuid] = user_obj
-            # await self.node_queues[node_proto_id].put({'op': 'update', 'uuid': uuid})
             return True, 200, 'Пользователь добавлен'
 
         # Сценарий 2: Очередь существует, пользователя нет
@@ -211,94 +477,46 @@ class ConfigWriteBuffer:
             await self.node_queues[node_proto_id].put({'op': 'add', 'uuid': uuid})
             return True, 200, 'Пользователь добавлен'
 
-        if not all([filepath, user_injectors]):
-            raise ValueError(
-                f"При первом обращении к node_proto_id={node_proto_id} "
-                f"нужен список user_injectors. Он состоит из словарей с ключами(extractor_script: str, libs: str | None, flatten_array_cursor: str)"
-            )
-
-        # Сценарий 3: Первое обращение к ноде
-        # Регистрируем ноду (загружаем существующих пользователей)
-        log_event(f"Первое обращение к ноде | node_proto_id: \033[35m{node_proto_id}\033[0m | регистрируем")
-        reg_res, status_code, msg = await self.register_node(
-            node_proto_id,
-            filepath,
-            user_injectors,
-            reload_command,
-            config2json_script,
-            json2config_script,
-            conf_converter_libs,
+        log_event(
+            f'Вставка не выполнена. Нода не зарегистрирова в очереди | node_proto_id: \033[33m{node_proto_id}\033[0m; user_uuid: \033[32m{user_obj["user_uuid"]}\033[0m',
+            level='ERROR',
         )
-        if not reg_res:
-            log_event(
-                f'Не удалось зарегистрировать ноду | node_proto_id: \033[31m{node_proto_id}\033[0m', level='WARNING'
-            )
-            return False, status_code, str(msg)
-
-        # Добавляем нового пользователя
-        self.buffer_storage[node_proto_id][uuid] = user_obj
-        await self.node_queues[node_proto_id].put({'op': 'add', 'uuid': uuid})
-        return True, 200, 'Пользователь добавлен'
+        raise NodeNotRegisteredError(node_proto_id)
 
     async def delete_user(
         self,
         node_proto_id: int,
         user_obj: dict,
-        filepath: str,
-        user_injectors: list[dict],
-        reload_command: str | None,
-        config2json_script: str | None,
-        json2config_script: str | None,
-        conf_converter_libs: str | None,
     ):
         """
         Удаляет пользователя из буфера (O(1))
 
         Args:
             node_proto_id: ID виртуальной ноды
-            user_obj: объект пользователя в конфиг-файле ядра
-            filepath: Путь к конфиг-файлу
-            users_path: Flatten-json путь до массива clients
-            flatten_user_identifier_key: Flatten-json путь до идентификатора пользователя
-            reload_command: Команда перезагрузки ядра (если нет hot-reload)
-            config2json_script: Скрипт для конвертации конфиг-файла в json структуру для нод клиента. Плюсы - поддержка любого конфига
-            json2config_script: Скрипт для конвертации из джсон структуры в формат файла для впн-ядра
-            conf_converter_libs: Либы для файл-конвертеров
-        """
-        "Проверяем очередь node_proto_id в буфере"
-        if node_proto_id not in self.buffer_storage:
-            log_event(
-                f"Попытка удаления из незарегистрированной ноды, пробуем подгрузить её | node_proto_id: \033[33m{node_proto_id}\033[0m",
-                level='WARNING',
-            )
-            reg_res, status_code, msg = await self.register_node(
-                node_proto_id,
-                filepath,
-                user_injectors,
-                reload_command,
-                config2json_script,
-                json2config_script,
-                conf_converter_libs,
-            )
+            user_obj: Объект пользователя (user_uuid обязателен в required_user_data_obj любого шаблона)
 
-            "Если нет, пытаемся зарегать"
-            if not reg_res:
-                log_event(
-                    f'Не удалось зарегистрировать ноду | node_proto_id: \033[31m{node_proto_id}\033[0m', level='WARNING'
-                )
-                return False, status_code, msg
+        Raises:
+            NodeNotRegisteredError: если нода не зарегистрирована
+        """
+        if node_proto_id not in self.node_metadata or node_proto_id not in self.buffer_storage:
+            log_event(
+                f'Вставка не выполнена. Предусловия невыполнены: Служебный шаблон отсутствует/битый | node_proto_id: \033[33m{node_proto_id}\033[0m; user_uuid: \033[32m{user_obj.get("user_uuid", "UUID_PLACEHOLDER")}\033[0m',
+                level='ERROR',
+            )
+            raise NodeNotRegisteredError(node_proto_id)
 
         uuid = user_obj['user_uuid']
 
-        "Проверяем наличие пользователя"
-        if not uuid in self.buffer_storage[node_proto_id]:  # noqa: E713
+        # Проверяем наличие пользователя
+        if uuid not in self.buffer_storage[node_proto_id]:
+            filepath = self.node_metadata[node_proto_id]['filepath']
             log_event(
                 f'Пользователя с uuid не существует в этом конфиге | uuid: \033[33m{uuid}\033[0m; config_file: \033[32m{filepath}\033[0m',
                 level='WARNING',
             )
             return True, 200, 'Пользователя уже не было'
 
-        "Удаляем из кэша и Добавляем в очередь"
+        # Удаляем из кэша и добавляем в очередь
         del self.buffer_storage[node_proto_id][uuid]
         log_event(
             f"Пользователь удалён из буфера | node_proto_id: \033[32m{node_proto_id}\033[0m | uuid: \033[32m{uuid}\033[0m"
@@ -342,57 +560,31 @@ class ConfigWriteBuffer:
         self,
         node_proto_id: int,
         users: list[dict],
-        filepath: str,
-        user_injectors: list[dict],
-        reload_command: str | None,
         action: Literal["add", "delete"],
-        config2json_script: str | None,
-        json2config_script: str | None,
-        conf_converter_libs: str | None,
     ):
-        if not self.node_metadata.get(node_proto_id):
-            success, status_code, msg = await self.register_node(
-                node_proto_id,
-                filepath,
-                user_injectors,
-                reload_command,
-                config2json_script,
-                json2config_script,
-                conf_converter_libs,
+        """
+        Пакетная операция добавления/удаления пользователей
+
+        Args:
+            node_proto_id: ID виртуальной ноды
+            users: список объектов пользователей
+            action: "add" или "delete"
+
+        Raises:
+            NodeNotRegisteredError: если нода не зарегистрирована
+        """
+        if node_proto_id not in self.node_metadata:
+            log_event(
+                f'Бульк не выполнен. Предусловия невыполнены: Служебный шаблон отсутствует/битый | node_proto_id: \033[33m{node_proto_id}\033[0m; users_len: \033[32m{len(users)}\033[0m',
+                level='ERROR',
             )
-            if not success:
-                return False, f"Не удалось выполнить действие. err: {msg}"
+            raise NodeNotRegisteredError(node_proto_id)
 
         action_map = {"add": self.add_user, "delete": self.delete_user}
 
-        "Если мы будем на каждый вызов переключать флаг ограничения записи, то в WBC нет смысла!"
-        if len(users) < self.max_batch:
-            for u in users:
-                # Можно реализовать логику подсчёта успешных вставок по первому аргументу от add_user
-                await action_map[action](
-                    node_proto_id=node_proto_id,
-                    user_obj=u,
-                    filepath=filepath,
-                    user_injectors=user_injectors,
-                    reload_command=reload_command,
-                    config2json_script=config2json_script,
-                    json2config_script=json2config_script,
-                    conf_converter_libs=conf_converter_libs,
-                )
-        else:
-            async with self.unlimit_queue(node_proto_id):
-                for u in users:
-                    # Можно реализовать логику подсчёта успешных вставок по первому аргументу от add_user
-                    await action_map[action](
-                        node_proto_id=node_proto_id,
-                        user_obj=u,
-                        filepath=filepath,
-                        user_injectors=user_injectors,
-                        reload_command=reload_command,
-                        config2json_script=config2json_script,
-                        json2config_script=json2config_script,
-                        conf_converter_libs=conf_converter_libs,
-                    )
+        # Только буфер и очередь: запись конфига и перезапуск ядра — дело воркера (одной записью на всю пачку)
+        for u in users:
+            await action_map[action](node_proto_id=node_proto_id, user_obj=u)
         return True, "Операция выполнена"
 
     async def _load_users_from_config(self, node_id: int):
@@ -443,11 +635,13 @@ class ConfigWriteBuffer:
         - Если таймаут истёк и очередь не пуста → пишет
         """
         while True:
+            # Нода удалена из памяти (remove_node) — воркеру больше нечего обслуживать
+            if node_id not in self.node_metadata:
+                break
             try:
                 operations = []
                 start_time = time.time()
-                # 1. Запоминаем состояние лимита на очередь конкретной ноды перед сборкой батча
-                was_limited = self.node_metadata[node_id]['queue_limited']
+                queue = self.node_queues[node_id]
 
                 # Собираем батч операций
                 while len(operations) < self.max_batch:
@@ -457,16 +651,21 @@ class ConfigWriteBuffer:
                         break
                     try:
                         # Пытаемся забрать операцию с таймаутом
-                        op = await asyncio.wait_for(self.node_queues[node_id].get(), timeout=remaining_time)
+                        op = await asyncio.wait_for(queue.get(), timeout=remaining_time)
                         operations.append(op)
-                        self.node_queues[node_id].task_done()
-                    except asyncio.TimeoutError:
+                        queue.task_done()
+                    except TimeoutError:
                         # Таймаут истёк, выходим
                         break
 
-                # Если очередь ограничивается лимитами для этой ноды
+                # Запись сохраняет всё состояние буфера, а не только операции батча: забираем и остаток очереди,
+                # чтобы пачка ушла одной записью и одним перезапуском ядра, а не порциями по max_batch
+                while not queue.empty():
+                    operations.append(queue.get_nowait())
+                    queue.task_done()
+
                 # Если есть операции → пишем на диск (неблокирующе)
-                if was_limited and self.node_metadata[node_id]['queue_limited'] and operations:
+                if operations:
                     log_event(
                         f"\033[35m[Worker]\033[0m Батч собран | node_proto_id: \033[32m{node_id}\033[0m; opers_len: \033[35m{len(operations)}\033[0m"
                     )
@@ -474,7 +673,7 @@ class ConfigWriteBuffer:
                     write_task = asyncio.create_task(self._write_node_to_disk(node_id))
                     self.pending_writes[node_id].add(write_task)
                     # Удаляем из pending после завершения
-                    write_task.add_done_callback(lambda t: self.pending_writes[node_id].discard(t))
+                    write_task.add_done_callback(lambda t: self.pending_writes.get(node_id, set()).discard(t))
 
             except asyncio.CancelledError:
                 break
@@ -483,6 +682,9 @@ class ConfigWriteBuffer:
                     f"\033[35m[Worker]\033[0m Ошибка воркера | node_proto_id: \033[31m{node_id}; error: \033[34m{e}\033[0m",
                     level='CRITICAL',
                 )
+                # Пауза перед следующей попыткой: без неё повторяющаяся ошибка крутит цикл без единого await
+                # и блокирует event loop всего нод-клиента
+                await asyncio.sleep(self.timeout)
 
     async def _write_node_to_disk(self, node_id: int):
         """
@@ -542,7 +744,16 @@ class ConfigWriteBuffer:
             process = await asyncio.create_subprocess_shell(
                 reload_command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
-            stdout, stderr = await process.communicate()
+            try:
+                # Без таймаута зависшая команда вешала запись, а с ней reinit (remove_node) и остановку
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=env.command_timeout)
+            except TimeoutError:
+                process.kill()
+                log_event(
+                    f'Команда перезагрузки ядра не завершилась за {env.command_timeout} с и прервана: "{reload_command}"',
+                    level='CRITICAL',
+                )
+                return
 
             if process.returncode == 0:
                 log_event("Ядро успешно перезагружено")
@@ -550,41 +761,6 @@ class ConfigWriteBuffer:
                 log_event(f"Ошибка перезагрузки ядра: \033[31m{stderr.decode()}\033[0m", level='CRITICAL')
         except Exception as e:
             log_event(f"Исключение при перезагрузке ядра | error: \033[34m{e}\033[0m", level='CRITICAL')
-
-    @asynccontextmanager
-    async def unlimit_queue(self, node_proto_id: int):
-        """
-        Временно отключает лимиты очереди для bulk операций для конкретной ноды
-
-        Args:
-            node_proto_id: ID ноды для которой отключаем лимиты
-
-        Использование:
-            async with buffer.unlimit_queue(node_proto_id):
-                # Здесь можно добавлять операции без триггера батчинга
-                await buffer.add_user(...)
-                await buffer.add_user(...)
-            # При выходе автоматически записываем накопленные операции
-        """
-        # Сохраняем предыдущее состояние конкретной ноды
-        previous_state = self.node_metadata[node_proto_id]['queue_limited']
-        # Отключаем лимиты для этой ноды
-        self.node_metadata[node_proto_id]['queue_limited'] = False
-        try:
-            yield self
-        finally:
-            # Восстанавливаем предыдущее состояние
-            self.node_metadata[node_proto_id]['queue_limited'] = previous_state
-            # Принудительно записываем все накопленные операции на диск
-            await self._flush_all_nodes(node_proto_id)
-
-    async def _flush_all_nodes(self, node_proto_id: int):
-        """Принудительно записывает все ноды на диск (для bulk операций)"""
-        log_event(
-            f"\033[35m[Flush]\033[0m Принудительная запись конфиг-файла на инстансе ядра | node_proto_id: \033[33m{node_proto_id}\033[0m"
-        )
-        await self._write_node_to_disk(node_proto_id)
-        self.queue_limited = True
 
     async def _audit_state(self, node_id: int):
         """
@@ -681,7 +857,7 @@ class ConfigWriteBuffer:
         Читает конфиг-файл
         """
         try:
-            async with aiofiles.open(filepath, mode='r', encoding='utf-8') as f:
+            async with aiofiles.open(filepath, encoding='utf-8') as f:
                 content = await f.read()
                 return True, content
         except FileNotFoundError:
@@ -745,6 +921,22 @@ class ConfigWriteBuffer:
         return current
 
 
+def _dump_json_config(data: dict) -> bytes:
+    """Конвертер по умолчанию (шаблон без json2config_script): конфиг ядра — JSON"""
+    return orjson.dumps(data, option=orjson.OPT_INDENT_2)
+
+
+def _error_loc_to_field(loc: tuple) -> str:
+    """('user_injectors', 0, 'extractor_script') → 'user_injectors[0].extractor_script'"""
+    field = ''
+    for part in loc:
+        if isinstance(part, int):
+            field += f'[{part}]'
+        else:
+            field += f'.{part}' if field else str(part)
+    return field
+
+
 def flatten_key2value(
     json_obj: dict,
     flatten_key: str,
@@ -801,18 +993,6 @@ def flatten_key2value(
             return Exception
 
     return current
-
-
-@dataclass
-class AuditModes:
-    lite: str = 'lite'  # Сравнение длины. Лог при расхождении. Нод клиент продолжает работать
-    medium: str = (
-        'medium'  # Глубокое сравнение каждого пользователя из State файла с пользователем из Конфиг-файла впн-ядра
-    )
-    strict: str = 'strict'  # Как Medium, но нод клиент прекращает работу и падает с ValueError
-
-    medium_advanced: str = 'medium_advanced'  # Medium. Расхождения отправляются на админку
-    strict_advanced: str = 'strict_advanced'  # Strict + Умное уведомление на админку
 
 
 def get_proto_cores_buffer(request: Request):

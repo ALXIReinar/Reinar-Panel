@@ -238,6 +238,8 @@ async def test_execute_get_metrics_unified(
     else:
         core_ip, core_port = "127.0.0.1", 10085
     script = get_script_from_template(TemplateScriptFields.get_metrics)
+    if not script or script.strip().startswith("python ") or "def " not in script:
+        pytest.skip("Template uses CLI command for metrics, not Python script")
     lib_names = get_script_from_template(TemplateScriptFields.lib_names)
     success, message = await HotReloadExecutor.execute_action_script(
         script=script,

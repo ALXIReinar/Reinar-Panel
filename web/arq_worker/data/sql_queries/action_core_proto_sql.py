@@ -9,21 +9,8 @@ class BulkActionsQueries:
 
     async def get_meta_for_bulk(self, outbox_event_ids: list[int]):
         query = '''
-        -- 1. Пре-агрегация инжекторов в конфиг-файлы впн-ядер
-        WITH pre_agg_user_injectors AS (
-            SELECT tmp_id,
-               json_agg(
-                   json_build_object(
-                       'flatten_array_cursor', flatten_array_cursor,
-                       'extractor_script', extractor_script,
-                       'libs', libs
-                   )
-               ) AS user_injectors
-            FROM templates_users_extractors
-            GROUP BY tmp_id
-        ),
-        -- 2. Пре-агрегация! Теперь у нас по одной записи на каждый node_proto_id с готовым JSON-массивом пользователей
-        pre_aggregated_users AS (
+        -- 1. Пре-агрегация! Теперь у нас по одной записи на каждый node_proto_id с готовым JSON-массивом пользователей
+        WITH pre_aggregated_users AS (
             SELECT node_proto_id,
                 json_agg(
                     json_build_object( 
@@ -36,20 +23,16 @@ class BulkActionsQueries:
             WHERE id = ANY($1)
             GROUP BY node_proto_id
         )
-        -- 3. Финальный джойн. 
-        -- Декартово произведение не раздувает записи, экономия ресурсов
+        -- 2. Финальный джойн. 
         SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, 
-               np.reload_core_command, pt.proto_python_lib,
-               np.config_path, pt.constant_user_data_obj, pt.required_user_data_obj,
-               pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, pt.api_bulk_delete_user_script, np.constant_node_data_obj,
-               pt.bulk_delete_script_custom_params, pt.json2config_script, pt.config2json_script, pt.conf_converter_libs,
-               COALESCE(aui.user_injectors, '[]'::json) AS user_injectors,
+               pt.constant_user_data_obj, pt.required_user_data_obj,
+               pt.bulk_add_script_custom_params, np.constant_node_data_obj,
+               pt.bulk_delete_script_custom_params,
                COALESCE(pau.users, '[]'::json) AS users
         FROM nodes_protocols np
         JOIN pre_aggregated_users pau ON pau.node_proto_id = np.id
         JOIN nodes n ON np.node_id = n.id AND n.is_active = true
         JOIN proto_templates pt ON np.tmp_id = pt.id 
-        LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id
         WHERE np.user_visible = true AND np.reg_status = $2
         '''  # noqa: W291
         return await self.conn.fetch(query, outbox_event_ids, VnodeRegStatuses.success)
@@ -86,20 +69,7 @@ class BulkActionsQueries:
             JOIN vnodes_sub_plans vsp ON vsp.sub_plan_id = ds.sub_plan_id
             RETURNING id AS event_id, user_sub_id, user_uuid, node_proto_id
         ),
-        -- 5.1. Пре агрегация инжекторов
-        pre_agg_user_injectors AS (
-            SELECT tmp_id,
-               json_agg(
-                   json_build_object(
-                       'flatten_array_cursor', flatten_array_cursor,
-                       'extractor_script', extractor_script,
-                       'libs', libs
-                   )
-               ) AS user_injectors
-            FROM templates_users_extractors
-            GROUP BY tmp_id
-        ),
-        -- 6. Пре-агрегация пользователей. Самая последняя, т.к. записей больше всех остальных пре-агрегаций
+        -- 5. Пре-агрегация пользователей. Самая последняя, т.к. записей больше всех остальных пре-агрегаций
         pre_agg_users AS (
             SELECT node_proto_id,
                    json_agg(
@@ -112,17 +82,14 @@ class BulkActionsQueries:
             FROM insert_outbox
             GROUP BY node_proto_id
         )
-        -- 7. Группируем пользователей по нодам для пакетной отправки
-        SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib, pt.api_bulk_delete_user_script, 
-               np.config_path, pt.bulk_delete_script_custom_params, pt.constant_user_data_obj, pt.required_user_data_obj,
-               pau.users, np.constant_node_data_obj, pt.json2config_script, pt.config2json_script, pt.conf_converter_libs,
-               np.reload_core_command,
-               COALESCE(aui.user_injectors, '[]'::json) AS user_injectors
+        -- 6. Группируем пользователей по нодам для пакетной отправки
+        SELECT np.id AS node_proto_id, n.private_ip, n.api_port, np.metrics_port, 
+               pt.bulk_delete_script_custom_params, pt.constant_user_data_obj, pt.required_user_data_obj,
+               pau.users, np.constant_node_data_obj
         FROM nodes_protocols np
         JOIN nodes n ON n.id = np.node_id AND n.is_active = true
         JOIN pre_agg_users pau ON pau.node_proto_id = np.id
         JOIN proto_templates pt ON np.tmp_id = pt.id 
-        LEFT JOIN pre_agg_user_injectors aui ON aui.tmp_id = pt.id 
         WHERE np.user_visible = true AND np.reg_status = $3
         '''  # noqa: W291
         return await self.conn.fetch(query, CoreProtoActions.delete, PayStatuses.expired, VnodeRegStatuses.success)

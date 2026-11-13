@@ -3,7 +3,6 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
 # C extensions
 *.so
 
@@ -183,3 +182,18 @@ check_env_imports.py
 .ruff_cache/
 run.py
 windows_vpn_tester/
+.claude/settings.local.json
+.claude/hooks/.state/
+mutants/
+CLAUDE.local.md
+.venv-linux/
+
+# Личный харнесс Claude Code — у каждого свой, в репозиторий не идёт
+CLAUDE.md
+.claude/
+.mcp.json
+devharness/
+.pre-commit-config.yaml
+requirements-dev.txt
+scripts/setup_wsl.sh
+pyproject.harness.toml

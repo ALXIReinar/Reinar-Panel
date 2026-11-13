@@ -18,7 +18,11 @@ env = cfg.env
 pool_settings = cfg.pool_settings
 
 from web.api import main_router  # noqa: E402
+from web.db.seed_data import load_seed_data  # noqa: E402
 from web.schemas.cookie_settings_schema import JWTCookieDep  # noqa: E402
+
+# Названия эталонных шаблонов: их тестовая очистка не трогает
+SEED_TEMPLATE_TITLES = [t["title"] for t in load_seed_data()["proto_templates"]]
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -92,14 +96,10 @@ async def db_seed(db_pool):
         # Whitelist будет пересоздан в тестах с нужными командами
         await conn.execute("TRUNCATE TABLE whitelist_commands RESTART IDENTITY")
 
-        # 3. Удаляем ТОЛЬКО тестовые шаблоны (созданные в тестах)
-        # seed_data шаблоны начинаются с 'xray-' или 'singbox-'
-        # ВАЖНО: таблица protocols удалена в миграции 8c7b68981995
-        await conn.execute("""
-            DELETE FROM proto_templates 
-            WHERE title NOT ILIKE 'xray-%' 
-            AND title NOT ILIKE 'singbox-%'
-        """)  # noqa: W291
+        # 3. Удаляем ТОЛЬКО тестовые шаблоны (созданные в тестах): всё, чего нет в seed_data.json.
+        # Раньше фильтр оставлял лишь 'xray-%' и 'singbox-%' и молча удалял amneziawg-* и hysteria-*
+        # вместе с экстракторами — тесты кастомных конвертеров нод-клиента оставались без шаблонов
+        await conn.execute("DELETE FROM proto_templates WHERE NOT (title = ANY($1::text[]))", SEED_TEMPLATE_TITLES)
 
         # 3. Справочники уже должны быть залиты через seed_data.py
         # Проверяем что они есть
@@ -597,8 +597,11 @@ class FakeAiohttpSession:
         self.json_data = {} if json_data is None else json_data
         self.status = status
         self.raise_error = raise_error
+        # Журнал вызовов: (метод, url, json-тело) — чтобы тесты проверяли, что и куда отправлено
+        self.calls: list[tuple[str, str, dict | None]] = []
 
     def get(self, url: str, *args, **kwargs):
+        self.calls.append(("GET", url, kwargs.get("json")))
         if self.raise_error:
             from aiohttp import ClientError
 
@@ -607,6 +610,7 @@ class FakeAiohttpSession:
 
     # Добавляем POST по аналогии
     def post(self, url: str, *args, **kwargs):
+        self.calls.append(("POST", url, kwargs.get("json")))
         if self.raise_error:
             from aiohttp import ClientError
 

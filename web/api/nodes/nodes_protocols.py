@@ -1,6 +1,10 @@
+import asyncio
+
 from fastapi import APIRouter, HTTPException
 from starlette.requests import Request
 
+from web.api.nodes.handlers import push_reinit
+from web.config_dir.config import NodeExecAiohttpDep
 from web.data.postgres import PgSqlDep
 from web.schemas.cookie_settings_schema import JWTCookieDep
 from web.schemas.nodes_protocols_schema import (
@@ -60,7 +64,12 @@ async def register_vnode(body: VNodeRegisterSchema, db: PgSqlDep, request: Reque
 
 
 @router.post('/server/nodes/protocols/confirm')
-async def confirm_vnode(body: VNodeRegisterResultSchema, db: PgSqlDep, request: Request):
+async def confirm_vnode(
+    body: VNodeRegisterResultSchema,
+    db: PgSqlDep,
+    request: Request,
+    aio_http: NodeExecAiohttpDep,
+):
     """
     Подтверждение регистрации виртуальной ноды
 
@@ -83,10 +92,17 @@ async def confirm_vnode(body: VNodeRegisterResultSchema, db: PgSqlDep, request: 
         service_name=body.service_name,
     )
     if not vnode:
-        log_event(f'Не удалось подтвердить регистрацию ноды. Виртуальной ноды не существует! | node_proto_id: \033[33m{body.node_proto_id}\033[0m',request=request,level='WARNING',)
+        log_event(
+            f'Не удалось подтвердить регистрацию ноды. Виртуальной ноды не существует! | node_proto_id: \033[33m{body.node_proto_id}\033[0m',
+            request=request,
+            level='WARNING',
+        )
         raise HTTPException(status_code=404, detail={'success': False, 'message': 'Виртуальная нода не найдена!'})
 
-    log_event(f'Виртуальная нода подтверждена, переходим к конфиг ссылке | node_proto_id: \033[33m{body.node_proto_id}\033[0m', request=request)
+    log_event(
+        f'Виртуальная нода подтверждена, переходим к конфиг ссылке | node_proto_id: \033[33m{body.node_proto_id}\033[0m',
+        request=request,
+    )
 
     "Если регистрация успешна - выполняем первый рендеринг config_link"
     if body.status == VnodeRegStatuses.success and body.config_content:
@@ -95,7 +111,11 @@ async def confirm_vnode(body: VNodeRegisterResultSchema, db: PgSqlDep, request: 
             node_info = await db.nodes_protocols.get_node_for_file_edit(body.node_proto_id)
 
             if not node_info or not node_info['url_tmp']:
-                log_event(f'Не удалось получить информацию для первого рендеринга конфиг-ссылки sub-ready состояния | node_proto_id: \033[33m{body.node_proto_id}\033[0m', request=request, level='WARNING')
+                log_event(
+                    f'Не удалось получить информацию для первого рендеринга конфиг-ссылки sub-ready состояния | node_proto_id: \033[33m{body.node_proto_id}\033[0m',
+                    request=request,
+                    level='WARNING',
+                )
             else:
                 # Генерируем config_link из сырого содержимого
                 config_link = generate_config_link_from_raw_content(
@@ -108,9 +128,46 @@ async def confirm_vnode(body: VNodeRegisterResultSchema, db: PgSqlDep, request: 
                 # Сохраняем в БД
                 await db.nodes_protocols.update_config_link(body.node_proto_id, config_link)
 
-                log_event(f'Первый рендеринг config_link выполнен при подтверждении регистрации | node_proto_id: \033[32m{body.node_proto_id}\033[0m; config_link: \033[35m{config_link}\033[0m', request=request)
+                log_event(
+                    f'Первый рендеринг config_link выполнен при подтверждении регистрации | node_proto_id: \033[32m{body.node_proto_id}\033[0m; config_link: \033[35m{config_link}\033[0m',
+                    request=request,
+                )
         except Exception as e:
-            log_event(f'Ошибка первого рендеринга config_link | node_proto_id: \033[31m{body.node_proto_id}\033[0m; error: \033[31m{repr(e)}\033[0m', request=request, level='ERROR')
+            log_event(
+                f'Ошибка первого рендеринга config_link | node_proto_id: \033[31m{body.node_proto_id}\033[0m; error: \033[31m{repr(e)}\033[0m',
+                request=request,
+                level='ERROR',
+            )
+
+    "Если регистрация успешна - вызываем реинициализацию на нод-клиенте (best-effort, таймаут 5с)"
+    # Best-effort: ошибка push не отменяет подтверждение — скрипт установки ноды ждёт ответа confirm.
+    # Без push нода включится при следующем старте нод-клиента или точечной реинициализацией (POST /private/nodes/{id}/reinit)
+    if body.status == VnodeRegStatuses.success:
+        try:
+            node_data = await db.nodes_protocols.get_node_for_file_edit(body.node_proto_id)
+            if node_data and node_data['private_ip'] and node_data['api_port']:
+                async with asyncio.timeout(5):
+                    status, _ = await push_reinit(
+                        aio_http, node_data['private_ip'], node_data['api_port'], [body.node_proto_id]
+                    )
+                log_event(
+                    f'Push реинициализации на нод-клиент | node_proto_id: \033[32m{body.node_proto_id}\033[0m; status: \033[33m{status}\033[0m',
+                    request=request,
+                    level='INFO' if status == 200 else 'WARNING',
+                )
+            elif node_data:
+                # Публичный адрес не используем: команды админки ходят к нод-клиенту только по приватной сети
+                log_event(
+                    f'Push реинициализации пропущен: у физической ноды не задан приватный IP | node_proto_id: \033[33m{body.node_proto_id}\033[0m',
+                    request=request,
+                    level='WARNING',
+                )
+        except Exception as e:
+            log_event(
+                f'Не удалось отправить push реинициализации на нод-клиент | node_proto_id: \033[33m{body.node_proto_id}\033[0m; error: {repr(e)}',
+                request=request,
+                level='WARNING',
+            )
 
     return {'success': True, 'message': 'Виртуальная нода сменила статус регистрации'}
 
