@@ -209,7 +209,6 @@ class TemplateScriptFields:
     bulk_delete_users: str = 'api_bulk_delete_user_script'
     get_metrics: str = 'api_metrics_script'
     metrics_parser: str = 'metrics_parser_code'
-    metrics_parser_libs: str = 'metrics_parser_libs'  # Добавлено для парсера метрик
     lib_names: str = 'proto_python_lib'
     custom_params_bulk_add: str = 'bulk_add_script_custom_params'
     custom_params_bulk_delete: str = 'bulk_delete_script_custom_params'

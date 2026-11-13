@@ -716,6 +716,22 @@ async def test_template_metrics_parsing(protocol_templates_with_extractors, use_
             else:
                 # AWG - уже строка
                 raw_metrics_str = raw_metrics_data
+            if core_type in XRAY_LIKE_CORES:
+                # Парсер xray/sing-box отдаёт прирост с прошлого опроса, а первый опрос — точка отсчёта
+                # (см. тесты группы 4). Делаем её пустым ответом: тогда счётчики ниже учитываются целиком
+                success, _ = await HotReloadExecutor.execute_action_script(
+                    script=parser_code,
+                    lib_names=lib_names,
+                    node_ip='0',
+                    core_api_port=0,
+                    action='parse_metrics',
+                    custom_params={
+                        "raw_metrics": json.dumps(sample_metrics['empty']),
+                        "vpn_users": mock_vpn_users,
+                        "local_state": mock_local_state,
+                    },
+                )
+                assert success is True
             success, result = await HotReloadExecutor.execute_action_script(
                 script=parser_code,
                 lib_names=lib_names,
@@ -894,3 +910,297 @@ async def test_template_metrics_collection_execution(
             pytest.fail(
                 f"Template '{template['title']}': Парсер упал на реальных данных: {e}\nRaw metrics: {raw_metrics}"
             )
+
+
+# ========== Группа 4: Метрики xray/sing-box — прирост по local_state, форматы входа ==========
+
+MB = 1024 * 1024
+XRAY_LIKE_CORES = ('xray', 'singbox')
+
+
+def _xray_like_templates(templates: list[dict]) -> list[dict]:
+    """Шаблоны xray/sing-box, по одному на каждый уникальный набор скриптов метрик (их 55 одинаковых)"""
+    unique: dict[tuple, dict] = {}
+    for template in templates:
+        if get_core_type(template['title']) in XRAY_LIKE_CORES and template.get('metrics_parser_code'):
+            unique.setdefault((template['metrics_parser_code'], template.get('api_metrics_script')), template)
+    if not unique:
+        pytest.skip("Среди выбранных шаблонов нет xray/sing-box с парсером метрик")
+    return list(unique.values())
+
+
+def _stats(**bytes_by_counter) -> list[dict]:
+    """user_1_up=5 → [{'name': 'user>>>1>>>traffic>>>uplink', 'value': 5}] — формат ответа API-скрипта"""
+    result = []
+    for key, value in bytes_by_counter.items():
+        _, user_sub_id, direction = key.split('_')
+        result.append(
+            {
+                'name': f"user>>>{user_sub_id}>>>traffic>>>{'uplink' if direction == 'up' else 'downlink'}",
+                'value': value,
+            }
+        )
+    return result
+
+
+async def _parse(template: dict, raw_metrics, local_state: dict) -> tuple[dict[int, int], list]:
+    """Запускает парсер шаблона в песочнице. Возвращает ({user_sub_id: МБ}, troubles)"""
+    success, result = await HotReloadExecutor.execute_action_script(
+        script=template['metrics_parser_code'],
+        lib_names=template.get('proto_python_lib'),
+        node_ip='0',
+        core_api_port=0,
+        action='parse_metrics',
+        custom_params={"raw_metrics": raw_metrics, "vpn_users": {}, "local_state": local_state},
+    )
+    assert success is True, f"Template '{template['title']}': парсер упал: {result}"
+    users_traffics, troubles = result
+    return {u['user_sub_id']: u['total_mb_used'] for u in users_traffics}, troubles
+
+
+@pytest.mark.asyncio
+@pytest.mark.db
+async def test_xray_metrics_parser_counts_delta_between_polls(protocol_templates_with_extractors):
+    """
+    Парсер отдаёт ПРИРОСТ трафика между опросами, а не накопленный счётчик ядра.
+
+    Счётчики ядра не сбрасываются (reset убран): коллектор прибавляет ответ парсера к used_mb, поэтому
+    повторная отдача накопленного значения — это многократный учёт одного и того же трафика.
+    """
+    for template in _xray_like_templates(protocol_templates_with_extractors):
+        state: dict = {}
+        title = template['title']
+
+        # Первый опрос с пустым state (нод-клиент перезапущен, ядро работает давно): трафик до этого момента
+        # уже учтён прошлыми опросами — берём значения за точку отсчёта и ничего не отдаём
+        traffic, _ = await _parse(template, _stats(user_1_up=5 * MB, user_1_down=7 * MB), state)
+        assert traffic == {}, f"{title}: первый опрос — точка отсчёта, а не трафик: {traffic}"
+
+        # Счётчики не изменились — трафика нет
+        traffic, _ = await _parse(template, _stats(user_1_up=5 * MB, user_1_down=7 * MB), state)
+        assert traffic == {}, f"{title}: без изменения счётчиков трафика быть не должно: {traffic}"
+
+        # Прирост: +1 МБ вверх и +2 МБ вниз; у нового пользователя 2 счётчик появился после точки отсчёта —
+        # он учитывается целиком
+        traffic, _ = await _parse(template, _stats(user_1_up=6 * MB, user_1_down=9 * MB, user_2_down=4 * MB), state)
+        assert traffic == {1: 3, 2: 4}, f"{title}: ожидался только прирост: {traffic}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.db
+async def test_xray_metrics_parser_keeps_sub_megabyte_remainder(protocol_templates_with_extractors):
+    """Трафик меньше 1 МБ за опрос не теряется: остаток байт переносится на следующий опрос"""
+    for template in _xray_like_templates(protocol_templates_with_extractors):
+        state: dict = {}
+        await _parse(template, [], state)  # точка отсчёта
+
+        traffic, _ = await _parse(template, _stats(user_1_up=int(0.6 * MB)), state)
+        assert traffic == {}, f"{template['title']}: 0.6 МБ — ещё не целый мегабайт: {traffic}"
+
+        # uplink и downlink округляются не по отдельности: 0.6 + 0.3 + 0.3 = 1.2 МБ → 1 МБ, 0.2 в остатке
+        traffic, _ = await _parse(template, _stats(user_1_up=int(0.9 * MB), user_1_down=int(0.3 * MB)), state)
+        assert traffic == {1: 1}, f"{template['title']}: остаток прошлого опроса должен был добрать мегабайт: {traffic}"
+
+        # 0.2 в остатке + 0.9 = 1.1 → ещё 1 МБ
+        traffic, _ = await _parse(template, _stats(user_1_up=int(1.8 * MB), user_1_down=int(0.3 * MB)), state)
+        assert traffic == {1: 1}, f"{template['title']}: {traffic}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.db
+async def test_xray_metrics_parser_survives_core_restart(protocol_templates_with_extractors):
+    """Перезапуск ядра обнуляет счётчики: прирост после него — это новое значение счётчика, а не разность"""
+    for template in _xray_like_templates(protocol_templates_with_extractors):
+        title = template['title']
+
+        # Счётчик стал меньше прошлого значения
+        state: dict = {}
+        await _parse(template, _stats(user_1_up=50 * MB), state)
+        traffic, _ = await _parse(template, _stats(user_1_up=2 * MB), state)
+        assert traffic == {1: 2}, f"{title}: после обнуления счётчика учитывается его новое значение: {traffic}"
+
+        # Счётчик пропал из ответа (ядро перезапущено, пользователь ещё не ходил), а затем вернулся со
+        # значением БОЛЬШЕ прежнего — учитывается целиком, а не как разность со старым
+        state = {}
+        await _parse(template, _stats(user_1_up=50 * MB), state)
+        traffic, _ = await _parse(template, [], state)
+        assert traffic == {}
+        traffic, _ = await _parse(template, _stats(user_1_up=70 * MB), state)
+        assert traffic == {1: 70}, f"{title}: счётчик после перезапуска ядра учитывается целиком: {traffic}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.db
+async def test_xray_metrics_parser_accepts_all_input_formats(protocol_templates_with_extractors):
+    """
+    Один парсер разбирает всё, что может прийти: список словарей от API-скрипта, JSON от CLI (строкой и словарём,
+    значения — числами или строками) и список protobuf-сообщений, который отдаёт xtlsapi (stats_query(...).stat —
+    на нём старый парсер падал с 'RepeatedCompositeContainer' object has no attribute 'get')
+    """
+    from xtlsapi.xray_api.app.stats.command import command_pb2
+
+    def protobuf_stats(stats: list[dict]):
+        return command_pb2.QueryStatsResponse(stat=[command_pb2.Stat(**s) for s in stats]).stat
+
+    after = _stats(user_1_up=3 * MB, user_1_down=1 * MB, user_2_up=2 * MB)
+    cli_json_with_string_values = {"stat": [{"name": s['name'], "value": str(s['value'])} for s in after]}
+
+    formats = {
+        # формат: (пустой ответ для точки отсчёта, ответ с трафиком)
+        'список словарей (API-скрипт)': ([], after),
+        'словарь CLI': ({"stat": []}, {"stat": after}),
+        'JSON-строка CLI': ('{"stat": []}', json.dumps({"stat": after})),
+        'JSON-строка CLI, пустой объект': ('{}', json.dumps(cli_json_with_string_values)),
+        'protobuf от xtlsapi': (protobuf_stats([]), protobuf_stats(after)),
+    }
+    for template in _xray_like_templates(protocol_templates_with_extractors):
+        for format_name, (empty, with_traffic) in formats.items():
+            state: dict = {}
+            traffic, troubles = await _parse(template, empty, state)
+            assert traffic == {} and troubles == [], f"{template['title']} / {format_name}: пустой ответ: {traffic}"
+            traffic, troubles = await _parse(template, with_traffic, state)
+            assert traffic == {1: 4, 2: 2}, f"{template['title']} / {format_name}: {traffic}"
+            assert troubles == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.db
+async def test_xray_metrics_parser_reports_troubles_without_failing(protocol_templates_with_extractors):
+    """Чужие и битые записи уходят в troubles и не роняют разбор остальных"""
+    for template in _xray_like_templates(protocol_templates_with_extractors):
+        state: dict = {}
+        await _parse(template, [], state)
+        raw = [
+            *_stats(user_1_up=2 * MB),
+            {'name': 'inbound>>>api>>>traffic>>>uplink', 'value': 999},  # не пользовательский счётчик
+            {'name': 'user>>>not-a-number>>>traffic>>>uplink', 'value': 5 * MB},  # user_sub_id не число
+            {'name': 'user>>>7>>>traffic>>>uplink'},  # нулевое значение CLI не печатает вовсе
+        ]
+        traffic, troubles = await _parse(template, raw, state)
+        assert traffic == {1: 2}, f"{template['title']}: {traffic}"
+        assert len(troubles) == 2, f"{template['title']}: в troubles — 2 записи: {troubles}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.db
+async def test_xray_api_metrics_script_returns_plain_stats_without_reset(protocol_templates_with_extractors):
+    """
+    API-скрипт метрик отдаёт простой список {'name', 'value'} и НЕ сбрасывает счётчики ядра:
+    прирост считает парсер. Со сбросом ответ, потерянный по дороге, терял и трафик
+    """
+    import xtlsapi
+    from xtlsapi.xray_api.app.stats.command import command_pb2
+
+    calls: list[dict] = []
+
+    class FakeXrayClient:
+        def __init__(self, host, port):
+            pass
+
+        def stats_query(self, pattern, reset=False):
+            calls.append({'pattern': pattern, 'reset': reset})
+            return command_pb2.QueryStatsResponse(
+                stat=[command_pb2.Stat(name='user>>>1>>>traffic>>>uplink', value=3 * MB)]
+            ).stat
+
+    for template in _xray_like_templates(protocol_templates_with_extractors):
+        if not template.get('api_metrics_script'):
+            continue
+        calls.clear()
+        with patch.object(xtlsapi, 'XrayClient', FakeXrayClient):
+            success, raw = await HotReloadExecutor.execute_action_script(
+                script=template['api_metrics_script'],
+                lib_names=template.get('proto_python_lib'),
+                node_ip='127.0.0.1',
+                core_api_port=10085,
+                action='get_metrics',
+                custom_params={},
+            )
+        assert success is True, f"{template['title']}: API-скрипт метрик упал: {raw}"
+        assert raw == [{'name': 'user>>>1>>>traffic>>>uplink', 'value': 3 * MB}], f"{template['title']}: {raw!r}"
+        assert calls == [{'pattern': 'user>>>', 'reset': False}], f"{template['title']}: {calls}"
+
+        # CLI-команда (запасной путь) тоже не сбрасывает счётчики
+        assert 'reset' not in (template.get('metrics_command') or ''), (
+            f"{template['title']}: metrics_command сбрасывает счётчики: {template['metrics_command']}"
+        )
+
+
+# ========== Группа 5: flow (XTLS Vision) в шаблонах xray ==========
+
+
+def _flow_allowed(title: str) -> bool:
+    """
+    XTLS Vision (flow) работает только у VLESS поверх голого TCP. На gRPC/XHTTP/WS ядро отвергает соединение
+    («rejected since the client flow is empty»), а у Trojan с flow в конфиге xray не запускается вовсе
+    («The feature Flow for Trojan has been removed»)
+    """
+    return '-vless-' in title and title.endswith('-tcp')
+
+
+@pytest.mark.asyncio
+@pytest.mark.db
+async def test_xray_templates_use_flow_only_for_vless_over_tcp(protocol_templates_with_extractors):
+    checked = 0
+    for template in protocol_templates_with_extractors:
+        title = template['title']
+        if get_core_type(title) != 'xray' or _flow_allowed(title):
+            continue
+        checked += 1
+        for field in ('constant_user_data_obj', 'bulk_add_script_custom_params', 'bulk_delete_script_custom_params'):
+            value = template.get(field) or {}
+            if isinstance(value, str):
+                value = json.loads(value)
+            assert 'flow' not in value, f"{title}: flow в {field}: {value}"
+        for extractor in template.get('extractors') or []:
+            assert 'flow' not in extractor['extractor_script'], (
+                f"{title}: экстрактор пишет flow в конфиг ядра:\n{extractor['extractor_script']}"
+            )
+        assert 'flow=' not in (template.get('url_tmp') or ''), f"{title}: flow в ссылке подписки: {template['url_tmp']}"
+        assert "'flow'" not in (template.get('sub_prepare_script') or ''), (
+            f"{title}: sub_prepare_script читает flow пользователя"
+        )
+    if not checked:
+        pytest.skip("Среди выбранных шаблонов нет xray-шаблонов без поддержки flow")
+
+
+@pytest.mark.asyncio
+@pytest.mark.db
+async def test_xray_vless_add_script_does_not_default_to_vision_flow(protocol_templates_with_extractors):
+    """
+    Скрипт добавления пользователя берёт flow только из custom_params. Раньше при отсутствии параметра он
+    подставлял xtls-rprx-vision — пользователь, добавленный через API ядра, не мог подключиться до перезапуска ядра
+    """
+    import xtlsapi
+
+    added: list[dict] = []
+
+    class FakeXrayClient:
+        def __init__(self, host, port):
+            pass
+
+        def add_client(self, **kwargs):
+            added.append(kwargs)
+
+    checked = 0
+    for template in protocol_templates_with_extractors:
+        title = template['title']
+        script = template.get('api_bulk_add_user_script') or ''
+        if get_core_type(title) != 'xray' or '-vless-' not in title or 'flow' not in script:
+            continue
+        checked += 1
+        added.clear()
+        with patch.object(xtlsapi, 'XrayClient', FakeXrayClient):
+            success, result = await HotReloadExecutor.execute_action_script(
+                script=script,
+                lib_names=template.get('proto_python_lib'),
+                user_obj=[{'user_sub_id': '1', 'user_uuid': '11111111-1111-1111-1111-111111111111'}],
+                node_ip='127.0.0.1',
+                core_api_port=10085,
+                action='user_core_operation',
+                custom_params={'inbound_tag': 'vless-inbound'},
+            )
+        assert success is True and result == {'success': 1, 'failed': 0}, f"{title}: {result}"
+        assert not added[0].get('flow'), f"{title}: без flow в custom_params скрипт передал ядру {added[0]}"
+    if not checked:
+        pytest.skip("Среди выбранных шаблонов нет xray-vless со скриптом добавления через API")

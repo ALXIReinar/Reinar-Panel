@@ -70,9 +70,11 @@ class UserSubAddItem(BaseModel):
     uuid: str = Field(max_length=36)
     order_id: Optional[int] = None
     sub_plan_id: int
-    traffic_used_day_mb: Optional[int] = None
+    # Израсходованный трафик не Optional: коллектор метрик прибавляет прирост (used_mb + N), а NULL + N = NULL —
+    # трафик не копился бы, и лимит не срабатывал. Лимиты (traffic_limit_*) — Optional: NULL значит «без лимита»
+    traffic_used_day_mb: int = Field(0, ge=0)
     traffic_limit_day_mb: Optional[int] = None
-    traffic_used_mb: Optional[int] = None
+    traffic_used_mb: int = Field(0, ge=0)
     traffic_limit_mb: Optional[int] = None
     infinite_traffic: bool
     expire_date: Optional[datetime] = None

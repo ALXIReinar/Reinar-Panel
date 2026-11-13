@@ -16,6 +16,7 @@ E2E тесты для полномасштабного пайплайна proto_
 import asyncio  # noqa: I001
 import sys  # noqa: F401
 from unittest.mock import AsyncMock, patch, MagicMock  # noqa: F401
+from types import SimpleNamespace
 import pytest
 import orjson  # noqa: F401
 
@@ -224,8 +225,8 @@ class MockXrayClient:
     def stats_query(self, **kwargs):
         """Мок для получения метрик"""
         self.calls.append(('stats_query', kwargs))
-        # Возвращаем фейковые метрики в формате Xray
-        return '{"stat": [{"name": "user>>>1>>>traffic>>>uplink", "value": 1024}]}'
+        # Как настоящий xtlsapi: список сообщений Stat с полями name и value (а не строка)
+        return [SimpleNamespace(name="user>>>1>>>traffic>>>uplink", value=1024)]
 
 
 class MockXtlsapiModule:
@@ -651,19 +652,8 @@ async def test_e2e_add_user_with_hot_reload_and_verify_metrics(
     add_script = get_script_from_template(TemplateScriptFields.bulk_add_users)
     metrics_script = get_script_from_template(TemplateScriptFields.get_metrics)
     metrics_parser = get_script_from_template(TemplateScriptFields.metrics_parser)
-    # До удаления metrics_parser_libs (требование 11) библиотеки парсера объединяются с proto_python_lib
-    lib_names = (
-        ','.join(
-            filter(
-                None,
-                [
-                    get_script_from_template(TemplateScriptFields.lib_names),
-                    get_script_from_template(TemplateScriptFields.metrics_parser_libs),
-                ],
-            )
-        )
-        or None
-    )
+    # Библиотеки всех скриптов шаблона, включая парсер метрик, — в proto_python_lib
+    lib_names = get_script_from_template(TemplateScriptFields.lib_names)
     custom_params_add = get_script_from_template(TemplateScriptFields.custom_params_bulk_add) or {}
     test_user_uuid = "e2e-verify-uuid-123"
     test_user_sub_id = "e2e_verify_sub"

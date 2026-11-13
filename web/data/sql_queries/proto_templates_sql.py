@@ -64,7 +64,7 @@ class ProtoTemplatesQueries:
         SELECT pt.id, pt.title, pt.url_tmp, pt.status, pt.is_accepted, pt.required_user_data_obj, pt.constant_user_data_obj,
                pt.proto_python_lib, pt.sub_prepare_script, pt.sub_required_libs, pt.api_bulk_delete_user_script, pt.metrics_parser_code, pt.metrics_command,
                pt.bulk_delete_script_custom_params, pt.api_metrics_script, pt.api_bulk_add_user_script, pt.bulk_add_script_custom_params, pt.description,
-               pt.json2config_script, pt.config2json_script, pt.conf_converter_libs, pt.metrics_parser_libs,
+               pt.json2config_script, pt.config2json_script, pt.conf_converter_libs,
                COALESCE(ui.user_injectors, '[]'::json) AS user_injectors
         FROM proto_templates pt
         LEFT JOIN user_injectors ui ON ui.tmp_id = pt.id

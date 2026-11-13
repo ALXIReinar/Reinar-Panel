@@ -10,6 +10,7 @@ Unit тесты для HotReloadExecutor с реальными скриптам�
 """
 
 from unittest.mock import patch  # noqa: I001
+from types import SimpleNamespace
 import pytest
 
 from node_client.api.sandbox.hot_reload_executor import HotReloadExecutor
@@ -71,8 +72,11 @@ class MockXrayClient:
 
     def stats_query(self, **kwargs):
         self.calls.append(('stats_query', kwargs))
-        # Имитируем вывод метрик Xray
-        return "user>>>test@email>>>uplink: 1024\nuser>>>test@email>>>downlink: 2048"
+        # Как настоящий xtlsapi: список сообщений Stat с полями name и value (а не строка)
+        return [
+            SimpleNamespace(name="user>>>1>>>traffic>>>uplink", value=1024),
+            SimpleNamespace(name="user>>>1>>>traffic>>>downlink", value=2048),
+        ]
 
 
 class MockXtlsapiModule:
@@ -250,7 +254,11 @@ async def test_execute_get_metrics_unified(
         action="get_metrics",
     )
     assert success is True
-    assert "uplink" in message or "downlink" in message
+    # Скрипт отдаёт простой список {'name', 'value'}; на свежем настоящем ядре он пуст — трафика ещё не было
+    assert isinstance(message, list)
+    assert all(set(stat) == {'name', 'value'} for stat in message)
+    if not use_real_core:
+        assert [stat['name'].split('>>>')[-1] for stat in message] == ['uplink', 'downlink']
 
 
 # ========== Группа 2: Импорт и global scope ==========

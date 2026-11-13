@@ -127,6 +127,7 @@ async def insert_proto_templates(conn: Connection, templates: list[dict[str, Any
     inserted_params = 0
     inserted_protocols = 0
     inserted_extractors = 0
+    updated_extractors = 0
     for template_data in templates:
         # Конвертируем datetime строки в объекты datetime
         template_data = convert_datetime_strings(template_data)
@@ -176,8 +177,26 @@ async def insert_proto_templates(conn: Connection, templates: list[dict[str, Any
                 """
                 await conn.execute(query, *values)
                 inserted_extractors += 1
+            else:
+                # Существующий экстрактор служебного шаблона обновляем, как и сам шаблон: иначе исправления
+                # экстракторов из seed_data.json не доезжали до уже развёрнутых баз
+                key_columns = ("flatten_array_cursor", "tmp_id")
+                columns = [c for c in extractor_data if c not in key_columns]
+                if columns:
+                    set_clause = ', '.join(f"{c} = ${i + 3}" for i, c in enumerate(columns))
+                    await conn.execute(
+                        f"""
+                        UPDATE templates_users_extractors SET {set_clause}
+                        WHERE flatten_array_cursor = $1 AND tmp_id = $2
+                        """,
+                        extractor_data["flatten_array_cursor"],
+                        template_id,
+                        *[extractor_data[c] for c in columns],
+                    )
+                    updated_extractors += 1
     print(
-        f"✓ proto_templates: {inserted_templates} шаблонов, {inserted_params} параметров, {inserted_protocols} протоколов, {inserted_extractors} экстракторов"
+        f"✓ proto_templates: {inserted_templates} шаблонов, {inserted_params} параметров, {inserted_protocols} протоколов, "
+        f"экстракторов: {inserted_extractors} новых, {updated_extractors} обновлено"
     )
 
 

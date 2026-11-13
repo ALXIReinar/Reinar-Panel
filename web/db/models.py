@@ -513,9 +513,9 @@ class UserSubs(Base):
     infinite_expire: Mapped[bool] = mapped_column(Boolean, nullable=False)
     order_id: Mapped[int | None] = mapped_column(BigInteger)
     expire_date: Mapped[datetime.datetime | None] = mapped_column(DateTime(True))
-    traffic_used_day_mb: Mapped[int | None] = mapped_column(BigInteger, server_default=text('0'))
+    traffic_used_day_mb: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text('0'))
     traffic_limit_day: Mapped[int | None] = mapped_column(BigInteger)
-    used_mb: Mapped[int | None] = mapped_column(BigInteger, server_default=text('0'))
+    used_mb: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text('0'))
     used_mb_limit: Mapped[int | None] = mapped_column(BigInteger)
     created_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(True), server_default=text('now()'))
 

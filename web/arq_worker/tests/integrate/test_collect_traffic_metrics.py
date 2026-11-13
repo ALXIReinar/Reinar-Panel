@@ -59,7 +59,7 @@ class TestCollectTrafficMetrics:
             node = await conn.fetchrow(
                 """
                 SELECT np.id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
-                       pt.metrics_parser_code, pt.metrics_parser_libs, pt.metrics_command, pt.api_metrics_script
+                       pt.metrics_parser_code, pt.metrics_command, pt.api_metrics_script
                 FROM nodes_protocols np
                 JOIN nodes n ON np.node_id = n.id
                 JOIN proto_templates pt ON np.tmp_id = pt.id
@@ -152,7 +152,7 @@ class TestCollectTrafficMetrics:
             node = await conn.fetchrow(
                 """
                 SELECT np.id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
-                       pt.metrics_parser_code, pt.metrics_parser_libs, pt.metrics_command, pt.api_metrics_script
+                       pt.metrics_parser_code, pt.metrics_command, pt.api_metrics_script
                 FROM nodes_protocols np
                 JOIN nodes n ON np.node_id = n.id
                 JOIN proto_templates pt ON np.tmp_id = pt.id
@@ -261,7 +261,7 @@ class TestCollectTrafficMetrics:
             node = await conn.fetchrow(
                 """
                 SELECT np.id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
-                       pt.metrics_parser_code, pt.metrics_parser_libs, pt.metrics_command, pt.api_metrics_script
+                       pt.metrics_parser_code, pt.metrics_command, pt.api_metrics_script
                 FROM nodes_protocols np
                 JOIN nodes n ON np.node_id = n.id
                 JOIN proto_templates pt ON np.tmp_id = pt.id
@@ -305,7 +305,7 @@ class TestCollectTrafficMetrics:
             node = await conn.fetchrow(
                 """
                 SELECT np.id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
-                       pt.metrics_parser_code, pt.metrics_parser_libs, pt.metrics_command, pt.api_metrics_script
+                       pt.metrics_parser_code, pt.metrics_command, pt.api_metrics_script
                 FROM nodes_protocols np
                 JOIN nodes n ON np.node_id = n.id
                 JOIN proto_templates pt ON np.tmp_id = pt.id
@@ -348,7 +348,7 @@ class TestCollectTrafficMetrics:
             node = await conn.fetchrow(
                 """
                 SELECT np.id, n.private_ip, n.api_port, np.metrics_port, pt.proto_python_lib,
-                       pt.metrics_parser_code, pt.metrics_parser_libs, pt.metrics_command, pt.api_metrics_script
+                       pt.metrics_parser_code, pt.metrics_command, pt.api_metrics_script
                 FROM nodes_protocols np
                 JOIN nodes n ON np.node_id = n.id
                 JOIN proto_templates pt ON np.tmp_id = pt.id

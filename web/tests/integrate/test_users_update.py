@@ -213,15 +213,20 @@ class TestUpdateUserSubs:
         assert response.status_code == 200
         async with db_pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT is_active, is_limited FROM user_subs WHERE b64_id = $1", "b64_token_without_flags_1"
+                "SELECT is_active, is_limited, used_mb, traffic_used_day_mb FROM user_subs WHERE b64_id = $1",
+                "b64_token_without_flags_1",
             )
         assert row["is_active"] is True
         assert row["is_limited"] is False
+        # Израсходованный трафик — 0, а не NULL: коллектор метрик прибавляет прирост (used_mb + N),
+        # а NULL + N = NULL — трафик не копился бы, и лимит никогда бы не сработал
+        assert row["used_mb"] == 0
+        assert row["traffic_used_day_mb"] == 0
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("flag", ["is_active", "is_limited"])
+    @pytest.mark.parametrize("flag", ["is_active", "is_limited", "traffic_used_mb", "traffic_used_day_mb"])
     async def test_add_subscription_null_flag_rejected(self, client, user_with_subs, mock_arq, db_pool, flag):
-        """Явный null во флаге подписки — 422, а не NULL в базе"""
+        """Явный null во флаге или счётчике трафика подписки — 422, а не NULL в базе"""
         user_id = user_with_subs["user_id"]
 
         response = await client.put(
