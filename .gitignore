@@ -188,8 +188,8 @@ mutants/
 CLAUDE.local.md
 .venv-linux/
 
-# Личный харнесс Claude Code — у каждого свой, в репозиторий не идёт
-CLAUDE.md
+# Личный харнесс Claude Code — у каждого свой, в репозиторий не идёт.
+# CLAUDE.md (корневой и вложенные api/CLAUDE.md) версионируются: это описание проекта.
 .claude/
 .mcp.json
 devharness/

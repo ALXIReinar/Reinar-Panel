@@ -16,10 +16,10 @@ from web.sub.data.postgres import PgSqlDep
 from web.sub.data.redis_storage import RedisDep
 from web.sub.schemas.sub_robo_schema import CreateRoboPayLinkSchema, WebhookRoboPayload
 
-router = APIRouter(prefix='/api/v1', tags=['🤖 RoboKassa Payment'])
+router = APIRouter(prefix='/api/v1/robokassa', tags=['🤖 RoboKassa Payment'])
 
 
-@router.post('/robokassa/get_pay_link')
+@router.post('/get_pay_link')
 async def create_payment_give_link(body: CreateRoboPayLinkSchema, request: Request, db: PgSqlDep, redis: RedisDep):
     """
     Возможно, переименовать на /api/v1/internal/robokassa/get_pay_link -
@@ -82,7 +82,7 @@ async def create_payment_give_link(body: CreateRoboPayLinkSchema, request: Reque
     return {'success': True, 'message': 'Ссылка на оплату', 'payment_url': payment_url}
 
 
-@router.post('/robokassa/webhook')
+@router.post('/webhook')
 async def processing_pay_result(
     form: Annotated[WebhookRoboPayload, Form()], request: Request, db: PgSqlDep, redis: RedisDep, arq: ArqDep
 ):
