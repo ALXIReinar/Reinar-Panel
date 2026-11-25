@@ -772,23 +772,16 @@ class ConfigWriteBuffer:
 
         try:
             # 1. Читаем фарш (state.json) и конфиг
-            state_ok, state_users = await self._read_config(state_filepath, False)
+            _, state_users = await self._read_config(state_filepath, raise_exc=True)
             # В json
             state_users = orjson.loads(state_users)
 
-            core_ok, config = await self._read_config(metadata['filepath'], False)
+            _, config = await self._read_config(metadata['filepath'], raise_exc=True)
             # в Json - используем конвертер или orjson.loads по умолчанию
             if metadata['config2json_script'] is None:
                 config = orjson.loads(config)
             else:
                 config = metadata['config2json_script'](config)
-
-            if not state_ok or not core_ok:
-                log_event(
-                    f'\033[36m[Audit]\033[0m Предоставлены неправильные конфигурации. Файлы не найдены; node_proto_id: \033[31m{node_id}\033[0m; node_meta: \033[34m{metadata}\033[0m',
-                    level='ERROR',
-                )
-                raise
 
             state_users = state_users['users']
 

@@ -415,7 +415,7 @@ async def test_audit_state_file_not_found(buffer, registered_vless_node):
     Проверяем:
     - Логируется ошибка
     - В lite/medium режиме возвращается False
-    - В strict режиме выбрасывается exception
+    - В strict режиме выбрасывается FileNotFoundError с путём к файлу состояния
     """
     node_id, state_path, config_path, superusers, cutlets = registered_vless_node
     # Удаляем state файл
@@ -424,10 +424,10 @@ async def test_audit_state_file_not_found(buffer, registered_vless_node):
     with patch('node_client.config.env.audit_mode', AuditModes.lite):
         result = await buffer._audit_state(node_id)
         assert result is False
-    # strict режим - выбрасывает exception
     with patch('node_client.config.env.audit_mode', AuditModes.strict):
-        with pytest.raises(Exception):  # Может быть различные типы
+        with pytest.raises(FileNotFoundError) as error:
             await buffer._audit_state(node_id)
+        assert error.value.filename == str(state_path)
 
 
 @pytest.mark.asyncio
@@ -437,7 +437,8 @@ async def test_audit_config_file_not_found(buffer, registered_vless_node):
 
     Проверяем:
     - Логируется ошибка
-    - Возвращается False или exception
+    - В lite режиме возвращается False
+    - В strict режиме выбрасывается FileNotFoundError с путём к конфигу ядра
     """
     node_id, state_path, config_path, superusers, cutlets = registered_vless_node
     # Удаляем config файл
@@ -445,6 +446,10 @@ async def test_audit_config_file_not_found(buffer, registered_vless_node):
     with patch('node_client.config.env.audit_mode', AuditModes.lite):
         result = await buffer._audit_state(node_id)
         assert result is False
+    with patch('node_client.config.env.audit_mode', AuditModes.strict):
+        with pytest.raises(FileNotFoundError) as error:
+            await buffer._audit_state(node_id)
+        assert error.value.filename == str(config_path)
 
 
 @pytest.mark.asyncio
