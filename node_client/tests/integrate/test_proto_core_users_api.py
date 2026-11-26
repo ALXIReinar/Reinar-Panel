@@ -11,13 +11,18 @@
 - Ответ 428 при незарегистрированной ноде
 """
 
+import time
+from importlib import import_module
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import grpc
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from node_client.api import main_router
+from node_client.api.sandbox.hot_reload_executor import HotReloadExecutor
+from node_client.config import env
 from node_client.exceptions import NodeNotRegisteredError
 from node_client.main import node_not_registered_handler
 from node_client.tests.utils.test_data_factory import create_test_user
@@ -70,6 +75,92 @@ def create_bulk_action_payload(**overrides):
     }
     payload.update(overrides)
     return payload
+
+
+@pytest.fixture
+def slow_grpc_core(monkeypatch):
+    """Транспорт RPC, которому для ответа нужно больше отведённого времени."""
+    calls = []
+
+    class DeadlineExceeded(grpc.RpcError):
+        def result(self):
+            raise self
+
+    def unary_unary(method, request_serializer=None, response_deserializer=None, _registered_method=False):
+        def rpc(request, timeout=None, **kwargs):
+            calls.append(timeout)
+            if timeout is not None:
+                time.sleep(timeout)
+                raise DeadlineExceeded("DEADLINE_EXCEEDED")
+            return response_deserializer(b"")
+
+        return MagicMock(side_effect=rpc, with_call=lambda *args, **kwargs: (rpc(*args, **kwargs), None))
+
+    channel = MagicMock(spec=grpc.Channel)
+    channel.unary_unary.side_effect = unary_unary
+    for client_name in ("XrayClient", "SingboxClient"):
+        monkeypatch.setattr(
+            import_module(f"xtlsapi.client.{client_name}"), "grpc_insecure_channel", lambda target: channel
+        )
+    return 12345, calls
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("client_name", ["XrayClient", "SingboxClient"])
+async def test_metrics_grpc_deadline_uses_cli(client, mock_buffer, slow_grpc_core, monkeypatch, client_name):
+    port, calls = slow_grpc_core
+    monkeypatch.setattr(env, "command_timeout", 0.15)
+    script = f"""from xtlsapi import {client_name}
+async def get_metrics(host, port, params):
+    return await asyncio.to_thread({client_name}(host, port).stats_query, 'user>>>')
+"""
+    mock_buffer.get_metadata.return_value = {
+        "api_metrics_script": HotReloadExecutor.get_compiled_func(script, "get_metrics", "xtlsapi"),
+        "metrics_command": "echo fallback {}",
+        "metrics_parser_code": lambda raw, users, state: {},
+    }
+    mock_buffer.buffer_storage = {}
+    mock_buffer.local_state = {}
+
+    response = await client.post("/api/v1/server/node/metrics", json={"node_proto_id": 1, "metrics_port": port})
+
+    assert response.status_code == 200
+    assert response.json()["source"] == "cli"
+    assert "DEADLINE_EXCEEDED" in response.json()["fallback_reason"]
+    assert len(calls) == 1 and 0 < calls[0] < 1
+
+
+@pytest.mark.asyncio
+async def test_bulk_grpc_deadline_spares_remaining_calls_and_queues_users(
+    client, mock_buffer, slow_grpc_core, monkeypatch
+):
+    port, calls = slow_grpc_core
+    monkeypatch.setattr(env, "command_timeout", 0.15)
+    script = """import xtlsapi
+async def bulk_add_users(users, host, port, params):
+    def apply():
+        core = xtlsapi.XrayClient(host, port)
+        failed = 0
+        for user in users:
+            try:
+                core.add_client('vpn', 'id', user['email'])
+            except Exception:
+                failed += 1
+        return {'failed': failed}
+    return await asyncio.to_thread(apply)
+"""
+    mock_buffer.get_metadata.return_value["api_bulk_add_user_script"] = HotReloadExecutor.get_compiled_func(
+        script, "bulk_add_users", "xtlsapi"
+    )
+    users = [create_test_user(email="first@test.com"), create_test_user(email="second@test.com")]
+    payload = create_bulk_action_payload(core_port=port, users=users)
+
+    response = await client.put("/api/v1/server/proto_core/user/bulk/action", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["hot_reload"] is False
+    assert len(calls) == 1 and 0 < calls[0] < 1
+    assert len(mock_buffer.bulk_action.call_args.kwargs["users"]) == 2
 
 
 # ========== Тесты для параметра action ==========

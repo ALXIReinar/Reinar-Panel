@@ -199,16 +199,13 @@ class TestUpdateVirtualNode:
 
     @pytest.mark.asyncio
     async def test_update_vnode_metrics_port_conflict(self, client, virtual_node_seed):
-        """Конфликт metrics_port с другой виртуальной нодой на той же физ. ноде (409)"""
+        """Две видимые виртуальные ноды на одном сервере не могут занять один metrics_port."""
         vnode_id = virtual_node_seed["vnode_id_2"]
+        url = f"/api/v1/private/nodes/protocols/{vnode_id}"
 
-        # Пытаемся установить metrics_port, который уже занят vnode_id_1
-        response = await client.put(
-            f"/api/v1/private/nodes/protocols/{vnode_id}",
-            json={
-                "metrics_port": 9090  # Уже занят vnode1
-            },
-        )
+        visibility = await client.put(url, json={"user_visible": True})
+        assert visibility.status_code == 200
+        response = await client.put(url, json={"metrics_port": 9090})
 
         assert response.status_code == 409
         data = response.json()
@@ -217,21 +214,38 @@ class TestUpdateVirtualNode:
 
     @pytest.mark.asyncio
     async def test_update_vnode_proto_port_conflict(self, client, virtual_node_seed):
-        """Конфликт proto_port с другой виртуальной нодой на той же физ. ноде (409)"""
+        """Две видимые виртуальные ноды на одном сервере не могут занять один proto_port."""
         vnode_id = virtual_node_seed["vnode_id_2"]
+        url = f"/api/v1/private/nodes/protocols/{vnode_id}"
 
-        # Пытаемся установить proto_port, который уже занят vnode_id_1
-        response = await client.put(
-            f"/api/v1/private/nodes/protocols/{vnode_id}",
-            json={
-                "proto_port": 8443  # Уже занят vnode1
-            },
-        )
+        visibility = await client.put(url, json={"user_visible": True})
+        assert visibility.status_code == 200
+        response = await client.put(url, json={"proto_port": 8443})
 
         assert response.status_code == 409
         data = response.json()
         assert data["detail"]["success"] is False
         assert "Конфликт портов" in data["detail"]["message"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("port_field", "port"), [("metrics_port", 9090), ("proto_port", 8443)])
+    async def test_show_vnode_with_conflicting_port(self, client, virtual_node_seed, port_field, port):
+        """Скрытая нода сохраняет занятый порт, а попытка показать её возвращает 409."""
+        vnode_id = virtual_node_seed["vnode_id_2"]
+        url = f"/api/v1/private/nodes/protocols/{vnode_id}"
+
+        update = await client.put(url, json={port_field: port})
+        assert update.status_code == 200
+
+        visibility = await client.put(url, json={"user_visible": True})
+        assert visibility.status_code == 409
+        assert "Конфликт портов" in visibility.json()["detail"]["message"]
+
+        get_response = await client.get(url)
+        assert get_response.status_code == 200
+        vnode = get_response.json()["node_protocol"]
+        assert vnode[port_field] == port
+        assert vnode["user_visible"] is False
 
     @pytest.mark.asyncio
     async def test_update_vnode_not_found(self, client, db_seed):

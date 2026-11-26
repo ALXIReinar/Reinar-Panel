@@ -8,13 +8,15 @@ import re
 import traceback
 from collections import defaultdict
 from functools import lru_cache
-from typing import Literal, Callable, Any
+from typing import Literal, Any
+from collections.abc import Callable
 
 import flatten_json
 import jmespath
 import orjson
 
 from node_client.api.sandbox.ast_validator import SecurityError, CodeSandboxValidator
+from node_client.api.sandbox.core_api import call_core_api, template_module
 from node_client.config import env
 from node_client.utils.logger_config import log_event
 
@@ -99,7 +101,7 @@ class HotReloadExecutor:
         for lib in lib_names:
             lib_clean = lib.strip()
             if lib_clean:
-                g_scope[lib_clean] = importlib.import_module(lib_clean)
+                g_scope[lib_clean] = template_module(importlib.import_module(lib_clean))
                 # Добавляем полный путь модуля
                 inner_allowed_packages.add(lib_clean)
                 # Также добавляем корневой пакет (для поддержки from X.Y.Z import ...)
@@ -181,11 +183,12 @@ class HotReloadExecutor:
                     custom_params.get('local_state'),
                 ),
             }
-            result = action_user_func(*args_func_map[action])
-
-            "Если async"
-            if asyncio.iscoroutine(result):
-                result = await result
+            if action != "parse_metrics":
+                result = await call_core_api(action_user_func, *args_func_map[action])
+            else:
+                result = action_user_func(*args_func_map[action])
+                if asyncio.iscoroutine(result):
+                    result = await result
 
             log_event(f"Hot-reload успешно выполнен для пользователя | user_obj: \033[37m{user_obj}\033[0m")
             return True, result
@@ -250,7 +253,7 @@ class HotReloadExecutor:
             # - import json → возвращает json
             # - from json import dumps → возвращает json (с атрибутом dumps)
             # - from json.encoder import JSONEncoder → возвращает json.encoder
-            return module
+            return template_module(module)
 
         return restricted_import
 

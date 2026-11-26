@@ -77,7 +77,6 @@ log "Назначен NODE_PROTO_ID: $NODE_PROTO_ID"
 CONFIG_PATH="$CONFIG_DIR/vless-reality-tcp-exit-${NODE_PROTO_ID}.json"
 cat <<EOF > "$CONFIG_PATH"
 {
-  {
   "log": {
     "level": "info",
     "timestamp": true
@@ -99,7 +98,7 @@ cat <<EOF > "$CONFIG_PATH"
       "type": "vless",
       "tag": "vless-sys-in",
       "listen": "::",
-      "listen_port": ;$INTERNAL_PORT,
+      "listen_port": $INTERNAL_PORT,
       "users": [
         {
           "name": "ru-entry-node",
@@ -113,9 +112,8 @@ cat <<EOF > "$CONFIG_PATH"
         "reality": {
           "enabled": true,
           "handshake": {
-            "server_options": {
-              "server_name": "www.microsoft.com"
-            }
+            "server": "www.microsoft.com",
+            "server_port": 443
           },
           "private_key": "$PRIVATE_KEY",
           "short_id": [

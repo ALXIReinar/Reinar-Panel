@@ -251,6 +251,30 @@ def test_settings_require_admin_panel_port(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_compile_node_isolates_script_globals_between_nodes_and_compilations(tmp_path):
+    """Глобалы живут между опросами одной копии скрипта и изолированы от других копий."""
+    script = """
+calls = []
+
+def parse_metrics(raw_metrics, vpn_users, local_state):
+    calls.append(raw_metrics)
+    return len(calls)
+"""
+    buffer = ConfigWriteBuffer()
+    first = create_vnode_item_with_config(tmp_path, 1) | {"metrics_parser_code": script}
+    second = create_vnode_item_with_config(tmp_path, 2) | {"metrics_parser_code": script}
+    first_parser = (await buffer.compile_node(first))["metrics_parser_code"]
+    second_parser = (await buffer.compile_node(second))["metrics_parser_code"]
+
+    assert first_parser("первый опрос", {}, {}) == 1
+    assert first_parser("второй опрос", {}, {}) == 2
+    assert second_parser("опрос другой ноды", {}, {}) == 1
+
+    recompiled_parser = (await buffer.compile_node(first))["metrics_parser_code"]
+    assert recompiled_parser("опрос после повторной компиляции", {}, {}) == 1
+
+
+@pytest.mark.asyncio
 async def test_compile_node_rejects_empty_extractor(tmp_path):
     """Пустой extractor_script — ошибка регистрации, а не молча падающие записи конфига"""
     buffer = ConfigWriteBuffer(max_batch=5, timeout=0.5)

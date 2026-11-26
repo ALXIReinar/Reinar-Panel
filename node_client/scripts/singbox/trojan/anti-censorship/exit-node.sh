@@ -52,7 +52,6 @@ HTTP_CODE=$(curl -s -w "%{http_code}" -o "$REG_RESPONSE" -X POST "$PANEL_CALLBAC
            "proto_id": '"$PROTO_ID"',
            "node_id": '"$NODE_ID"',
            "proto_port": '"$INTERNAL_PORT"',
-           "metrics_command": "sing-box api stats -server 127.0.0.1:{}",
            "metrics_port": '"$METRICS_PORT"',
            "title": "'"$TITLE"'",
            "constant_node_data_obj": {
@@ -79,7 +78,6 @@ CONFIG_PATH="$CONFIG_DIR/trojan-reality-tcp-${NODE_PROTO_ID}.json"
 # Генерация конфига Sing-box
 cat <<EOF > "$CONFIG_PATH"
 {
-  {
   "log": {
     "level": "info",
     "timestamp": true
@@ -101,12 +99,11 @@ cat <<EOF > "$CONFIG_PATH"
       "type": "trojan",
       "tag": "trojan-sys-in",
       "listen": "::",
-      "listen_port": ;$INTERNAL_PORT,
+      "listen_port": $INTERNAL_PORT,
       "users": [
         {
           "name": "ru-entry-node",
-          "uuid": "$UUID",
-          "flow": "xtls-rprx-vision"
+          "password": "$UUID"
         }
       ],
       "tls": {
@@ -115,9 +112,8 @@ cat <<EOF > "$CONFIG_PATH"
         "reality": {
           "enabled": true,
           "handshake": {
-            "server_options": {
-              "server_name": "www.apple.com"
-            }
+            "server": "www.apple.com",
+            "server_port": 443
           },
           "private_key": "$PRIVATE_KEY",
           "short_id": [

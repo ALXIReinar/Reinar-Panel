@@ -1,8 +1,8 @@
-import asyncio  # noqa: I001
 from fastapi import APIRouter, HTTPException
 from starlette.requests import Request
 
 from node_client.api.proto_core.write_behind_caching_file import CoreBuffersDep
+from node_client.api.sandbox.core_api import call_core_api
 from node_client.config import CoreProtoActions
 from node_client.schemas.proto_core_users_schema import BaseUserCoreSchema
 from node_client.utils.logger_config import log_event
@@ -42,9 +42,7 @@ async def bulk_action_users_core(body: BaseUserCoreSchema, request: Request, buf
                 f"\033[32m[Bulk]\033[0m Попытка hot-reload действия | action: \033[33m{body.action}\033[0m; node_proto_id: \033[32m{body.node_proto_id}\033[0m;",
                 request=request,
             )
-            res = action_script(body.users, '127.0.0.1', body.core_port, body.custom_params or {})
-            if asyncio.iscoroutine(res):
-                res = await res
+            res = await call_core_api(action_script, body.users, '127.0.0.1', body.core_port, body.custom_params or {})
             hot_reload_result = res
             # Скрипты шаблонов ловят ошибки ядра по каждому пользователю сами и возвращают {"success": n, "failed": m}:
             # без этой проверки отказ ядра (например, неверный ключ пользователя) виден только в print скрипта

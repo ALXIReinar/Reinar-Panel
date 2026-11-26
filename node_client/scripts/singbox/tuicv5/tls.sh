@@ -35,7 +35,7 @@ find_free_port() {
     while ss -lntu | awk '{print $4}' | grep -q ":$port$"; do
         port=$((port + 1))
     done
-    log $port
+    printf '%s\n' "$port"
 }
 
 INTERNAL_PORT=$(find_free_port 8443)
@@ -52,7 +52,6 @@ HTTP_CODE=$(curl -s -w "%{http_code}" -o "$REG_RESPONSE" -X POST "$PANEL_CALLBAC
            "proto_id": '"$PROTO_ID"',
            "node_id": '"$NODE_ID"',
            "proto_port": '"$INTERNAL_PORT"',
-           "metrics_command": "sing-box api stats -server 127.0.0.1:{}",
            "metrics_port": '"$METRICS_PORT"',
            "title": "'"$TITLE"'"
          }')
@@ -95,7 +94,6 @@ cat <<EOF > "$CONFIG_PATH"
       "listen_port": $INTERNAL_PORT,
       "users": [],
       "congestion_control": "bbr",
-      "udp_relay_mode": "native",
       "zero_rtt_handshake": true,
       "tls": {
         "enabled": true,

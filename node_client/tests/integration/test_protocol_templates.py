@@ -16,14 +16,19 @@
     pytest node_client/tests/integration/test_protocol_templates.py --protocol=xray --mode=real -v
 """
 
-import asyncio  # noqa: F401, I001
 import json
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
+
 import pytest
+import xtlsapi
+from xtlsapi.xray_api.app.proxyman.command import command_pb2
+from xtlsapi.xray_api.proxy.trojan import config_pb2 as trojan_pb2
 
 from node_client.api.sandbox.hot_reload_executor import HotReloadExecutor
 from node_client.tests.conftest import get_core_container
-
 
 # ========== Helper функции ==========
 
@@ -131,6 +136,20 @@ class MockUniversalCoreClient:
         self.port = port
         self.calls = []
         self.users = {}  # Хранилище "добавленных" пользователей
+        self.handler_stub = SimpleNamespace(AlterInbound=self.add_trojan_client)
+
+    def add_trojan_client(self, request):
+        """Декодирует запрос на границе gRPC и проверяет тип аккаунта."""
+        assert request.operation.type == command_pb2.AddUserOperation.DESCRIPTOR.full_name
+        operation = command_pb2.AddUserOperation.FromString(request.operation.value)
+        assert operation.user.account.type == trojan_pb2.Account.DESCRIPTOR.full_name
+        account = trojan_pb2.Account.FromString(operation.user.account.value)
+        return self.add_client(
+            inbound_tag=request.tag,
+            email=operation.user.email,
+            user_id_or_password=account.password,
+            protocol='trojan',
+        )
 
     def add_client(self, **kwargs):
         """Имитация добавления клиента в ядро"""
@@ -179,7 +198,7 @@ class MockUniversalCoreModule:
 @pytest.fixture
 def mock_universal_core(is_mock_mode):
     """
-    Подменяет библиотеки управления ядрами (xtlsapi, singbox-client, и др.) в sys.modules
+    Подменяет клиентов ядер, сохраняя реальные protobuf-сообщения xtlsapi.
 
     ВАЖНО: Мок применяется ТОЛЬКО в mock режиме (--mode=mock или по умолчанию).
     В real режиме (--mode=real) библиотеки должны быть установлены реально.
@@ -190,14 +209,12 @@ def mock_universal_core(is_mock_mode):
         return
     # Mock режим - подменяем библиотеки
     mock_module = MockUniversalCoreModule()
-    # Подменяем разные возможные названия библиотек
     mock_dict = {
-        'xtlsapi': mock_module,
         'singbox_client': mock_module,
         'shadowsocks_client': mock_module,
     }
     CORE_CALLS.clear()
-    with patch.dict('sys.modules', mock_dict):
+    with patch.object(xtlsapi, 'XrayClient', MockUniversalCoreClient), patch.dict('sys.modules', mock_dict):
         yield mock_module
 
 
@@ -584,28 +601,10 @@ def get_sample_metrics_for_core(core_type: str) -> dict:
 
 
 def prepare_mock_vpn_users_for_core(core_type: str) -> dict:
-    """
-    Создаёт mock vpn_users с учётом специфики ядра
-
-    AWG требует node_ipv6_subnet для расчёта IP адресов
-    Парсеры ядер итерируют по vpn_users как по списку (не по dict!)
-
-    Args:
-        core_type: Тип ядра
-
-    Returns:
-        list: Mock vpn_users объект (список пользователей)
-    """
+    """Создаёт словарь vpn_users в том же формате, что и нод-клиент."""
     if core_type == 'amneziawg':
-        # AWG парсер требует node_ipv6_subnet для вычисления IP
-        # ВАЖНО: используем одну подсеть для всех пользователей (как в реальности)
-        return [
-            {'user_sub_id': 1, 'node_ipv6_subnet': 'fd00:1::/64'},
-            {'user_sub_id': 2, 'node_ipv6_subnet': 'fd00:1::/64'},
-            {'user_sub_id': 3, 'node_ipv6_subnet': 'fd00:1::/64'},
-        ]
-    # Базовый набор для xray/singbox/hysteria (не требуют vpn_users, только для troubles)
-    return []
+        return {f'uuid-{index}': {'user_sub_id': index, 'node_ipv6_subnet': 'fd00:1::/64'} for index in range(1, 4)}
+    return {}
 
 
 @pytest.mark.asyncio
@@ -716,9 +715,9 @@ async def test_template_metrics_parsing(protocol_templates_with_extractors, use_
             else:
                 # AWG - уже строка
                 raw_metrics_str = raw_metrics_data
-            if core_type in XRAY_LIKE_CORES:
-                # Парсер xray/sing-box отдаёт прирост с прошлого опроса, а первый опрос — точка отсчёта
-                # (см. тесты группы 4). Делаем её пустым ответом: тогда счётчики ниже учитываются целиком
+            if core_type in (*XRAY_LIKE_CORES, 'amneziawg'):
+                # Первый опрос задаёт точку отсчёта. Начинаем с пустого ответа ядра.
+                empty = sample_metrics['empty']
                 success, _ = await HotReloadExecutor.execute_action_script(
                     script=parser_code,
                     lib_names=lib_names,
@@ -726,7 +725,7 @@ async def test_template_metrics_parsing(protocol_templates_with_extractors, use_
                     core_api_port=0,
                     action='parse_metrics',
                     custom_params={
-                        "raw_metrics": json.dumps(sample_metrics['empty']),
+                        "raw_metrics": empty if isinstance(empty, str) else json.dumps(empty),
                         "vpn_users": mock_vpn_users,
                         "local_state": mock_local_state,
                     },
@@ -1093,7 +1092,7 @@ async def test_xray_api_metrics_script_returns_plain_stats_without_reset(protoco
 
     calls: list[dict] = []
 
-    class FakeXrayClient:
+    class FakeMetricsClient:
         def __init__(self, host, port):
             pass
 
@@ -1107,7 +1106,10 @@ async def test_xray_api_metrics_script_returns_plain_stats_without_reset(protoco
         if not template.get('api_metrics_script'):
             continue
         calls.clear()
-        with patch.object(xtlsapi, 'XrayClient', FakeXrayClient):
+        with (
+            patch.object(xtlsapi, 'XrayClient', FakeMetricsClient),
+            patch.object(xtlsapi, 'SingboxClient', FakeMetricsClient),
+        ):
             success, raw = await HotReloadExecutor.execute_action_script(
                 script=template['api_metrics_script'],
                 lib_names=template.get('proto_python_lib'),
@@ -1124,6 +1126,204 @@ async def test_xray_api_metrics_script_returns_plain_stats_without_reset(protoco
         assert 'reset' not in (template.get('metrics_command') or ''), (
             f"{template['title']}: metrics_command сбрасывает счётчики: {template['metrics_command']}"
         )
+
+
+@pytest.fixture(scope='module')
+def seed_proto_templates():
+    seed_path = Path(__file__).parents[3] / "web/db/seed_data.json"
+    return json.loads(seed_path.read_text(encoding="utf-8"))["proto_templates"]
+
+
+@pytest.mark.asyncio
+async def test_xray_trojan_seed_hot_add_sends_trojan_account(seed_proto_templates, mock_universal_core):
+    """Trojan-inbound получает protobuf Trojan Account с паролем подписки."""
+    if mock_universal_core is None:
+        pytest.skip('Проверка protobuf на подменённой границе gRPC')
+    templates = [item for item in seed_proto_templates if item['title'].startswith('xray-trojan-')]
+    assert templates
+    user_uuid = '14fb130f-dfee-4f72-bc30-882550021798'
+    for template in templates:
+        add_users = HotReloadExecutor.get_compiled_func(
+            template['api_bulk_add_user_script'], 'bulk_add_users', template['proto_python_lib']
+        )
+        CORE_CALLS.clear()
+        result = await add_users([{'user_uuid': user_uuid, 'user_sub_id': '7001'}], '127.0.0.1', 10085, {})
+        assert result == {'success': 1, 'failed': 0}, template['title']
+        assert CORE_CALLS == [
+            (
+                'add_client',
+                {
+                    'inbound_tag': 'trojan-inbound',
+                    'email': '7001',
+                    'user_id_or_password': user_uuid,
+                    'protocol': 'trojan',
+                },
+            )
+        ], template['title']
+
+
+@pytest.mark.parametrize(
+    ('subnet_key', 'subnet', 'addresses'),
+    [
+        ('node_ipv4_subnet', '192.0.2.0/30', ('192.0.2.2/32', '192.0.2.1/32')),
+        ('node_ipv6_subnet', 'fd00:1::/64', ('FD00:1:0:0:0:0:0:1/128', 'fd00:1::2/128')),
+    ],
+    ids=['ipv4', 'ipv6'],
+)
+@pytest.mark.asyncio
+async def test_amneziawg_seed_metrics_track_known_peers(seed_proto_templates, subnet_key, subnet, addresses):
+    """Парсер учитывает дельты знакомых пиров и продолжает после незнакомого пира."""
+    family = subnet_key.removeprefix('node_').removesuffix('_subnet')
+    templates = [item for item in seed_proto_templates if item['title'].startswith(f'amneziawg-awg-{family}')]
+    assert templates
+    vpn_users = {
+        'uuid-1': {'user_sub_id': '1', subnet_key: subnet},
+        'uuid-2': {'user_sub_id': 2, subnet_key: subnet},
+    }
+
+    def dump(first_rx, first_tx, second_rx):
+        return (
+            'interface-private-key\tinterface-public-key\t51820\toff\n'
+            f'peer1\t(none)\t(none)\t{addresses[0]}\t1\t{first_rx}\t{first_tx}\toff\n'
+            f'unknown\tpeer-preshared-key\t(none)\t198.51.100.4/32\t1\t{8 * MB}\t0\toff\n'
+            f'peer2\t(none)\t(none)\t{addresses[1]}\t1\t{second_rx}\t0\toff\n'
+        )
+
+    for template in templates:
+        local_state = {}
+        for raw, expected in (
+            (dump(4 * MB, 2 * MB, MB), []),
+            (dump(4 * MB + MB // 4, 2 * MB + MB // 4, 4 * MB), [{'user_sub_id': 2, 'total_mb_used': 3}]),
+            (dump(4 * MB + MB // 2, 2 * MB + MB // 2, 4 * MB), [{'user_sub_id': 1, 'total_mb_used': 1}]),
+            (dump(4 * MB + MB // 2, 2 * MB + MB // 2, 4 * MB), []),
+            (dump(MB, 3 * MB + MB // 2, 4 * MB), [{'user_sub_id': 1, 'total_mb_used': 2}]),
+        ):
+            success, result = await HotReloadExecutor.execute_action_script(
+                script=template['metrics_parser_code'],
+                lib_names=template['proto_python_lib'],
+                node_ip='127.0.0.1',
+                core_api_port=0,
+                action='parse_metrics',
+                custom_params={'raw_metrics': raw, 'vpn_users': vpn_users, 'local_state': local_state},
+            )
+            assert success, f"{template['title']}: {result}"
+            traffic, troubles = result
+            assert traffic == expected, template['title']
+            assert len(troubles) == 1
+            assert 'peer-preshared-key' not in str(troubles)
+
+
+@pytest.mark.parametrize(
+    ('family', 'subnet', 'expected_allowed_ips'),
+    [
+        ('ipv4', '192.0.2.0/24', '192.0.2.8/32'),
+        ('ipv6', 'fd00:1::/64', 'fd00:1::7/128'),
+    ],
+)
+def test_amneziawg_seed_writes_native_peer_config(seed_proto_templates, family, subnet, expected_allowed_ips):
+    """Нативный AWG принимает строку AllowedIPs, а Reserved остаётся параметром клиента."""
+    templates = [item for item in seed_proto_templates if item['title'].startswith(f'amneziawg-awg-{family}')]
+    assert len(templates) == 4
+    user = {
+        'user_uuid': '14fb130f-dfee-4f72-bc30-882550021798',
+        'user_sub_id': 7,
+        f'node_{family}_subnet': subnet,
+        'warp': True,
+    }
+    for template in templates:
+        extractor = template['templates_users_extractors'][0]
+        transform = HotReloadExecutor.get_compiled_func(extractor['extractor_script'], 'transform', extractor['libs'])
+        dump = HotReloadExecutor.get_compiled_func(
+            template['json2config_script'], 'json2config', template['conf_converter_libs']
+        )
+        load = HotReloadExecutor.get_compiled_func(
+            template['config2json_script'], 'config2json', template['conf_converter_libs']
+        )
+        peer = transform(user)
+        config = dump({'Peers': [peer]}).decode()
+
+        assert f'AllowedIPs = {expected_allowed_ips}' in config.splitlines(), template['title']
+        assert 'Reserved' not in config, template['title']
+        assert load(config)['Peers'] == [peer], template['title']
+
+
+@pytest.fixture(scope='module')
+def singbox_seed_templates(seed_proto_templates):
+    return [
+        template
+        for template in seed_proto_templates
+        if template['title'].startswith('singbox-') and not template['title'].startswith('singbox-awg-')
+    ]
+
+
+@pytest.mark.asyncio
+async def test_singbox_seed_metrics_use_user_counters_and_string_ids(singbox_seed_templates):
+    """Обычный sing-box принимает строковые ID и возвращает накопительные метрики по подпискам."""
+    import xtlsapi
+    from xtlsapi.singbox_api import stats_pb2
+
+    assert singbox_seed_templates
+
+    class FakeSingboxClient:
+        def __init__(self, host, port):
+            pass
+
+        def stats_query(self, pattern, reset):
+            assert pattern == 'user>>>'
+            assert reset is False
+            return [
+                stats_pb2.Stat(name='inbound>>>main>>>traffic>>>downlink', value=5 * MB),
+                stats_pb2.Stat(name='user>>>7001>>>traffic>>>downlink', value=2 * MB),
+            ]
+
+    with (
+        patch.object(xtlsapi, 'SingboxClient', FakeSingboxClient),
+        patch.object(xtlsapi, 'XrayClient', side_effect=AssertionError('Шаблон sing-box вызвал XrayClient')),
+    ):
+        for template in singbox_seed_templates:
+            title = template['title']
+            (extractor,) = (
+                item
+                for item in template['templates_users_extractors']
+                if item['flatten_array_cursor'] == 'experimental___v2ray_api___stats___users'
+            )
+            transform = HotReloadExecutor.get_compiled_func(
+                extractor['extractor_script'], 'transform', extractor['libs']
+            )
+            assert transform({'user_sub_id': 7001}) == '7001', title
+
+            success, raw = await HotReloadExecutor.execute_action_script(
+                script=template['api_metrics_script'],
+                lib_names=template['proto_python_lib'],
+                node_ip='127.0.0.1',
+                core_api_port=10085,
+                action='get_metrics',
+            )
+            assert success, f'{title}: {raw}'
+            assert raw == [{'name': 'user>>>7001>>>traffic>>>downlink', 'value': 2 * MB}], title
+            assert template['metrics_command'] is None, title
+
+
+@pytest.mark.parametrize('transport', ['tcp', 'grpc'])
+def test_singbox_seed_vless_reality_flow_matches_subscription(singbox_seed_templates, transport):
+    """Штатная ссылка VLESS Reality не передаёт flow, конфиг сервера должен её принимать."""
+    template = next(item for item in singbox_seed_templates if item['title'] == f'singbox-vless-reality-{transport}')
+    extractor = next(
+        item
+        for item in template['templates_users_extractors']
+        if item['flatten_array_cursor'] == 'inbounds___0___users'
+    )
+    user = {
+        'user_uuid': '14fb130f-dfee-4f72-bc30-882550021798',
+        'user_sub_id': 7001,
+        **template['constant_user_data_obj'],
+    }
+    transform = HotReloadExecutor.get_compiled_func(extractor['extractor_script'], 'transform', extractor['libs'])
+
+    link = parse_qs(urlsplit(template['url_tmp']).query)
+    assert 'flow' not in link
+    assert 'flow' not in transform(user)
+    assert 'flow' not in template['constant_user_data_obj']
 
 
 # ========== Группа 5: flow (XTLS Vision) в шаблонах xray ==========

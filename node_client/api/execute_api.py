@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 
 from node_client.api.proto_core.write_behind_caching_file import CoreBuffersDep
+from node_client.api.sandbox.core_api import call_core_api
 from node_client.config import env
 from node_client.schemas.execute_schema import (
     ExecuteCommandSchema,
@@ -80,10 +81,7 @@ async def get_metrics(
                 f"\033[35m[Metrics]\033[0m Сбор метрик API-скриптом | node_proto_id: \033[33m{body.node_proto_id}\033[0m",
                 request=request,
             )
-            res = api_script('127.0.0.1', body.metrics_port, {})
-            if asyncio.iscoroutine(res):
-                res = await res
-            raw = res
+            raw = await call_core_api(api_script, '127.0.0.1', body.metrics_port, {})
             source = "api"
         except Exception as e:
             first_error = str(e)
