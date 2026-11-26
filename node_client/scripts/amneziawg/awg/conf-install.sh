@@ -2,7 +2,8 @@
 set -euo pipefail
 umask 077
 
-PANEL_PROTOCOLS_URL="http://${ADMIN_PANEL_IP:-10.0.0.1}:${ADMIN_PANEL_PORT:?Укажи ADMIN_PANEL_PORT}/api/v1/server/nodes/protocols"
+PANEL_URL="http://${ADMIN_PANEL_IP:-10.0.0.1}:${ADMIN_PANEL_PORT:?Укажи ADMIN_PANEL_PORT}"
+PANEL_PROTOCOLS_URL="$PANEL_URL/api/v1/server/nodes/protocols"
 AWG_ROUTING=${AWG_ROUTING:-1}
 AWG_AUTOSTART=${AWG_AUTOSTART:-1}
 

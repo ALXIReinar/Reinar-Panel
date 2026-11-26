@@ -26,8 +26,9 @@ fi
 OBFS_PASS=$(openssl rand -hex 8)
 SINGBOX_BIN="/usr/local/bin/sing-box"
 CONFIG_DIR="/etc/reinar/configs/sing-box/hy2"
-PANEL_CALLBACK_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/register"
-PANEL_CONFIRM_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/confirm"
+PANEL_URL="http://${ADMIN_PANEL_IP:-10.0.0.1}:$ADMIN_PANEL_PORT"
+PANEL_CALLBACK_URL="$PANEL_URL/api/v1/server/nodes/protocols/register"
+PANEL_CONFIRM_URL="$PANEL_URL/api/v1/server/nodes/protocols/confirm"
 IPTABLES_BIN=$(command -v iptables)
 
 mkdir -p "$CONFIG_DIR"

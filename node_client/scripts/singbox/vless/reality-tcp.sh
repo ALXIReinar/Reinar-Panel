@@ -16,8 +16,9 @@ fi
 
 SINGBOX_BIN="/usr/local/bin/sing-box"
 CONFIG_DIR="/etc/reinar/configs/sing-box/trojan"
-PANEL_CALLBACK_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/register"
-PANEL_CONFIRM_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/confirm"
+PANEL_URL="http://${ADMIN_PANEL_IP:-10.0.0.1}:$ADMIN_PANEL_PORT"
+PANEL_CALLBACK_URL="$PANEL_URL/api/v1/server/nodes/protocols/register"
+PANEL_CONFIRM_URL="$PANEL_URL/api/v1/server/nodes/protocols/confirm"
 
 mkdir -p "$CONFIG_DIR"
 
@@ -36,11 +37,11 @@ METRICS_PORT=$(find_free_port 10085)
 
 
 # Извлекаем ключи
-KEYS=$(sing-box generate reality-keypair)
+KEYS=$("$SINGBOX_BIN" generate reality-keypair) || exit 1
 PRIVATE_KEY=$(echo "$KEYS" | grep "PrivateKey" | awk '{print $2}')
 PUBLIC_KEY=$(echo "$KEYS" | grep "PublicKey" | awk '{print $2}')
 
-SHORT_ID=$(openssl -hex 8)
+SHORT_ID=$(openssl rand -hex 8) || exit 1
 
 log "Выделен внутренний порт для Sing-box: $INTERNAL_PORT"
 

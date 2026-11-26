@@ -20,8 +20,9 @@ fi
 
 XRAY_BIN="/usr/local/bin/xray"
 CONFIG_DIR="/etc/reinar/configs/xray/wh_list"
-PANEL_CALLBACK_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/register"
-PANEL_CONFIRM_URL="http://10.0.0.1:$ADMIN_PANEL_PORT/api/v1/server/nodes/protocols/confirm"
+PANEL_URL="http://${ADMIN_PANEL_IP:-10.0.0.1}:$ADMIN_PANEL_PORT"
+PANEL_CALLBACK_URL="$PANEL_URL/api/v1/server/nodes/protocols/register"
+PANEL_CONFIRM_URL="$PANEL_URL/api/v1/server/nodes/protocols/confirm"
 
 mkdir -p "$CONFIG_DIR"
 
