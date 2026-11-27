@@ -1,0 +1,8 @@
+httpx
+psycopg[binary]
+PyYAML
+python-dotenv
+flatten-json
+Jinja2
+jmespath
+orjson

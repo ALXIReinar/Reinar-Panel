@@ -1,0 +1,29 @@
+db:
+  env_file: ../web/.env.api.prod
+  host_override: 127.0.0.1
+  port_override: null
+admin_url: http://127.0.0.1:8000
+sub_service_url: http://127.0.0.1:18080
+node_client_url: http://127.0.0.1:8200
+node_client_unit: reinar-node
+admin_panel_ip_for_scripts: 10.0.0.1
+admin_panel_port_for_scripts: 8000
+scripts_root: ../node_client/scripts
+physical_node_title: nl-main
+test_user_id: 1
+test_sub_plan_id: 1
+domain: null
+email: null
+required_free_ports: [80, 443]
+collector_log_args: [docker, logs, arq-sub-worker]
+timeouts:
+  http_s: 15
+  db_s: 15
+  os_s: 15
+  bind_wait_s: 10
+  stability_window_s: [10, 15]
+  unbind_wait_s: 30
+  collector_interval_s: 300
+  collector_grace_s: 60
+  s2_poll_interval_s: 5
+  install_s: 600
